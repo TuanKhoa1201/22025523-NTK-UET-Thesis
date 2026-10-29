@@ -15,8 +15,12 @@ export NTK_EXT4_CACHE_DIR="${NTK_EXT4_CACHE_DIR:-${HOME}/.cache/ntk_iris_scan_ca
 
 mkdir -p "${NTK_STORAGE_DIR}" "${NTK_EXT4_CACHE_DIR}"
 cd "${ROOT_DIR}"
+# The Python CLI accepts --serve-http and --port only. Storage is configured
+# through NTK_STORAGE_DIR, and the HTTP server deliberately binds localhost.
+if [[ "${HOST}" != "127.0.0.1" && "${HOST}" != "localhost" ]]; then
+  echo "NTK_BACKEND_HOST must be localhost; use an authenticated reverse proxy for remote access." >&2
+  exit 2
+fi
 exec "${PYTHON_BIN}" -u scripts/ntk_web_backend_service.py \
   --serve-http \
-  --host "${HOST}" \
-  --port "${PORT}" \
-  --storage-dir "${NTK_STORAGE_DIR}"
+  --port "${PORT}"
