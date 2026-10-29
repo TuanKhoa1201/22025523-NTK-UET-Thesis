@@ -829,6 +829,9 @@ class ScanJobRecord:
         self.findings_Preview_count: int = 0
         self.restoration_status = restoration_status
         self.has_full_scan_findings_payload = has_full_scan_findings_payload
+        # The pipeline may finish Stage 10 before record_scan() commits the full JSON
+        # and SQLite findings index. Do not publish COMPLETED before both are ready.
+        self.artifacts_ready: bool = False
 
 
 class ScanJobManager:
@@ -881,6 +884,7 @@ class ScanJobManager:
             "exclude_globs": sorted(str(x) for x in (params.get("exclude_globs") or [])),
             "max_files_limit": str(params.get("max_files_limit") or ""),
             "scan_scope_policy": str(params.get("scan_scope_policy") or "STRICT_FAIL_ON_LIMIT"),
+            "force_fresh_scan": bool(params.get("force_fresh_scan", False)),
             "zip_sha256": str(params.get("zip_sha256") or ""),
         }
         raw = json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode("utf-8")
@@ -931,6 +935,9 @@ class ScanJobManager:
         )
         if isinstance(trace_dict.get("scan_summary"), dict) and trace_dict["scan_summary"]:
             job_rec.result_summary = dict(trace_dict["scan_summary"])
+        # Historical records have already completed persistence (or are explicitly
+        # trace-only restorations), so the live publication gate does not apply.
+        job_rec.artifacts_ready = True
         with self._lock:
             self._jobs[job_id] = job_rec
         return job_id
@@ -945,7 +952,10 @@ class ScanJobManager:
             if not force_new_job and fp in self._active_by_fingerprint:
                 existing_id = self._active_by_fingerprint[fp]
                 existing_rec = self._jobs.get(existing_id)
-                if existing_rec is not None and existing_rec.tracker.job_state in ("QUEUED", "RUNNING"):
+                if existing_rec is not None and (
+                    existing_rec.tracker.job_state in ("QUEUED", "RUNNING")
+                    or (existing_rec.tracker.job_state == "COMPLETED" and not existing_rec.artifacts_ready)
+                ):
                     snap = existing_rec.tracker.to_job_progress_dict(
                         extra_fields={
                             "deduplicated_existing_job": True,
@@ -959,10 +969,11 @@ class ScanJobManager:
                             "pipeline_trace_url": f"/api/scans/{existing_rec.scan_id}/pipeline-trace",
                         }
                     )
-                    return 202, snap
+                    return 202, self._publication_safe_snapshot(existing_rec, snap)
 
             active_or_queued = [
                 j for j in self._jobs.values() if j.tracker.job_state in ("QUEUED", "RUNNING")
+                or (j.tracker.job_state == "COMPLETED" and not j.artifacts_ready)
             ]
             if len(active_or_queued) >= self.max_pending_jobs:
                 return 429, {
@@ -1020,7 +1031,7 @@ class ScanJobManager:
                     "pipeline_trace_url": f"/api/scans/{scan_id}/pipeline-trace",
                 }
             )
-            return 202, snap
+            return 202, self._publication_safe_snapshot(job_rec, snap)
 
     def _worker_loop(self) -> None:
         while True:
@@ -1034,8 +1045,11 @@ class ScanJobManager:
                     job_rec.tracker.start_pipeline()
                     res = self._execute_job(job_rec)
                     if res.get("status") == "OK":
+                        # execute_job returns only after the complete scan JSON and
+                        # SQLite index are durably written. Publish readiness LAST.
                         job_rec.result_summary = res.get("summary", {})
                         job_rec.tracker.finish_pipeline(success=True)
+                        job_rec.artifacts_ready = True
                     else:
                         if job_rec.tracker.job_state != "FAILED":
                             active_st = job_rec.tracker.active_stage or 1
@@ -1060,6 +1074,28 @@ class ScanJobManager:
                     if job_rec is not None:
                         self._active_by_fingerprint.pop(job_rec.request_fingerprint, None)
                 self._queue.task_done()
+
+    @staticmethod
+    def _publication_safe_snapshot(job_rec: ScanJobRecord, snapshot: Dict[str, Any]) -> Dict[str, Any]:
+        # The internal tracker reports COMPLETED as soon as Stage 10 ends. The
+        # HTTP job contract must report RUNNING until the worker's persistence
+        # callback has succeeded, so browsers never fetch unfinished findings.
+        if snapshot.get("state") == "COMPLETED" and not job_rec.artifacts_ready:
+            snapshot["state"] = "RUNNING"
+            snapshot["job_state"] = "RUNNING"
+            snapshot["publication_state"] = "PERSISTING_RESULTS"
+            snapshot["results_ready"] = False
+            snapshot["finished_at_utc"] = None
+        else:
+            # A restored trace can be published for replay, but its individual
+            # findings may never have been archived. Do not call that READY.
+            full_ready = bool(job_rec.artifacts_ready and job_rec.has_full_scan_findings_payload)
+            snapshot["results_ready"] = full_ready
+            snapshot["publication_state"] = (
+                "READY" if full_ready else
+                "TRACE_ONLY" if job_rec.artifacts_ready else "NOT_READY"
+            )
+        return snapshot
 
     def get_job_snapshot(self, job_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
@@ -1089,7 +1125,8 @@ class ScanJobManager:
                     extra["cache_statistics"] = job_rec.result_summary["cache_statistics"]
                 if "coverage_status" in job_rec.result_summary:
                     extra["coverage_status"] = job_rec.result_summary["coverage_status"]
-        return job_rec.tracker.to_job_progress_dict(extra_fields=extra)
+        snapshot = job_rec.tracker.to_job_progress_dict(extra_fields=extra)
+        return self._publication_safe_snapshot(job_rec, snapshot)
 
     def list_jobs(self, limit: int = 25) -> List[Dict[str, Any]]:
         with self._lock:
@@ -1114,7 +1151,7 @@ class ScanJobManager:
             )
             if r.result_summary is not None:
                 snap["summary"] = r.result_summary
-            out.append(snap)
+            out.append(self._publication_safe_snapshot(r, snap))
         return out
 
 

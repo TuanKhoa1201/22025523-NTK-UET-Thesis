@@ -48,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ntk_alert_verification as triage_mod
 import ntk_iris_shared as shared
 import ntk_pipeline_telemetry_and_datasets as telemetry_mod
+import ntk_cwss_context_api as cwss_context_api
 
 DEFAULT_BASE_MODEL_WSL = (
     "/home/tuankhoa/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-0.5B-Instruct/"
@@ -2985,6 +2986,7 @@ def scan_java_sources_and_triage(
     llm_cache_hits = 0
     llm_cache_misses = 0
     actual_gpu_inference_calls = 0
+    fresh_inference_requests = 0
 
     if not llm_requests:
         llm_outputs: List[Tuple[str, float]] = []
@@ -2999,6 +3001,12 @@ def scan_java_sources_and_triage(
                 "total_candidates": 0,
                 "unique_api_identities_inferred": 0,
                 "actual_gpu_inference_calls": 0,
+                "fresh_inference_requests": 0,
+                "skip_explanation": (
+                    "OpenGrep found no candidate matching the configured four-CWE ruleset. "
+                    "The LLM has no valid candidate API to classify. This is a measured "
+                    "zero-work stage, not a successful LLM inference or a proof of safety."
+                ),
             },
         )
     else:
@@ -3039,7 +3047,7 @@ def scan_java_sources_and_triage(
                 uncached_reqs.append(req_item)
 
         if uncached_reqs:
-            actual_gpu_inference_calls = len(uncached_reqs)
+            fresh_inference_requests = len(uncached_reqs)
             fresh_outputs = run_llm_inference_for_identities(
                 uncached_reqs, config=cfg, custom_llm_callable=custom_llm_callable
             )
@@ -3053,6 +3061,10 @@ def scan_java_sources_and_triage(
                     }
             if use_llm_cache and new_llm_to_persist:
                 scan_cache.put_many_json("llm_api_identities", new_llm_to_persist)
+            # A custom callable or CPU model does not represent GPU inference.
+            actual_device = str(_LAST_INFERENCE_TELEMETRY.get("actual_model_device", ""))
+            if custom_llm_callable is None and actual_device.lower().startswith("cuda"):
+                actual_gpu_inference_calls = fresh_inference_requests
 
         llm_outputs = [dedup_llm_outputs[idx] or ("{}", 0.0) for idx in req_to_dedup_idx]
         for (hit, cwe_int, ast_info), (raw_llm_out, _) in zip(ast_analyses, llm_outputs):
@@ -3068,14 +3080,16 @@ def scan_java_sources_and_triage(
             "unique_api_identities_inferred": len(dedup_reqs),
             "llm_cache_hits": llm_cache_hits,
             "llm_cache_misses": llm_cache_misses,
+            "fresh_inference_requests": fresh_inference_requests,
             "actual_gpu_inference_calls": actual_gpu_inference_calls,
+            "inference_cache_only": bool(dedup_reqs and not uncached_reqs),
             "strict_json_valid_count": sum(1 for p in callee_predictions if p.strict_valid),
             "abstain_count": sum(1 for p in callee_predictions if p.abstain),
             "predicted_roles": dict(
                 collections.Counter(p.role for p in callee_predictions if p.strict_valid)
             ),
         }
-        if custom_llm_callable is None and _LAST_INFERENCE_TELEMETRY:
+        if custom_llm_callable is None and uncached_reqs and _LAST_INFERENCE_TELEMETRY:
             actual_dev = str(_LAST_INFERENCE_TELEMETRY.get("actual_model_device", req_dev_str))
             stage6_meta.update(
                 {
@@ -3372,6 +3386,7 @@ def scan_java_sources_and_triage(
                 "hits": llm_cache_hits,
                 "misses": llm_cache_misses,
                 "actual_gpu_inference_calls": actual_gpu_inference_calls,
+                "fresh_inference_requests": fresh_inference_requests,
             },
         },
     }
@@ -3419,6 +3434,7 @@ def scan_java_sources_and_triage(
         "opengrep_candidate_count": total_cands,
         "unique_api_identities_classified": len(dedup_reqs),
         "llm_inference_count": len(llm_requests),
+        "llm_fresh_inference_requests": fresh_inference_requests,
         "actual_gpu_inference_calls": actual_gpu_inference_calls,
         "retained_vulnerability_alerts": retained_count,
         "likely_true_positive_report_count": len(reported_findings),
@@ -4758,6 +4774,20 @@ def create_ntk_http_server(
                         "error_message": f"Scan ID {scan_id!r} not found",
                     },
                 )
+                return
+
+            # CWSS 1.0.1 context-enriched, read-only, paginated priority assessments.
+            # This never changes the legacy TP/FP triage state machine or archived findings.
+            m_cwss_page = re.match(r"^/api/scans/([A-Za-z0-9_\-]+)/cwss/page$", path)
+            if m_cwss_page:
+                scan_id = m_cwss_page.group(1)
+                http_code, cwss_payload = cwss_context_api.cwss_findings_page(
+                    backend_state,
+                    scan_id,
+                    query.get("page", ["1"])[0],
+                    query.get("page_size", ["50"])[0],
+                )
+                self._send_json(http_code, cwss_payload)
                 return
 
             # Task B2: Paginated Findings (`GET /api/scans/{scan_id}/findings/page` and `GET /api/scans/{scan_id}/findings`)
