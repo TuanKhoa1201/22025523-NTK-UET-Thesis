@@ -8,11 +8,6 @@ const DATASETS = [
   ['dev_vnext_3_1', 'Development · VNext.3.1'],
   ['quarantine_review_queue', 'Quarantine · Review Queue']
 ];
-const RELEASE_META = {
-  base: 'Qwen/Qwen2.5-Coder-0.5B-Instruct',
-  adapter: 'eo06_vnext31_trackb_main',
-  checkpoint: 'eo06_vnext31_trackb_main_epoch3'
-};
 
 function DatasetCard({item}) {
   return <Card className="dataset-stat"><span className="dataset-count">{Number(item.row_count ?? 0).toLocaleString()}</span><h3>{item.title || item.dataset_id}</h3><p>{item.dataset_id}</p><p>SHA-256 {item.sha256_verified ? 'đã xác minh' : 'chưa xác minh'} · row count {item.row_count_verified ? 'đã xác minh' : 'chưa xác minh'}</p><p>{item.training_eligibility_status || (item.training_eligible ? 'Đủ điều kiện huấn luyện' : 'Không dùng huấn luyện')}</p></Card>;
@@ -122,6 +117,14 @@ export default function DatasetExplorer() {
   const selected = entries.find((item) => item.dataset_id === datasetId);
   const totalPages = Number(pageInfo.total_pages || 0);
   const training = manifest?.eo06_training_provenance || {};
+  const trainingSet = entries.find((row) => row.dataset_id === training.primary_training_dataset_id);
+  const privacy = manifest?.privacy_and_redistribution_audit || {};
+  const licenseDistribution = trainingSet?.distribution?.by_spdx_license || {};
+  const knownLicenses = Object.keys(licenseDistribution).filter((name) => name && name !== 'UNKNOWN');
+  const trainingRun = training.eo06_run_id ?? training.training_execution_receipt?.run_id;
+  const trackB = training.primary_training_dataset_rows;
+  const trackA = training.pilot_subset_dataset_rows;
+  const devRows = training.validation_dataset_rows;
   const privacyRows = fieldRows(manifest?.privacy_and_redistribution_audit);
 
   return (
@@ -130,30 +133,31 @@ export default function DatasetExplorer() {
         <div className="guided-actions">{['csv', 'jsonl', 'xlsx'].map((format) => <button key={format} className="button-secondary" disabled={Boolean(exporting)} onClick={() => exportDataset(format)}><Icon name="Download" />{exporting === format ? 'Đang tải…' : `Tải ${format.toUpperCase()}`}</button>)}</div>
       } />
       {manifestError && <div className="inline-error" role="alert">{manifestError}</div>}
-      <DataNotice>Track A là tập con của Track B; không cộng hai tập như dữ liệu độc lập. Track B là dữ liệu fine-tuning EO06; Development phục vụ validation/checkpoint selection; Quarantine bị loại khỏi training.</DataNotice>
+      <DataNotice>{training.track_a_is_strict_subset_of_track_b === true
+        ? 'Backend xác nhận Track A nằm trong Track B; không cộng chồng. Development chỉ phục vụ validation; Quarantine không dùng để huấn luyện.'
+        : 'Đang chờ manifest dataset xác thực để hiển thị quan hệ tập huấn luyện, validation và quarantine.'}</DataNotice>
       <div className="dataset-cards">{(entries.length ? entries : DATASETS.map(([dataset_id, title]) => ({dataset_id, title, row_count: '—'}))).map((item) => <DatasetCard key={item.dataset_id} item={item} />)}</div>
       <Card className="model-card" title="Fine-tuning provenance">
-        <div className="model-card-grid"><div><span>BASE MODEL</span><strong>{manifest?.eo06_training_provenance?.base_model || RELEASE_META.base}</strong></div><div><span>ADAPTER</span><strong>{manifest?.eo06_training_provenance?.adapter || RELEASE_META.adapter}</strong></div><div><span>CHECKPOINT</span><strong>{manifest?.eo06_training_provenance?.selected_checkpoint || RELEASE_META.checkpoint}</strong></div><div><span>RELEASE</span><strong>{manifest?.dataset_release_version || '—'}</strong></div></div>
+        <div className="model-card-grid"><div><span>BASE MODEL</span><strong>{training.base_model_id || 'Chưa có thông tin từ backend'}</strong></div><div><span>ADAPTER</span><strong>{training.best_adapter_arm_id || 'Chưa có thông tin từ backend'}</strong></div><div><span>CHECKPOINT</span><strong>{training.best_adapter_arm_id && training.best_checkpoint_epoch ? `${training.best_adapter_arm_id}_epoch${training.best_checkpoint_epoch}` : 'Chưa có thông tin checkpoint'}</strong></div><div><span>RELEASE</span><strong>{manifest?.dataset_release_version || '—'}</strong></div></div>
         <h4>Model and Training</h4>
         <div className="model-card-grid">
-          <div><span>TRAINING DATASET</span><strong>{training.training_dataset || training.source_artifact || 'Manifest chưa cung cấp'}</strong></div>
-          <div><span>TRAINING SPLIT</span><strong>{training.training_split || training.split || 'Manifest chưa cung cấp'}</strong></div>
-          <div><span>TRAINING RUN ID</span><strong>{training.training_run_id || training.run_id || 'Manifest chưa cung cấp'}</strong></div>
+          <div><span>TRAINING DATASET</span><strong>{trainingSet?.title || training.primary_training_dataset_id || 'Chưa xác định được nguồn huấn luyện'}</strong></div>
+          <div><span>TRAINING SPLIT</span><strong>{trackB != null ? `Train Track B: ${trackB} mẫu${devRows != null ? ` · Dev: ${devRows} mẫu` : ''}` : 'Chưa xác định tập chia'}</strong></div>
+          <div><span>TRAINING RUN ID</span><strong>{trainingRun || 'Chưa có run ID'}</strong></div>
         </div>
         <h4>API Role Taxonomy</h4>
         <div className="role-badges">{['source', 'sink', 'taint-propagator', 'none'].map((value) => <Badge tone="blue" key={value}>{value}</Badge>)}</div>
-        <p className="panel-note">Sanitizer không phải role LLM thứ năm.</p>
         {manifest?.api_role_taxonomy && <details className="technical-details"><summary>Chi tiết taxonomy từ manifest</summary><pre><code>{JSON.stringify(manifest.api_role_taxonomy, null, 2)}</code></pre></details>}
         <h4>Data Quality and Provenance</h4>
         <div className="model-card-grid">
-          <div><span>VERIFIED PROVENANCE</span><strong>{training.provenance_status || training.verified_provenance || 'Manifest chưa cung cấp'}</strong></div>
-          <div><span>SPDX LICENSING</span><strong>{training.spdx_license || training.spdx_licensing || 'Manifest chưa cung cấp'}</strong></div>
-          <div><span>SOURCE JSONL SHA-256</span><strong>{training.source_jsonl_sha256 || training.source_artifact_sha256 || 'Manifest chưa cung cấp'}</strong></div>
-          <div><span>TRAINING ELIGIBILITY</span><strong>{training.training_eligibility_status || training.training_eligible || 'Manifest chưa cung cấp'}</strong></div>
-          <div><span>TRACK A INCLUSION POLICY</span><strong>{training.track_a_inclusion_policy || manifest?.track_a_inclusion_policy || 'Manifest chưa cung cấp'}</strong></div>
-          <div><span>ADAPTER SHA-256</span><strong>{training.adapter_sha256 || training.adapter_digest || 'Manifest chưa cung cấp'}</strong></div>
+          <div><span>VERIFIED PROVENANCE</span><strong>{privacy.all_training_records_open_source_spdx_verified === true ? 'Đã kiểm chứng đối với Track B' : 'Chưa được xác nhận'}</strong></div>
+          <div><span>SPDX LICENSING</span><strong>{knownLicenses.length ? knownLicenses.join(', ') : privacy.all_training_records_open_source_spdx_verified === true ? 'SPDX nguồn mở đã xác minh (xem phân bố từng dataset)' : 'Chưa xác định SPDX'}</strong></div>
+          <div><span>TRACK B JSONL SHA-256</span><strong>{training.primary_training_dataset_sha256 || 'Chưa có checksum'}</strong></div>
+          <div><span>TRAINING ELIGIBILITY</span><strong>{trainingSet?.training_eligibility_status || 'Chưa có trạng thái xét duyệt'}</strong></div>
+          <div><span>TRACK A INCLUSION POLICY</span><strong>{training.track_a_is_strict_subset_of_track_b === true && trackA != null && trackB != null ? `Track A (${trackA}) nằm trong Track B (${trackB}); không cộng chồng` : 'Chưa xác nhận quan hệ hai tập'}</strong></div>
+          <div><span>ADAPTER SHA-256</span><strong>{training.best_adapter_sha256 || 'Chưa có checksum adapter'}</strong></div>
         </div>
-        <p className="panel-note">Source JSONL SHA-256 và XLSX tải xuống là hai file khác nhau. Export Excel tự nó không chứng minh file nguồn đã được dùng trong fine-tuning; cần đối chiếu training manifest và execution receipt.</p>
+        <p className="panel-note">Mã SHA-256 ở trên thuộc JSONL Track B dùng cho training; dữ liệu Excel xuất từ API có checksum riêng. Đối chiếu execution receipt khi đánh giá kết quả huấn luyện.</p>
         <h4>Privacy Audit</h4>
         {privacyRows.length
           ? <div className="model-card-grid">{privacyRows.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>

@@ -46,12 +46,26 @@ export function buildDataset(scanId, scan, findingsPayload) {
   });
   const rows = [...map.values()];
   const count = (decision) => rows.filter((row) => row.decision === decision).length;
+  const totals = scan?.triage_totals || findingsPayload?.triage_totals;
+  const backendTotal = Number(scan?.total_findings ?? totals?.total_candidates);
+  const reportedTotal = Number(totals?.report_count);
+  const reviewedTotal = Number(totals?.review_count);
+  const suppressedTotal = Number(totals?.suppress_count);
+  const countOrLoaded = (value, decision) => Number.isFinite(value) ? value : count(decision);
+  const resolvedTotal = Number.isFinite(backendTotal) ? backendTotal : rows.length;
+  const report = countOrLoaded(reportedTotal, 'REPORT');
+  const review = countOrLoaded(reviewedTotal, 'REVIEW');
+  const suppress = countOrLoaded(suppressedTotal, 'SUPPRESS');
   return {
     scanId,
     scan,
     findingsPayload,
     rows,
-    counts: {total: rows.length, report: count('REPORT'), review: count('REVIEW'), suppress: count('SUPPRESS'), unclassified: rows.filter((row) => !row.decision).length}
+    pagination: {loaded: rows.length, total: resolvedTotal, page: 1, pageSize: 50},
+    counts: {
+      total: resolvedTotal, report, review, suppress,
+      unclassified: Math.max(0, resolvedTotal - report - review - suppress)
+    }
   };
 }
 
@@ -94,9 +108,37 @@ function recordHistory(dataset) {
 
 export async function loadLiveScan(scanId, signal) {
   const options = {signal, timeoutMs: 60000};
-  const [scan, findingsPayload] = await Promise.all([api.scan(scanId, options), api.findings(scanId, options)]);
+  // Do not request the full JSON findings payload (can exceed 90 MB for a large repository).
+  // The canonical source of global counts is the lightweight indexed scan summary.
+  const [scan, page, cwssResult] = await Promise.all([
+    api.scanSummary(scanId, options),
+    api.findingsPage(scanId, 1, 50, options),
+    api.cwssPage(scanId, 1, 50, options).catch((error) => ({status: 'UNAVAILABLE', error: String(error?.message || error)}))
+  ]);
   if (scan?.scan_id !== scanId) throw new Error('Phản hồi metadata không khớp scan_id đã chọn.');
-  if (findingsPayload?.scan_id !== scanId) throw new Error('Phản hồi findings không khớp scan_id đã chọn.');
+  if (page?.scan_id !== scanId) throw new Error('Phản hồi findings phân trang không khớp scan_id đã chọn.');
+  if (scan.has_full_scan_findings_payload === false) {
+    throw new Error('Phiên quét chỉ có trace, không có dữ liệu findings đầy đủ.');
+  }
+  // CWSS scores are independent weakness priorities and never replace TP/FP evidence.
+  // The overlay is read-only, versioned and may remain provisional when context is missing.
+  const cwssByFinding = new Map(
+    (Array.isArray(cwssResult?.assessments) ? cwssResult.assessments : [])
+      .map((item) => [item.finding_id, item.cwss])
+  );
+  const findingsPayload = {
+    scan_id: scanId,
+    cwss_status: cwssResult?.status || 'UNAVAILABLE',
+    findings: Array.isArray(page?.findings)
+      ? page.findings.map((item) => ({...item, ...(cwssByFinding.has(item.finding_id) ? {cwss: cwssByFinding.get(item.finding_id)} : {})}))
+      : [],
+    triage_totals: scan.triage_totals,
+    summary: scan.summary,
+    paginated: true,
+    page: 1,
+    page_size: 50,
+    total_count: page?.total_count ?? scan.total_findings
+  };
   writeCache(scanId, scan, findingsPayload);
   window.sessionStorage.setItem(ACTIVE_KEY, scanId);
   window.sessionStorage.removeItem(DEMO_KEY);
@@ -125,11 +167,11 @@ export function useScanSelection() {
     window.sessionStorage.setItem(ACTIVE_KEY, scanId);
     const cached = readCache(scanId);
     if (cached) {
+      // Show cached findings immediately, but revalidate CWSS profile and metrics on every mount.
       setState({id: scanId, status: 'ready', data: cached, error: ''});
-      return undefined;
     }
     const controller = new AbortController();
-    setState({id: scanId, status: 'loading', data: null, error: ''});
+    if (!cached) setState({id: scanId, status: 'loading', data: null, error: ''});
     loadLiveScan(scanId, controller.signal)
       .then((data) => setState({id: scanId, status: 'ready', data, error: ''}))
       .catch((error) => {

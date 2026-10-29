@@ -132,6 +132,10 @@ export const api = {
   }),
   listScanJobs: (options) => optionalList('/api/scan-jobs', options),
   listScans: (options) => optionalList('/api/scans', options),
+  cwssPage: (scanId, page = 1, pageSize = 50, options = {}) => request(
+    `/api/scans/${encodeURIComponent(scanId)}/cwss/page?page=${page}&page_size=${pageSize}`,
+    {...options, timeoutMs: 30000}
+  ),
   pipelineTrace: (scanId, options = {}) => request(`/api/scans/${encodeURIComponent(scanId)}/pipeline-trace`, {
     ...options,
     timeoutMs: 30000

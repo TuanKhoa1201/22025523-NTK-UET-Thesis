@@ -92,7 +92,9 @@ export function StageTiming({job, counts}) {
 }
 
 function unwrapPayload(payload) {
-  return payload?.data?.summary ?? payload?.summary ?? payload?.data ?? payload;
+  // /api/scans/{id}/summary is a top-level indexed record. Unwrapping the
+  // nested `summary` drops triage_totals, scanner_metadata, coverage_diagnostics.
+  return payload?.data ?? payload;
 }
 
 function findField(source, keys, depth = 0) {
@@ -214,7 +216,7 @@ function coverageRows(job, counts, summaryPayload, tracePayload) {
   const duplicateCount = Number.isFinite(Number(accumulated)) && Number.isFinite(Number(deduplicated))
     ? Math.max(0, Number(accumulated) - Number(deduplicated))
     : undefined;
-  const cacheStatistics = parseCache(valueFrom([summary, stage06, job, trace], ['cache_statistics']));
+  const cacheStatistics = valueFrom([summary, stage06, job, trace], ['cache_statistics']);
   const e2e = formatE2e(valueFrom(
     [summary, trace, job],
     ['total_e2e_duration_ms', 'total_e2e_elapsed_ms']
@@ -233,13 +235,14 @@ function coverageRows(job, counts, summaryPayload, tracePayload) {
     ['Ứng viên OpenGrep đã deduplicate', valueFrom([stage03, summary, job], ['raw_opengrep_candidates'])],
     ['Pattern matches trùng đã loại bỏ', duplicateCount],
     ['Ứng viên cuối cùng (triage total)', totals?.total_candidates ?? triageTotal(summary, stage10)],
-    ['Candidate contexts', valueFrom([stage04, summary, job], ['candidate_contexts', 'candidate_context_count', 'contexts_extracted'])],
-    ['AST parser identity', valueFrom([stage04, summary, job], ['ast_parser', 'ast_parser_identity', 'parser_identity'])],
-    ['AST files processed', valueFrom([stage04, summary, job], ['ast_files_processed'])],
-    ['AST files reused', valueFrom([stage04, summary, job], ['ast_files_reused'])],
-    ['IRIS / taint evidence', valueFrom([stage05, summary, job], ['taint_evidence_count', 'iris_taint_findings', 'taint_paths_found'])],
+    ['Candidate contexts', valueFrom([stage04, summary, job], ['candidate_contexts_extracted'])],
+    ['AST parser identity', valueFrom([stage04, summary, job], ['ast_parser_engine'])],
+    ['AST files processed (new parses)', valueFrom([stage04, summary, job], ['javac_ast_parsed_files'])],
+    ['AST files reused (cache hits)', valueFrom([stage04, summary, job], ['javac_ast_cache_hits'])],
+    ['IRIS / taint evidence', valueFrom([stage05, summary, job], ['verified_taint_flows_detected'])],
     ['API identities đã phân loại', valueFrom([summary, stage06, job], ['unique_api_identities_classified'])],
-    ['Ứng viên được phân loại bởi LLM', valueFrom([summary, stage06, job], ['llm_inference_count'])],
+    ['API đưa vào bước phân loại LLM', valueFrom([summary, stage06, job], ['llm_inference_count'])],
+    ['Suy luận mới (không tính cache)', valueFrom([summary, stage06, job], ['llm_fresh_inference_requests', 'fresh_inference_requests'])],
     ['GPU inference thực tế', valueFrom([summary, stage06, job], ['actual_gpu_inference_calls'])],
     ['LLM cache hits', valueFrom([summary, stage06, job], ['llm_cache_hits', 'cache_hits'])],
     ['LLM cache misses', valueFrom([summary, stage06, job], ['llm_cache_misses', 'cache_misses'])],

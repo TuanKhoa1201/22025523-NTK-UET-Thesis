@@ -37,6 +37,7 @@ export function normalizeFinding(item) {
   const scoreValue = firstValue(item, ['final_heuristic_score', 'confidence_score', 'final_score', 'sast_score', 'heuristic_score', 'score'])
     ?? firstValue(item?.evidence_fusion, ['final_heuristic_score', 'confidence_score', 'final_score', 'score']);
   const score = scoreValue === undefined ? null : Number(scoreValue);
+  const cwss = item?.cwss && typeof item.cwss === 'object' ? item.cwss : null;
 
   return {
     id: firstValue(item, ['finding_id', 'candidate_id', 'id', 'key']) ?? '',
@@ -46,6 +47,9 @@ export function normalizeFinding(item) {
     line: firstValue(item, ['line_number', 'source_line', 'line']) ?? location.line ?? '',
     severity: firstValue(item, ['severity', 'priority', 'risk_level']) ?? '',
     score: Number.isFinite(score) ? score : null,
+    cwss,
+    cwssScore: cwss && Number.isFinite(Number(cwss.cwss_score)) ? Number(cwss.cwss_score) : null,
+    cwssUnknownMetrics: cwss ? Number(cwss.unknown_metric_count) : null,
     scoreBreakdown: firstValue(item, ['score_breakdown']) ?? firstValue(item?.evidence_fusion, ['score_breakdown']),
     decision: firstValue(item, ['triage_decision', 'decision', 'policy_decision', 'triage']) ?? '',
     role: firstValue(item, ['api_role', 'role', 'classification']) ?? '',

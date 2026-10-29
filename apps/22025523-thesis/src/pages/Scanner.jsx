@@ -83,6 +83,7 @@ export default function Scanner() {
   const backend = useOutletContext()?.backend ?? {status: 'CHECKING', health: null};
   const [tab, setTab] = useState('github');
   const [url, setUrl] = useState('');
+  const [forceFresh, setForceFresh] = useState(false);
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -130,12 +131,16 @@ export default function Scanner() {
           setLiveScanId(job.scan_id);
         }
         if (state === 'QUEUED' || state === 'RUNNING') {
-          setLiveStatus(state === 'QUEUED' ? 'Backend đã xếp job vào hàng chờ' : `Backend đang thực thi${job.active_stage ? ` · stage ${job.active_stage}` : ''}`);
+          setLiveStatus(state === 'QUEUED'
+            ? 'Backend đã xếp job vào hàng chờ'
+            : job.publication_state === 'PERSISTING_RESULTS'
+              ? 'Đã chạy xong 10 giai đoạn; backend đang lưu JSON và lập chỉ mục findings…'
+              : `Backend đang thực thi${job.active_stage ? ` · stage ${job.active_stage}` : ''}`);
           pollTimer = window.setTimeout(poll, 750);
           return;
         }
         if (state === 'COMPLETED' && job.scan_id) {
-          setLiveStatus('Đang tải metadata và findings của scan từ backend');
+          setLiveStatus('Đang tải summary và trang findings đầu tiên từ backend');
           window.clearInterval(timerRef.current);
           setElapsedMs(Date.now() - startRef.current);
           try {
@@ -145,7 +150,7 @@ export default function Scanner() {
             const total = Number(data.scan?.total_e2e_duration_ms);
             setBackendMs(Number.isFinite(total) ? total : null);
             setLiveStage('COMPLETED');
-            setLiveStatus('Hoàn tất: đã nhận và đối chiếu scan_id, metadata và findings từ backend');
+            setLiveStatus('Hoàn tất: dữ liệu đã lưu; summary và trang findings đầu tiên tải thành công');
           } catch (failure) {
             if (!stopped && !controller.signal.aborted) setError(`Job đã hoàn tất nhưng không tải được findings: ${failure.message}`);
           }
@@ -239,7 +244,10 @@ export default function Scanner() {
     try {
       setLiveStage('WAITING_FOR_RESPONSE');
       setLiveStatus('Đang chờ backend tạo job phân tích');
-      const result = await api.createScanJob(url.trim(), undefined, {signal: controller.signal});
+      const result = await api.createScanJob(
+        url.trim(), undefined, {signal: controller.signal},
+        forceFresh ? {force_fresh_scan: true, force_new_job: true} : {}
+      );
       if (typeof result?.job_id !== 'string' || !result.job_id) {
         throw new Error('Backend chưa trả về job_id theo hợp đồng hiện tại. Không thể theo dõi job này.');
       }
@@ -301,7 +309,11 @@ export default function Scanner() {
                   <input id="repo-url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://github.com/owner/repository" />
                   <Badge>HTTPS</Badge>
                 </div>
-                <p>Branch hoặc commit có thể cấu hình khi API backend hỗ trợ.</p>
+                <p>Backend phân tích theo ruleset CWE được hỗ trợ; không có ứng viên thì LLM không chạy và không khẳng định mã nguồn an toàn.</p>
+                <label className="scanner-fresh-option" style={{display: 'flex', alignItems: 'center', gap: 10, marginTop: 12}}>
+                  <input type="checkbox" checked={forceFresh} disabled={busy} onChange={(event) => setForceFresh(event.target.checked)} />
+                  <span>Chạy mới không dùng cache để kiểm chứng suy luận thật (tốn thời gian và tài nguyên GPU)</span>
+                </label>
               </div>
             ) : (
               <button className={`dropzone ${file ? 'has-file' : ''}`} onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {event.preventDefault(); setFile(event.dataTransfer.files[0] || null);}}>
