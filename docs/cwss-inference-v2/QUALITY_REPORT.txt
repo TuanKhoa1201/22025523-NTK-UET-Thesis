@@ -1,0 +1,92 @@
+NTK CWSS Automatic V2 quality report - real DTO replay + synthetic source
+
+Baseline181 was independently verified in Codex after applying exact supplied409
+patch to source SHA2354149167dfe930be805a7985735c8c78129dc53ab89c92762595b3696e940c.
+No claim of a fresh laptop/GPU pass is made. No model, repository program or
+OWASP E2E was executed. Real scan source is parsed with the existing Javac bridge.
+
+Actual scan: SCAN-20261030110451-37DA51. Original report confirms25 default12.6.
+All25 supplied archived/indexed DTO pairs, snapshot SHA bindings, provenance and
+report were checksum-verified. A shared snapshot had24 pre-index fingerprints;
+rebinding accepts only the two verified DTO representations and matching source
+provenance. Source/IRIS changes remain rejected. The original three409 tests pass.
+
+Finding | CWE | decision | proof | preliminary | before Complete | Evidence | Estimate | Complete | V/E/R/D | blocked
+FINDING-001-CWE022-doPost-L72 | CWE-022 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | AST_CALLSITE_MISSING_OR_AMBIGUOUS,UNSUPPORTED_OR_UNPROVEN_OVERLOAD,RECEIVER_TYPE_UNPROVEN,SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-002-CWE079-doPost-L75 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-003-CWE079-doPost-L87 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-004-CWE022-doPost-L73 | CWE-022 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | AST_CALLSITE_MISSING_OR_AMBIGUOUS,UNSUPPORTED_OR_UNPROVEN_OVERLOAD,RECEIVER_TYPE_UNPROVEN,SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-005-CWE079-doPost-L74 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-006-CWE078-doPost-L69 | CWE-078 | REPORT | PROVEN_TAINT | 3.6 | 12.6 | 4.1 | 6.1 | 16.0 | 1/2/0/12 |
+FINDING-007-CWE078-doPost-L61 | CWE-078 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-008-CWE079-doPost-L65 | CWE-079 | SUPPRESS | PROVEN_SAFE | 3.6 | 12.6 | 0.0 | 0.0 | 0.0 | 1/0/0/14 |
+FINDING-009-CWE089-doPost-L58 | CWE-089 | REPORT | PROVEN_TAINT | 3.6 | 12.6 | 4.1 | 6.3 | 16.4 | 1/2/0/12 |
+FINDING-010-CWE079-doPost-L56 | CWE-079 | REPORT | PROVEN_TAINT | 3.6 | 12.6 | 3.6 | 6.1 | 16.1 | 0/3/0/12 |
+FINDING-011-CWE079-doPost-L56 | CWE-079 | REPORT | PROVEN_TAINT | 3.6 | 12.6 | 3.6 | 6.1 | 16.1 | 0/3/0/12 |
+FINDING-012-CWE089-doPost-L59 | CWE-089 | REPORT | PROVEN_TAINT | 3.6 | 12.6 | 4.1 | 6.3 | 16.4 | 1/2/0/12 |
+FINDING-013-CWE078-doPost-L63 | CWE-078 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-014-CWE089-doPost-L59 | CWE-089 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-015-CWE022-doPost-L78 | CWE-022 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | AST_CALLSITE_MISSING_OR_AMBIGUOUS,UNSUPPORTED_OR_UNPROVEN_OVERLOAD,RECEIVER_TYPE_UNPROVEN,SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-016-CWE079-doPost-L81 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-017-CWE079-doPost-L93 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-018-CWE022-doPost-L79 | CWE-022 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | AST_CALLSITE_MISSING_OR_AMBIGUOUS,UNSUPPORTED_OR_UNPROVEN_OVERLOAD,RECEIVER_TYPE_UNPROVEN,SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-019-CWE079-doPost-L80 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-020-CWE078-doPost-L82 | CWE-078 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-021-CWE079-doPost-L86 | CWE-079 | SUPPRESS | PROVEN_SAFE | 3.6 | 12.6 | 0.0 | 0.0 | 0.0 | 1/0/0/14 |
+FINDING-022-CWE089-doPost-L76 | CWE-089 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | UNSUPPORTED_OR_UNPROVEN_OVERLOAD,RECEIVER_TYPE_UNPROVEN,SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-023-CWE079-doPost-L77 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-024-CWE079-doPost-L65 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | AST_CALLSITE_MISSING_OR_AMBIGUOUS,UNSUPPORTED_OR_UNPROVEN_OVERLOAD,RECEIVER_TYPE_UNPROVEN,SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+FINDING-025-CWE079-doPost-L65 | CWE-079 | REVIEW | UNKNOWN | 3.6 | 12.6 | 3.6 | 3.6 | 12.6 | 0/0/0/15 | SINK_SLOT_UNCOVERED,IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF
+
+Aggregated assignments across400 metric positions: {"verified_metric_count": 5, "estimated_metric_count": 12, "reference_metric_count": 0, "default_metric_count": 358, "attested_metric_count": 0}. P:NA accounts for25 positions.
+Default positions358/400=89.5%, versus375/400=93.75% before. Verified5/400=1.25%; estimated12/400=3%; policy25/400=6.25%; reference0.
+Audit Evidence retains370 Unknown positions (verified5 + P25); Complete has numerical Unknown0, with unresolved inputs disclosed as Defaults.
+
+Real data results:25/25 POST observed,5/5 taint bindings usable,2/2 safe retained,18/18 Unknown retained; decisions stay5 REPORT/18 REVIEW/2 SUPPRESS.
+No business/deployment declaration exists for the real scan. Real contextual scores are null; no high-risk deployment is fabricated.
+
+Synthetic Java fixtures (not OWASP labels, not deployed exploit ground truth)
+Fixture | IRIS | GENERAL_JAVA | declared high-risk
+ShellServlet | PROVEN_TAINT | 16.0 | 84.0
+SqlServlet | PROVEN_TAINT | 16.4 | 86.0
+ProcessServlet | PROVEN_TAINT | 16.0 | 84.0
+FileServlet | PROVEN_TAINT | 16.0 | 84.0
+HtmlServlet | PROVEN_TAINT | 16.1 | 84.7
+ConstantServlet | PROVEN_SAFE | 0.0 | 0.0
+ParameterizedServlet | PROVEN_SAFE | 0.0 | 0.0
+EncodedServlet | PROVEN_SAFE | 0.0 | 0.0
+GuardedPathServlet | UNKNOWN | 12.6 | 67.1
+UnknownServlet | UNKNOWN | 12.6 | 67.1
+FieldServlet | UNKNOWN | 12.6 | 67.1
+
+High-risk fixture proof uses the SAME frozen typed domain declaration for both sources. No vector injection, no score search, no weight changes. The high Java sources compile against a minimal servlet API contract and use real JDK SQL/process API signatures. They are never executed. The shell must exist and JDBC URL/driver must be configured in the declared deployment. Static proof is not a dynamic exploit demonstration.
+
+ShellServlet
+TI:H,0.9/AP:RU,0.7/AL:S,0.9/IC:N,1/FC:D,0.8/RP:N,1/RL:A,1/AV:I,1/AS:N,1/IN:A,1/SC:A,1/BI:C,1/DI:H,1/EX:H,1/EC:N,1/P:NA,1
+weights={"TI": 0.9, "AP": 0.7, "AL": 0.9, "IC": 1.0, "FC": 0.8, "RP": 1.0, "RL": 1.0, "AV": 1.0, "AS": 1.0, "IN": 1.0, "SC": 1.0, "BI": 1.0, "DI": 1.0, "EX": 1.0, "EC": 1.0, "P": 1.0}
+subscores={"base": "84.00", "attack_surface": "1.0", "environment": "1.00"}; exact CWSS=84.00000
+counts={"verified_metric_count": 2, "estimated_metric_count": 1, "reference_metric_count": 11, "default_metric_count": 1, "attested_metric_count": 0, "unknown_count": 0, "metric_count": 16, "policy_na_count": 1}
+
+SqlServlet
+TI:H,0.9/AP:RU,0.7/AL:A,1/IC:N,1/FC:D,0.8/RP:N,1/RL:A,1/AV:I,1/AS:N,1/IN:A,1/SC:A,1/BI:C,1/DI:H,1/EX:H,1/EC:N,1/P:NA,1
+weights={"TI": 0.9, "AP": 0.7, "AL": 1.0, "IC": 1.0, "FC": 0.8, "RP": 1.0, "RL": 1.0, "AV": 1.0, "AS": 1.0, "IN": 1.0, "SC": 1.0, "BI": 1.0, "DI": 1.0, "EX": 1.0, "EC": 1.0, "P": 1.0}
+subscores={"base": "86.00", "attack_surface": "1.0", "environment": "1.00"}; exact CWSS=86.00000
+counts={"verified_metric_count": 1, "estimated_metric_count": 2, "reference_metric_count": 11, "default_metric_count": 1, "attested_metric_count": 0, "unknown_count": 0, "metric_count": 16, "policy_na_count": 1}
+
+Negative controls: constant command, parameterized SQL, encoded output, unknown
+helper/field return, normalization guard unproven by IRIS, method authorization,
+internal deployment, primitive PrintWriter output and AST/Qwen/overload conflict.
+Safe proof produces0; Unknown stays unverified (even if conditional numeric score
+is67.1 under an explicitly risky scenario). Authorization/internal context tests
+reduce score using official weights. No independent severity labels were supplied;
+no MAE, calibrated probability or benchmark accuracy is claimed. Test passing is
+engineering validation, not scientific accuracy evidence.
+
+Limits: full dependency/JAR symbol attribution, general heap/field solving,
+unavailable helper definitions, all formatter varargs, all batch receiver paths,
+actual deployment controls/auth/privileges/business criticality remain unresolved.
+Unproven FileInputStream/FileOutputStream mappings and nonexistent JDK batchUpdate
+are disclosed, not aliased to compatible-looking identities. Registry support
+alone is not proof. See docs/CWSS_AUTOMATIC_V2.txt and private REAL25_RESULTS.csv
+for the exact blocked rules and graph hashes. Full pipeline CUDA/LoRA and WSL
+HTTP acceptance still require the laptop; Codex processed persisted evidence.

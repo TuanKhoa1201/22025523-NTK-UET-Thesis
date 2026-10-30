@@ -20,6 +20,7 @@ Guarantees:
 import argparse
 import base64
 import collections
+import copy
 import fnmatch
 import gc
 import hashlib
@@ -49,6 +50,7 @@ import ntk_alert_verification as triage_mod
 import ntk_iris_shared as shared
 import ntk_pipeline_telemetry_and_datasets as telemetry_mod
 import ntk_cwss_context_api as cwss_context_api
+import ntk_cwss_workflow as cwss_workflow
 
 DEFAULT_BASE_MODEL_WSL = (
     "/home/tuankhoa/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-0.5B-Instruct/"
@@ -70,7 +72,7 @@ DEFAULT_CORS_ALLOWED_ORIGINS: Tuple[str, ...] = (
 )
 DEFAULT_CORS_ALLOW_METHODS = "GET, POST, OPTIONS"
 DEFAULT_CORS_ALLOW_HEADERS = (
-    "Content-Type, Accept, Origin, X-Requested-With, X-Archive-Filename, X-Scan-Id, Cache-Control, Pragma"
+    "Content-Type, Accept, Origin, X-Requested-With, X-Archive-Filename, X-Scan-Id, Cache-Control, Pragma, Authorization"
 )
 DEFAULT_CORS_MAX_AGE = "600"
 
@@ -3619,6 +3621,9 @@ def scan_java_sources_and_triage(
     payload["report_synthesis_duration_ms"] = report_synthesis_ms
     payload["total_e2e_duration_ms"] = pipeline_trace_dict["total_e2e_elapsed_ms"]
     payload["pipeline_trace"] = pipeline_trace_dict
+    # Passive post-triage collection while checkout still exists; no pipeline stage changes.
+    payload["cwss_automatic_collection"] = cwss_workflow.automatic_v2.graph.collect(src_path, all_findings, source_prov_check)
+    payload["cwss_complete_context"] = cwss_workflow.complete.collect_context(src_path)
     return payload
 
 
@@ -3917,10 +3922,13 @@ def render_scan_html_report(scan_record: Dict[str, Any]) -> str:
         dec = html.escape(str(f.get("decision", "")))
         ts = html.escape(str(f.get("triage_status", "")))
         sc = html.escape(str(f.get("confidence_score", f.get("final_heuristic_score", ""))))
+        priority = f.get("cwss")
+        cwss_detail = (html.escape(json.dumps(priority, indent=2, ensure_ascii=False))
+                       if isinstance(priority, dict) else "CWSS not archived; use the CWSS assessment report API")
         rcs = html.escape(", ".join(f.get("reason_codes", [])))
         rows.append(
             f"<tr><td>{fid}</td><td>{cwe}</td><td>{fp}:{ln} (<code>{em}</code>)</td>"
-            f"<td><strong>{dec}</strong> ({ts})</td><td>{sc}</td><td>{rcs}</td></tr>"
+            f"<td><strong>{dec}</strong> ({ts})</td><td><pre>{cwss_detail}</pre></td><td>{sc}</td><td>{rcs}</td></tr>"
         )
     rows_html = "\n".join(rows)
     return f"""<!DOCTYPE html>
@@ -3937,13 +3945,15 @@ th {{ background: #f4f4f4; }}
 </head>
 <body>
 <h1>NTK/IRIS Security Scan Report ({scan_id})</h1>
+<p>CWSS is weakness priority, not TP probability. INCOMPLETE scores are not verified low risk.
+This archived report shows scan-time preliminary assessment; use the CWSS assessment report API for published revisions.</p>
 <p><strong>Source:</strong> {repo_url} | <strong>Commit / SHA:</strong> <code>{commit_sha}</code></p>
 <p><strong>Total Candidates:</strong> {summary.get('total_scanner_candidates', 0)} |
 <strong>REPORT:</strong> {summary.get('likely_true_positive_report_count', 0)} |
 <strong>REVIEW:</strong> {summary.get('needs_review_count', 0)} |
 <strong>SUPPRESS:</strong> {summary.get('suppressed_false_positives', 0)}</p>
 <table>
-<thead><tr><th>Finding ID</th><th>CWE</th><th>Location</th><th>Decision / Triage</th><th>Heuristic Score</th><th>Reason Codes</th></tr></thead>
+<thead><tr><th>Finding ID</th><th>CWE</th><th>Location</th><th>Decision / Triage</th><th>CWSS 1.0.1 / mode / status / metrics / subscores / evidence</th><th>Internal heuristic (not probability)</th><th>Reason Codes</th></tr></thead>
 <tbody>
 {rows_html}
 </tbody>
@@ -4212,6 +4222,56 @@ class NtkBackendState:
     ) -> Dict[str, Any]:
         record = dict(scan_payload)
         record["scan_id"] = scan_id
+        record["sast_priority_policy"] = "CWSS_0_100_WITH_ASSESSMENT_STATE"
+        # The results index attaches per-finding source provenance from this scan
+        # record. Bind that SAME evidence before publishing immutable CWSS snapshots,
+        # otherwise subsequent API reads see a different source_evidence_hash (409).
+        original_findings = list(record.get("findings", []))
+        provenance = record.get("source_provenance_verification") or {}
+        provenance_rows = provenance.get("per_finding_records", []) if isinstance(provenance, dict) else []
+        by_id = {str(row["finding_id"]): row for row in provenance_rows
+                 if isinstance(row, dict) and row.get("finding_id")}
+        indexed_findings = []
+        for original in original_findings:
+            finding = dict(original)
+            source_record = by_id.get(str(finding.get("finding_id", "")))
+            if source_record is not None:
+                if (finding.get("source_provenance_record") is not None
+                        and finding["source_provenance_record"] != source_record):
+                    raise ValueError("CWSS source provenance disagrees with scan verification")
+                finding["source_provenance_record"] = copy.deepcopy(source_record)
+            indexed_findings.append(dict(finding, cwss=cwss_workflow.evaluate(finding, scan_id)))
+        record["findings"] = indexed_findings
+        # Sidecar only: do not overwrite existing assessments or triage decisions.
+        snapshot = record.pop("cwss_automatic_collection", None)
+        if snapshot is None:
+            snapshot = cwss_workflow.automatic.collect(None, record["findings"])
+        else:
+            snapshot = copy.deepcopy(snapshot)
+            bound_hashes = snapshot.get("finding_evidence_hashes")
+            if not isinstance(bound_hashes, dict):
+                raise ValueError("CWSS automatic collection lacks finding hash bindings")
+            for original, indexed in zip(original_findings, indexed_findings):
+                fid = str(original["finding_id"])
+                previous_hash = cwss_workflow.evidence_hash(original)
+                current_hash = cwss_workflow.evidence_hash(indexed)
+                if bound_hashes.get(fid) not in (previous_hash, current_hash):
+                    raise ValueError("CWSS automatic collection fingerprint changed")
+                bound_hashes[fid] = current_hash
+        complete_snapshot = dict(snapshot)
+        declared_context = record.pop("cwss_complete_context", None)
+        if declared_context is not None:
+            complete_snapshot["complete_reference_context"] = declared_context
+        auto_store = cwss_workflow.AssessmentStore(cwss_workflow.directory(self))
+        for finding in record["findings"]:
+            auto_store.publish_automatic(finding, scan_id, snapshot)
+            # Independent revision stream preserves existing evidence/estimate history.
+            reviewed = [r for r in auto_store.history(scan_id, finding['finding_id'])
+                        if r['profile']['mode'] == 'ASSESSED']
+            attestation = ({'profile': reviewed[-1]['profile'], 'reviewer': reviewed[-1]['reviewer']}
+                           if reviewed else None)
+            cwss_workflow.AssessmentStore(cwss_workflow.directory(self)/'complete').publish_complete(
+                finding, scan_id, complete_snapshot, cwss_workflow.complete.selection(), attestation)
         record["restoration_status"] = "LIVE_OR_FULL_PERSISTED_SCAN"
         record["has_full_scan_findings_payload"] = True
         if isinstance(record.get("pipeline_trace"), dict):
@@ -4369,6 +4429,12 @@ def create_ntk_http_server(
             parsed_url = urllib.parse.urlsplit(self.path)
             path = parsed_url.path.rstrip("/") or "/"
             query = urllib.parse.parse_qs(parsed_url.query)
+
+            cwss_response = cwss_workflow.handle(backend_state, "GET", path, query,
+                                                 authorization=self.headers.get("Authorization", ""))
+            if cwss_response is not None:
+                self._send_json(*cwss_response)
+                return
 
             if path == "/api/health":
                 cfg = backend_state.config
@@ -4992,6 +5058,27 @@ def create_ntk_http_server(
                 return
             parsed_url = urllib.parse.urlsplit(self.path)
             path = parsed_url.path.rstrip("/") or "/"
+
+            if cwss_workflow.ROUTE.fullmatch(path):
+                try:
+                    cwss_workflow.authorize(self.headers.get("Authorization", ""))
+                except (PermissionError, ValueError):
+                    self._send_json(401, {"error_code": "CWSS_AUTH_REQUIRED"})
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if not 0 < length <= 1024 * 1024:
+                        raise ValueError("CWSS JSON body must be 1..1048576 bytes")
+                    if not self.headers.get("Content-Type", "").lower().startswith("application/json"):
+                        raise ValueError("CWSS body must be application/json")
+                    body = json.loads(self.rfile.read(length))
+                except (ValueError, UnicodeError) as exc:
+                    self._send_json(422, {"error_code": "CWSS_VALIDATION_ERROR", "error_message": str(exc)})
+                    return
+                response = cwss_workflow.handle(backend_state, "POST", path,
+                    urllib.parse.parse_qs(parsed_url.query), body, self.headers.get("Authorization", ""))
+                self._send_json(*response)
+                return
 
             if path not in ("/api/scans", "/api/scans/zip", "/api/scan-jobs"):
                 self._send_json(

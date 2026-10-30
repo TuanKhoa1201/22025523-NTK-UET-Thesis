@@ -261,9 +261,27 @@ def read_published_profile(scan_id: str, directory: Optional[Path] = None) -> Op
     return load_profile(target)
 
 
-def publish_profile_checked(source: Path, directory: Optional[Path] = None) -> Path:
+def publish_profile_checked(source: Path, directory: Optional[Path] = None,
+                            findings: Optional[Sequence[Mapping[str, Any]]] = None) -> Path:
     """Only explicit CLI operation; atomic replace with backup, no API write endpoint."""
     profile = load_profile(Path(source))
+    # Legacy operator publication uses the same attestation gate as reads.
+    # Never replace a valid profile with unchecked metric records.
+    originals = {str(f.get("finding_id")): f for f in (findings or [])}
+    for fid, entry in profile["findings"].items():
+        if not FINDING_PATTERN.fullmatch(str(fid)) or not isinstance(entry, Mapping):
+            raise ValueError("Invalid profile finding")
+        metrics = entry.get("metric_assessments") or {}
+        if not isinstance(metrics, Mapping):
+            raise ValueError("Invalid metric_assessments")
+        for factor, rec in metrics.items():
+            if factor not in FACTOR_ORDER or factor == "P" or not isinstance(rec, Mapping):
+                raise ValueError("Invalid context metric")
+            code = _normalized_code(factor, rec.get("code", ""))
+            if code not in ("UK", "U") and rec.get("verified") is True and fid not in originals:
+                raise ValueError("Verified legacy publication requires original finding evidence")
+        if fid in originals:
+            reviewed_metric_overrides(profile, originals[fid], profile["scan_id"])
     target = profile_path_for_scan(profile["scan_id"], directory)
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if target.is_symlink():

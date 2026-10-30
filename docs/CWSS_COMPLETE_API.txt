@@ -1,0 +1,100 @@
+NTK CWSS_AUTO_COMPLETE V1 - SCENARIO-CONDITIONAL discrete targeted scoring
+MITRE: https://cwe.mitre.org/cwss/cwss_v1.0.1.html
+No formula, weights, Decimal settings or prior inference/replay versions changed.
+Q unsupported; P:NA targeted. Default D uses the official metric-specific weight.
+FC:D is not FC:T/LT, proof or attestation despite sharing the official LT weight.
+
+Selection precedence per metric:
+1. Existing auto local VERIFIED evidence (or P policy).
+2. Existing ASSESSED profile, revalidated through original V2 gates. FC:T/LT/F
+   remains subject to independent reviewer verdict/reachability gates.
+3. Existing evidence-based estimates; additionally conditional AL:S for resolved
+   OS/file capability or AL:A for database/browser capability. No admin privilege
+   or privilege escalation is inferred. Machine estimates remain unverified.
+4. Declared reference context values, labelled REFERENCE_ASSUMED.
+5. Official MITRE D, labelled STANDARD_DEFAULT. No UK/U in this mode.
+Prior Evidence/Estimate output, history and their replay remain unchanged.
+
+Reference policies version NTK_REFERENCE_CONTEXT_1 (normative NTK scenarios,
+not empirical priors; no calibration claim):
+GENERAL_JAVA: General Java Application. No deployment assumptions; remaining D.
+INTERNET_WEB: Internet-Facing Web Application. AV:I RL:A SC:A BI:M.
+BUSINESS_CRITICAL_WEB: Business-Critical Web Application. AV:I RL:A SC:A BI:C.
+RESTRICTED_INTERNAL: Restricted Internal Application.
+  AV:R RP:RU RL:A AS:S SC:R BI:M EC:B.
+These codes apply only where higher-tier evidence/estimates have no value.
+The last profile explicitly assumes strong auth/best available external controls;
+it does not claim such controls were observed. Profiles do not infer AP or FC.
+
+No profile is auto-selected as public or business-critical from a CWE/Ingress.
+Default is GENERAL_JAVA. Server operator may explicitly configure
+NTK_CWSS_REFERENCE_PROFILE to one of the four IDs. Unknown ID is a config error.
+Optional repository root file ntk-cwss-reference-context.json declares scenario
+intent (untrusted assertions, never VERIFIED) with fields:
+{
+ "schema_version":"NTK_REFERENCE_CONTEXT_1",
+ "profile":"BUSINESS_CRITICAL_WEB",
+ "revision":"scenario-v1",
+ "reason":"Detailed explicit scenario justification",
+ "metric_assumptions":{
+   "BI":{"code":"C","reason":"Detailed declared asset impact assumption"}
+ }
+}
+Revision/rationale >=8 chars; each metric rationale >=24 chars. Only official
+explicit discrete codes accepted; UK/U/D/NA and FC/P overrides forbidden.
+Missing declaration -> operator profile/default. Invalid/oversized/non-UTF8/linked
+declaration -> ignored with reference_context_warning; never silently selects a
+high-risk profile. <=32KiB; data parsing only; no repository code execution.
+A valid repository declaration chooses its named scenario; source path/hash,
+revision, reasons and document persist in the complete assessment snapshot.
+BI/EC without such context or attestation remain official D, never VERIFIED.
+
+Integration and API
+Complete sidecar revision is generated automatically by record_scan, after the
+unchanged ten-stage scan, with no frontend context form required. Repository
+context is passively collected before checkout cleanup. Finding/scan archives,
+REPORT/REVIEW/SUPPRESS, heuristic fusion and existing CWSS preliminary field stay
+unchanged. Existing reviewed profiles can be consumed when record_scan is called;
+publishing an analyst revision does not retroactively refresh existing Complete
+snapshots. Historical snapshots remain immutable; no recalculation on GET.
+
+GET /api/scans/{scan}/cwss/v1/findings/{fid}/automatic
+Existing automatic_scores map retains its two keys. New sibling auto_complete
+contains CWSS_AUTO_COMPLETE. A historical scan without snapshot returns explicitly
+unpersisted fallback (revision=null, source unavailable), under GENERAL_JAVA.
+GET .../cwss/v1/ranking?mode=CWSS_AUTO_COMPLETE
+GET .../cwss/v1/report?mode=CWSS_AUTO_COMPLETE
+Existing exact-score sorting, paging and decision filtering retained.
+GET .../cwss/v1/catalog adds mode and reference profile definitions/version.
+GET .../cwss/v1/findings/{fid}/history adds complete_revisions separately.
+GET .../cwss/v1/findings/{fid}/replay?mode=CWSS_AUTO_COMPLETE&revision=1
+
+Response fields:
+cwss_score, mode/score_mode, assessment_status=SCENARIO-CONDITIONAL,
+vector/metric_vector, metric_assessments/metric_provenance,
+verified_metric_count, attested_metric_count, estimated_metric_count,
+reference_metric_count, default_metric_count, policy_na_count,
+reference_profile/version/name/selection, three_subscores (exact Decimal strings),
+explanation, calculation_hash, profile_hash, source_evidence_hash,
+assessment_completeness.unverified_metric_count, fully_verified=false.
+Unknown count is zero for vector completeness, not evidence completeness.
+Each metric stores code, official weight, classification, reason, provenance.
+Policy NA is counted separately; all counts sum to16. Attested is separately
+counted, rather than silently relabelled machine verification.
+
+Storage under existing assessment directory /complete uses the same SQLite
+immutable revision/checksum/CAS transaction infrastructure. This independent
+revision stream avoids renumbering the accepted pair history. Repeated identical
+results are idempotent. Source, reference definition/version, assumption document,
+optional validated attestation and engine hashes are snapshotted. Replay rejects
+changed reference/engine definitions; it does not reread the repository.
+Existing POST authorization and attestation validation unchanged. No new HTTP
+write route accepts Complete profiles, VERIFIED metrics or repository paths.
+
+Limits: reference policies are transparent choices, not scientifically calibrated
+risk distributions. A high score conditional on EX:H/BI:C/EC:N assumptions is not
+proof those conditions hold. No official MITRE High/Critical thresholds are used.
+Source evidence limitations from Auto V1 still apply. Business/assets, external
+controls, acquired privileges and exploit reliability cannot generally be proven
+from Java source. Default/general profile cannot solve this epistemic limit;
+website must display conditional status/counts/provenance alongside the number.

@@ -1,0 +1,4128 @@
+[
+  {
+    "fixture": "ShellServlet",
+    "synthetic": true,
+    "iris_proof": "PROVEN_TAINT",
+    "default": {
+      "cwss_version": "1.0.1",
+      "specification_url": "https://cwe.mitre.org/cwss/cwss_v1.0.1.html",
+      "cwss_score": 16.0,
+      "cwss_score_exact": "16.016616000",
+      "subscores_exact": {
+        "base": "50.40",
+        "attack_surface": "0.8025",
+        "environment": "0.396"
+      },
+      "calculation_arithmetic": "DECIMAL",
+      "decimal_precision": 50,
+      "rounding_policy": "NTK_HALF_UP_1_DECIMAL",
+      "supported_profile": "CWSS_1_0_1_DISCRETE_TARGETED",
+      "cwss_score_unrounded": 16.016616,
+      "base_finding_subscore": 50.4,
+      "attack_surface_subscore": 0.8025,
+      "environment_subscore": 0.396,
+      "vector": "TI:H,0.9/AP:D,0.7/AL:S,0.9/IC:D,0.6/FC:D,0.8/RP:D,0.7/RL:D,0.9/AV:D,0.75/AS:D,0.85/IN:A,1/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1",
+      "factor_codes": {
+        "TI": "H",
+        "AP": "D",
+        "AL": "S",
+        "IC": "D",
+        "FC": "D",
+        "RP": "D",
+        "RL": "D",
+        "AV": "D",
+        "AS": "D",
+        "IN": "A",
+        "SC": "D",
+        "BI": "D",
+        "DI": "D",
+        "EX": "D",
+        "EC": "D",
+        "P": "NA"
+      },
+      "factor_weights": {
+        "TI": 0.9,
+        "AP": 0.7,
+        "AL": 0.9,
+        "IC": 0.6,
+        "FC": 0.8,
+        "RP": 0.7,
+        "RL": 0.9,
+        "AV": 0.75,
+        "AS": 0.85,
+        "IN": 1.0,
+        "SC": 0.7,
+        "BI": 0.6,
+        "DI": 0.6,
+        "EX": 0.6,
+        "EC": 0.6,
+        "P": 1.0
+      },
+      "unknown_metrics": [],
+      "unknown_metric_count": 0,
+      "assessment_status": "SCENARIO-CONDITIONAL",
+      "score_kind": "CWSS_1_0_1_WEAKNESS_PRIORITIZATION_NOT_TP_PROBABILITY",
+      "not_a_tp_probability": true,
+      "not_a_cvss_score": true,
+      "mode": "CWSS_AUTO_COMPLETE",
+      "score_mode": "CWSS_AUTO_COMPLETE",
+      "inference_version": "NTK_CWSS_INFERENCE_V2",
+      "engine_version": "NTK_CWSS_DECIMAL_V1",
+      "engine_hash": "f7d807df08a00b8ed9015ee508739cd2bddbccbf539d8a04fa8a436ab398461e",
+      "finding_id": "FINDING-V2-ShellServlet",
+      "scan_id": "SCAN-CWSS-V2",
+      "finding_anchor": "32110021fd1724a4ceaf947ed7ac9f9cf18605659aa53a08a5a34b45d77ec878",
+      "source_evidence_hash": "b87e832a1ac275a8d3f5981f4d6e6c15fa43af1bbdf022ee67ea2d58bcdf82f8",
+      "metric_assessments": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Explicit shell command capability",
+          "rule_id": "SHELL_CAPABILITY",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "S",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "D",
+          "weight": 0.9,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "D",
+          "weight": 0.75,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "D",
+          "weight": 0.85,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_provenance": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Explicit shell command capability",
+          "rule_id": "SHELL_CAPABILITY",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "S",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "D",
+          "weight": 0.9,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "D",
+          "weight": 0.75,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "D",
+          "weight": 0.85,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_vector": "TI:H,0.9/AP:D,0.7/AL:S,0.9/IC:D,0.6/FC:D,0.8/RP:D,0.7/RL:D,0.9/AV:D,0.75/AS:D,0.85/IN:A,1/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1",
+      "normalized_evidence": {
+        "version": "NTK_CWSS_GRAPH_V2",
+        "finding_id": "FINDING-V2-ShellServlet",
+        "cwe": "CWE-078",
+        "file_path": "ShellServlet.java",
+        "line": 10,
+        "source_hash": "34d5e3098bcbe6194a91635fff61c048c0506e424c81f2a154bfdceddc8020a5",
+        "source_bound": true,
+        "ast_callsite": {
+          "stmt_order": 3,
+          "call_expr": "Runtime.getRuntime().exec(new String[]{\"/bin/sh\", \"-c\", value})",
+          "receiver": "Runtime.getRuntime()",
+          "method_name": "exec",
+          "arguments": [
+            "new String[]{\"/bin/sh\", \"-c\", value}"
+          ],
+          "arg_kinds": [
+            "NEW_ARRAY"
+          ],
+          "arg_identifiers": [
+            "String",
+            "value"
+          ],
+          "arg_string_literals": [
+            "/bin/sh",
+            "-c"
+          ],
+          "scope_id": 1,
+          "ancestor_scopes": [
+            1,
+            0
+          ],
+          "start_line": 10,
+          "end_line": 10
+        },
+        "observed_callsite": {
+          "stmt_order": 3,
+          "call_expr": "Runtime.getRuntime().exec(new String[]{\"/bin/sh\", \"-c\", value})",
+          "receiver": "Runtime.getRuntime()",
+          "method_name": "exec",
+          "arguments": [
+            "new String[]{\"/bin/sh\", \"-c\", value}"
+          ],
+          "arg_kinds": [
+            "NEW_ARRAY"
+          ],
+          "arg_identifiers": [
+            "String",
+            "value"
+          ],
+          "arg_string_literals": [
+            "/bin/sh",
+            "-c"
+          ],
+          "scope_id": 1,
+          "ancestor_scopes": [
+            1,
+            0
+          ],
+          "start_line": 10,
+          "end_line": 10
+        },
+        "resolved_method_identity": {
+          "package": "java.lang",
+          "class": "Runtime",
+          "method": "exec",
+          "signature": "Process exec(String[] cmdarray)"
+        },
+        "identity": {
+          "package": "java.lang",
+          "class": "Runtime",
+          "method": "exec",
+          "signature": "Process exec(String[] cmdarray)"
+        },
+        "iris_identity": {
+          "package": "java.lang",
+          "class": "Runtime",
+          "method": "exec",
+          "signature": "Process exec(String[] cmdarray)"
+        },
+        "format_slot_binding": null,
+        "declaring_type": "java.lang.Runtime",
+        "signature": {
+          "method": "exec",
+          "types": [
+            "String[]"
+          ],
+          "names": [
+            "cmdarray"
+          ]
+        },
+        "overload_binding": "JAVAC_SCOPED_TYPES_AND_REGISTERED_JDK_SUMMARY",
+        "sink_slot": "arg0",
+        "covered_slots": [
+          "cmdarray",
+          "0",
+          "arg0"
+        ],
+        "receiver": "Runtime.getRuntime()",
+        "receiver_origin": null,
+        "receiver_alias_path": [],
+        "slot_binding_verified": true,
+        "receiver_type_verified": true,
+        "iris_proof": "PROVEN_TAINT",
+        "trace_status": "VERIFIED_TAINT_FLOW",
+        "source_nodes": [
+          "request"
+        ],
+        "unresolved_flow_steps": [],
+        "source_to_sink_steps": [
+          "SOURCE_PARAM:request",
+          "new String[]{\"/bin/sh\", \"-c\", value}",
+          "value = request.getParameter(\"value\") (line 9)",
+          "request.getParameter(\"value\")",
+          "SOURCE_API:request.getParameter(\"value\")"
+        ],
+        "sink_node": "Runtime.getRuntime().exec(new String[]{\"/bin/sh\", \"-c\", value})",
+        "control": {
+          "status": "NONE_DETECTED",
+          "proof_node": "",
+          "context": ""
+        },
+        "qwen_role": {
+          "raw_output": "",
+          "strict_json_valid": true,
+          "predicted_role": "sink",
+          "sink_args": [
+            "arg0"
+          ],
+          "canonical_sink_args": [
+            "cmdarray"
+          ],
+          "abstain": false,
+          "abstain_reason": "OK",
+          "inference_latency_ms": 0.0,
+          "prompt_contract": "CANONICAL_IRIS_2MSG_PROMPT_V1"
+        },
+        "entry_point": {
+          "observed": true,
+          "framework": "SERVLET",
+          "method": "doPost",
+          "http_method": "POST",
+          "route_mapped": false,
+          "mapping": null,
+          "method_security_observed": false,
+          "external_reachability_established": false,
+          "authentication_verified": false
+        },
+        "local_taint_proven": true,
+        "local_safe_proven": false,
+        "status": "VERIFIED",
+        "origin": "JAVAC_SCOPED_DECLARATIONS_AND_IRIS",
+        "confidence": "LOCAL_PROOF",
+        "conflicts": [],
+        "blocked_rules": [],
+        "rule_id": "NORMALIZE_JAVA_V2",
+        "evidence_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+      },
+      "reference_profile": "GENERAL_JAVA",
+      "reference_profile_version": "NTK_REFERENCE_CONTEXT_1",
+      "reference_context_hash": null,
+      "profile_hash": "7c226ffe6dc4e7a9a6a4734b10eaa8b1922e5737a8f99f824adf4209228189d4",
+      "fully_verified": false,
+      "three_subscores": {
+        "base": "50.40",
+        "attack_surface": "0.8025",
+        "environment": "0.396"
+      },
+      "triage_decision": "REPORT",
+      "heuristic_evidence_score": 0.85,
+      "explanation": "Versioned per-metric rules. Local proof is not deployed exploitability; declared context is conditional.",
+      "verified_metric_count": 2,
+      "estimated_metric_count": 1,
+      "reference_metric_count": 0,
+      "default_metric_count": 12,
+      "attested_metric_count": 0,
+      "assessment_completeness": {
+        "verified_metric_count": 2,
+        "estimated_metric_count": 1,
+        "reference_metric_count": 0,
+        "default_metric_count": 12,
+        "attested_metric_count": 0,
+        "unknown_count": 0,
+        "metric_count": 16,
+        "policy_na_count": 1
+      },
+      "calculation_hash": "ecb33f0f1fb39579c32bf77086cc64e78d18cadb86b5f16b21d8d6210857e903"
+    },
+    "high_declared_scenario": {
+      "cwss_version": "1.0.1",
+      "specification_url": "https://cwe.mitre.org/cwss/cwss_v1.0.1.html",
+      "cwss_score": 84.0,
+      "cwss_score_exact": "84.00000",
+      "subscores_exact": {
+        "base": "84.00",
+        "attack_surface": "1.0",
+        "environment": "1.00"
+      },
+      "calculation_arithmetic": "DECIMAL",
+      "decimal_precision": 50,
+      "rounding_policy": "NTK_HALF_UP_1_DECIMAL",
+      "supported_profile": "CWSS_1_0_1_DISCRETE_TARGETED",
+      "cwss_score_unrounded": 84.0,
+      "base_finding_subscore": 84.0,
+      "attack_surface_subscore": 1.0,
+      "environment_subscore": 1.0,
+      "vector": "TI:H,0.9/AP:RU,0.7/AL:S,0.9/IC:N,1/FC:D,0.8/RP:N,1/RL:A,1/AV:I,1/AS:N,1/IN:A,1/SC:A,1/BI:C,1/DI:H,1/EX:H,1/EC:N,1/P:NA,1",
+      "factor_codes": {
+        "TI": "H",
+        "AP": "RU",
+        "AL": "S",
+        "IC": "N",
+        "FC": "D",
+        "RP": "N",
+        "RL": "A",
+        "AV": "I",
+        "AS": "N",
+        "IN": "A",
+        "SC": "A",
+        "BI": "C",
+        "DI": "H",
+        "EX": "H",
+        "EC": "N",
+        "P": "NA"
+      },
+      "factor_weights": {
+        "TI": 0.9,
+        "AP": 0.7,
+        "AL": 0.9,
+        "IC": 1.0,
+        "FC": 0.8,
+        "RP": 1.0,
+        "RL": 1.0,
+        "AV": 1.0,
+        "AS": 1.0,
+        "IN": 1.0,
+        "SC": 1.0,
+        "BI": 1.0,
+        "DI": 1.0,
+        "EX": 1.0,
+        "EC": 1.0,
+        "P": 1.0
+      },
+      "unknown_metrics": [],
+      "unknown_metric_count": 0,
+      "assessment_status": "SCENARIO-CONDITIONAL",
+      "score_kind": "CWSS_1_0_1_WEAKNESS_PRIORITIZATION_NOT_TP_PROBABILITY",
+      "not_a_tp_probability": true,
+      "not_a_cvss_score": true,
+      "mode": "CWSS_AUTO_COMPLETE",
+      "score_mode": "CWSS_AUTO_COMPLETE",
+      "inference_version": "NTK_CWSS_INFERENCE_V2",
+      "engine_version": "NTK_CWSS_DECIMAL_V1",
+      "engine_hash": "f7d807df08a00b8ed9015ee508739cd2bddbccbf539d8a04fa8a436ab398461e",
+      "finding_id": "FINDING-V2-ShellServlet",
+      "scan_id": "SCAN-CWSS-V2",
+      "finding_anchor": "32110021fd1724a4ceaf947ed7ac9f9cf18605659aa53a08a5a34b45d77ec878",
+      "source_evidence_hash": "b87e832a1ac275a8d3f5981f4d6e6c15fa43af1bbdf022ee67ea2d58bcdf82f8",
+      "metric_assessments": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Explicit shell command capability",
+          "rule_id": "SHELL_CAPABILITY",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "RU",
+          "weight": 0.7,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_SERVICE_PRIVILEGE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "S",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_INTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "I",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPOSURE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DEPLOYMENT_SCOPE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "C",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_ASSET_CRITICALITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DISCOVERY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPLOITABILITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_provenance": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Explicit shell command capability",
+          "rule_id": "SHELL_CAPABILITY",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "RU",
+          "weight": 0.7,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_SERVICE_PRIVILEGE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "S",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_INTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "I",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPOSURE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DEPLOYMENT_SCOPE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "C",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_ASSET_CRITICALITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DISCOVERY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPLOITABILITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_vector": "TI:H,0.9/AP:RU,0.7/AL:S,0.9/IC:N,1/FC:D,0.8/RP:N,1/RL:A,1/AV:I,1/AS:N,1/IN:A,1/SC:A,1/BI:C,1/DI:H,1/EX:H,1/EC:N,1/P:NA,1",
+      "normalized_evidence": {
+        "version": "NTK_CWSS_GRAPH_V2",
+        "finding_id": "FINDING-V2-ShellServlet",
+        "cwe": "CWE-078",
+        "file_path": "ShellServlet.java",
+        "line": 10,
+        "source_hash": "34d5e3098bcbe6194a91635fff61c048c0506e424c81f2a154bfdceddc8020a5",
+        "source_bound": true,
+        "ast_callsite": {
+          "stmt_order": 3,
+          "call_expr": "Runtime.getRuntime().exec(new String[]{\"/bin/sh\", \"-c\", value})",
+          "receiver": "Runtime.getRuntime()",
+          "method_name": "exec",
+          "arguments": [
+            "new String[]{\"/bin/sh\", \"-c\", value}"
+          ],
+          "arg_kinds": [
+            "NEW_ARRAY"
+          ],
+          "arg_identifiers": [
+            "String",
+            "value"
+          ],
+          "arg_string_literals": [
+            "/bin/sh",
+            "-c"
+          ],
+          "scope_id": 1,
+          "ancestor_scopes": [
+            1,
+            0
+          ],
+          "start_line": 10,
+          "end_line": 10
+        },
+        "observed_callsite": {
+          "stmt_order": 3,
+          "call_expr": "Runtime.getRuntime().exec(new String[]{\"/bin/sh\", \"-c\", value})",
+          "receiver": "Runtime.getRuntime()",
+          "method_name": "exec",
+          "arguments": [
+            "new String[]{\"/bin/sh\", \"-c\", value}"
+          ],
+          "arg_kinds": [
+            "NEW_ARRAY"
+          ],
+          "arg_identifiers": [
+            "String",
+            "value"
+          ],
+          "arg_string_literals": [
+            "/bin/sh",
+            "-c"
+          ],
+          "scope_id": 1,
+          "ancestor_scopes": [
+            1,
+            0
+          ],
+          "start_line": 10,
+          "end_line": 10
+        },
+        "resolved_method_identity": {
+          "package": "java.lang",
+          "class": "Runtime",
+          "method": "exec",
+          "signature": "Process exec(String[] cmdarray)"
+        },
+        "identity": {
+          "package": "java.lang",
+          "class": "Runtime",
+          "method": "exec",
+          "signature": "Process exec(String[] cmdarray)"
+        },
+        "iris_identity": {
+          "package": "java.lang",
+          "class": "Runtime",
+          "method": "exec",
+          "signature": "Process exec(String[] cmdarray)"
+        },
+        "format_slot_binding": null,
+        "declaring_type": "java.lang.Runtime",
+        "signature": {
+          "method": "exec",
+          "types": [
+            "String[]"
+          ],
+          "names": [
+            "cmdarray"
+          ]
+        },
+        "overload_binding": "JAVAC_SCOPED_TYPES_AND_REGISTERED_JDK_SUMMARY",
+        "sink_slot": "arg0",
+        "covered_slots": [
+          "cmdarray",
+          "0",
+          "arg0"
+        ],
+        "receiver": "Runtime.getRuntime()",
+        "receiver_origin": null,
+        "receiver_alias_path": [],
+        "slot_binding_verified": true,
+        "receiver_type_verified": true,
+        "iris_proof": "PROVEN_TAINT",
+        "trace_status": "VERIFIED_TAINT_FLOW",
+        "source_nodes": [
+          "request"
+        ],
+        "unresolved_flow_steps": [],
+        "source_to_sink_steps": [
+          "SOURCE_PARAM:request",
+          "new String[]{\"/bin/sh\", \"-c\", value}",
+          "value = request.getParameter(\"value\") (line 9)",
+          "request.getParameter(\"value\")",
+          "SOURCE_API:request.getParameter(\"value\")"
+        ],
+        "sink_node": "Runtime.getRuntime().exec(new String[]{\"/bin/sh\", \"-c\", value})",
+        "control": {
+          "status": "NONE_DETECTED",
+          "proof_node": "",
+          "context": ""
+        },
+        "qwen_role": {
+          "raw_output": "",
+          "strict_json_valid": true,
+          "predicted_role": "sink",
+          "sink_args": [
+            "arg0"
+          ],
+          "canonical_sink_args": [
+            "cmdarray"
+          ],
+          "abstain": false,
+          "abstain_reason": "OK",
+          "inference_latency_ms": 0.0,
+          "prompt_contract": "CANONICAL_IRIS_2MSG_PROMPT_V1"
+        },
+        "entry_point": {
+          "observed": true,
+          "framework": "SERVLET",
+          "method": "doPost",
+          "http_method": "POST",
+          "route_mapped": false,
+          "mapping": null,
+          "method_security_observed": false,
+          "external_reachability_established": false,
+          "authentication_verified": false
+        },
+        "local_taint_proven": true,
+        "local_safe_proven": false,
+        "status": "VERIFIED",
+        "origin": "JAVAC_SCOPED_DECLARATIONS_AND_IRIS",
+        "confidence": "LOCAL_PROOF",
+        "conflicts": [],
+        "blocked_rules": [],
+        "rule_id": "NORMALIZE_JAVA_V2",
+        "evidence_hash": "38bed8b39b48e9f8f76f7c2e1bdfeca858309e1a523dff6628b7b8918d90a32c"
+      },
+      "reference_profile": "BUSINESS_CRITICAL_INTERNET_FACING",
+      "reference_profile_version": "synthetic-domain-v1",
+      "reference_context_hash": "12fa15dae158954ab2742bdf923159bf26aef7ef1318dc9cac7c4241ffb339e9",
+      "profile_hash": "7b77d1e3817e7085f9bc1080313b0bb845b8fcec1e45891d3fb53de2938b3051",
+      "fully_verified": false,
+      "three_subscores": {
+        "base": "84.00",
+        "attack_surface": "1.0",
+        "environment": "1.00"
+      },
+      "triage_decision": "REPORT",
+      "heuristic_evidence_score": 0.85,
+      "explanation": "Versioned per-metric rules. Local proof is not deployed exploitability; declared context is conditional.",
+      "verified_metric_count": 2,
+      "estimated_metric_count": 1,
+      "reference_metric_count": 11,
+      "default_metric_count": 1,
+      "attested_metric_count": 0,
+      "assessment_completeness": {
+        "verified_metric_count": 2,
+        "estimated_metric_count": 1,
+        "reference_metric_count": 11,
+        "default_metric_count": 1,
+        "attested_metric_count": 0,
+        "unknown_count": 0,
+        "metric_count": 16,
+        "policy_na_count": 1
+      },
+      "calculation_hash": "cae49eed09a9f331b533c0568e615d79f8648f59da670c0daf61ad05db68d934"
+    }
+  },
+  {
+    "fixture": "SqlServlet",
+    "synthetic": true,
+    "iris_proof": "PROVEN_TAINT",
+    "default": {
+      "cwss_version": "1.0.1",
+      "specification_url": "https://cwe.mitre.org/cwss/cwss_v1.0.1.html",
+      "cwss_score": 16.4,
+      "cwss_score_exact": "16.397964000",
+      "subscores_exact": {
+        "base": "51.60",
+        "attack_surface": "0.8025",
+        "environment": "0.396"
+      },
+      "calculation_arithmetic": "DECIMAL",
+      "decimal_precision": 50,
+      "rounding_policy": "NTK_HALF_UP_1_DECIMAL",
+      "supported_profile": "CWSS_1_0_1_DISCRETE_TARGETED",
+      "cwss_score_unrounded": 16.397964,
+      "base_finding_subscore": 51.6,
+      "attack_surface_subscore": 0.8025,
+      "environment_subscore": 0.396,
+      "vector": "TI:H,0.9/AP:D,0.7/AL:A,1/IC:D,0.6/FC:D,0.8/RP:D,0.7/RL:D,0.9/AV:D,0.75/AS:D,0.85/IN:A,1/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1",
+      "factor_codes": {
+        "TI": "H",
+        "AP": "D",
+        "AL": "A",
+        "IC": "D",
+        "FC": "D",
+        "RP": "D",
+        "RL": "D",
+        "AV": "D",
+        "AS": "D",
+        "IN": "A",
+        "SC": "D",
+        "BI": "D",
+        "DI": "D",
+        "EX": "D",
+        "EC": "D",
+        "P": "NA"
+      },
+      "factor_weights": {
+        "TI": 0.9,
+        "AP": 0.7,
+        "AL": 1.0,
+        "IC": 0.6,
+        "FC": 0.8,
+        "RP": 0.7,
+        "RL": 0.9,
+        "AV": 0.75,
+        "AS": 0.85,
+        "IN": 1.0,
+        "SC": 0.7,
+        "BI": 0.6,
+        "DI": 0.6,
+        "EX": 0.6,
+        "EC": 0.6,
+        "P": 1.0
+      },
+      "unknown_metrics": [],
+      "unknown_metric_count": 0,
+      "assessment_status": "SCENARIO-CONDITIONAL",
+      "score_kind": "CWSS_1_0_1_WEAKNESS_PRIORITIZATION_NOT_TP_PROBABILITY",
+      "not_a_tp_probability": true,
+      "not_a_cvss_score": true,
+      "mode": "CWSS_AUTO_COMPLETE",
+      "score_mode": "CWSS_AUTO_COMPLETE",
+      "inference_version": "NTK_CWSS_INFERENCE_V2",
+      "engine_version": "NTK_CWSS_DECIMAL_V1",
+      "engine_hash": "f7d807df08a00b8ed9015ee508739cd2bddbccbf539d8a04fa8a436ab398461e",
+      "finding_id": "FINDING-V2-SqlServlet",
+      "scan_id": "SCAN-CWSS-V2",
+      "finding_anchor": "dafe37f2b9b2bd5e4280e1a5c576e0cfec0d4278889c5e10a825c76d7e6e6daf",
+      "source_evidence_hash": "65991963553a60b880f31991bf007c23f676657d996d9e8fa60c26a85c4572f7",
+      "metric_assessments": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional significant impact of covered local sink capability; runtime scope remains unverified",
+          "rule_id": "RESOLVED_SINK_CAPABILITY",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "A",
+          "weight": 1,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "D",
+          "weight": 0.9,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "D",
+          "weight": 0.75,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "D",
+          "weight": 0.85,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_provenance": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional significant impact of covered local sink capability; runtime scope remains unverified",
+          "rule_id": "RESOLVED_SINK_CAPABILITY",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "A",
+          "weight": 1,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "D",
+          "weight": 0.9,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "D",
+          "weight": 0.75,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "D",
+          "weight": 0.85,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "D",
+          "weight": 0.7,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "D",
+          "weight": 0.6,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_vector": "TI:H,0.9/AP:D,0.7/AL:A,1/IC:D,0.6/FC:D,0.8/RP:D,0.7/RL:D,0.9/AV:D,0.75/AS:D,0.85/IN:A,1/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1",
+      "normalized_evidence": {
+        "version": "NTK_CWSS_GRAPH_V2",
+        "finding_id": "FINDING-V2-SqlServlet",
+        "cwe": "CWE-089",
+        "file_path": "SqlServlet.java",
+        "line": 11,
+        "source_hash": "a14896299fcdca596d599384274099f2f7b1a582880ae65f4c0d612d40fdf2bb",
+        "source_bound": true,
+        "ast_callsite": {
+          "stmt_order": 8,
+          "call_expr": "statement.executeUpdate(value)",
+          "receiver": "statement",
+          "method_name": "executeUpdate",
+          "arguments": [
+            "value"
+          ],
+          "arg_kinds": [
+            "IDENTIFIER"
+          ],
+          "arg_identifiers": [
+            "value"
+          ],
+          "arg_string_literals": [],
+          "scope_id": 3,
+          "ancestor_scopes": [
+            3,
+            2,
+            1,
+            0
+          ],
+          "start_line": 11,
+          "end_line": 11
+        },
+        "observed_callsite": {
+          "stmt_order": 8,
+          "call_expr": "statement.executeUpdate(value)",
+          "receiver": "statement",
+          "method_name": "executeUpdate",
+          "arguments": [
+            "value"
+          ],
+          "arg_kinds": [
+            "IDENTIFIER"
+          ],
+          "arg_identifiers": [
+            "value"
+          ],
+          "arg_string_literals": [],
+          "scope_id": 3,
+          "ancestor_scopes": [
+            3,
+            2,
+            1,
+            0
+          ],
+          "start_line": 11,
+          "end_line": 11
+        },
+        "resolved_method_identity": {
+          "package": "java.sql",
+          "class": "Statement",
+          "method": "executeUpdate",
+          "signature": "int executeUpdate(String sql)"
+        },
+        "identity": {
+          "package": "java.sql",
+          "class": "Statement",
+          "method": "executeUpdate",
+          "signature": "int executeUpdate(String sql)"
+        },
+        "iris_identity": {
+          "package": "java.sql",
+          "class": "Statement",
+          "method": "executeUpdate",
+          "signature": "int executeUpdate(String sql)"
+        },
+        "format_slot_binding": null,
+        "declaring_type": "java.sql.Statement",
+        "signature": {
+          "method": "executeUpdate",
+          "types": [
+            "String"
+          ],
+          "names": [
+            "sql"
+          ]
+        },
+        "overload_binding": "JAVAC_SCOPED_TYPES_AND_REGISTERED_JDK_SUMMARY",
+        "sink_slot": "arg0",
+        "covered_slots": [
+          "sql",
+          "0",
+          "arg0"
+        ],
+        "receiver": "statement",
+        "receiver_origin": null,
+        "receiver_alias_path": [],
+        "slot_binding_verified": true,
+        "receiver_type_verified": true,
+        "iris_proof": "PROVEN_TAINT",
+        "trace_status": "VERIFIED_TAINT_FLOW",
+        "source_nodes": [
+          "request"
+        ],
+        "unresolved_flow_steps": [],
+        "source_to_sink_steps": [
+          "SOURCE_PARAM:request",
+          "value",
+          "value = request.getParameter(\"value\") (line 8)",
+          "request.getParameter(\"value\")",
+          "SOURCE_API:request.getParameter(\"value\")"
+        ],
+        "sink_node": "statement.executeUpdate(value)",
+        "control": {
+          "status": "NONE_DETECTED",
+          "proof_node": "",
+          "context": ""
+        },
+        "qwen_role": {
+          "raw_output": "",
+          "strict_json_valid": true,
+          "predicted_role": "sink",
+          "sink_args": [
+            "arg0"
+          ],
+          "canonical_sink_args": [
+            "sql"
+          ],
+          "abstain": false,
+          "abstain_reason": "OK",
+          "inference_latency_ms": 0.0,
+          "prompt_contract": "CANONICAL_IRIS_2MSG_PROMPT_V1"
+        },
+        "entry_point": {
+          "observed": true,
+          "framework": "SERVLET",
+          "method": "doPost",
+          "http_method": "POST",
+          "route_mapped": false,
+          "mapping": null,
+          "method_security_observed": false,
+          "external_reachability_established": false,
+          "authentication_verified": false
+        },
+        "local_taint_proven": true,
+        "local_safe_proven": false,
+        "status": "VERIFIED",
+        "origin": "JAVAC_SCOPED_DECLARATIONS_AND_IRIS",
+        "confidence": "LOCAL_PROOF",
+        "conflicts": [],
+        "blocked_rules": [],
+        "rule_id": "NORMALIZE_JAVA_V2",
+        "evidence_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+      },
+      "reference_profile": "GENERAL_JAVA",
+      "reference_profile_version": "NTK_REFERENCE_CONTEXT_1",
+      "reference_context_hash": null,
+      "profile_hash": "5504207450b4226497a67ee45fe9e5803805c58e88de4811765b5d93ad5e05ba",
+      "fully_verified": false,
+      "three_subscores": {
+        "base": "51.60",
+        "attack_surface": "0.8025",
+        "environment": "0.396"
+      },
+      "triage_decision": "REPORT",
+      "heuristic_evidence_score": 0.85,
+      "explanation": "Versioned per-metric rules. Local proof is not deployed exploitability; declared context is conditional.",
+      "verified_metric_count": 1,
+      "estimated_metric_count": 2,
+      "reference_metric_count": 0,
+      "default_metric_count": 12,
+      "attested_metric_count": 0,
+      "assessment_completeness": {
+        "verified_metric_count": 1,
+        "estimated_metric_count": 2,
+        "reference_metric_count": 0,
+        "default_metric_count": 12,
+        "attested_metric_count": 0,
+        "unknown_count": 0,
+        "metric_count": 16,
+        "policy_na_count": 1
+      },
+      "calculation_hash": "ecd5d398cc62369e335b61afc321e21c5c8c344c5a63df0744c71fb20ac1b2fc"
+    },
+    "high_declared_scenario": {
+      "cwss_version": "1.0.1",
+      "specification_url": "https://cwe.mitre.org/cwss/cwss_v1.0.1.html",
+      "cwss_score": 86.0,
+      "cwss_score_exact": "86.00000",
+      "subscores_exact": {
+        "base": "86.00",
+        "attack_surface": "1.0",
+        "environment": "1.00"
+      },
+      "calculation_arithmetic": "DECIMAL",
+      "decimal_precision": 50,
+      "rounding_policy": "NTK_HALF_UP_1_DECIMAL",
+      "supported_profile": "CWSS_1_0_1_DISCRETE_TARGETED",
+      "cwss_score_unrounded": 86.0,
+      "base_finding_subscore": 86.0,
+      "attack_surface_subscore": 1.0,
+      "environment_subscore": 1.0,
+      "vector": "TI:H,0.9/AP:RU,0.7/AL:A,1/IC:N,1/FC:D,0.8/RP:N,1/RL:A,1/AV:I,1/AS:N,1/IN:A,1/SC:A,1/BI:C,1/DI:H,1/EX:H,1/EC:N,1/P:NA,1",
+      "factor_codes": {
+        "TI": "H",
+        "AP": "RU",
+        "AL": "A",
+        "IC": "N",
+        "FC": "D",
+        "RP": "N",
+        "RL": "A",
+        "AV": "I",
+        "AS": "N",
+        "IN": "A",
+        "SC": "A",
+        "BI": "C",
+        "DI": "H",
+        "EX": "H",
+        "EC": "N",
+        "P": "NA"
+      },
+      "factor_weights": {
+        "TI": 0.9,
+        "AP": 0.7,
+        "AL": 1.0,
+        "IC": 1.0,
+        "FC": 0.8,
+        "RP": 1.0,
+        "RL": 1.0,
+        "AV": 1.0,
+        "AS": 1.0,
+        "IN": 1.0,
+        "SC": 1.0,
+        "BI": 1.0,
+        "DI": 1.0,
+        "EX": 1.0,
+        "EC": 1.0,
+        "P": 1.0
+      },
+      "unknown_metrics": [],
+      "unknown_metric_count": 0,
+      "assessment_status": "SCENARIO-CONDITIONAL",
+      "score_kind": "CWSS_1_0_1_WEAKNESS_PRIORITIZATION_NOT_TP_PROBABILITY",
+      "not_a_tp_probability": true,
+      "not_a_cvss_score": true,
+      "mode": "CWSS_AUTO_COMPLETE",
+      "score_mode": "CWSS_AUTO_COMPLETE",
+      "inference_version": "NTK_CWSS_INFERENCE_V2",
+      "engine_version": "NTK_CWSS_DECIMAL_V1",
+      "engine_hash": "f7d807df08a00b8ed9015ee508739cd2bddbccbf539d8a04fa8a436ab398461e",
+      "finding_id": "FINDING-V2-SqlServlet",
+      "scan_id": "SCAN-CWSS-V2",
+      "finding_anchor": "dafe37f2b9b2bd5e4280e1a5c576e0cfec0d4278889c5e10a825c76d7e6e6daf",
+      "source_evidence_hash": "65991963553a60b880f31991bf007c23f676657d996d9e8fa60c26a85c4572f7",
+      "metric_assessments": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional significant impact of covered local sink capability; runtime scope remains unverified",
+          "rule_id": "RESOLVED_SINK_CAPABILITY",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "RU",
+          "weight": 0.7,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_SERVICE_PRIVILEGE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "A",
+          "weight": 1,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_INTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "I",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPOSURE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DEPLOYMENT_SCOPE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "C",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_ASSET_CRITICALITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DISCOVERY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPLOITABILITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_provenance": {
+        "TI": {
+          "metric": "TI",
+          "code": "H",
+          "weight": 0.9,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional significant impact of covered local sink capability; runtime scope remains unverified",
+          "rule_id": "RESOLVED_SINK_CAPABILITY",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AP": {
+          "metric": "AP",
+          "code": "RU",
+          "weight": 0.7,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_SERVICE_PRIVILEGE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AL": {
+          "metric": "AL",
+          "code": "A",
+          "weight": 1,
+          "classification": "ESTIMATED",
+          "inference_status": "ESTIMATED",
+          "reason": "Conditional compromise layer from sink semantics, not acquired privilege level",
+          "rule_id": "LOCAL_COMPROMISE_LAYER",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IC": {
+          "metric": "IC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_INTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "FC": {
+          "metric": "FC",
+          "code": "D",
+          "weight": 0.8,
+          "classification": "MITRE_DEFAULT",
+          "inference_status": "MITRE_DEFAULT",
+          "reason": "Official Default is not proof, including FC:D",
+          "rule_id": "OFFICIAL_DISCRETE_DEFAULT",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "MITRE_DEFAULT",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RP": {
+          "metric": "RP",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "RL": {
+          "metric": "RL",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AV": {
+          "metric": "AV",
+          "code": "I",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPOSURE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "AS": {
+          "metric": "AS",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_AUTHENTICATION",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "IN": {
+          "metric": "IN",
+          "code": "A",
+          "weight": 1,
+          "classification": "VERIFIED",
+          "inference_status": "VERIFIED",
+          "reason": "Local request-to-server-sink flow is automatable; no deployed reachability claim",
+          "rule_id": "SYNCHRONOUS_HTTP_SERVER_EFFECT",
+          "evidence": [
+            "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+          ],
+          "assumption": false,
+          "confidence": "LOCAL_PROOF",
+          "input_evidence_status": "VERIFIED",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "SC": {
+          "metric": "SC",
+          "code": "A",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DEPLOYMENT_SCOPE",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "BI": {
+          "metric": "BI",
+          "code": "C",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_ASSET_CRITICALITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "DI": {
+          "metric": "DI",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_DISCOVERY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EX": {
+          "metric": "EX",
+          "code": "H",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXPLOITABILITY",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "EC": {
+          "metric": "EC",
+          "code": "N",
+          "weight": 1,
+          "classification": "REFERENCE_ASSUMPTION",
+          "inference_status": "REFERENCE_ASSUMPTION",
+          "reason": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+          "rule_id": "DECLARED_EXTERNAL_CONTROLS",
+          "evidence": [
+            "fixture:declared-domain-scenario-not-runtime-proof"
+          ],
+          "assumption": true,
+          "confidence": "UNVERIFIED",
+          "input_evidence_status": "REFERENCE_ASSUMPTION",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": false,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        },
+        "P": {
+          "metric": "P",
+          "code": "NA",
+          "weight": 1,
+          "classification": "NOT_APPLICABLE",
+          "inference_status": "NOT_APPLICABLE",
+          "reason": "Prevalence excluded for targeted individual finding",
+          "rule_id": "TARGETED_POLICY",
+          "evidence": [
+            "https://cwe.mitre.org/cwss/cwss_v1.0.1.html"
+          ],
+          "assumption": false,
+          "confidence": "POLICY",
+          "input_evidence_status": "NOT_APPLICABLE",
+          "conflicts": [],
+          "rejection_reasons": [],
+          "evidence_sufficient": true,
+          "provenance": {
+            "inference_version": "NTK_CWSS_INFERENCE_V2",
+            "graph_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498",
+            "policy_hash": "d997f8e4383dc01b9c1dd64d8d2a715d4f17514fac6274d8aa9e16b6632aaa67"
+          },
+          "applied_to_score": true
+        }
+      },
+      "metric_vector": "TI:H,0.9/AP:RU,0.7/AL:A,1/IC:N,1/FC:D,0.8/RP:N,1/RL:A,1/AV:I,1/AS:N,1/IN:A,1/SC:A,1/BI:C,1/DI:H,1/EX:H,1/EC:N,1/P:NA,1",
+      "normalized_evidence": {
+        "version": "NTK_CWSS_GRAPH_V2",
+        "finding_id": "FINDING-V2-SqlServlet",
+        "cwe": "CWE-089",
+        "file_path": "SqlServlet.java",
+        "line": 11,
+        "source_hash": "a14896299fcdca596d599384274099f2f7b1a582880ae65f4c0d612d40fdf2bb",
+        "source_bound": true,
+        "ast_callsite": {
+          "stmt_order": 8,
+          "call_expr": "statement.executeUpdate(value)",
+          "receiver": "statement",
+          "method_name": "executeUpdate",
+          "arguments": [
+            "value"
+          ],
+          "arg_kinds": [
+            "IDENTIFIER"
+          ],
+          "arg_identifiers": [
+            "value"
+          ],
+          "arg_string_literals": [],
+          "scope_id": 3,
+          "ancestor_scopes": [
+            3,
+            2,
+            1,
+            0
+          ],
+          "start_line": 11,
+          "end_line": 11
+        },
+        "observed_callsite": {
+          "stmt_order": 8,
+          "call_expr": "statement.executeUpdate(value)",
+          "receiver": "statement",
+          "method_name": "executeUpdate",
+          "arguments": [
+            "value"
+          ],
+          "arg_kinds": [
+            "IDENTIFIER"
+          ],
+          "arg_identifiers": [
+            "value"
+          ],
+          "arg_string_literals": [],
+          "scope_id": 3,
+          "ancestor_scopes": [
+            3,
+            2,
+            1,
+            0
+          ],
+          "start_line": 11,
+          "end_line": 11
+        },
+        "resolved_method_identity": {
+          "package": "java.sql",
+          "class": "Statement",
+          "method": "executeUpdate",
+          "signature": "int executeUpdate(String sql)"
+        },
+        "identity": {
+          "package": "java.sql",
+          "class": "Statement",
+          "method": "executeUpdate",
+          "signature": "int executeUpdate(String sql)"
+        },
+        "iris_identity": {
+          "package": "java.sql",
+          "class": "Statement",
+          "method": "executeUpdate",
+          "signature": "int executeUpdate(String sql)"
+        },
+        "format_slot_binding": null,
+        "declaring_type": "java.sql.Statement",
+        "signature": {
+          "method": "executeUpdate",
+          "types": [
+            "String"
+          ],
+          "names": [
+            "sql"
+          ]
+        },
+        "overload_binding": "JAVAC_SCOPED_TYPES_AND_REGISTERED_JDK_SUMMARY",
+        "sink_slot": "arg0",
+        "covered_slots": [
+          "sql",
+          "0",
+          "arg0"
+        ],
+        "receiver": "statement",
+        "receiver_origin": null,
+        "receiver_alias_path": [],
+        "slot_binding_verified": true,
+        "receiver_type_verified": true,
+        "iris_proof": "PROVEN_TAINT",
+        "trace_status": "VERIFIED_TAINT_FLOW",
+        "source_nodes": [
+          "request"
+        ],
+        "unresolved_flow_steps": [],
+        "source_to_sink_steps": [
+          "SOURCE_PARAM:request",
+          "value",
+          "value = request.getParameter(\"value\") (line 8)",
+          "request.getParameter(\"value\")",
+          "SOURCE_API:request.getParameter(\"value\")"
+        ],
+        "sink_node": "statement.executeUpdate(value)",
+        "control": {
+          "status": "NONE_DETECTED",
+          "proof_node": "",
+          "context": ""
+        },
+        "qwen_role": {
+          "raw_output": "",
+          "strict_json_valid": true,
+          "predicted_role": "sink",
+          "sink_args": [
+            "arg0"
+          ],
+          "canonical_sink_args": [
+            "sql"
+          ],
+          "abstain": false,
+          "abstain_reason": "OK",
+          "inference_latency_ms": 0.0,
+          "prompt_contract": "CANONICAL_IRIS_2MSG_PROMPT_V1"
+        },
+        "entry_point": {
+          "observed": true,
+          "framework": "SERVLET",
+          "method": "doPost",
+          "http_method": "POST",
+          "route_mapped": false,
+          "mapping": null,
+          "method_security_observed": false,
+          "external_reachability_established": false,
+          "authentication_verified": false
+        },
+        "local_taint_proven": true,
+        "local_safe_proven": false,
+        "status": "VERIFIED",
+        "origin": "JAVAC_SCOPED_DECLARATIONS_AND_IRIS",
+        "confidence": "LOCAL_PROOF",
+        "conflicts": [],
+        "blocked_rules": [],
+        "rule_id": "NORMALIZE_JAVA_V2",
+        "evidence_hash": "2f3552d59d7ec65f25f94b91705f663008f2050d89ce4958dc830619f5b05498"
+      },
+      "reference_profile": "BUSINESS_CRITICAL_INTERNET_FACING",
+      "reference_profile_version": "synthetic-domain-v1",
+      "reference_context_hash": "12fa15dae158954ab2742bdf923159bf26aef7ef1318dc9cac7c4241ffb339e9",
+      "profile_hash": "7326d3b7b6f7e54a26b8f7947e1aa3beeb03845fdcc913b8c8fa180596ad21df",
+      "fully_verified": false,
+      "three_subscores": {
+        "base": "86.00",
+        "attack_surface": "1.0",
+        "environment": "1.00"
+      },
+      "triage_decision": "REPORT",
+      "heuristic_evidence_score": 0.85,
+      "explanation": "Versioned per-metric rules. Local proof is not deployed exploitability; declared context is conditional.",
+      "verified_metric_count": 1,
+      "estimated_metric_count": 2,
+      "reference_metric_count": 11,
+      "default_metric_count": 1,
+      "attested_metric_count": 0,
+      "assessment_completeness": {
+        "verified_metric_count": 1,
+        "estimated_metric_count": 2,
+        "reference_metric_count": 11,
+        "default_metric_count": 1,
+        "attested_metric_count": 0,
+        "unknown_count": 0,
+        "metric_count": 16,
+        "policy_na_count": 1
+      },
+      "calculation_hash": "d774009548cec171546dfbf350bd6da38441599f79ed266825a3df7cd15c614f"
+    }
+  }
+]

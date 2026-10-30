@@ -1,0 +1,125 @@
+NTK Automatic Evidence-Based CWSS V1 (extension to CWSS V2)
+Standard: https://cwe.mitre.org/cwss/cwss_v1.0.1.html
+Profile: DISCRETE TARGETED, P:NA; Quantified Q unsupported.
+Engine, official weights, Decimal precision50 and HALF_UP rounding unchanged.
+
+Lifecycle and scope
+-------------------
+Passive collection runs after completion of the existing ten-stage scan/triage,
+while Java checkout exists. It executes no repository code, commands, expressions,
+builds, models or external API calls. record_scan consumes the transient snapshot
+and publishes an atomic pair of SQLite sidecar revisions for each new finding.
+Original scan/finding triage and archives are not rewritten by auto publication.
+The existing V2 preliminary cwss field remains backward compatible.
+All findings, including REVIEW and SUPPRESS, retain their existing decisions.
+
+CWSS_AUTO_EVIDENCE: applies only registered local-static VERIFIED facts and P:NA.
+CWSS_AUTO_ESTIMATE: also applies explicitly labelled MACHINE_SUGGESTED and
+SCENARIO_ASSUMED inputs. These never become attestations or verified facts.
+Neither mode means verified deployed exploitability or calibrated TP probability.
+An incomplete small numeric score does not establish low real-world risk.
+Do not assign MITRE High/Critical thresholds; CWSS specifies no such bands.
+
+GET /api/scans/{scan}/cwss/v1/findings/{finding}/automatic
+  200: scan_id, finding_id, inference_version, automatic_scores containing
+  CWSS_AUTO_EVIDENCE and CWSS_AUTO_ESTIMATE. Each includes:
+  mode, cwss_score, cwss_score_exact, vector, factor_codes, factor_weights,
+  base_finding_subscore, attack_surface_subscore, environment_subscore,
+  subscores_exact, unknown_metrics/count, assessment_status, fully_verified=false,
+  metric_assessments (16), machine_suggestions, assessment_completeness,
+  source_evidence_hash, finding_anchor, inference_version/hash, profile_hash,
+  verification_scope, collection_limitations, revision/revision_hash (null if absent),
+  triage_decision, heuristic_evidence_score.
+  Each metric: metric, name, code, weight, meaning, classification,
+  inference_status, rule_id, reasoning in reason, source, evidence[], provenance,
+  evidence_sufficient, applied_to_score.
+  Evidence item: reference and SHA-256 when available.
+
+GET /api/scans/{scan}/cwss/v1/ranking?mode=CWSS_AUTO_EVIDENCE
+GET /api/scans/{scan}/cwss/v1/ranking?mode=CWSS_AUTO_ESTIMATE
+GET /api/scans/{scan}/cwss/v1/report?mode=CWSS_AUTO_EVIDENCE
+GET /api/scans/{scan}/cwss/v1/report?mode=CWSS_AUTO_ESTIMATE
+  Same V2 paging (ranking only), decision filter, tie-break and full report contract.
+  Sort by exact Decimal CWSS descending, then finding_id; no heuristic mixing.
+  Default mode remains ASSESSED for backward compatibility. Automatic mode must
+  be selected explicitly; UI can display both and compare the applied metrics.
+
+GET /api/scans/{scan}/cwss/v1/findings/{finding}/history
+GET /api/scans/{scan}/cwss/v1/findings/{finding}/replay?revision={integer}
+  Existing revision contract also covers automatic pairs. Replay uses stored
+  finding/source snapshots, inference version and the original scoring engine.
+  It never rereads a changed checkout. Changed hashes/version fail explicitly.
+  Historical finding without snapshot: returns mode-labelled finding-only fallback,
+  not a claimed repository analysis; read API does not publish revisions.
+
+GET /api/scans/{scan}/cwss/v1/catalog
+  Adds automatic_modes, inference_version and automatic_scope.
+
+No new public write route. POST automatic -> 401 without existing bearer auth,
+405 with valid auth. User-submitted auto modes, source paths, snapshots or VERIFIED
+records are rejected by the existing preview/draft/publish validation. Existing
+reviewer attestation, versioned context, FC reachability gates and CORS unchanged.
+Only the server-side scan collector may call publish_automatic. Repeat collection
+with identical results is idempotent; concurrent publication uses BEGIN IMMEDIATE;
+both automatic mode revisions commit or roll back together. Reviewer publication
+still uses the latest global expected_revision, including automatic revisions.
+
+Inference rules (not a new scoring heuristic)
+--------------------------------------------
+All effect rules require semantic Javac IRIS, PROVEN_TAINT, verified local flow,
+exact supported API package/class/method/signature and matching AST overload,
+strict local Qwen role, one required sink slot with canonical coverage. Formal
+slot names (cmdarray/sql/path/x) and arg0 aliases are supported without accepting
+another overload or receiver. Local proof requires original source SHA-256 binding.
+No rule uses CWE labels to assign a metric value.
+
+TI:H VERIFIED: explicit covered Runtime.exec(String[] cmdarray) containing
+/bin/sh -c command in a supported synchronous Spring GET method. Proves command
+capability only; never process account, acquired privilege, target asset impact.
+Other supported flow-to-sinks: TI:H MACHINE_SUGGESTED, only applied in ESTIMATE.
+These are broad capability estimates, not calibrated impact predictions.
+
+IC:C VERIFIED: consumes an existing semantic PROVEN_SAFE IRIS containment proof,
+normalization plus dominating Path.startsWith guard and full slot coverage,
+explicit release, matching source hash. Constants alone, sanitizer names,
+partial/custom/Unknown controls cannot establish IC:C. Scope is this finding,
+not application-wide defense. Does not produce SUPPRESS or change FC.
+IC:N SCENARIO_ASSUMED on proven local flow with NONE_DETECTED: explicitly assumes
+no other effective internal controls. Absence of sanitizer is not VERIFIED absence.
+
+IN:A VERIFIED: supported simple synchronous Spring GET request-to-server-sink
+(SQL execution, process execution or file read), current enclosing method/source
+line, source hash and full slot proof. Establishes automatable interaction,
+not public access. XSS victim interaction remains Unknown.
+
+RP:N, AS:N SCENARIO_ASSUMED: exactly one supported Spring SecurityFilterChain,
+whole-file allowlisted grammar with anyRequest().permitAll(), supported GET,
+no method security and complete bounded inventory. Assumes configuration is
+active and no upstream/custom control changes access. Multiple chains, dynamic
+matchers, filters, authenticated() or method guards leave these Unknown.
+
+AV:I SCENARIO_ASSUMED: one Ingress host plus matching exact GET path, complete
+inventory. Explicitly assumes the manifest targets this application and is
+active/public. Ingress is never VERIFIED Internet access. Docker EXPOSE and
+Kubernetes Service are observed routing intent only and assign no access score.
+
+AP, AL, FC, RL, SC, BI, DI, EX, EC: UNKNOWN; no supported automatic proof rule.
+FC:T/LT/F still requires V2 analyst attestation with independent verification;
+no automatic taint/role inference bypass. BI/EC require asset/business/external
+control evidence outside these rules. P:NA fixed targeted policy.
+
+Collector limits and trust boundary
+----------------------------------
+Deterministic sorted passive traversal, <=2048 files/directories, <=128KiB each,
+<=2MiB examined candidate text, skip build/cache/dependency directories. Reject
+symlinks, traversal and non-UTF8/oversized files. Partial inventory disables
+security/exposure assumptions. Finding source and relevant security source are
+snapshotted; deployment files retain only allowlisted routing lines, not secrets
+or env payloads. SHA-256 of original and retained content are separate.
+Source code snapshots may contain application code: keep the V2 localhost/private
+storage trust boundary; authenticated multi-tenant source access is not added.
+No Java general parser, Spring runtime evaluator, dependency JAR/config loader,
+full Kubernetes topology resolution, DNS/firewall or deployed state verification
+is claimed. Unsupported syntax stays Unknown. Existing source provenance is
+trusted as the pipeline's analysis-to-source binding. Hashes detect corruption,
+not malicious administrator replacement of both data and checksums.

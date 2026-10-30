@@ -1,0 +1,14 @@
+{
+  "schema_version": "NTK_REFERENCE_CONTEXT_1",
+  "profile": "BUSINESS_CRITICAL_WEB",
+  "revision": "synthetic-v1",
+  "reason": "SCENARIO-CONDITIONAL synthetic critical deployment; no actual deployment or independently labelled exploitability is claimed.",
+  "metric_assumptions": {
+    "AP": {"code": "RU", "reason": "Scenario assumes compromise grants regular service-account privileges, not administrator access."},
+    "BI": {"code": "C", "reason": "Synthetic critical asset assumption explicitly declared for sensitivity testing."},
+    "EC": {"code": "N", "reason": "Synthetic scenario assumes no effective external mitigation for this weakness."},
+    "DI": {"code": "H", "reason": "Synthetic scenario assumes easily discoverable exposed endpoint; not measured attacker discovery."},
+    "EX": {"code": "H", "reason": "Synthetic scenario assumes reliable exploitation; not independently measured or calibrated."},
+    "SC": {"code": "A", "reason": "Synthetic scenario assumes the weakness occurs across all scoped application deployments."}
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": "NTK_CWSS_DECLARED_CONTEXT_V2",
+  "profile_id": "BUSINESS_CRITICAL_INTERNET_FACING",
+  "profile_version": "synthetic-domain-v1",
+  "declared_by": "synthetic-asset-owner",
+  "declared_at": "2026-10-30T12:00:00+07:00",
+  "reference": "fixture:declared-domain-scenario-not-runtime-proof",
+  "rationale": "SYNTHETIC SCENARIO-CONDITIONAL: critical online transaction service, ordinary service-account privileges, documented endpoints, no mitigating controls in this declared scenario. Discovery and exploit reliability are assumptions, not measurements.",
+  "asset_criticality": "CRITICAL",
+  "exposure": "INTERNET",
+  "authentication": "NONE",
+  "external_controls": "NONE",
+  "internal_controls": "NONE",
+  "deployment_scope": "ALL",
+  "service_privilege": "REGULAR",
+  "discovery": "DOCUMENTED_EXPOSED",
+  "exploitability": "DIRECT_UNMITIGATED"
+}

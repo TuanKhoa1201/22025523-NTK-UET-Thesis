@@ -1,0 +1,210 @@
+NTK Automatic CWSS Inference V2 - engineering and acceptance contract
+==================================================================
+Standard: https://cwe.mitre.org/cwss/cwss_v1.0.1.html
+Discrete targeted CWSS 1.0.1; no Quantified Q, no new weights, no score multiplier.
+
+BASELINE AND ROOT CAUSES
+The verified laptop recovery patch SHA256 is
+44cd10e17650906ae13a8fabe83cd056efb909fe714b58d874a3a0824b81c3fd.
+Pre-fix web backend SHA256:2354149167dfe930be805a7985735c8c78129dc53ab89c92762595b3696e940c.
+Post-fix SHA256:e6c7bdfdb9645356e6b4d1962ab39606bf9d931ddbd7f67bf5db9b98f13ea296.
+All181 baseline tests were run and passed in Codex before resuming V2 work.
+The three original 409 tests are retained unmodified. This is a patch on181;
+do not reapply earlier178 cumulative patches or run the provided recovery shell.
+
+Confirmed adapter defects:
+- V1 compared raw signature strings, including parameter spellings and metadata
+  that sometimes contained the enclosing method rather than the callee.
+- Only one-argument overloads were modeled; receiver-state this was rejected.
+- Its combined proven gate required model role, exact identity and arg0 even for
+  zero-argument ProcessBuilder/CallableStatement sinks.
+- GET-only Spring route grammar excluded every servlet doPost in the private scan.
+- IRIS V1 generic PrintWriter.println(String x) summaries represented actual
+  PrintWriter.format(Locale,String,Object...) and format(String,Object...) calls.
+- Snapshot hash bindings could describe archived DTOs before index enrichment.
+  The supplied409 fix binds the same provenance BEFORE new publication. Read
+  compatibility additionally accepts only hash-checked equivalent enrichment;
+  changed source, IRIS, decision or meaningful review status still conflicts.
+- Some identities point at nonexistent Java APIs (Statement.batchUpdate) or
+  FileInputStream/FileOutputStream callsites represented as Files.readAllBytes.
+  These remain unresolved/conflicting; they are not silently renamed APIs.
+
+ARCHITECTURE AND TRUST
+Existing OpenGrep + IRIS + local Qwen + triage -> bounded normalized graph ->
+independent per-metric policy -> unchanged MITRE Decimal scorer -> immutable
+sidecar revisions -> existing REST ranking/report/replay.
+No detection stage, triage decision, IRIS core, OpenGrep, model or frontend changed.
+
+ntk_cwss_evidence_graph.collect reuses the existing passive source collector and
+existing NTK JavacTask extractor. At most64 relevant Java sources, bridge timeout5s
+per parse, aggregate collection budget15s checked between files (an in-progress
+parse can overrun by up to its timeout). Cached AST is reused. Source hashes bind
+the snapshot to the analyzed file; inventory_complete alone never proves trust.
+AST source paths are canonical relative paths, avoiding temp-path hash variation.
+Missing parser/budget/evidence stays Unknown; no project build, class execution,
+network/model call, or repository script execution occurs.
+
+This bridge supplies syntax, callsites, scopes and declared types, not complete
+javac symbol attribution against every dependency. V2 binds registered JDK API
+summaries to scoped declared receiver/argument types. Unresolved/custom/shadowed
+receivers are rejected. The graph explicitly labels this bound, limited origin.
+
+Each graph preserves raw IRIS identity, normalized/observed/resolved callsite,
+source/line/hash, method signature, scoped receiver, alias origin (depth<=4),
+actual taint-bearing slot, covered aliases, IRIS state/trace, source nodes,
+control proof, Qwen role, entry point, conflicts/rejections and graph hash.
+UNKNOWN is never promoted merely because a request enters a constructor/helper.
+Existing interprocedural return/alias proofs from IRIS are consumed. No guessed
+field propagation replaces the18 Unknown proofs. Supplied snapshots do not include
+external helper definitions needed to independently establish those return paths.
+
+IDENTITY/SLOT CONTRACT
+Method name + declaring owner + registered parameter types + AST callsite/arity
+must agree. Return text and formal-name spelling do not define an overload.
+A real overload mismatch remains CONFLICT. Enclosing signature metadata is kept
+as an explicitly ignored metadata conflict only when the actual call is bound.
+Actual arg0/0 and formal parameter names are matched by the registered signature;
+this is a receiver slot, never converted to arg0. Receiver origin must be a
+supported ProcessBuilder construction or prepareCall/prepareStatement; aliases
+are bounded and must have matching scoped declared types. Existing IRIS must
+already prove taint reaches that slot. Parameterized execution is distinct from
+SQL assembled before statement preparation.
+
+Runtime exec String/String[] and registered env/directory overloads are recognized
+when AST argument types establish the overload. Exec is not automatically shell
+execution. Multi-argument exec is not declared completely safe from arg0 alone.
+ProcessBuilder.start consumes proven receiver state, including command(list)
+state already proved by IRIS. SQL supports Statement executeQuery/executeUpdate,
+inherited String overloads, Prepared/Callable execution and registered batch
+surface. executeBatch still needs supported receiver-state proof; registry support
+alone cannot overcome missing IRIS proof. Statement.batchUpdate is not a JDK API.
+PrintWriter print/println/write and format/printf are recognized by owner/type.
+Format aggregate repair requires exact AST call and a return-path trace tied to
+the format expression; Locale changes its actual slot toarg1. Arbitrary parameter
+names or constant format+unknown varargs do not satisfy that repair rule.
+A servlet text/html MIME setting establishes HTML-response potential, not an
+HTML_BODY encoding context or safe sanitizer. Print output is not always XSS.
+File read/path operations require source/slot/type proof; original wrong File I/O
+identities remain explicit unresolved observations instead of false JDK bindings.
+
+HTTP entry observation covers doGet/doPost/doPut/doDelete with servlet parameter
+and superclass/import checks. Spring Get/Post/Put/Delete/RequestMapping and method
+security annotations are recognized separately. Passive web.xml mapping parsing
+rejects DOCTYPE/entities and binds servlet class names to URL patterns.
+Entry observation != route mapping != deployed exposure != authentication proof.
+No endpoint-only rule yields RP:N, AS:N, AV:I, IC:N or EC:N.
+Qwen is advisory: AST-bound proof can survive a Qwen identity/role conflict, with
+raw model output retained and conflict disclosed. CWSS does not change triage.
+
+16-METRIC DECISION TABLE
+Metric | Local evidence/estimation | Explicit context | Missing-data fallback
+TI | exact safe slot:N; explicit shell:H proof; covered SQL/process/file or HTML capability:H estimate | no automatic CWE lookup | Unknown / D
+AP | never infer elevation from execution | declared regular/limited service privilege or validated reviewer | Unknown / D
+AL | conditional system vs application layer from proved sink capability | validated reviewer | Unknown / D
+IC | existing complete safe control proof:C | internal controls NONE/PARTIAL declared, not absence of sanitizer | Unknown / D
+FC | original independent attestation gates only; never taint->T/LT | no repository FC override accepted | Unknown / D
+RP | method authorization annotation:estimate only | explicit declared authentication | Unknown / D
+RL | no unsupported operational inference | application privilege layer from declared auth | Unknown / D
+AV | no Internet claim from endpoint/Ingress | declared Internet/intranet/local | U / D
+AS | no authentication strength claim from method name | none/password/privileged MFA declaration | Unknown / D
+IN | proved local HTTP-to-server flow:A; HTML victim:T estimate | not forced from CWE | Unknown / D
+SC | no deployed-frequency claim from Java source | declared ALL/RARE inventory scope | Unknown / D
+BI | no business inference from CWE | criticality+rationale declaration or reviewer | Unknown / D
+DI | no empirical attacker-discovery prior | declared documented/restricted scenario | Unknown / D
+EX | no calibrated exploit probability | declared direct/restricted scenario | Unknown / D
+EC | no external-controls absence inference | declared NONE/BEST_AVAILABLE/COMPLETE | Unknown / D
+P | targeted policy:NA | no override | NA
+
+Statuses VERIFIED, ESTIMATED, REFERENCE_ASSUMPTION, MITRE_DEFAULT, UNKNOWN and
+CONFLICT remain separate. Metric input_evidence_status can be CONFLICT while its
+numeric fallback value is MITRE_DEFAULT; these are different axes. Resolved
+metadata/model conflicts are retained even when AST supplies a usable local fact.
+Counts include a separate attested count and fixed policy NA count. Numerical
+completeness is not evidence completeness; no automatic score is fully_verified.
+Default FC:D has official weight.8; that does not mean Proven Locally True.
+
+CONTEXT SCHEMA AND SCIENCE
+Optional repository file ntk-cwss-deployment-context.json contains a typed domain
+scenario, not an injected16-metric vector. <=32KiB, passive parsing, links rejected.
+Schema NTK_CWSS_DECLARED_CONTEXT_V2 requires profile_id, profile_version, declared_by,
+timezone-aware declared_at, reference, detailed rationale and these domain fields:
+asset_criticality CRITICAL/MODERATE/LOW; exposure INTERNET/INTRANET/LOCAL;
+authentication NONE/REGULAR_PASSWORD/PRIVILEGED_MFA;
+external_controls NONE/BEST_AVAILABLE/COMPLETE; internal_controls NONE/PARTIAL;
+deployment_scope ALL/RARE; service_privilege REGULAR/LIMITED;
+discovery DOCUMENTED_EXPOSED/RESTRICTED; exploitability DIRECT_UNMITIGATED/RESTRICTED.
+Profile IDs BUSINESS_CRITICAL_INTERNET_FACING and USER_DECLARED_DEPLOYMENT. No default
+selection of business-critical profile. Complete still defaults to GENERAL_JAVA,
+with existing declared V1 reference IDs supported as fallback policies.
+Context is REFERENCE_ASSUMPTION, never reviewer attestation or verified deployment.
+Its content hash and actor/time/reference are recorded. Invalid file is reported
+as rejected; it cannot manufacture a score or FC:T. The audit Evidence mode does
+not apply scenario values. Assessed ranking remains separate.
+
+The high-risk public fixture context was defined before scoring in domain terms:
+critical Internet service, no authentication/internal/external mitigation, regular
+service account, broad deployment, documented discovery and direct exploitability.
+DI/EX assumptions are not measurements. No thresholds or score search selects
+context values; no administrator privilege and no FC:T used. The same frozen
+context is applied to both actual Java/IRIS synthetic scenarios. Results are
+84.0 and86.0 by the MITRE engine, not forced or postprocessed. See handoff's
+HIGH_RISK_PROOF.json for vectors, official weights, exact subscores and hashes.
+
+Formula, unchanged (all variables are official metric WEIGHTS):
+Base=(10*TI+5*(AP+AL)+5*FC)*f(TI)*IC*4.
+Attack=(20*(RP+RL+AV)+20*SC+15*IN+5*AS)/100.
+Environment=((10*BI+3*DI+4*EX+3*P)*f(BI)*EC)/20.
+CWSS=Base*Attack*Environment; f(TI/BI)=0 only for zero impact, otherwise1.
+Decimal precision50, HALF_UP to one decimal; exact strings retained. No official
+MITRE severity bands or calibrated TP probabilities are claimed.
+
+API/STORAGE/BACKWARD COMPATIBILITY
+Existing /api/scans/{scan}/cwss/v1 catalog, findings/{fid}/automatic, ranking,
+report, history and replay continue to work. Per-assessment inference_version is
+NTK_CWSS_INFERENCE_V2; old top-level inference_version metadata remains compatible,
+with v2_inference_version/policy_hash/metric_policy added to the catalog.
+Automatic response retains Evidence/Estimate map and sibling auto_complete.
+Ranking/report accept the existing three automatic mode strings. Unknown profile
+modes are rejected; no new write route bypasses bearer authorization or CORS.
+New scans collect V2 AST/graph snapshots and publish V2 revisions using existing
+SQLite atomic publication. Complete retains its separate revision stream.
+V1 automatic and completion modules are unchanged, and replay dispatches by stored
+inference version. Existing181 provenance binding occurs before publication.
+No GET rewrites historical scores, no old envelope/checksum is edited. Explicit
+local acceptance --append creates new revisions after source/fingerprint checks.
+
+REAL25 AND ACCEPTANCE
+Private input ZIPs and original DTO/Java contents are NOT included in the code
+patch. All25 actual DTOs were evaluated in Codex from the supplied, hash-verified
+snapshot; no GPU or OWASP pipeline rerun. Private read-only JSON/CSV output is in
+handoff/REAL25_RESULTS.*.25/25 entry points,5/5 proven local taints,2/2 safe,
+18/18 retained Unknown. Remaining defaults are genuine missing proof/context,
+not the former all-or-nothing adapter. Before25/25 were12.6; after18 are12.6,
+2 are0, and5 are16.0-16.4 under GENERAL_JAVA. No real high-risk deployment context
+was supplied, so real25 contextual scores are null, not invented business facts.
+No independent severity labels were supplied; no MAE/calibration/accuracy claim.
+
+WSL usage (paths are examples; use existing runtime/JDK17 and the actual store):
+  git apply --check ntk-cwss-inference-v2-from-181.incremental.patch
+  git apply ntk-cwss-inference-v2-from-181.incremental.patch
+  export PYTHONPATH=backend/ntk-production-v2/scripts
+  export NTK_REAL25_DIR=/path/to/extracted/NTK_CWSS_REAL25_FOR_CODEX
+  python -m unittest discover -s backend/ntk-production-v2/tests -v
+  python backend/ntk-production-v2/scripts/ntk_cwss_v2_acceptance.py --dto-dir "$NTK_REAL25_DIR" --output work/cwss-v2-real25.json
+  python backend/ntk-production-v2/scripts/ntk_cwss_v2_acceptance.py --storage-dir "$NTK_STORAGE_DIR" --scan-id SCAN-20261030110451-37DA51 --output work/cwss-v2-preview.json
+Review preview first. If accepted, use the same command plus --append; it writes
+only new sidecar revisions and leaves the scan archive unchanged. Back up sidecar
+DBs before local migration using the operator's normal procedure. Optional
+--context /path/to/user-declared-context.json applies a clearly declared scenario.
+GET ranking?mode=CWSS_AUTO_COMPLETE and history/complete_revisions should show new
+revision/version. Replay Complete with mode=CWSS_AUTO_COMPLETE&revision=N.
+
+LIMITATIONS
+No new general field/heap taint solver was introduced. Bound dependency source,
+return paths, mutation/escape and actual auth/deployment still matter;18 Unknown
+are not silently promoted. Missing external helper definitions cannot be inferred
+from their names. Full Java compiler symbol attribution, every possible overload,
+Spring inheritance/filter semantics, Docker/Kubernetes runtime deployment truth,
+WAF/grants/business attestation and exploit reliability remain outside this
+bounded adapter. Registry entries are necessary, not sufficient evidence.
+Actual CUDA/LoRA and end-to-end scanning remain laptop acceptance steps.

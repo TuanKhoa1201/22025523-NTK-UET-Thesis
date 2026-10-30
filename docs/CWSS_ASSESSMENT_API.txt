@@ -1,0 +1,150 @@
+NTK CWSS 1.0.1 discrete targeted assessment API — V2
+
+Standard: https://cwe.mitre.org/cwss/cwss_v1.0.1.html
+Engine: NTK_CWSS_DECIMAL_V1. Profile: NTK_CWSS_ASSESSMENT_V2.
+All 16 official discrete metrics/weights retained. Q is not supported. P is
+fixed NA with a targeted-finding rationale. Final rounding is NTK HALF_UP to
+one decimal; exact Decimal score and three subscores are returned as strings. Arithmetic
+uses a fixed precision-50 Decimal context, independent of caller precision.
+No MITRE High/Critical thresholds are invented.
+
+DEPLOYMENT AND AUTHORIZATION
+Existing server remains bound to localhost. For website deployment use a
+trusted TLS reverse proxy and explicit allowed origins; do not expose tokens
+or local files to untrusted users. Read API shares the existing scan read
+boundary; draft reads and all POSTs require authorization.
+
+Set NTK_CWSS_REVIEWER_TOKENS to a private server-side JSON map:
+  {"reviewer-identity":"a unique secret of at least 32 characters"}
+Use Authorization: Bearer <that reviewer's token>. No default/fallback key.
+Missing, wrong or weak tokens fail closed. Metric reviewer must equal the
+server-resolved principal. An unauthorized Origin is rejected by existing
+CORS checks. Authorization is an allowed request header. Protect this env
+configuration and rotate tokens as needed; token provisioning/SSO is outside
+this backend contract. Never put the secret in source, a public frontend
+bundle, a profile or a URL.
+
+Set NTK_CWSS_ASSESSMENT_DIR to a private directory, or use
+<NTK_STORAGE_DIR>/cwss-assessments. SQLite transactions, private permissions,
+immutable revisions, optimistic concurrency, profile/content hashes and
+stored finding snapshots support reproducible assessments. These checksums
+are integrity checks, not a signature against a malicious database admin.
+
+ROUTES
+B = /api/scans/{scan_id}/cwss/v1
+F = B/findings/{finding_id}
+GET B/report?mode=ASSESSED  JSON assessment report of all findings, including
+                          current revisions, metric catalog, triage and internal
+                          heuristic, without modifying scan archive. SCENARIO
+                          reports require scenario_name just like ranking.
+GET B/catalog             16 names, meanings, value labels, official weights,
+                          supported classifications and engine/version.
+GET F/template           profile skeleton + Preliminary result + catalog.
+GET F/draft              authenticated reviewer's last saved draft or null.
+POST F/preview           validate and calculate without publishing a revision.
+POST F/draft             validate and replace the caller's private draft.
+POST F/publish           validate, compare expected_revision, atomically append.
+GET F/history            immutable revision envelopes in revision order.
+GET F/replay?revision=N  verify checksum, engine/weights, re-evaluate snapshot
+                          and require exact canonical equality with stored result.
+GET B/ranking?mode=ASSESSED&page=1&page_size=50&decision=REPORT
+                          rank ALL matching findings before pagination by
+                          exact CWSS descending, then finding ID. Size 1..200.
+                          mode PRELIMINARY/SCENARIO/ASSESSED; SCENARIO requires
+                          scenario_name. Decision filter is optional.
+
+Ranking selects latest revision IN THE REQUESTED MODE (and named scenario).
+An unassessed finding falls back to clearly labelled PRELIMINARY, revision
+null, with Unknown/completeness data; it is never silently a scenario or an
+attested finding. Consumers must show each row's returned mode, status and
+completeness, not assume the requested mode exists for every row.
+
+POST content type: application/json, body limit 1 MiB.
+POST body for preview/draft: {"profile": <template with edited values>}.
+POST publish: {"profile": <profile>, "expected_revision": 0} for first publish;
+subsequent publish must use the latest integer revision from history. Do not
+retry stale writes by blindly incrementing the revision.
+
+200 read/preview/draft; 201 published; 401 authorization; 403 rejected Origin;
+404 missing scan/finding/revision; 405 route/method mismatch; 409 stale revision
+or replay/evidence mismatch; 422 profile/schema/evidence validation; 500 storage
+unavailable. Errors have error_code and, where safe, error_message.
+
+PROFILE
+Start with GET F/template; preserve schema_version, scan_id, finding_id,
+finding_anchor and source_evidence_hash. Do not synthesize anchors.
+context has exactly deployment_name, deployment_version_or_commit,
+assessment_scope. These are mandatory nonempty strings for SCENARIO/ASSESSED.
+mode is PRELIMINARY, SCENARIO or ASSESSED. SCENARIO needs scenario_name;
+other modes must leave it empty. finding_verification is an object.
+metrics is an object keyed by metric code; omit Unknown factors if convenient.
+P must be omitted; server supplies NOT_APPLICABLE/NA with official rationale.
+
+Metric object fields:
+  code: official discrete value (UK/U for Unknown)
+  classification: UNKNOWN | MACHINE_SUGGESTED | SCENARIO_ASSUMED |
+                  ANALYST_ATTESTED | NOT_APPLICABLE
+  reason: detailed factor-specific rationale (at least 24 characters if applied)
+  source: evidence source (at least 6 characters if applied)
+  reference: code/finding/context/document reference (at least 6 characters)
+  reviewer: authenticated principal for assessed values
+  reviewed_at_utc: ISO8601 timestamp including timezone for assessed values
+  verified: true only for an explicit analyst attestation
+
+VERIFIED is reserved for registered trusted server evidence producers; none
+currently assign operational risk factors automatically. Clients cannot claim
+VERIFIED. MACHINE_SUGGESTED never changes scoring codes, even if verified=true
+is submitted. Missing metrics remain official Unknown, never auto D or NA.
+SCENARIO accepts SCENARIO_ASSUMED with explicit reason/source/reference, never
+verified=true. ASSESSED accepts ANALYST_ATTESTED, or NOT_APPLICABLE for a
+reviewed NA exclusion. Default D is allowed only with explicit attestation or
+scenario rationale. D/NA (other than policy P) restrict fully_verified status.
+
+For FC LT/T/F the legacy semantic review gate is reused. Supply independent
+finding_verification verdict CONFIRMED_TRUE_POSITIVE or CONFIRMED_FALSE_POSITIVE,
+detailed evidence, reference, reviewer, reviewed_at_utc. FC:T additionally needs
+attacker_reachability_verified=true in that record. A compatible original
+human review_status can satisfy LT/F; it does not establish FC:T reachability.
+AST VERIFIED_TAINT_FLOW and Qwen role only generate suggestions, not FC:T.
+
+RESULTS AND DISPLAY CONTRACT
+cwss_score: 0..100, main SAST prioritization score under the stated context.
+mode, assessment_status COMPLETE/INCOMPLETE, fully_verified, risk_interpretation,
+unknown_metrics/count, assessment_completeness and scope-limited D/NA metrics.
+An incomplete 3.6 is NOT verified low risk. A scenario is NOT a deployed fact.
+vector, factor_codes/weights, three subscores, subscores_exact, cwss_score_exact.
+metric_assessments: 16 values, names, meanings, weights, classification,
+rationale, references, reviewer/time, sufficiency and missing-evidence reason.
+machine_suggestions: separate review leads, never automatically applied.
+metric_sensitivity_not_proof: one-at-a-time resulting CWSS per official code;
+compare to cwss_score to see a factor's effect. Not a new scoring heuristic,
+not attestation and not proof that other factors remain independent in reality.
+profile_hash, source_evidence_hash, finding_anchor, engine_version/hash.
+Published envelope adds revision, revision_hash, reviewer, publication time,
+original profile and finding snapshot. Replay returns replay_verified=true.
+
+New scan records receive Preliminary CWSS before first persistence; old scan
+archives are never rewritten. Published assessment revisions live in the
+sidecar. GET /api/scans/{scan_id}/cwss/page remains compatible and overlays the
+latest ASSESSED revision, otherwise legacy context or new Preliminary output.
+A SCENARIO revision is never selected by that default website read API.
+
+Heuristic fusion score 0..1 and REPORT/REVIEW/SUPPRESS remain separate, unchanged
+triage evidence. Existing scanner severity is not a CWSS severity threshold.
+Frontend files are unchanged: they can read the existing CWSS page overlay;
+editing, scenario selection, new history/ranking views require website work
+against this contract. Never relabel a requested mode as the actual row mode.
+
+VERSIONING AND LIMITS
+Vectors/profile/revision replay is deterministic for this engine. Future
+engine/weight changes must retain/version the old engine to replay old records;
+current code rejects mismatch rather than silently recomputing history.
+Static source does not establish runtime privileges, public exposure, business
+criticality, real authentication or control effectiveness. References are
+reviewer attestations; the backend does not independently validate external
+business documents or run an exploit. A trusted token is not a substitute for
+competent evidence review.
+Legacy operator publish_profile_checked now rejects invalid metric codes
+before replacement and requires original findings for verified metric claims.
+The V2 workflow is the authenticated frontend write path; do not expose the
+low-level pure score_finding/score_codes functions as unaudited write endpoints.

@@ -1,0 +1,144 @@
+NTK — CWSS discrete targeted scoring V2: quality and acceptance report
+
+BASE AND SCOPE
+Requested base: 97716ce3c4d38f83941fe0e219a9a67d2b6e4dae. Cloud checkout still has
+older f431749 HEAD plus earlier accepted patches. The audit fetched exact
+97716ce files via GitHub; four modified component baselines match those Git
+blob IDs. This handoff is a curated incremental patch FROM 97716ce, not a full
+git diff from stale local HEAD. It excludes earlier AST/IRIS patches and all
+work/ artifacts. Apply checks reconstruct exactly the four baseline files,
+apply the patch and byte-compare all seven outputs. Reverse check also passes.
+
+ROOT CAUSE ADDRESSED
+The old scorer used float intermediate arithmetic before Decimal rounding.
+A valid vector with exact 28.05 returned 28.0 under the intended HALF_UP policy.
+CWSS was calculated only on reads from an optional context file; no website
+write workflow, immutable assessment revisions or global CWSS ranking existed.
+Scoring with 15 Unknown + P:NA produced 3.6, a legitimate incomplete score that
+cannot establish low risk. The repair retains that vector and adds controlled
+ways to supply context, rather than raising default weights or replacing UK.
+
+WHAT CHANGED
+Existing scorer: same 16 discrete code/weight tables and same three MITRE
+formulas; fixed precision-50 Decimal context throughout arithmetic, HALF_UP
+final rounding, exact decimal score/subscores alongside compatible numbers.
+New assessment layer: PRELIMINARY/SCENARIO/ASSESSED use that single scorer;
+16 per-factor classifications, reasons, sources, references, weights/meanings,
+missing evidence, completeness, separate machine suggestions and one-factor
+sensitivity. New operational risk facts are not automatically invented.
+
+Machine suggestions use observed sink identity, code, local flow and strict
+API role for a potential TI value; independent impact remains unassessed.
+AST control releases may suggest IC:C, explicitly requiring full-path review.
+FC can suggest LT/F/UK but cannot become T from local flow. Privileges, actual
+exposure/authentication, deployment inventory, business impact, discovery,
+exploit reliability and external control effectiveness remain Unknown until
+context is explicitly attested. DI/EX review guidance is not exploit proof.
+VERIFIED is reserved for registered trusted producers; currently none auto-
+assign operational risk values. Config/source references may be supplied for
+analyst review; no Dockerfile/annotation-to-deployment assertion is made.
+
+Workflow: reviewer-mapped bearer authorization; private drafts; shared full
+validation for preview/draft/publish/replay; optimistic revision CAS; atomic
+SQLite publication; profile/revision/engine/evidence hashes; finding snapshot;
+replay equality; mode-aware ranking before pagination; full JSON report.
+Legacy operator publication validates before replacing, and verified legacy
+claims require original finding evidence. Existing CWSS page API overlays the
+latest assessed revision, never a scenario. New scans receive preliminary
+CWSS before their first persistence. Existing scan archives and TP/FP triage
+are never overwritten by assessment publication.
+Backend HTML archived reports expose stored CWSS separately from the internal
+heuristic and direct consumers to the current assessment report for revisions.
+No frontend source was changed. See API_CONTRACT.txt for all routes and payloads.
+
+SCIENTIFIC CHECKS
+125 backend tests PASS: 95 existing + 30 new. No GPU, Qwen inference, holdout,
+new benchmark or training data changes. New live HTTP tests use local loopback
+only, with temporary storage and synthetic identities/tokens. Original AST/
+IRIS and triage tests remain unchanged. Existing MITRE 92.6 and 51.1 examples
+pass, as do zero-impact/control edge cases and separate heuristic semantics.
+New tests pin all sixteen discrete weight tables and labels, Q rejection,
+3.6 preliminary, exact 28.05 -> 28.1, caller Decimal-context isolation,
+scenario sensitivity, machine/attestation separation, no FC:T from taint,
+authentication/CORS, evidence/version mismatch, preview/draft/publish/history,
+concurrent revision conflict, replay, integrity corruption detection, global
+ranking, legacy validation and new-scan/report integration.
+
+git diff --check passes. The patch has seven explicitly allowlisted source,
+test and contract files; no archives/logs/cache/model/dataset/generated output.
+Manifest and SHA256SUMS identify the delivered patch. Tests and acceptance
+checks are not claims about application exploitability or business impact.
+
+METRIC COVERAGE AND SENSITIVITY
+metric-evidence-matrix.csv covers all sixteen metrics, their exact code/weight
+sets, required evidence and implementation entrypoints. metric-catalog.json
+contains value labels and guidance returned by the catalog API.
+
+Without deployment/analyst evidence: 15/16 Unknown = 93.75%; remaining P:NA is
+an intentional policy exclusion, NOT a verified operational fact. No metric
+is promoted simply because Qwen/IRIS agrees on a local sink.
+A synthetic attestation of BI alone leaves 14/16 Unknown = 87.5%; assessed mode
+remains INCOMPLETE and fully_verified=false. Publishing does not cure missing
+metrics. All sixteen assigned is also insufficient for fully_verified=true
+if D/NA (apart from policy P) limits verification scope.
+
+quality-examples-synthetic.json demonstrates controlled context sensitivity
+for the four supported CWEs using self-created finding DTOs. These are unit-
+level scenarios, not real deployment measurements: baseline 3.6; explicit
+SCENARIO BI:C produces 5.2; BI:N produces 0 by the standard f(BI) gate. Neither
+changes REPORT or the .85 internal heuristic. Context combinations can increase
+or decrease scores; there is no mechanism that raises them automatically.
+A fully synthetic attestation of the MITRE example reproduces 92.6; it does
+not assert that the NTK application has that risk or business criticality.
+
+REPOSITORY SOURCE EXAMPLES AND THEIR EVIDENCE LIMITS
+CWE-022: bundled PathTraversal.java::readAttachmentVulnerable constructs a File
+from an uploads base and caller-supplied filename then reads Files.readAllBytes.
+This is a source review lead for TI/IC/FC. Actual filesystem grants, route
+reachability, sensitive contents, BI and external controls are not established.
+CWE-078: bundled CommandInjection.java::pingHostVulnerable concatenates caller
+input into a /bin/sh -c command passed to Runtime.exec. Process UID, container
+isolation, caller authentication and affected assets remain unknown.
+CWE-089: bundled SqlInjection.java::findUserVulnerable concatenates a name into
+SQL then Statement.executeQuery. A JDBC username in a fixture does not prove
+actual database grants, deployed authentication, data classification or BI.
+CWE-079: NTK's actual rules file defines the PrintWriter.println sink pattern
+(ntk.java.cwe079.printwriter-println). No deployed XSS finding/context was
+provided in this task; the four-CWE scoring test uses a clearly synthetic
+PrintWriter DTO. Victim/browser context, output encoding, real exposure and
+business impact remain Unknown. No XSS deployment result is fabricated.
+
+No new scans were run to relabel these source examples. The accepted laptop
+16-case/95-test run is user-provided baseline evidence, not rerun here. A real
+four-CWE context-assessed evaluation requires real scan findings plus reviewed
+deployment/business evidence; this handoff supplies the workflow to capture
+it, not invented attestations. The absent real CWE-079 context is a documented
+evaluation limitation.
+
+LIMITS AND WEBSITE ACCEPTANCE
+External evidence references are authenticated reviewer assertions, not
+independently fetched/signed business documents. Tokens need private operator
+provisioning/rotation and TLS when proxied; reads retain the existing localhost
+trust boundary. No SSO or tenant model is claimed. Tamper checksums do not
+protect against an administrator who can rewrite both database and checksum.
+Future engine changes must preserve/version the historical engine; replay
+currently rejects engine/weight/result mismatches rather than silently
+rewriting history. Ranking computes current overlays over all findings before
+pagination, so very large scans may later need a materialized priority index.
+
+Frontend was explicitly outside scope. Its existing CWSS read overlay can
+consume assessed scores; new edit/scenario/history/ranking controls must be
+implemented against API_CONTRACT.txt. Consumers must display actual row mode,
+Unknown/completeness and scope limitations. A fallback Preliminary row is not
+an assessed scenario merely because the request asked for that mode. No
+unofficial MITRE High/Critical thresholds have been added.
+
+LAPTOP ACCEPTANCE
+Verify HEAD is 97716ce3c4d38f83941fe0e219a9a67d2b6e4dae; verify SHA256SUMS in
+the handoff directory; run git apply --check <patch>, then git apply <patch>.
+Run backend unittest discovery with scripts on PYTHONPATH and JDK 17 on PATH.
+Configure a private reviewer/token mapping and temporary assessment directory.
+GET template, preview named scenario, attest factor-specific real evidence,
+publish expected_revision=0, replay revision=1, inspect current report/ranking,
+then confirm archived finding bytes/triage remain unchanged. Do not copy unit-
+test business claims into real attestations. No commit/push was performed.

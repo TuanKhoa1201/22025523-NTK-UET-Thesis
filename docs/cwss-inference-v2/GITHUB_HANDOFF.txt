@@ -1,0 +1,67 @@
+NTK CWSS Inference V2 GitHub handoff
+
+Base: 97716ce3c4d38f83941fe0e219a9a67d2b6e4dae
+Branch: cwss-inference-v2-220
+Layers: CWSS125 + Automatic159 + Complete178 + exact HTTP409 correction181 + InferenceV2 220.
+
+Fresh isolated checkout verification: 220 tests PASS in 35.665 seconds, including two private real25 tests.
+Test log retained locally (not published); SHA-256: 9f684271c9aa18cdd8ca0886e1109765cfb9216267bf9340749b1afefae9d74c
+Initial cold checkout run: 219/220; Javac bridge was not compiled and /usr/bin/javac was absent.
+Run the existing bin/compile_javac_ast_bridge.sh with NTK_JAVAC_BIN pointing to a JDK17 javac before testing.
+After bridge compilation the unchanged source passed all220 tests. Generated class files are excluded.
+No GPU, Qwen inference, OWASP E2E or holdout executed.
+
+Private real25 inputs are intentionally excluded. For complete local acceptance set NTK_REAL25_DIR to the extracted checksummed DTO directory; without it the private test class skips.
+Full DTO JSON/source snapshot reports remain outside Git; REAL25_RESULTS.csv provides the reviewed 25-finding research table.
+HIGH_RISK_PROOF.json is synthetic SCENARIO-CONDITIONAL evidence, not a verified deployment.
+Research documents copied from the accepted handoff; report trailing whitespace removed for git diff --check.
+
+Files in this changeset (plus this handoff record):
+backend/ntk-production-v2/scripts/ntk_cwss_auto_v2.py
+backend/ntk-production-v2/scripts/ntk_cwss_automatic.py
+backend/ntk-production-v2/scripts/ntk_cwss_complete.py
+backend/ntk-production-v2/scripts/ntk_cwss_context.py
+backend/ntk-production-v2/scripts/ntk_cwss_context_api.py
+backend/ntk-production-v2/scripts/ntk_cwss_evidence_graph.py
+backend/ntk-production-v2/scripts/ntk_cwss_provenance.py
+backend/ntk-production-v2/scripts/ntk_cwss_v101.py
+backend/ntk-production-v2/scripts/ntk_cwss_v2_acceptance.py
+backend/ntk-production-v2/scripts/ntk_cwss_workflow.py
+backend/ntk-production-v2/scripts/ntk_web_backend_service.py
+backend/ntk-production-v2/tests/fixtures/cwss_auto/CommandController.java
+backend/ntk-production-v2/tests/fixtures/cwss_auto/PathController.java
+backend/ntk-production-v2/tests/fixtures/cwss_auto/SecurityConfig.java
+backend/ntk-production-v2/tests/fixtures/cwss_auto/SqlController.java
+backend/ntk-production-v2/tests/fixtures/cwss_auto/XssController.java
+backend/ntk-production-v2/tests/fixtures/cwss_auto/ingress.yaml
+backend/ntk-production-v2/tests/fixtures/cwss_complete/high-reference.json
+backend/ntk-production-v2/tests/fixtures/cwss_v2/ConstantServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/EncodedServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/FieldServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/FileServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/GuardedPathServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/HelperServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/HtmlServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/ParameterizedServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/ProcessServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/ShellServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/SqlServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/UnknownServlet.java
+backend/ntk-production-v2/tests/fixtures/cwss_v2/high-risk-context.json
+backend/ntk-production-v2/tests/test_ntk_cwss_409_provenance.py
+backend/ntk-production-v2/tests/test_ntk_cwss_automatic.py
+backend/ntk-production-v2/tests/test_ntk_cwss_complete.py
+backend/ntk-production-v2/tests/test_ntk_cwss_v2.py
+backend/ntk-production-v2/tests/test_ntk_cwss_workflow.py
+docs/CWSS_ASSESSMENT_API.txt
+docs/CWSS_AUTOMATIC_API.txt
+docs/CWSS_AUTOMATIC_QUALITY.txt
+docs/CWSS_AUTOMATIC_V2.txt
+docs/CWSS_COMPLETE_API.txt
+docs/CWSS_COMPLETE_QUALITY.txt
+docs/cwss-inference-v2/API_CONTRACT.txt
+docs/cwss-inference-v2/CWSS_V2_QUALITY_REPORT.txt
+docs/cwss-inference-v2/CWSS_V2_metric-evidence-matrix.csv
+docs/cwss-inference-v2/HIGH_RISK_PROOF.json
+docs/cwss-inference-v2/QUALITY_REPORT.txt
+docs/cwss-inference-v2/REAL25_RESULTS.csv

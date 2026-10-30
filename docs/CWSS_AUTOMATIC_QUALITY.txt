@@ -1,0 +1,104 @@
+NTK Automatic CWSS V1 quality report
+====================================
+No benchmark, holdout, GPU, Qwen inference or independent severity labels used.
+All four Java examples and their simplified deployment context are SYNTHETIC.
+The matrix below uses deterministic mocked pipeline DTOs; separate regression
+checks run the real existing Java AST for the four local-flow examples, constants
+and Unknown helper (role output is a test double, no Qwen). The fixtures are
+illustrations of rule behavior, not deployed exploitability/TP ground truth.
+
+Before: V2 preliminary all15 Unknown + P:NA -> 3.6, Unknown ratio15/16=93.75%.
+Scores are NOT forced to High/Critical. No independent reference vectors for
+these fixtures exist; no error, MAE or benchmark accuracy is claimed. The
+unchanged MITRE engine remains checked by the existing standard example tests.
+
+Synthetic results (proof/estimates are kept distinct)
+CWE | mode | before->after | verified | estimates | Unknown/16
+078 | CWSS_AUTO_EVIDENCE | 3.6->5.5 | 2 | 0 | 13/16 (81.25%)
+078 | CWSS_AUTO_ESTIMATE | 3.6->15.2 | 2 | 4 | 9/16 (56.25%)
+089 | CWSS_AUTO_EVIDENCE | 3.6->4.1 | 1 | 0 | 14/16 (87.50%)
+089 | CWSS_AUTO_ESTIMATE | 3.6->15.2 | 1 | 5 | 9/16 (56.25%)
+079 | CWSS_AUTO_EVIDENCE | 3.6->3.6 | 0 | 0 | 15/16 (93.75%)
+079 | CWSS_AUTO_ESTIMATE | 3.6->13.8 | 0 | 5 | 10/16 (62.50%)
+022 | CWSS_AUTO_EVIDENCE | 3.6->4.1 | 1 | 0 | 14/16 (87.50%)
+022 | CWSS_AUTO_ESTIMATE | 3.6->15.2 | 1 | 5 | 9/16 (56.25%)
+
+Full vectors (same official scorer, no new weights)
+CWE-078 CWSS_AUTO_EVIDENCE
+TI:H,0.9/AP:UK,0.5/AL:UK,0.5/IC:UK,0.5/FC:UK,0.5/RP:UK,0.5/RL:UK,0.5/AV:U,0.5/AS:UK,0.5/IN:A,1/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 5.455312500
+CWE-078 CWSS_AUTO_ESTIMATE
+TI:H,0.9/AP:UK,0.5/AL:UK,0.5/IC:N,1/FC:UK,0.5/RP:N,1/RL:UK,0.5/AV:I,1/AS:N,1/IN:A,1/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 15.1800000
+CWE-089 CWSS_AUTO_EVIDENCE
+TI:UK,0.5/AP:UK,0.5/AL:UK,0.5/IC:UK,0.5/FC:UK,0.5/RP:UK,0.5/RL:UK,0.5/AV:U,0.5/AS:UK,0.5/IN:A,1/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 4.132812500
+CWE-089 CWSS_AUTO_ESTIMATE
+TI:H,0.9/AP:UK,0.5/AL:UK,0.5/IC:N,1/FC:UK,0.5/RP:N,1/RL:UK,0.5/AV:I,1/AS:N,1/IN:A,1/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 15.1800000
+CWE-079 CWSS_AUTO_EVIDENCE
+TI:UK,0.5/AP:UK,0.5/AL:UK,0.5/IC:UK,0.5/FC:UK,0.5/RP:UK,0.5/RL:UK,0.5/AV:U,0.5/AS:UK,0.5/IN:UK,0.5/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 3.5937500
+CWE-079 CWSS_AUTO_ESTIMATE
+TI:H,0.9/AP:UK,0.5/AL:UK,0.5/IC:N,1/FC:UK,0.5/RP:N,1/RL:UK,0.5/AV:I,1/AS:N,1/IN:UK,0.5/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 13.756875000
+CWE-022 CWSS_AUTO_EVIDENCE
+TI:UK,0.5/AP:UK,0.5/AL:UK,0.5/IC:UK,0.5/FC:UK,0.5/RP:UK,0.5/RL:UK,0.5/AV:U,0.5/AS:UK,0.5/IN:A,1/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 4.132812500
+CWE-022 CWSS_AUTO_ESTIMATE
+TI:H,0.9/AP:UK,0.5/AL:UK,0.5/IC:N,1/FC:UK,0.5/RP:N,1/RL:UK,0.5/AV:I,1/AS:N,1/IN:A,1/SC:UK,0.5/BI:UK,0.5/DI:UK,0.5/EX:UK,0.5/EC:UK,0.5/P:NA,1
+Exact score: 15.1800000
+
+Context sensitivity (synthetic Command example):
+Ingress exact-route scenario AV:I -> 15.2.
+No exposure evidence AV:U -> 13.3.
+Only AV changes; no business/deployment fact is invented. Both use FC:UK,
+BI:UK and EC:UK. Neither number verifies low deployed risk.
+
+Sixteen-metric rule/source coverage
+Metric | evidence output | estimate output | required provenance
+TI | H only explicit covered shell command | H for supported local-flow sink capability | Java source hash + exact IRIS owner/overload/slot + role
+AP | Unknown | Unknown | process/application privilege not established
+AL | Unknown | Unknown | acquired privilege layer not established
+IC | C only accepted complete IRIS containment proof | N assumed from no detected local sanitizer | matching source hash + semantic proof + every required slot
+FC | Unknown | Unknown | use existing independent reviewer attestation workflow
+RP | Unknown | N only supported single permitAll GET chain | source config active/upstream assumptions disclosed
+RL | Unknown | Unknown | required privilege layer lacks proof
+AV | U | I only single Ingress host + matching exact GET path | manifest targets app/public/active assumptions disclosed
+AS | Unknown | N only supported single permitAll GET chain | authentication deployment not verified
+IN | A for synchronous GET to supported server sink | same; XSS remains Unknown | current Java method/line/hash + local source/sink proof
+SC | Unknown | Unknown | deployment frequency/reachability scope lacks proof
+BI | Unknown | Unknown | business/asset owner context required
+DI | Unknown | Unknown | no attacker-discovery data
+EX | Unknown | Unknown | no independent exploit-reliability evidence
+EC | Unknown | Unknown | external controls need environment evidence
+P | NA | NA | MITRE targeted scoring policy
+
+Internal-control test distinctions:
+A mocked complete IRIS containment contract is accepted as IC:C and scores0
+without changing triage or FC. This tests consumption of an existing accepted
+proof, not the ability of IRIS to prove every guard. A separate actual Java
+normalization/containment example currently yields IRIS UNKNOWN; automatic
+IC stays UK and score remains3.6. No AST/IRIS code is changed to force a result.
+
+Reproducibility and validation:
+Fixed inference version, deterministic traversal, canonical hashes, same Decimal
+engine. Identical snapshots produce identical vector/hash/score; SQLite publication
+is an idempotent atomic mode pair. Replays use snapshots, including original
+version and engine hashes. Changed context creates new revisions, not archive
+rewrites. Tests cover competing writes, no-auth writes, source mismatch,
+unsupported owner/overload, slot gaps, stale source, ambiguous security, modified
+snapshots, path traversal/symlinks, inventory bounds and config-secret exclusion.
+
+Limits:
+Local static capability is not deployed reachability or complete impact. Only a
+small synchronous Spring syntax and an entire simple security grammar are
+supported. Unsupported/inherited/dynamic methods and external libraries stay
+Unknown. Deployment configuration is scenario evidence, never runtime truth.
+Kubernetes service ownership and firewall/topology are not resolved. Docker
+EXPOSE is observed only, not evidence of Internet exposure. BI/EC/privileges and
+FC remain Unknown automatically. High-risk deployments can still have low,
+incomplete numeric CWSS until their missing facts are independently established.
+Full verified prioritization still uses V2 context/attestation; automatic mode
+never imports a machine suggestion into attestation. Source snapshots use V2's
+private localhost trust boundary; no multi-tenant authorization was added.

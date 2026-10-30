@@ -1,0 +1,53 @@
+CWSS Complete V1 quality report -- all examples SCENARIO-CONDITIONAL
+Synthetic Java and simplified IRIS/OpenGrep/Qwen DTOs reuse Auto V1 fixtures.
+New tests isolate completion and context. Real AST compatibility is covered by
+retained Auto V1 tests. No new scan, benchmark labels, calibrated prior, GPU or
+Qwen inference is claimed. Tests passing demonstrate invariants, not accuracy.
+No independent severity reference labels: no MAE/error metric is reported.
+
+CWE | Preliminary | Evidence | Estimate | Complete | V/E/R/D (+P:NA separately)
+078 | 3.6 | 5.5 | 15.2 | 30.6 | 2/5/0/8
+089 | 3.6 | 4.1 | 15.2 | 31.3 | 1/6/0/8
+079 | 3.6 | 3.6 | 13.8 | 29.0 | 0/6/0/9
+022 | 3.6 | 4.1 | 15.2 | 30.6 | 1/6/0/8
+
+Complete vectors (official weights retained in full vector)
+CWE-078: TI:H,0.9/AP:D,0.7/AL:S,0.9/IC:N,1/FC:D,0.8/RP:N,1/RL:D,0.9/AV:I,1/AS:N,1/IN:A,1/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1
+CWE-089: TI:H,0.9/AP:D,0.7/AL:A,1/IC:N,1/FC:D,0.8/RP:N,1/RL:D,0.9/AV:I,1/AS:N,1/IN:A,1/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1
+CWE-079: TI:H,0.9/AP:D,0.7/AL:A,1/IC:N,1/FC:D,0.8/RP:N,1/RL:D,0.9/AV:I,1/AS:N,1/IN:D,0.55/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1
+CWE-022: TI:H,0.9/AP:D,0.7/AL:S,0.9/IC:N,1/FC:D,0.8/RP:N,1/RL:D,0.9/AV:I,1/AS:N,1/IN:A,1/SC:D,0.7/BI:D,0.6/DI:D,0.6/EX:D,0.6/EC:D,0.6/P:NA,1
+
+General profile supplies no reference metric overrides. Command V/E/R/D is
+2/5/0/8 out of16 (12.5%/31.25%/0%/50%) plus P6.25%; SQL and Path are
+1/6/0/8 (6.25%/37.5%/0%/50%) plus P; XSS is0/6/0/9
+(0%/37.5%/0%/56.25%) plus P. All have numerical Unknown0, but many unverified
+inputs. These are not complete evidence assignments or deployed ground truth.
+
+Reasons for changes: existing sink/source estimates retained; conditional layer
+AL estimated from supported API effect; remaining inputs use official D. Each
+D has its own MITRE weight (e.g. FC .8, BI .6, EC .6), not substituted High.
+No CWE-to-score table or point threshold changes a score. Verified IC:C yields
+zero through the unchanged multiplication; it never changes triage or FC.
+
+High fully automatic declared scenario: 84.0/100, FC:D,
+attested_count=0, under explicit synthetic assumptions.
+TI:H,0.9/AP:RU,0.7/AL:S,0.9/IC:N,1/FC:D,0.8/RP:N,1/RL:A,1/AV:I,1/AS:N,1/IN:A,1/SC:A,1/BI:C,1/DI:H,1/EX:H,1/EC:N,1/P:NA,1
+This exceeds50 by standard formula with reference AP:RU, BI:C, EC:N, DI:H,
+EX:H, SC:A plus supported flow/route estimates. These assumptions are NOT verified
+or independent deployment labels. No administrator privilege assumption used.
+Restricted internal reference scenario: 15.0/100.
+Without any source/context (all15 official D + P:NA):12.6/100, conditional.
+A separate valid synthetic analyst high-context test scores96.0; FC:T still
+requires original independent reviewer/reachability checks. No auto promotion.
+
+Sensitivity: INTERNET_WEB vs BUSINESS_CRITICAL_WEB differs only in BI:M vs C;
+score changes33.3 ->43.3 for Command. Restricted controls decrease it to15.0.
+Complete containment proof contracts produce IC:C score0. Unsupported actual
+IRIS guards stay Unknown in Evidence and D in Complete, never a fabricated proof.
+
+Limits: default/general assumptions need not describe the target deployment.
+Repository reference context is author-declared and could be inaccurate; source
+hash only reproduces it, not validates truth. BI/EC default/reference values are
+never VERIFIED. No reliable acquired privilege/discovery/exploit-rate measurement
+is available from these inputs. Static reachability is not runtime exposure.
+No scientific accuracy claim follows from the comparison table.
