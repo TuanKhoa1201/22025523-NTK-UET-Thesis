@@ -2880,7 +2880,7 @@ def scan_java_sources_and_triage(
     for hit, hit_path_str, hit_line, hit_rule, hit_code, cwe_int, java_text in candidate_contexts:
         f_sha = path_to_sha.get(hit_path_str) or shared.sha256_bytes(java_text.encode("utf-8"))
         s_key = shared.sha256_bytes(
-            f"{f_sha}|{hit_line}|{cwe_int}|{hit_rule}|{hit_code}|JAVAC_AST_V1".encode("utf-8")
+            f"{f_sha}|{hit_line}|{cwe_int}|{hit_rule}|{hit_code}|{triage_mod.AST_ANALYSIS_VERSION}".encode("utf-8")
         )
         site_keys.append(s_key)
 

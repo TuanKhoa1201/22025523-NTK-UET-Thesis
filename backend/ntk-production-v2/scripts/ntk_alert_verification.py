@@ -38,6 +38,7 @@ MODEL_VERSION_DEFAULT: str = "eo06_vnext31_trackb_main_epoch3"
 RULESET_VERSION_DEFAULT: str = "NTK_OPENGREP_JAVA_RULESET_V1.4"
 SCORING_POLICY_VERSION_DEFAULT: str = "NTK_BOUNDED_SAFETY_FLOOR_FUSION_V1.2"
 SCORE_KIND_DEFAULT: str = "HEURISTIC_EVIDENCE_FUSION_SCORE_NOT_CALIBRATED_PROBABILITY"
+AST_ANALYSIS_VERSION = "JAVAC_AST_V2_ARRAY_SAFETY"
 
 INFRASTRUCTURE_PARAM_TYPES: Set[str] = {
     "Connection",
@@ -877,6 +878,80 @@ def _resolve_variable_in_scope(
     }
 
 
+def _unproven_array_state_names(method: Dict[str, Any], sink_order: int) -> Set[str]:
+    """Invalidate constant proofs for written/escaped arrays and their local aliases.
+
+    This is a may-alias guard, not heap analysis: branches and ambiguous aliases
+    are merged conservatively. An unknown call may mutate an array. Do not use
+    the order at a declaration snapshot: aliases share storage until the sink.
+    """
+    locals_before = [v for v in method.get("local_variables", [])
+                     if int(v.get("stmt_order", 0)) < sink_order]
+    assignments = [a for a in method.get("assignments", [])
+                   if int(a.get("stmt_order", 0)) < sink_order]
+    array_names = {str(v.get("name", "")) for v in locals_before
+                   if "[]" in str(v.get("type", "")) or v.get("init_kind") == "NEW_ARRAY"
+                   or v.get("type", "") in ("", "var", "Object", "java.lang.Object")}
+    variable_names = {str(v.get("name", "")) for v in locals_before}
+    variable_names.update(str(p.get("name", "")) for p in method.get("parameters", []))
+    # `var values = helper()` need not expose [] in the declaration type.
+    # An indexed write itself establishes an array root without type attribution.
+    for a in assignments:
+        target = str(a.get("target", ""))
+        if "[" in target:
+            array_names.update(set(_extract_non_literal_identifiers(target.split("[", 1)[0])) & variable_names)
+    edges: List[Tuple[str, str]] = []
+    for v in locals_before:
+        if v.get("init_kind") in ("IDENTIFIER", "TYPE_CAST", "PARENTHESIZED") or (
+            "[]" in str(v.get("type", "")) or v.get("type", "") in ("", "var", "Object", "java.lang.Object")
+        ):
+            edges.extend((str(v.get("name", "")), str(n)) for n in v.get("identifiers", [])
+                         if n in variable_names)
+    for a in assignments:
+        target = str(a.get("target", ""))
+        if re.fullmatch(r"[A-Za-z_$][\w$]*", target) and a.get("value_kind") in (
+            "IDENTIFIER", "TYPE_CAST", "PARENTHESIZED"
+        ):
+            edges.extend((target, str(n)) for n in a.get("identifiers", []) if n in variable_names)
+
+    def closure(names: Set[str]) -> Set[str]:
+        names = set(names)
+        changed = True
+        while changed:
+            changed = False
+            for left, right in edges:
+                if (left in names or right in names) and not {left, right} <= names:
+                    names.update((left, right))
+                    changed = True
+        return names
+
+    aliases = closure(array_names)
+    uncertain: Set[str] = set()
+    for a in assignments:
+        target = str(a.get("target", ""))
+        if "[" in target:
+            uncertain.update(set(_extract_non_literal_identifiers(target)) & aliases)
+        if not re.fullmatch(r"[A-Za-z_$][\w$]*", target):
+            uncertain.update(set(a.get("identifiers", [])) & aliases)
+    # TreeScanner visits an outer call before its nested argument calls. Include
+    # those argument calls too; they can mutate the array before the sink runs.
+    sink_calls = [i for i in method.get("invocations", [])
+                  if int(i.get("stmt_order", 0)) == sink_order]
+    sink_end = int(sink_calls[0].get("end_line", 0)) if sink_calls else 0
+    for inv in method.get("invocations", []):
+        order = int(inv.get("stmt_order", 0))
+        if order == sink_order:
+            continue
+        if order > sink_order and int(inv.get("start_line", 0)) > sink_end:
+            continue
+        uncertain.update(set(inv.get("arg_identifiers", [])) & aliases)
+        uncertain.update(set(_extract_non_literal_identifiers(str(inv.get("receiver", "")))) & aliases)
+    for node in method.get("new_classes", []):
+        if int(node.get("stmt_order", 0)) < sink_order:
+            uncertain.update(set(node.get("arg_identifiers", [])) & aliases)
+    return closure(uncertain)
+
+
 def _analyze_with_openjdk_ast(
     ast_file: Dict[str, Any],
     java_source_text: str,
@@ -1083,7 +1158,6 @@ def _analyze_with_openjdk_ast(
         "append",
         "doSomething",
         "createThing",
-        "getTheValue",
         "command",
         "add",
     }
@@ -1101,6 +1175,12 @@ def _analyze_with_openjdk_ast(
         m_switches = m_dict.get("switches", [])
         m_invocations = m_dict.get("invocations", [])
         m_new_classes = m_dict.get("new_classes", [])
+        unproven_arrays = _unproven_array_state_names(m_dict, max_stmt_order)
+        # Array parameters do not have a local heap-state proof. A literal
+        # initializer at the caller does not prove the callee cannot mutate it.
+        unproven_arrays.update(str(p.get("name", "")) for p in m_dict.get("parameters", [])
+                               if "[]" in str(p.get("type", ""))
+                               or p.get("type") in ("Object", "java.lang.Object"))
         m_c_ints, m_c_strs = _compute_const_local_maps(m_local_vars, m_assignments)
         for k_ov, v_ov in m_const_overrides.items():
             m_c_strs[k_ov] = v_ov
@@ -1261,32 +1341,24 @@ def _analyze_with_openjdk_ast(
                     reaching_new_classes.append(nc)
                     all_lits.extend(nc.get("arg_string_literals", []))
 
-            # 4. Check for same-class helper calls (e.g. `doSomething(request, param)`) or known constant wrapper calls
+            # 4. Resolve unique same-class helpers from source, never by name alone.
             helper_resolved_const = False
             helper_const_val = ""
             for inv in direct_invs:
                 inv_mname = str(inv.get("method_name", ""))
                 inv_recv = str(inv.get("receiver", "")).strip()
-                # `SeparateClassRequest.getTheValue(...)` returns constant "bar"
-                if inv_mname == "getTheValue" and inv_recv:
-                    helper_resolved_const = True
-                    helper_const_val = "bar"
-                    all_idents.discard(inv_recv)
-                    continue
-
                 if (
-                    (inv_recv in ("", cls_name, "this") or inv_recv.startswith("new "))
+                    inv_recv in ("", cls_name, "this")
                     and inv_mname not in visited_methods
                     and not re.match(r"^(sanitize|clean|validate|filter|purify)[A-Z_]", inv_mname)
                 ):
                     callee_candidates = [
                         cm
-                        for c_obj in classes
-                        for cm in c_obj.get("methods", [])
+                        for cm in target_class.get("methods", [])
                         if str(cm.get("name", "")) == inv_mname
                         and len(cm.get("parameters", [])) == len(inv.get("arguments", []))
                     ]
-                    if callee_candidates and callee_candidates[0].get("returns"):
+                    if len(callee_candidates) == 1 and callee_candidates[0].get("returns"):
                         cm = callee_candidates[0]
                         cm_params = cm.get("parameters", [])
                         cm_untrusted_map: Dict[str, Tuple[str, ...]] = {}
@@ -1511,10 +1583,14 @@ def _analyze_with_openjdk_ast(
                     mapped_tainted_params.update(orig_params)
 
             tainted_used = tuple(p for p in untrusted_params if p in mapped_tainted_params)
+            unproven_array_dependencies = all_idents & unproven_arrays
+            if unproven_array_dependencies:
+                trace_steps.append("ARRAY_STATE_UNPROVEN:" + ",".join(sorted(unproven_array_dependencies)))
             is_pure_const = (
                 all_defs_const
                 and not tainted_used
                 and not has_non_const_reassignment
+                and not unproven_array_dependencies
                 and not any(f in all_idents for f in (field_names - static_final_consts))
             )
 
@@ -1840,6 +1916,26 @@ def _analyze_with_openjdk_ast(
     reaching_invs = arg_trace["reaching_invocations"]
     reaching_ncs = arg_trace["reaching_new_classes"]
     trace_steps = arg_trace["trace_steps"]
+
+    # A sanitizer in an old array initializer is not a proof about its state
+    # after a write/escape. Do not let later sanitizer heuristics release it.
+    if any(step.startswith("ARRAY_STATE_UNPROVEN:") for step in trace_steps):
+        return JavaAstSiteAnalysis(
+            file_path=file_path, match_line=match_line, cwe=cwe_int,
+            package_name=pkg_name, class_name=cls_name,
+            enclosing_method=enclosing_method, enclosing_signature=enclosing_sig,
+            untrusted_params=tuple(untrusted_params), target_callee_identity=target_ident,
+            matched_code_line=matched_code_line,
+            source_sink_trace_status=("VERIFIED_TAINT_FLOW" if tainted_params_used
+                                      else "NO_FLOW_DETECTED_INTRAPROCEDURAL_LIMIT"),
+            taint_reaches_sink=bool(tainted_params_used),
+            taint_source_params=tainted_params_used, taint_trace_steps=tuple(trace_steps),
+            sanitizer_status="NONE_DETECTED",
+            ast_evidence=shared.AstReleaseEvidence(ast_parser_engine="OPENJDK17_JAVAC_TASK_AST"),
+            extra_reason_codes=("RC_ARRAY_STATE_UNPROVEN_AFTER_MUTATION_OR_ESCAPE",),
+            ast_parser_engine="OPENJDK17_JAVAC_TASK_AST",
+            ast_overloaded_signature=ast_overloaded_sig,
+        )
 
     # =========================================================================
     # CASE 2: Pure Compile-Time Constant Sink Arguments
