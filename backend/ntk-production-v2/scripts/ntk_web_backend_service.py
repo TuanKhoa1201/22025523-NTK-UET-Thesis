@@ -2877,10 +2877,14 @@ def scan_java_sources_and_triage(
     site_cache_misses = 0
 
     site_keys: List[str] = []
+    dependency_shas: Dict[str, str] = {}
     for hit, hit_path_str, hit_line, hit_rule, hit_code, cwe_int, java_text in candidate_contexts:
         f_sha = path_to_sha.get(hit_path_str) or shared.sha256_bytes(java_text.encode("utf-8"))
+        if hit_path_str not in dependency_shas:
+            dependency_shas[hit_path_str] = triage_mod.java_source_dependency_fingerprint(java_text, hit_path_str)
+        dependency_sha = dependency_shas[hit_path_str]
         s_key = shared.sha256_bytes(
-            f"{f_sha}|{hit_line}|{cwe_int}|{hit_rule}|{hit_code}|{triage_mod.AST_ANALYSIS_VERSION}".encode("utf-8")
+            f"{f_sha}|{dependency_sha}|{hit_line}|{cwe_int}|{hit_rule}|{hit_code}|{triage_mod.AST_ANALYSIS_VERSION}".encode("utf-8")
         )
         site_keys.append(s_key)
 

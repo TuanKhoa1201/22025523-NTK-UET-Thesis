@@ -23,6 +23,7 @@ Responsibilities:
 """
 
 import hashlib
+import urllib.parse
 import json
 import os
 import re
@@ -38,7 +39,7 @@ MODEL_VERSION_DEFAULT: str = "eo06_vnext31_trackb_main_epoch3"
 RULESET_VERSION_DEFAULT: str = "NTK_OPENGREP_JAVA_RULESET_V1.4"
 SCORING_POLICY_VERSION_DEFAULT: str = "NTK_BOUNDED_SAFETY_FLOOR_FUSION_V1.2"
 SCORE_KIND_DEFAULT: str = "HEURISTIC_EVIDENCE_FUSION_SCORE_NOT_CALIBRATED_PROBABILITY"
-AST_ANALYSIS_VERSION = "JAVAC_AST_V2_ARRAY_SAFETY"
+AST_ANALYSIS_VERSION = "JAVAC_AST_V4_STANDARD_API_TRANSFERS"
 
 INFRASTRUCTURE_PARAM_TYPES: Set[str] = {
     "Connection",
@@ -123,6 +124,14 @@ class JavaAstSiteAnalysis:
     extra_reason_codes: Tuple[str, ...] = ()
     ast_parser_engine: str = "OPENJDK17_JAVAC_TASK_AST"
     ast_overloaded_signature: str = ""
+
+    @property
+    def flow_proof_state(self) -> str:
+        if self.taint_reaches_sink:
+            return "PROVEN_TAINT"
+        if self.source_sink_trace_status in ("SAFE_CONSTANT_OR_PARAMETERIZED", "SAFE_SANITIZED_OR_GUARDED"):
+            return "PROVEN_SAFE"
+        return "UNKNOWN"
 
 
 def ensure_javac_ast_bridge_compiled(
@@ -902,9 +911,9 @@ def _unproven_array_state_names(method: Dict[str, Any], sink_order: int) -> Set[
             array_names.update(set(_extract_non_literal_identifiers(target.split("[", 1)[0])) & variable_names)
     edges: List[Tuple[str, str]] = []
     for v in locals_before:
-        if v.get("init_kind") in ("IDENTIFIER", "TYPE_CAST", "PARENTHESIZED") or (
+        if v.get("init_kind") != "NEW_ARRAY" and (v.get("init_kind") in ("IDENTIFIER", "TYPE_CAST", "PARENTHESIZED") or (
             "[]" in str(v.get("type", "")) or v.get("type", "") in ("", "var", "Object", "java.lang.Object")
-        ):
+        )):
             edges.extend((str(v.get("name", "")), str(n)) for n in v.get("identifiers", [])
                          if n in variable_names)
     for a in assignments:
@@ -950,6 +959,40 @@ def _unproven_array_state_names(method: Dict[str, Any], sink_order: int) -> Set[
         if int(node.get("stmt_order", 0)) < sink_order:
             uncertain.update(set(node.get("arg_identifiers", [])) & aliases)
     return closure(uncertain)
+
+
+def java_source_dependency_fingerprint(java_source_text: str, file_path: str) -> str:
+    """Content key for named sibling/import sources, including missing files.
+
+    Mirrors bounded source lookup without walking a repository or consulting the
+    process-wide AST cache (which can contain unrelated projects).
+    """
+    pending = [(Path(file_path).resolve(), java_source_text)]
+    seen: Dict[str, str] = {}
+    while pending:
+        path, source = pending.pop()
+        if str(path) in seen:
+            continue
+        seen[str(path)] = hashlib.sha256(source.encode("utf-8")).hexdigest()
+        clean = _strip_java_comments_multiline(source)
+        pkg = re.search(r"\bpackage\s+([\w.]+)\s*;", clean)
+        root = path.parent
+        if pkg and list(root.parts[-len(pkg[1].split(".")):]) == pkg[1].split("."):
+            for _ in pkg[1].split("."):
+                root = root.parent
+        imports = re.findall(r"\bimport\s+([\w.]+)\s*;", clean)
+        paths = {path.parent / (name + ".java")
+                 for name in re.findall(r"\b[A-Z][A-Za-z0-9_$]*\b", clean)}
+        qualified_new = re.findall(r"\bnew\s+([a-z][\w.]*\.[A-Z]\w*)\s*\(", clean)
+        paths.update(root / (imp.replace(".", "/") + ".java") for imp in imports + qualified_new)
+        for candidate in paths:
+            if str(candidate) in seen:
+                continue
+            try:
+                pending.append((candidate, candidate.read_text(encoding="utf-8", errors="replace")))
+            except OSError:
+                seen[str(candidate)] = "MISSING"
+    return hashlib.sha256(json.dumps(seen, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def _analyze_with_openjdk_ast(
@@ -1137,6 +1180,9 @@ def _analyze_with_openjdk_ast(
         "get",
         "of",
         "toPath",
+        "normalize",
+        "resolve",
+        "getName",
         "toString",
         "trim",
         "toLowerCase",
@@ -1156,11 +1202,51 @@ def _analyze_with_openjdk_ast(
         "charAt",
         "length",
         "append",
-        "doSomething",
-        "createThing",
         "command",
         "add",
     }
+
+    source_units = [(ast_file, Path(file_path))]
+
+    def source_class(type_name, owner):
+        simple = type_name.rsplit(".", 1)[-1]
+        contexts = [(unit, path) for unit, path in source_units
+                    if any(cls is owner for cls in unit.get("classes", []))]
+        if len(contexts) != 1:
+            return None
+        for unit, path in contexts:
+            matches = [cls for cls in unit.get("classes", []) if cls.get("class_name") == simple]
+            if matches:
+                return matches[0] if len(matches) == 1 else None
+            pkg = str(unit.get("package_name", ""))
+            root = path.parent
+            if pkg and list(root.parts[-len(pkg.split(".")):]) == pkg.split("."):
+                for _ in pkg.split("."):
+                    root = root.parent
+            candidates = {path.parent / (simple + ".java")}
+            if "." in type_name:
+                candidates.add(root / (type_name.replace(".", "/") + ".java"))
+            for imp in unit.get("imports", []):
+                if str(imp).endswith("." + simple) and not str(imp).startswith("static "):
+                    candidates.add(root / (str(imp).replace(".", "/") + ".java"))
+            existing = [cp for cp in candidates if cp.is_file()]
+            if len(existing) != 1:
+                continue
+            cp = existing[0]
+            parsed = next((unit for unit, old_path in source_units if cp == old_path), None)
+            if parsed is None:
+                try:
+                    helper_source = cp.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    return None
+                parsed = parse_java_source_with_javac_ast(helper_source, str(cp))
+            if parsed:
+                if not any(cp == old_path for _, old_path in source_units):
+                    source_units.append((parsed, cp))
+                matches = [c for c in parsed.get("classes", []) if c.get("class_name") == simple]
+                if len(matches) == 1:
+                    return matches[0]
+        return None
 
     def _build_method_tracer(
         m_dict: Dict[str, Any],
@@ -1168,7 +1254,13 @@ def _analyze_with_openjdk_ast(
         m_const_overrides: Dict[str, str],
         max_stmt_order: int,
         visited_methods: Set[str],
+        owner_class: Optional[Dict[str, Any]] = None,
     ):
+        owner_class = owner_class or target_class
+        owner_fields = {str(f.get("name", "")) for f in owner_class.get("fields", [])}
+        owner_consts = {str(f.get("name", "")) for f in owner_class.get("fields", [])
+                        if f.get("is_static") and f.get("is_final")
+                        and _is_const_ast_kind(str(f.get("init_kind", "")))}
         m_local_vars = m_dict.get("local_variables", [])
         m_assignments = m_dict.get("assignments", [])
         m_if_guards = m_dict.get("if_guards", [])
@@ -1184,6 +1276,93 @@ def _analyze_with_openjdk_ast(
         m_c_ints, m_c_strs = _compute_const_local_maps(m_local_vars, m_assignments)
         for k_ov, v_ov in m_const_overrides.items():
             m_c_strs[k_ov] = v_ov
+
+        servlet_types = {"HttpServletRequest", "javax.servlet.http.HttpServletRequest",
+                         "jakarta.servlet.http.HttpServletRequest"}
+
+        def standard_type(receiver, qualified):
+            # JavacTask.parse has no classpath attribution. Admit only an explicit
+            # JDK name/import with no local, field or source-class shadow.
+            root = receiver.split(".", 1)[0]
+            if root in owner_fields or any(v.get("name") == root for v in m_local_vars + m_dict.get("parameters", [])):
+                return False
+            if receiver == qualified:
+                return True
+            simple = qualified.rsplit(".", 1)[-1]
+            units = [u for u, _ in source_units if any(c is owner_class for c in u.get("classes", []))]
+            return (receiver == simple and len(units) == 1
+                    and qualified in units[0].get("imports", [])
+                    and not any(c.get("class_name") == simple for c in units[0].get("classes", []))
+                    and source_class(simple, owner_class) is None)
+
+        def servlet_receiver(receiver):
+            return (receiver in m_untrusted_map and any(
+                p.get("name") == receiver and p.get("type") in servlet_types
+                for p in m_dict.get("parameters", []))
+                and not any(c.get("class_name") == "HttpServletRequest"
+                            for u, _ in source_units for c in u.get("classes", [])))
+
+        def declared_type(expr, ancestors, order, line):
+            if re.fullmatch(r'"(?:\\.|[^"\\])*"', expr.strip()):
+                return "String"
+            local = _resolve_variable_in_scope(expr, ancestors, order, line, m_local_vars, m_assignments)
+            if local:
+                return str(local["var_type"])
+            return next((str(p.get("type", "")) for p in m_dict.get("parameters", [])
+                         if p.get("name") == expr), "")
+
+        def header_origin(expr, ancestors, order, line, seen=frozenset()):
+            if expr in seen or len(seen) >= 12:
+                return None
+            calls = [i for i in m_invocations if i.get("call_expr") == expr
+                     and i.get("method_name") == "getHeaders" and servlet_receiver(i.get("receiver"))
+                     and len(i.get("arguments", [])) == 1
+                     and declared_type(str(i["arguments"][0]), ancestors, order, line) in ("String", "java.lang.String")]
+            if calls:
+                return calls[0]
+            local = _resolve_variable_in_scope(expr, ancestors, order, line, m_local_vars,
+                                                m_assignments, m_invocations, m_if_guards, m_switches)
+            defs = local["reaching_defs"] if local else []
+            if len(defs) != 1 or not defs[0].get("dominating"):
+                return None
+            aliases = {expr}
+            edges = [(v.get("name"), v.get("init_expr")) for v in m_local_vars
+                     if v.get("init_kind") == "IDENTIFIER"]
+            while True:
+                previous = set(aliases)
+                for a, b in edges:
+                    if a in aliases or b in aliases:
+                        aliases.update((a, b))
+                if previous == aliases:
+                    break
+            if any(int(i.get("stmt_order", 0)) < max_stmt_order
+                   and aliases.intersection(i.get("arg_identifiers", [])) for i in m_invocations):
+                return None
+            if any(int(a.get("stmt_order", 0)) < max_stmt_order
+                   and not re.fullmatch(r"[A-Za-z_$][\w$]*", str(a.get("target", "")))
+                   and aliases.intersection(a.get("identifiers", [])) for a in m_assignments):
+                return None
+            if any(int(n.get("stmt_order", 0)) < max_stmt_order
+                   and aliases.intersection(n.get("arg_identifiers", [])) for n in m_new_classes):
+                return None
+            d = defs[0]
+            return header_origin(str(d["expr"]), local["declaration"]["ancestor_scopes"],
+                                 int(d["stmt_order"]), int(d["line"]), seen | {expr})
+
+        def expression_type(expr, ancestors, order, line):
+            declared = declared_type(expr, ancestors, order, line)
+            if declared:
+                return declared
+            for i in m_invocations:
+                if i.get("call_expr") != expr:
+                    continue
+                if (servlet_receiver(i.get("receiver")) and i.get("method_name") in
+                        ("getParameter", "getHeader", "getQueryString")):
+                    return "String"
+                if (i.get("method_name") == "nextElement" and not i.get("arguments")
+                        and header_origin(str(i.get("receiver")), ancestors, order, line)):
+                    return "String"
+            return ""
 
         def _trace_expr(
             expr_str: str,
@@ -1325,7 +1504,8 @@ def _analyze_with_openjdk_ast(
             direct_invs: List[Dict[str, Any]] = []
             for inv in m_invocations:
                 if (
-                    int(inv.get("stmt_order", 0)) <= max_stmt_order
+                    (int(inv.get("stmt_order", 0)) <= max_stmt_order
+                     or int(inv.get("start_line", 0)) <= match_line <= int(inv.get("end_line", 0)))
                     and inv.get("call_expr", "")
                     and inv.get("call_expr", "") in expr_str
                 ):
@@ -1341,94 +1521,220 @@ def _analyze_with_openjdk_ast(
                     reaching_new_classes.append(nc)
                     all_lits.extend(nc.get("arg_string_literals", []))
 
-            # 4. Resolve unique same-class helpers from source, never by name alone.
+            # Calls carry return-value evidence, not lexical argument membership.
+            # Only outer calls are evaluated here; nested calls are evaluated through
+            # their arguments/returns so an unknown wrapper cannot inherit source taint.
+            known_constructors = {"String", "java.lang.String", "StringBuilder", "java.lang.StringBuilder",
+                                  "File", "java.io.File", "ProcessBuilder", "java.lang.ProcessBuilder",
+                                  "ArrayList", "java.util.ArrayList", "ArrayList<String>", "java.util.ArrayList<String>"}
+            unknown_constructors = [nc for nc in reaching_new_classes
+                                    if nc.get("class_type") not in known_constructors]
+            direct_invs = [inv for inv in direct_invs if not any(
+                inv["call_expr"] in str(nc.get("new_expr", "")) for nc in unknown_constructors)]
+            direct_invs = [inv for inv in direct_invs if not any(
+                inv["call_expr"] != outer["call_expr"]
+                and inv["call_expr"] in outer["call_expr"] for outer in direct_invs)]
             helper_resolved_const = False
             helper_const_val = ""
+            call_unknown = bool(unknown_constructors)
+            call_results = []
+            residual = expr_str
+            for nc in unknown_constructors:
+                unknown_expr = str(nc.get("new_expr", ""))
+                trace_steps.append("UNKNOWN_CALL_RETURN:" + unknown_expr)
             for inv in direct_invs:
-                inv_mname = str(inv.get("method_name", ""))
-                inv_recv = str(inv.get("receiver", "")).strip()
-                if (
-                    inv_recv in ("", cls_name, "this")
-                    and inv_mname not in visited_methods
-                    and not re.match(r"^(sanitize|clean|validate|filter|purify)[A-Z_]", inv_mname)
-                ):
-                    callee_candidates = [
-                        cm
-                        for cm in target_class.get("methods", [])
-                        if str(cm.get("name", "")) == inv_mname
-                        and len(cm.get("parameters", [])) == len(inv.get("arguments", []))
-                    ]
-                    if len(callee_candidates) == 1 and callee_candidates[0].get("returns"):
-                        cm = callee_candidates[0]
-                        cm_params = cm.get("parameters", [])
-                        cm_untrusted_map: Dict[str, Tuple[str, ...]] = {}
-                        cm_const_ov: Dict[str, str] = {}
-                        inv_args = inv.get("arguments", [])
-                        inv_kinds = inv.get("arg_kinds", [])
-                        for p_idx, p_info in enumerate(cm_params):
-                            p_nm = str(p_info.get("name", "")).strip()
-                            p_tp = str(p_info.get("type", "")).strip()
-                            a_ex = str(inv_args[p_idx]).strip() if p_idx < len(inv_args) else ""
-                            a_kd = str(inv_kinds[p_idx]).strip() if p_idx < len(inv_kinds) else "UNKNOWN"
-                            a_ids = _extract_non_literal_identifiers(a_ex)
-                            arg_sub = _trace_expr(
-                                expr_str=a_ex,
-                                expr_kind=a_kd,
-                                expr_idents=a_ids,
-                                ref_anc=inv.get("ancestor_scopes", ref_anc),
-                                ref_order=int(inv.get("stmt_order", ref_order)),
-                                ref_ln=int(inv.get("start_line", ref_ln)),
-                                visited_vars=set(visited_vars),
-                            )
-                            if arg_sub["tainted_params_used"]:
-                                cm_untrusted_map[p_nm] = tuple(arg_sub["tainted_params_used"])
-                            elif p_tp not in INFRASTRUCTURE_PARAM_TYPES and a_ex in m_untrusted_map:
-                                cm_untrusted_map[p_nm] = m_untrusted_map[a_ex]
-                            elif arg_sub["is_pure_compile_time_constant"]:
-                                cm_const_ov[p_nm] = str(arg_sub["const_repr"])
+                call = str(inv.get("call_expr", ""))
+                name = str(inv.get("method_name", ""))
+                recv = str(inv.get("receiver", "")).strip()
+                callee_class = None
+                if recv in ("", "this", str(owner_class.get("class_name", ""))):
+                    callee_class = owner_class
+                else:
+                    # Resolve an exact newly constructed local receiver, or a class
+                    # reference. Interface/field/ambiguous receiver state stays unknown.
+                    local = _resolve_variable_in_scope(
+                        recv, ref_anc, ref_order, ref_ln, m_local_vars, m_assignments)
+                    if local:
+                        defs = local["reaching_defs"]
+                        if len(defs) == 1:
+                            ctor = re.match(r"^new\s+([\w.]+)\s*\(", defs[0]["expr"])
+                            if ctor:
+                                callee_class = source_class(ctor.group(1), owner_class)
+                    elif re.fullmatch(r"[\w.]+", recv) and recv[:1].isupper():
+                        callee_class = source_class(recv, owner_class)
+                    else:
+                        ctor = re.match(r"^new\s+([\w.]+)\s*\(", recv)
+                        if ctor:
+                            callee_class = source_class(ctor.group(1), owner_class)
 
-                        callee_tracer = _build_method_tracer(
-                            m_dict=cm,
-                            m_untrusted_map=cm_untrusted_map,
-                            m_const_overrides=cm_const_ov,
-                            max_stmt_order=999999,
-                            visited_methods=visited_methods | {inv_mname},
-                        )
-                        ret_all_const = True
-                        for ret_node in cm.get("returns", []):
-                            r_sub = callee_tracer(
-                                expr_str=str(ret_node.get("expr", "")),
-                                expr_kind=str(ret_node.get("kind", "")),
-                                expr_idents=list(ret_node.get("identifiers", [])),
-                                ref_anc=list(ret_node.get("ancestor_scopes", [1, 0])),
-                                ref_order=int(ret_node.get("stmt_order", 999999)),
-                                ref_ln=int(ret_node.get("start_line", 0)),
-                            )
-                            for st in r_sub["trace_steps"]:
-                                if st not in trace_steps:
-                                    trace_steps.append(st)
-                            all_kinds.update(r_sub["all_kinds"])
-                            all_lits.extend(r_sub["all_lits"])
-                            for r_inv in r_sub["reaching_invocations"]:
-                                if r_inv not in reaching_invocations:
-                                    reaching_invocations.append(r_inv)
-                            for r_nc in r_sub["reaching_new_classes"]:
-                                if r_nc not in reaching_new_classes:
-                                    reaching_new_classes.append(r_nc)
-                            mapped_tainted_params.update(r_sub["tainted_params_used"])
-                            if not r_sub["is_pure_compile_time_constant"]:
-                                ret_all_const = False
-                            else:
-                                helper_const_val = str(r_sub["const_repr"])
+                candidates = [cm for cm in (callee_class or {}).get("methods", [])
+                              if cm.get("name") == name
+                              and len(cm.get("parameters", [])) == len(inv.get("arguments", []))]
+                key = str((callee_class or {}).get("class_name", "")) + ":" + name
+                result = None
+                if len(candidates) == 1 and key not in visited_methods and len(visited_methods) < 12:
+                    cm = candidates[0]
+                    cm_map, cm_consts = {}, {}
+                    for i, param in enumerate(cm.get("parameters", [])):
+                        arg = str(inv["arguments"][i])
+                        sub = _trace_expr(arg, inv["arg_kinds"][i],
+                                          _extract_non_literal_identifiers(arg), ref_anc,
+                                          int(inv.get("stmt_order", ref_order)), ref_ln, set(visited_vars))
+                        if sub["tainted_params_used"]:
+                            cm_map[param["name"]] = sub["tainted_params_used"]
+                        elif sub["is_pure_compile_time_constant"]:
+                            cm_consts[param["name"]] = sub["const_repr"]
+                    tracer = _build_method_tracer(cm, cm_map, cm_consts, 999999,
+                                                  visited_methods | {key}, callee_class)
+                    returns = [tracer(str(r.get("expr", "")), str(r.get("kind", "")),
+                                      r.get("identifiers", []), r.get("ancestor_scopes", [1, 0]),
+                                      int(r.get("stmt_order", 999999)), int(r.get("start_line", 0)))
+                               for r in cm.get("returns", [])]
+                    if returns:
+                        # A branch-dependent tainted return is a possible flow, not
+                        # proof of a feasible source-to-sink return path.
+                        all_safe = all(r["is_pure_compile_time_constant"] for r in returns)
+                        unconditional_return = any(
+                            r.get("ancestor_scopes") == [1, 0]
+                            and not any(int(g.get(prefix + "_start_line", -1)) <= int(r.get("start_line", 0))
+                                        <= int(g.get(prefix + "_end_line", -1))
+                                        for g in cm.get("if_guards", []) for prefix in ("then", "else"))
+                            for r in cm.get("returns", []))
+                        all_taint = unconditional_return and all(r["tainted_params_used"] for r in returns)
+                        result = dict(returns[0])
+                        result["is_pure_compile_time_constant"] = all_safe
+                        result["tainted_params_used"] = tuple(sorted(set().union(
+                            *(set(r["tainted_params_used"]) for r in returns)))) if all_taint else ()
+                        result["trace_steps"] = ["HELPER_RETURN:" + key] + [
+                            step for r in returns for step in r["trace_steps"]]
+                        result["reaching_invocations"] = [i for r in returns for i in r["reaching_invocations"]]
+                        result["reaching_new_classes"] = [n for r in returns for n in r["reaching_new_classes"]]
+                        result["all_idents"] = set()  # callee names are in a different scope
+                # Explicit external source APIs and modeled value transforms.
+                source_getters = {"getParameter", "getParameterValues", "getHeader", "getHeaders", "getQueryString"}
+                source_recv = recv in m_untrusted_map and any(
+                    p.get("name") == recv and str(p.get("type", "")).endswith("HttpServletRequest")
+                    for p in m_dict.get("parameters", []))
+                sanitizer_names = {sig.rsplit("::", 1)[-1] for sigs in
+                                   shared.APPROVED_CWE_SANITIZER_SIGNATURES.values() for sig in sigs}
+                receiver_type = next((str(p.get("type", "")) for p in m_dict.get("parameters", [])
+                                      if p.get("name") == recv), "")
+                receiver_local = _resolve_variable_in_scope(
+                    recv, ref_anc, ref_order, ref_ln, m_local_vars, m_assignments)
+                if receiver_local:
+                    receiver_type = str(receiver_local["var_type"])
+                known_types = {"String", "StringBuilder", "StringBuffer", "Path", "File",
+                               "List", "ArrayList", "Map", "HashMap", "ProcessBuilder"}
+                simple_type = receiver_type.split("<", 1)[0].rsplit(".", 1)[-1]
+                static_receiver = recv in ("String", "java.lang.String", "Paths", "java.nio.file.Paths",
+                                           "Path", "java.nio.file.Path", "Base64", "java.util.Base64")
+                nested_receiver = "(" in recv and not recv.startswith("new ")
+                modeled = (callee_class is None and name in pure_transform_methods
+                           and (simple_type in known_types or static_receiver or nested_receiver))
+                # Approved sanitizer identity is checked again by the release engine.
+                modeled = modeled or (name in sanitizer_names and (
+                    "ESAPI" in recv or "Encode" in recv or "FilenameUtils" in recv))
+                transfer = None
+                transfer_signature = ""
+                transfer_encoding_constant = False
+                args = inv.get("arguments", [])
+                kinds = inv.get("arg_kinds", [])
+                if result is None and name == "decode" and standard_type(recv, "java.net.URLDecoder") and len(args) == 2:
+                    data_type = expression_type(str(args[0]), ref_anc, ref_order, ref_ln)
+                    encoding_type = declared_type(str(args[1]), ref_anc, ref_order, ref_ln)
+                    # Charset constants have a verified declaring class/import.
+                    charset = str(args[1]).rsplit(".", 1)
+                    charset_constant = (len(charset) == 2 and standard_type(charset[0], "java.nio.charset.StandardCharsets")
+                                        and charset[1] in {"UTF_8", "US_ASCII", "ISO_8859_1", "UTF_16", "UTF_16BE", "UTF_16LE"})
+                    if encoding_type == "Charset" and not standard_type("Charset", "java.nio.charset.Charset"):
+                        encoding_type = ""
+                    if charset_constant:
+                        encoding_type = "java.nio.charset.Charset"
+                    if data_type in ("String", "java.lang.String") and encoding_type in (
+                            "String", "java.lang.String", "Charset", "java.nio.charset.Charset"):
+                        signature_arg = "java.nio.charset.Charset" if "Charset" in encoding_type else "String"
+                        transfer_signature = f"String decode(String, {signature_arg})"
+                        transfer = (str(args[0]), str(kinds[0]), ref_anc, ref_order, ref_ln)
+                        enc_sub = _trace_expr(str(args[1]), str(kinds[1]),
+                                              _extract_non_literal_identifiers(str(args[1])), ref_anc,
+                                              ref_order, ref_ln, set(visited_vars))
+                        transfer_encoding_constant = charset_constant or enc_sub["is_pure_compile_time_constant"]
+                elif result is None and name == "nextElement" and not args:
+                    origin = header_origin(recv, ref_anc, ref_order, ref_ln)
+                    if origin:
+                        transfer_signature = "E nextElement() [E=String; HttpServletRequest.getHeaders(String)]"
+                        transfer = (str(origin["call_expr"]), "METHOD_INVOCATION", origin["ancestor_scopes"],
+                                    int(origin["stmt_order"]), int(origin["start_line"]))
+                if transfer:
+                    operand, kind, ancestors, order, line = transfer
+                    sub = _trace_expr(operand, kind, _extract_non_literal_identifiers(operand),
+                                      ancestors, order, line, set(visited_vars))
+                    result = dict(sub)
+                    identity = "java.net.URLDecoder" if name == "decode" else "java.util.Enumeration"
+                    result["trace_steps"] = [f"API_TAINT_TRANSFER:{identity}::{transfer_signature}"] + sub["trace_steps"]
+                    result["reaching_invocations"] = [inv] + sub["reaching_invocations"]
+                    # Decoding is not sanitization. Constant propagation requires
+                    # independently proven constant data AND encoding operands.
+                    result["is_pure_compile_time_constant"] = False
+                    if name == "decode" and transfer_encoding_constant and kinds[0] == "STRING_LITERAL":
+                        # Fold literal inputs only when the output value can be
+                        # computed exactly; an undecoded const_repr could select
+                        # the wrong switch/guard path in a downstream helper.
+                        try:
+                            literal = json.loads(str(args[0]))
+                            encoding = ({"UTF_8": "UTF-8", "US_ASCII": "US-ASCII", "ISO_8859_1": "ISO-8859-1"}
+                                        .get(charset[-1], "") if charset_constant else json.loads(str(args[1])))
+                            if encoding.upper().replace("_", "-") in {"UTF-8", "UTF8", "US-ASCII", "ISO-8859-1"} and not re.search(r"%(?![0-9a-fA-F]{2})", literal):
+                                result["const_repr"] = urllib.parse.unquote_plus(literal, encoding=encoding, errors="replace")
+                                result["is_pure_compile_time_constant"] = True
+                        except (ValueError, LookupError, TypeError):
+                            pass
 
-                        # Replace caller argument taint with the actual return taint of `cm`
-                        if ret_all_const and not mapped_tainted_params:
-                            helper_resolved_const = True
-                            for a_id in inv.get("arg_identifiers", []):
-                                all_idents.discard(a_id)
-                        elif not mapped_tainted_params:
-                            for a_id in inv.get("arg_identifiers", []):
-                                all_idents.discard(a_id)
+                if result is None and source_recv and name in source_getters:
+                    result = {
+                        "trace_steps": ["SOURCE_API:" + call], "all_kinds": {"METHOD_INVOCATION"},
+                        "all_idents": set(), "all_lits": [], "reaching_invocations": [inv],
+                        "reaching_new_classes": [], "tainted_params_used": m_untrusted_map[recv],
+                        "is_pure_compile_time_constant": False, "const_repr": "",
+                    }
+                elif result is None and modeled:
+                    operands = [(str(a), str(k)) for a, k in zip(inv.get("arguments", []), inv.get("arg_kinds", []))]
+                    if not static_receiver and name not in sanitizer_names:
+                        operands.append((recv, "METHOD_INVOCATION" if "(" in recv else "IDENTIFIER"))
+                    subs = [_trace_expr(a, k, _extract_non_literal_identifiers(a), ref_anc,
+                                        ref_order, ref_ln, set(visited_vars)) for a, k in operands]
+                    if subs:
+                        result = {
+                            "trace_steps": [step for sub in subs for step in sub["trace_steps"]],
+                            "all_kinds": set().union(*(sub["all_kinds"] for sub in subs)),
+                            "all_idents": set().union(*(sub["all_idents"] for sub in subs)),
+                            "all_lits": [lit for sub in subs for lit in sub["all_lits"]],
+                            "reaching_invocations": [inv] + [i for sub in subs for i in sub["reaching_invocations"]],
+                            "reaching_new_classes": [n for sub in subs for n in sub["reaching_new_classes"]],
+                            "tainted_params_used": tuple(sorted(set().union(*(set(sub["tainted_params_used"]) for sub in subs)))),
+                            "is_pure_compile_time_constant": all(sub["is_pure_compile_time_constant"] for sub in subs),
+                            "const_repr": " ".join(sub["const_repr"] for sub in subs),
+                        }
+                if result is None:
+                    call_unknown = True
+                    trace_steps.append("UNKNOWN_CALL_RETURN:" + call)
+                else:
+                    call_results.append(result)
+                    if not result["is_pure_compile_time_constant"] and not result["tainted_params_used"]:
+                        trace_steps.append("UNKNOWN_CALL_RETURN:" + call)
+                    trace_steps.extend(result["trace_steps"])
+                    reaching_invocations.extend(result["reaching_invocations"])
+                    reaching_new_classes.extend(result["reaching_new_classes"])
+                    mapped_tainted_params.update(result["tainted_params_used"])
+                residual = residual.replace(call, "")
+            for nc in unknown_constructors:
+                residual = residual.replace(str(nc.get("new_expr", "")), "")
+            if direct_invs or unknown_constructors:
+                all_idents = set(_extract_non_literal_identifiers(residual))
+                helper_resolved_const = (not residual.strip() and not call_unknown and bool(call_results)
+                                         and all(r["is_pure_compile_time_constant"] for r in call_results))
+                if helper_resolved_const:
+                    helper_const_val = call_results[0]["const_repr"]
 
             is_const_leaf, const_leaf_val = _is_pure_const_path_factory_expr(
                 expr_str, m_invocations, m_new_classes, static_final_consts
@@ -1484,6 +1790,8 @@ def _analyze_with_openjdk_ast(
                 all_defs_const = True
             else:
                 all_defs_const = False
+            if call_unknown or any(not r["is_pure_compile_time_constant"] for r in call_results):
+                all_defs_const = False
             const_repr = helper_const_val or const_leaf_val or expr_str.strip('"')
 
             for ident in list(all_idents):
@@ -1508,9 +1816,11 @@ def _analyze_with_openjdk_ast(
                     if ident in m_untrusted_map:
                         all_defs_const = False
                         mapped_tainted_params.update(m_untrusted_map[ident])
-                    elif ident in static_final_consts:
+                    elif ident in owner_consts:
                         continue
-                    elif ident in field_names:
+                    elif ident in owner_fields or any(p.get("name") == ident for p in m_dict.get("parameters", [])):
+                        all_defs_const = False
+                    elif expr_kind in ("IDENTIFIER", "MEMBER_SELECT"):
                         all_defs_const = False
                     continue
 
@@ -1578,20 +1888,17 @@ def _analyze_with_openjdk_ast(
                     else:
                         const_repr = sub["const_repr"]
 
-            for p_ident, orig_params in m_untrusted_map.items():
-                if p_ident in all_idents and not helper_resolved_const:
-                    mapped_tainted_params.update(orig_params)
-
             tainted_used = tuple(p for p in untrusted_params if p in mapped_tainted_params)
             unproven_array_dependencies = all_idents & unproven_arrays
             if unproven_array_dependencies:
+                tainted_used = ()  # unknown heap state invalidates the old value proof too
                 trace_steps.append("ARRAY_STATE_UNPROVEN:" + ",".join(sorted(unproven_array_dependencies)))
             is_pure_const = (
                 all_defs_const
                 and not tainted_used
                 and not has_non_const_reassignment
                 and not unproven_array_dependencies
-                and not any(f in all_idents for f in (field_names - static_final_consts))
+                and not any(f in all_idents for f in (owner_fields - owner_consts))
             )
 
             return {
@@ -1604,6 +1911,7 @@ def _analyze_with_openjdk_ast(
                 "tainted_params_used": tainted_used,
                 "is_pure_compile_time_constant": is_pure_const,
                 "const_repr": const_repr,
+                "proof_state": "PROVEN_TAINT" if tainted_used else ("PROVEN_SAFE" if is_pure_const else "UNKNOWN"),
             }
 
         return _trace_expr
@@ -1614,7 +1922,7 @@ def _analyze_with_openjdk_ast(
         m_untrusted_map=root_untrusted_map,
         m_const_overrides={},
         max_stmt_order=sink_stmt_order,
-        visited_methods={enclosing_method},
+        visited_methods={cls_name + ":" + enclosing_method},
     )
 
     # Resolve canonical target callee identity & primary sink argument expression
@@ -1655,20 +1963,26 @@ def _analyze_with_openjdk_ast(
             const_str_vars=const_str_vars,
         )
         recv_type = recv_resolved["var_type"] if recv_resolved else ""
-        if (
-            ("PreparedStatement" in recv_type or "CallableStatement" in recv_type)
-            and len(sink_args_exprs) == 0
-        ):
-            is_prepared_stmt_call = True
+        if not recv_type:
+            recv_type = next((str(p.get("type", "")) for p in target_method.get("parameters", [])
+                              if p.get("name") == sink_recv), "")
+        recv_simple = recv_type.rsplit(".", 1)[-1]
+        is_prepared_stmt_call = recv_simple in ("PreparedStatement", "CallableStatement") and not sink_args_exprs
+        if is_prepared_stmt_call:
             ps_var_name = sink_recv
-            ast_overloaded_sig = f"ResultSet {sink_mname}()"
-        else:
-            ast_overloaded_sig = f"ResultSet {sink_mname}(String sql)"
+        ret_type = {"executeQuery": "ResultSet", "executeUpdate": "int", "execute": "boolean",
+                    "addBatch": "void", "prepareStatement": "PreparedStatement",
+                    "prepareCall": "CallableStatement"}.get(sink_mname, "Object")
+        params = "String sql" if sink_args_exprs else ""
+        if len(sink_args_exprs) > 1:
+            # Extra overload arguments have no complete safety model here.
+            params += ", " + ", ".join("Object arg" + str(i) for i in range(1, len(sink_args_exprs)))
+        ast_overloaded_sig = f"{ret_type} {sink_mname}({params})"
         target_ident = {
             "package": "java.sql",
-            "class": "Statement",
-            "method": "executeQuery",
-            "signature": "ResultSet executeQuery(String sql)",
+            "class": recv_simple if recv_simple in ("Statement", "PreparedStatement", "CallableStatement", "Connection") else "Statement",
+            "method": sink_mname,
+            "signature": ast_overloaded_sig,
         }
         primary_arg_expr = sink_args_exprs[0] if sink_args_exprs else ""
         primary_arg_kind = sink_arg_kinds[0] if sink_arg_kinds else "NULL"
@@ -1678,7 +1992,11 @@ def _analyze_with_openjdk_ast(
             else (list(sink_inv.get("arg_identifiers", [])) if sink_inv else [])
         )
     elif sink_mname == "exec":
-        if sink_args_exprs and ("String[]" in sink_args_exprs[0] or sink_arg_kinds[0] == "NEW_ARRAY"):
+        arg_var = _resolve_variable_in_scope(
+            sink_args_exprs[0] if sink_args_exprs else "", sink_ancestors, sink_stmt_order,
+            int(match_line), local_vars, assignments)
+        array_arg = bool(arg_var and arg_var["var_type"] in ("String[]", "java.lang.String[]"))
+        if sink_args_exprs and (array_arg or "String[]" in sink_args_exprs[0] or sink_arg_kinds[0] == "NEW_ARRAY"):
             ast_overloaded_sig = "Process exec(String[] cmdarray)"
         else:
             ast_overloaded_sig = "Process exec(String command)"
@@ -1686,7 +2004,7 @@ def _analyze_with_openjdk_ast(
             "package": "java.lang",
             "class": "Runtime",
             "method": "exec",
-            "signature": "Process exec(String command)",
+            "signature": ast_overloaded_sig,
         }
         primary_arg_expr = sink_args_exprs[0] if sink_args_exprs else ""
         primary_arg_kind = sink_arg_kinds[0] if sink_arg_kinds else "METHOD_INVOCATION"
@@ -1764,37 +2082,52 @@ def _analyze_with_openjdk_ast(
     ]
     if not sink_param_names:
         sink_param_names = ["this"]
-    covered_args_tuple = tuple(sink_param_names + ["0", "arg0"])
+    # Coverage is about the traced argument or receiver, never synthetic arg0
+    # coverage for a zero-argument API. Additional SQL arguments stay uncovered.
+    covered_args_tuple = (("this",) if not sink_args_exprs else
+                          tuple(dict.fromkeys([sink_param_names[0], "0", "arg0"])))
 
     # =========================================================================
     # CASE 1: CWE-089 PreparedStatement / CallableStatement Execution (`ps.execute*()`)
     # =========================================================================
+    prepared_trace = None
     if is_prepared_stmt_call and ps_var_name:
-        ps_resolved = _resolve_variable_in_scope(
-            var_name=ps_var_name,
-            ref_ancestors=sink_ancestors,
-            ref_stmt_order=sink_stmt_order,
-            ref_line=int(match_line),
-            local_variables=local_vars,
-            assignments=assignments,
-            invocations=invocations,
-            if_guards=if_guards,
-            switches=switches,
-            const_int_vars=const_int_vars,
-            const_str_vars=const_str_vars,
-        )
-        ps_defs = ps_resolved["reaching_defs"] if ps_resolved else []
-        prep_inv: Optional[Dict[str, Any]] = None
-        for d in ps_defs:
-            for inv in invocations:
-                if (
-                    inv.get("method_name") in ("prepareStatement", "prepareCall")
-                    and int(inv.get("stmt_order", 0)) <= sink_stmt_order
-                    and inv.get("call_expr", "") in d["expr"]
-                ):
-                    prep_inv = inv
-                    break
+        receiver_aliases = {ps_var_name}
+        alias_edges = [(str(v.get("name", "")), str(v.get("init_expr", "")).strip())
+                       for v in local_vars if v.get("init_kind") == "IDENTIFIER"
+                       and int(v.get("stmt_order", 0)) < sink_stmt_order]
+        changed = True
+        while changed:
+            previous = set(receiver_aliases)
+            for left, right in alias_edges:
+                if left in receiver_aliases or right in receiver_aliases:
+                    receiver_aliases.update((left, right))
+            changed = previous != receiver_aliases
 
+        def prepared_origin(name, seen, ref_order, ref_line, ref_anc):
+            if name in seen:
+                return None
+            resolved = _resolve_variable_in_scope(
+                name, ref_anc, ref_order, ref_line, local_vars,
+                assignments, invocations, if_guards, switches, const_int_vars, const_str_vars)
+            defs = resolved["reaching_defs"] if resolved else []
+            if len(defs) != 1 or not defs[0].get("dominating"):
+                return None
+            # Receiver escape/unknown mutation makes its prepared SQL state unknown.
+            if any(int(i.get("stmt_order", 0)) < sink_stmt_order and (
+                receiver_aliases.intersection(i.get("arg_identifiers", [])) or (
+                    i.get("receiver") in receiver_aliases and not str(i.get("method_name", "")).startswith("set")))
+                   for i in invocations):
+                return None
+            expr = str(defs[0]["expr"]).strip()
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", expr):
+                return prepared_origin(expr, seen | {name}, int(defs[0]["stmt_order"]),
+                                       int(defs[0]["line"]), resolved["declaration"]["ancestor_scopes"])
+            origins = [i for i in invocations if i.get("method_name") in ("prepareStatement", "prepareCall")
+                       and i.get("call_expr") == expr and int(i.get("stmt_order", 0)) < sink_stmt_order]
+            return origins[0] if len(origins) == 1 else None
+
+        prep_inv = prepared_origin(ps_var_name, set(), sink_stmt_order, int(match_line), sink_ancestors)
         if prep_inv is not None and prep_inv.get("arguments"):
             sql_tpl_expr = str(prep_inv["arguments"][0])
             sql_tpl_kind = str(prep_inv["arg_kinds"][0]) if prep_inv.get("arg_kinds") else "UNKNOWN"
@@ -1808,6 +2141,7 @@ def _analyze_with_openjdk_ast(
                 ref_ln=int(prep_inv.get("start_line", match_line)),
             )
 
+            prepared_trace = tpl_trace
             has_param_binding = any(
                 inv.get("receiver") == ps_var_name
                 and str(inv.get("method_name", "")).startswith("set")
@@ -1897,14 +2231,14 @@ def _analyze_with_openjdk_ast(
                     taint_source_params=tpl_trace["tainted_params_used"],
                     taint_trace_steps=tuple(tpl_trace["trace_steps"] + [matched_code_line]),
                     sanitizer_status="PARTIAL_OR_INSUFFICIENT_GUARD",
-                    ast_evidence=shared.AstReleaseEvidence(ast_parser_engine="OPENJDK17_JAVAC_TASK_AST"),
+                    ast_evidence=shared.AstReleaseEvidence(covered_sink_args=covered_args_tuple, ast_parser_engine="OPENJDK17_JAVAC_TASK_AST"),
                     extra_reason_codes=("RC_PREPARED_STATEMENT_DYNAMIC_SQL_CONCAT",),
                     ast_parser_engine="OPENJDK17_JAVAC_TASK_AST",
                     ast_overloaded_signature=ast_overloaded_sig,
                 )
 
     # Trace primary sink argument expression across lexical scopes & reaching definitions
-    arg_trace = trace_expression(
+    arg_trace = prepared_trace or trace_expression(
         expr_str=primary_arg_expr,
         expr_kind=primary_arg_kind,
         expr_idents=primary_arg_idents,
@@ -1919,20 +2253,24 @@ def _analyze_with_openjdk_ast(
 
     # A sanitizer in an old array initializer is not a proof about its state
     # after a write/escape. Do not let later sanitizer heuristics release it.
-    if any(step.startswith("ARRAY_STATE_UNPROVEN:") for step in trace_steps):
+    array_unknown = any(step.startswith("ARRAY_STATE_UNPROVEN:") for step in trace_steps)
+    call_unknown = any(step.startswith("UNKNOWN_CALL_RETURN:") for step in trace_steps)
+    if array_unknown or call_unknown:
+        independent_taint = bool(tainted_params_used) and not array_unknown
         return JavaAstSiteAnalysis(
             file_path=file_path, match_line=match_line, cwe=cwe_int,
             package_name=pkg_name, class_name=cls_name,
             enclosing_method=enclosing_method, enclosing_signature=enclosing_sig,
             untrusted_params=tuple(untrusted_params), target_callee_identity=target_ident,
             matched_code_line=matched_code_line,
-            source_sink_trace_status=("VERIFIED_TAINT_FLOW" if tainted_params_used
-                                      else "NO_FLOW_DETECTED_INTRAPROCEDURAL_LIMIT"),
-            taint_reaches_sink=bool(tainted_params_used),
-            taint_source_params=tainted_params_used, taint_trace_steps=tuple(trace_steps),
+            source_sink_trace_status=("VERIFIED_TAINT_FLOW" if independent_taint else "NO_FLOW_DETECTED_INTRAPROCEDURAL_LIMIT"),
+            taint_reaches_sink=independent_taint,
+            taint_source_params=tainted_params_used if independent_taint else (), taint_trace_steps=tuple(trace_steps),
             sanitizer_status="NONE_DETECTED",
-            ast_evidence=shared.AstReleaseEvidence(ast_parser_engine="OPENJDK17_JAVAC_TASK_AST"),
-            extra_reason_codes=("RC_ARRAY_STATE_UNPROVEN_AFTER_MUTATION_OR_ESCAPE",),
+            ast_evidence=shared.AstReleaseEvidence(covered_sink_args=covered_args_tuple if independent_taint else (),
+                                                  ast_parser_engine="OPENJDK17_JAVAC_TASK_AST"),
+            extra_reason_codes=(("RC_ARRAY_STATE_UNPROVEN_AFTER_MUTATION_OR_ESCAPE",) if array_unknown
+                                else ("RC_HELPER_RETURN_UNPROVEN",)),
             ast_parser_engine="OPENJDK17_JAVAC_TASK_AST",
             ast_overloaded_signature=ast_overloaded_sig,
         )
@@ -2454,7 +2792,7 @@ def _analyze_with_openjdk_ast(
             taint_source_params=tainted_params_used,
             taint_trace_steps=tuple([f"SOURCE_PARAM:{','.join(tainted_params_used)}"] + trace_steps),
             sanitizer_status="NONE_DETECTED",
-            ast_evidence=shared.AstReleaseEvidence(ast_parser_engine="OPENJDK17_JAVAC_TASK_AST"),
+            ast_evidence=shared.AstReleaseEvidence(covered_sink_args=covered_args_tuple, ast_parser_engine="OPENJDK17_JAVAC_TASK_AST"),
             extra_reason_codes=("RC_IRIS_VERIFIED_SOURCE_TO_SINK_TAINT_FLOW",),
             ast_parser_engine="OPENJDK17_JAVAC_TASK_AST",
             ast_overloaded_signature=ast_overloaded_sig,
@@ -2701,7 +3039,10 @@ def verify_and_triage_finding(
     elif (
         not explicit_release
         and ast_analysis.ast_parser_engine == "OPENJDK17_JAVAC_TASK_AST"
-        and ast_analysis.taint_reaches_sink
+        and ast_analysis.flow_proof_state == "PROVEN_TAINT"
+        and bool(ast_analysis.ast_evidence.covered_sink_args)
+        and set(callee_prediction.canonical_sink_args if callee_prediction else ()).issubset(
+            ast_analysis.ast_evidence.covered_sink_args)
         and ast_analysis.source_sink_trace_status in ("VERIFIED_TAINT_FLOW", "PARTIAL_OR_INSUFFICIENT_GUARD")
         and llm_valid
         and llm_role == "sink"
@@ -2788,6 +3129,7 @@ def verify_and_triage_finding(
         "ast_overloaded_signature": ast_analysis.ast_overloaded_signature or ast_analysis.enclosing_signature,
         "target_callee_identity": dict(ast_analysis.target_callee_identity),
         "source_sink_trace_status": ast_analysis.source_sink_trace_status,
+        "flow_proof_state": ast_analysis.flow_proof_state,
         "taint_reaches_sink": bool(ast_analysis.taint_reaches_sink),
         "taint_source_params": list(ast_analysis.taint_source_params),
         "taint_trace_steps": list(ast_analysis.taint_trace_steps),
