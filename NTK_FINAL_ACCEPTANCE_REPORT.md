@@ -137,7 +137,9 @@ Frontend pages: `Architecture.jsx`, `LiveResults.jsx`, `ResearchPages.jsx`, `Res
 
 Frontend tests: `cwss-route-wiring.test.cjs`, `scan-contract.test.cjs`, `live-api-acceptance.cjs`. Thêm `.gitignore` cho `/work/`, báo cáo này và hai artifacts CWSS công khai.
 
-Git sử dụng WSL, nhánh `cwss-inference-v2-220`; remote branch trước đồng bộ ở `597ffab`. Chỉ stage source/tests/report/artifacts công khai. Không stage checkpoint, database, cache, source snapshot, private repro hoặc dữ liệu nghiên cứu private. Kết quả commit/push được bổ sung sau bước đồng bộ.
+Git sử dụng WSL, nhánh `cwss-inference-v2-220`; remote branch trước đồng bộ ở `597ffab`. Chỉ stage source/tests/report/artifacts công khai. Không stage checkpoint, database, cache, source snapshot, private repro hoặc dữ liệu nghiên cứu private.
+
+Đã push thành công tới `TuanKhoa1201/22025523-NTK-UET-Thesis`, đúng nhánh `cwss-inference-v2-220`, không force. Các commit triển khai: `b2e4cc1` (backend/proof/triage), `fad5596` (frontend/API), `8ba5933` (acceptance và provenance). Bản cập nhật trạng thái báo cáo được commit/push tiếp trên cùng nhánh. Worktree sạch sau đồng bộ; không merge main.
 
 ## 9. Kịch bản demo bảo vệ
 
@@ -160,6 +162,6 @@ FRONTEND_STATUS=BUILD_AND_LIVE_API_PASS_VISUAL_NOT_TESTED
 BACKEND_STATUS=PASS_LOCAL_CUDA_10_STAGES
 TESTS_PASSED=224_BACKEND_7_FRONTEND_37_API_60_REPLAY
 TESTS_FAILED=0_FINAL_RUN
-GITHUB_SYNC_STATUS=PENDING_FINAL_PUSH
+GITHUB_SYNC_STATUS=PASS_BRANCH_PUSHED
 DEMO_URL=http://127.0.0.1:5173/#/results?scan_id=SCAN-20261101164045-3AA266
 ```
