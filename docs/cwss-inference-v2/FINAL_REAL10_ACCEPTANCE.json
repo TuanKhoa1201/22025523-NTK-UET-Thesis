@@ -1,0 +1,188 @@
+{
+  "status": "PASS",
+  "scan_id": "SCAN-20261101164045-3AA266",
+  "original_scan_id": "SCAN-20261101150533-750A61",
+  "original_archive_sha256": "27f78b2a890bad97ce692c2214bcdcdd236e5b833a010707c3c4710b0d59cb79",
+  "resolved_commit": "f40c618c5a709afce350ef06ed2899c85cf586e9",
+  "coverage": "PARTIAL_BOUNDED",
+  "api_checks_passed": 37,
+  "pipeline_stages": 10,
+  "actual_gpu_inference_calls": 5,
+  "duration_ms": 32667.086,
+  "findings": [
+    {
+      "finding_id": "FINDING-001-CWE022-doPost-L72",
+      "iris_proof": "UNKNOWN",
+      "triage": "REVIEW",
+      "source_hash": "a83e78f8e9dd7b941c19eb2709429a2b7bec32b8921c193f3d02c4a04097a4b7",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": false,
+      "sink_slot": "arg0",
+      "blocked_rules": [
+        "AST_CALLSITE_MISSING_OR_AMBIGUOUS",
+        "UNSUPPORTED_OR_UNPROVEN_OVERLOAD",
+        "RECEIVER_TYPE_UNPROVEN",
+        "SINK_SLOT_UNCOVERED",
+        "IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF"
+      ],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 12.6,
+      "scenario_after": 67.1
+    },
+    {
+      "finding_id": "FINDING-002-CWE079-doPost-L75",
+      "iris_proof": "UNKNOWN",
+      "triage": "REVIEW",
+      "source_hash": "a83e78f8e9dd7b941c19eb2709429a2b7bec32b8921c193f3d02c4a04097a4b7",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": false,
+      "sink_slot": "arg0",
+      "blocked_rules": [
+        "SINK_SLOT_UNCOVERED",
+        "IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF"
+      ],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 12.6,
+      "scenario_after": 67.1
+    },
+    {
+      "finding_id": "FINDING-003-CWE079-doPost-L87",
+      "iris_proof": "UNKNOWN",
+      "triage": "REVIEW",
+      "source_hash": "a83e78f8e9dd7b941c19eb2709429a2b7bec32b8921c193f3d02c4a04097a4b7",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": false,
+      "sink_slot": "arg0",
+      "blocked_rules": [
+        "SINK_SLOT_UNCOVERED",
+        "IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF"
+      ],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 12.6,
+      "scenario_after": 67.1
+    },
+    {
+      "finding_id": "FINDING-004-CWE022-doPost-L73",
+      "iris_proof": "UNKNOWN",
+      "triage": "REVIEW",
+      "source_hash": "34ffca044de7a7c3d47e5b1a48d5b35c42fff120e82df6969c5719e25259f2ac",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": false,
+      "sink_slot": "arg0",
+      "blocked_rules": [
+        "AST_CALLSITE_MISSING_OR_AMBIGUOUS",
+        "UNSUPPORTED_OR_UNPROVEN_OVERLOAD",
+        "RECEIVER_TYPE_UNPROVEN",
+        "SINK_SLOT_UNCOVERED",
+        "IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF"
+      ],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 12.6,
+      "scenario_after": 67.1
+    },
+    {
+      "finding_id": "FINDING-005-CWE079-doPost-L74",
+      "iris_proof": "UNKNOWN",
+      "triage": "REVIEW",
+      "source_hash": "34ffca044de7a7c3d47e5b1a48d5b35c42fff120e82df6969c5719e25259f2ac",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": false,
+      "sink_slot": "arg0",
+      "blocked_rules": [
+        "SINK_SLOT_UNCOVERED",
+        "IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF"
+      ],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 12.6,
+      "scenario_after": 67.1
+    },
+    {
+      "finding_id": "FINDING-006-CWE078-doPost-L69",
+      "iris_proof": "PROVEN_TAINT",
+      "triage": "REPORT",
+      "source_hash": "8671e8cd2686594b31abba5a17021472e25c5e3d074362a164dae2a5a4e8deda",
+      "source_bound": true,
+      "local_taint_proven": true,
+      "local_safe_proven": false,
+      "sink_slot": "this",
+      "blocked_rules": [],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 16.0,
+      "scenario_after": 84.0
+    },
+    {
+      "finding_id": "FINDING-007-CWE078-doPost-L61",
+      "iris_proof": "UNKNOWN",
+      "triage": "REVIEW",
+      "source_hash": "2fa47beaa6be3b3e9fa64841a0e80a0f7965517fd79b3f30eb1f10a20a3ed721",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": false,
+      "sink_slot": "arg0",
+      "blocked_rules": [
+        "SINK_SLOT_UNCOVERED",
+        "IRIS_UNKNOWN_NO_LOCAL_FLOW_PROOF"
+      ],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 12.6,
+      "scenario_after": 67.1
+    },
+    {
+      "finding_id": "FINDING-008-CWE079-doPost-L65",
+      "iris_proof": "PROVEN_SAFE",
+      "triage": "SUPPRESS",
+      "source_hash": "2fa47beaa6be3b3e9fa64841a0e80a0f7965517fd79b3f30eb1f10a20a3ed721",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": true,
+      "sink_slot": "arg0",
+      "blocked_rules": [],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 0.0,
+      "scenario_after": 0.0
+    },
+    {
+      "finding_id": "FINDING-009-CWE089-doPost-L58",
+      "iris_proof": "PROVEN_TAINT",
+      "triage": "REPORT",
+      "source_hash": "9bc49dbe491a39162c97b0c43b8ce5e42a4de5c0552c52117b1a51b0a541dfbe",
+      "source_bound": true,
+      "local_taint_proven": true,
+      "local_safe_proven": false,
+      "sink_slot": "this",
+      "blocked_rules": [],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 16.4,
+      "scenario_after": 86.0
+    },
+    {
+      "finding_id": "FINDING-010-CWE079-doPost-L54",
+      "iris_proof": "PROVEN_SAFE",
+      "triage": "SUPPRESS",
+      "source_hash": "a10fe5916807d083825dfa8e147e37d8e3bec6494b59da6bdd632758d510858e",
+      "source_bound": true,
+      "local_taint_proven": false,
+      "local_safe_proven": true,
+      "sink_slot": "arg2",
+      "blocked_rules": [],
+      "general_before": 12.6,
+      "scenario_before": 67.1,
+      "general_after": 0.0,
+      "scenario_after": 0.0
+    }
+  ]
+}
