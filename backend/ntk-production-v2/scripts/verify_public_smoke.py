@@ -51,19 +51,18 @@ def main() -> int:
         "java_fixture_count": len(java_files),
     }
 
-    # 3. Check Java AST Extractor
-    java_bin = shutil.which("java") or "/usr/bin/java"
-    ast_bridge_dir = SCRIPTS_DIR / "javac_ast_bridge"
-    cmd_ast = [java_bin, "-cp", str(ast_bridge_dir), "NtkJavacAstExtractor", str(java_files[0])]
-    proc_ast = subprocess.run(cmd_ast, capture_output=True, text=True, timeout=30)
-    if proc_ast.returncode != 0:
+    # Use the production bridge (compiles if needed); nested class methods must
+    # actually exist before reporting AST success.
+    ast_json = ntk_alert_verification.parse_java_source_with_javac_ast(
+        java_files[0].read_text(), str(java_files[0]))
+    methods = sum(len(c.get('methods', [])) for c in (ast_json or {}).get('classes', []))
+    if not methods:
         report["status"] = "FAIL"
-        report["checks"]["java_ast_extractor"] = {"status": "FAIL", "stderr": proc_ast.stderr}
+        report["checks"]["java_ast_extractor"] = {"status": "FAIL", "error": "No semantic methods extracted"}
     else:
-        ast_json = json.loads(proc_ast.stdout)
         report["checks"]["java_ast_extractor"] = {
             "status": "PASS",
-            "methods_extracted": len(ast_json.get("methods", [])),
+            "methods_extracted": methods,
         }
 
     # 4. Check OpenGrep binary if present

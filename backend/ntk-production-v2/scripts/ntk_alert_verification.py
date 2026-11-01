@@ -2978,6 +2978,7 @@ def verify_and_triage_finding(
     model_version: str = MODEL_VERSION_DEFAULT,
     ruleset_version: str = RULESET_VERSION_DEFAULT,
     scoring_policy_version: str = SCORING_POLICY_VERSION_DEFAULT,
+    legacy_score_compatibility: bool = True,
 ) -> shared.FindingSchemaV2:
     """
     Executes Evidence Fusion (`evaluate_bounded_safety_floor`) and applies the deterministic
@@ -2997,9 +2998,11 @@ def verify_and_triage_finding(
         callee_prediction=callee_prediction,
         ast_evidence=ast_analysis.ast_evidence,
     )
-    floor_res = shared.evaluate_bounded_safety_floor(cand)
-    explicit_release = bool(floor_res["explicit_ast_release_verified"])
-    release_reason = str(floor_res["ast_release_reason"])
+    # Production decisions depend on semantic evidence, never a numeric score.
+    # The old scorer remains opt-in for historical API/replay compatibility.
+    explicit_release, release_reason = shared.verify_ast_release_evidence(cand)
+    floor_res = (shared.evaluate_bounded_safety_floor(cand)
+                 if legacy_score_compatibility else {})
 
     reason_codes: List[str] = ["RC_OPENGREP_CANDIDATE_MATCH"]
     for rc in ast_analysis.extra_reason_codes:
@@ -3033,7 +3036,7 @@ def verify_and_triage_finding(
         triage_status = "LIKELY_FALSE_POSITIVE"
         decision = "SUPPRESS"
         kept_by_pipeline = False
-        effective_score = 0.0
+        effective_score = 0.0 if legacy_score_compatibility else None
         reason_codes.append(f"RC_AUTO_SUPPRESS_AST_VERIFIED:{release_reason}")
         disposition = f"SUPPRESSED_FALSE_POSITIVE (AST_SAFETY_RELEASE:{release_reason})"
     elif (
@@ -3050,7 +3053,7 @@ def verify_and_triage_finding(
         triage_status = "LIKELY_TRUE_POSITIVE"
         decision = "REPORT"
         kept_by_pipeline = True
-        effective_score = float(floor_res["final_score"])
+        effective_score = float(floor_res["final_score"]) if legacy_score_compatibility else None
         if release_reason != "NO_AST_RELEASE_CLAIMED":
             reason_codes.append(f"RC_AST_RELEASE_REJECTED:{release_reason}")
         else:
@@ -3063,8 +3066,8 @@ def verify_and_triage_finding(
         triage_status = "NEEDS_REVIEW"
         decision = "REVIEW"
         kept_by_pipeline = True
-        effective_score = float(floor_res["final_score"])
-        if floor_res["safety_floor_applied"]:
+        effective_score = float(floor_res["final_score"]) if legacy_score_compatibility else None
+        if floor_res.get("safety_floor_applied"):
             reason_codes.append("RC_SAFETY_FLOOR_055_CLAMPED")
         if ast_analysis.taint_reaches_sink and llm_role != "sink":
             reason_codes.append("RC_CONFLICT_IRIS_TAINT_VS_LLM_ROLE")
@@ -3170,6 +3173,13 @@ def verify_and_triage_finding(
             "Heuristic neuro-symbolic evidence fusion score in [0.0, 1.0]; "
             "NOT a calibrated statistical probability."
         ),
+    } if legacy_score_compatibility else {
+        "policy": "NTK_EVIDENCE_TRIAGE_V1",
+        "legacy_score_status": "REMOVED_FROM_PRODUCTION",
+        "explicit_ast_release_verified": explicit_release,
+        "ast_release_reason": release_reason,
+        "numeric_score_used_for_decision": False,
+        "priority_engine": "NTK_CWSS_INFERENCE_V2",
     }
 
     return shared.FindingSchemaV2(
@@ -3204,14 +3214,14 @@ def verify_and_triage_finding(
             "output_context": ast_analysis.ast_evidence.output_context,
         },
         score_breakdown=fusion_score_breakdown,
-        final_heuristic_score=round(float(effective_score), 4),
+        final_heuristic_score=round(float(effective_score), 4) if effective_score is not None else None,
         is_calibrated_probability=False,
         kept_by_pipeline=kept_by_pipeline,
         disposition=disposition,
         triage_status=triage_status,
         decision=decision,
-        confidence_score=round(float(effective_score), 4),
-        score_kind=SCORE_KIND_DEFAULT,
+        confidence_score=round(float(effective_score), 4) if effective_score is not None else None,
+        score_kind=SCORE_KIND_DEFAULT if legacy_score_compatibility else "EVIDENCE_POLICY_NOT_CALIBRATED_PROBABILITY_CWSS_V2_PRIORITY",
         severity=sev_norm,
         reason_codes=tuple(reason_codes),
         evidence_refs=evidence_refs,
@@ -3293,9 +3303,13 @@ def validate_finding_schema_v2_dict(d: Dict[str, Any]) -> Tuple[bool, List[str]]
     if d["sanitizer_status"] not in shared.VALID_SANITIZER_STATUSES:
         errors.append(f"INVALID_SANITIZER_STATUS:{d['sanitizer_status']}")
 
-    score = float(d["confidence_score"])
-    if not (0.0 <= score <= 1.0):
-        errors.append(f"CONFIDENCE_SCORE_OUT_OF_RANGE:{score}")
+    raw_score = d["confidence_score"]
+    evidence_policy = d.get('fusion_score_breakdown', {}).get('policy') == 'NTK_EVIDENCE_TRIAGE_V1'
+    if raw_score is None:
+        if not evidence_policy or d.get('final_heuristic_score') is not None:
+            errors.append('NULL_SCORE_REQUIRES_EVIDENCE_POLICY')
+    elif not (0.0 <= float(raw_score) <= 1.0):
+        errors.append(f"CONFIDENCE_SCORE_OUT_OF_RANGE:{raw_score}")
     if d["is_calibrated_probability"] is not False:
         errors.append("IS_CALIBRATED_PROBABILITY_MUST_BE_FALSE")
     if "NOT_CALIBRATED_PROBABILITY" not in str(d["score_kind"]):
@@ -3372,8 +3386,8 @@ def get_finding_schema_v2_json_schema() -> Dict[str, Any]:
             "decision": {"type": "string", "enum": list(shared.VALID_TRIAGE_DECISIONS)},
             "review_status": {"type": "string", "enum": list(shared.VALID_REVIEW_STATUSES)},
             "review_metadata": {"type": "object"},
-            "confidence_score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "final_heuristic_score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "confidence_score": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+            "final_heuristic_score": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
             "score_kind": {"type": "string", "const": SCORE_KIND_DEFAULT},
             "is_calibrated_probability": {"type": "boolean", "const": False},
             "kept_by_pipeline": {"type": "boolean"},

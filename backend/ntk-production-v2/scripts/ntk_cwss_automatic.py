@@ -65,6 +65,10 @@ def collect(root, findings, provenance=None):
         snapshot.update(inventory_complete=False, limitations=['SOURCE_REPOSITORY_UNAVAILABLE'])
         return snapshot
     root = Path(root).resolve()
+    snapshot['resolved_commit_sha'] = (provenance or {}).get('resolved_commit_sha')
+    if not root.is_dir():
+        snapshot.update(inventory_complete=False, limitations=['SOURCE_REPOSITORY_UNAVAILABLE'])
+        return snapshot
     wanted = set()
     for f in findings:
         p = Path(str(f.get('file_path', '')))
@@ -77,6 +81,21 @@ def collect(root, findings, provenance=None):
         except ValueError:
             pass
     count = total = 0
+    # Collect finding sources first. A large repository must not consume the
+    # passive inventory budget before the exact sources being assessed are read.
+    for rel in sorted(wanted):
+        try:
+            row = _read(root, root / rel)
+            if row is None:
+                raise ValueError('unreadable source')
+            if total + len(row['text'].encode()) > MAX_TOTAL:
+                raise ValueError('source content budget')
+            row['content_sha256'] = hashlib.sha256(row['text'].encode()).hexdigest()
+            snapshot['files'].append(row)
+            total += len(row['text'].encode())
+        except (OSError, UnicodeError, ValueError):
+            snapshot['inventory_complete'] = False
+            snapshot['limitations'].append('FINDING_SOURCE_UNAVAILABLE:' + rel)
     try:
         for directory, dirs, names in os.walk(root, followlinks=False):
             count += 1
@@ -96,6 +115,8 @@ def collect(root, findings, provenance=None):
                     break
                 path = Path(directory)/name
                 rel = path.relative_to(root).as_posix()
+                if rel in wanted:
+                    continue
                 java = name.endswith('.java')
                 config = name == 'Dockerfile' or name.endswith(('.yaml', '.yml', '.properties'))
                 if not java and not config:

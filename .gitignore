@@ -36,3 +36,6 @@ Thumbs.db
 
 # Generated Java bytecode
 *.class
+
+# Local backups and acceptance runtime (never publish source snapshots or databases).
+/work/

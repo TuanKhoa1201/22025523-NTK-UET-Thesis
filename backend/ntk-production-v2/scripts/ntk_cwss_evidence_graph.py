@@ -55,6 +55,7 @@ def collect(root, findings, provenance=None):
     snapshot = v1.collect(root, findings, provenance)
     snapshot['inference_version'] = VERSION
     snapshot['java_ast'] = {}
+    snapshot['independent_local_proofs'] = {}
     # 64 relevant sources, per-file bridge timeout5s, aggregate time budget15s.
     import time
     deadline = time.monotonic()+15
@@ -70,6 +71,35 @@ def collect(root, findings, provenance=None):
                 snapshot['java_ast'][row['path']] = {'sha256':row['sha256'], 'ast':ast}
         except (OSError, ValueError, TimeoutError):
             snapshot['limitations'].append('CWSS_AST_UNAVAILABLE:'+row['path'])
+    # Re-analyse the captured source instead of promoting archived IRIS booleans.
+    # Persist the result with its source SHA so replay survives checkout cleanup.
+    import ntk_iris_shared as shared
+    rows = {r['path']: r for r in snapshot['files']}
+    for finding in findings:
+        fid = finding['finding_id']
+        row = rows.get(snapshot['finding_source_paths'].get(fid))
+        if not row or row['path'] not in snapshot['java_ast'] or time.monotonic() >= deadline:
+            snapshot['limitations'].append('CWSS_LOCAL_PROOF_UNAVAILABLE:'+fid)
+            continue
+        try:
+            analysis = av.analyze_java_site_ast_and_taint(
+                row['text'], str(__import__('pathlib').Path(root)/row['path']),
+                int(finding['line_number']), scoring._parse_cwe(finding['cwe']))
+            candidate = shared.FindingCandidate(
+                finding_id=fid, cwe=scoring._parse_cwe(finding['cwe']),
+                file_path=row['path'], line_number=int(finding['line_number']),
+                severity=str(finding.get('severity', '')), base_scanner_score=0,
+                ast_evidence=analysis.ast_evidence)
+            release, reason = shared.verify_ast_release_evidence(candidate)
+            snapshot['independent_local_proofs'][fid] = {
+                'sha256': row['sha256'], 'flow_proof_state': analysis.flow_proof_state,
+                'target_callee_identity': analysis.target_callee_identity,
+                'taint_reaches_sink': analysis.taint_reaches_sink,
+                'ast_parser_engine': analysis.ast_parser_engine,
+                'covered_sink_args': list(analysis.ast_evidence.covered_sink_args),
+                'safe_release_verified': release, 'safe_release_reason': reason}
+        except (OSError, ValueError, TimeoutError):
+            snapshot['limitations'].append('CWSS_LOCAL_PROOF_UNAVAILABLE:'+fid)
     from pathlib import Path
     import json
     path=Path(root)/'ntk-cwss-deployment-context.json'
@@ -133,11 +163,23 @@ def normalize(finding, snapshot):
         offset=1 if locale else 0
         value=args[offset] if len(args)>offset else ''
         linked=bool(re.fullmatch(r'[A-Za-z_$][\w$]*',value) and any(step.startswith(value+' = ') for step in iris.get('taint_trace_steps',[])))
-        if len(args)==offset+2 and linked:
+        # A literal format with one explicitly typed varargs array has a separate
+        # sink slot. Bind the aggregate IRIS trace to that exact array, never to
+        # a guessed formal name or to an unrelated argument on the same line.
+        array = args[offset+1] if len(args)==offset+2 else ''
+        array_decl = [d for d in method.get('local_variables',[])
+            if d.get('name') == array and d.get('type') in ('Object[]','String[]','java.lang.Object[]','java.lang.String[]')
+            and d.get('scope_id') in actual.get('ancestor_scopes',[])
+            and d.get('stmt_order',0) < actual.get('stmt_order',0)]
+        array_linked = bool('independent_local_proofs' in snapshot and re.fullmatch(r'"(?:\\.|[^"\\])*"',value)
+            and len(array_decl)==1 and any(step.startswith(array+' = ') for step in iris.get('taint_trace_steps',[])))
+        if len(args)==offset+2 and (linked or array_linked):
             types=['String','Object[]'] if offset==0 else ['java.util.Locale','String','Object[]']
             identity={**identity,'method':actual['method_name'],'signature':'PrintWriter '+actual['method_name']+'('+', '.join(types)+')'}
             target={'method':actual['method_name'],'types':types,'names':[None]*len(types)}
-            format_binding={'slot':'arg'+str(offset),'expression':value,'origin':'IRIS_AGGREGATE_RETURN_PATH_TO_AST_FORMAT_ARGUMENT'}
+            format_binding={'slot':'arg'+str(offset+1 if array_linked else offset),
+                'expression':array if array_linked else value,
+                'origin':'IRIS_AGGREGATE_TO_AST_VARARGS_ARRAY' if array_linked else 'IRIS_AGGREGATE_RETURN_PATH_TO_AST_FORMAT_ARGUMENT'}
             conflicts.append('IRIS_AGGREGATE_PRINTWRITER_IDENTITY_REFINED')
     calls = [c for c in method.get('method_invocations',method.get('invocations',[])) if c.get('method_name')==identity.get('method')
              and int(c.get('start_line',0)) <= int(finding.get('line_number') or 0) <= int(c.get('end_line',0))]
@@ -253,6 +295,19 @@ def normalize(finding, snapshot):
                and iris.get('explicit_ast_release_verified') is not True)
     safe=bool(local and not (owner[:2]==('java.lang','Runtime') and len(target['types'])>1) and state=='PROVEN_SAFE' and iris.get('taint_reaches_sink') is False
               and iris.get('explicit_ast_release_verified') is True and iris.get('source_sink_trace_status') in ('SAFE_CONSTANT_OR_PARAMETERIZED','SAFE_SANITIZED_OR_GUARDED'))
+    # New snapshots require a second, source-bound local analysis. Older immutable
+    # revisions retain their recorded policy for reproducible historical replay.
+    if 'independent_local_proofs' in snapshot:
+        proof = snapshot['independent_local_proofs'].get(fid) or {}
+        independent = bool(bound and proof.get('sha256') == expected
+            and proof.get('ast_parser_engine') == 'OPENJDK17_JAVAC_TASK_AST'
+            and proof.get('target_callee_identity') == iris_identity
+            and proof.get('flow_proof_state') == state and proof.get('covered_sink_args'))
+        taint = bool(taint and independent and proof.get('taint_reaches_sink') is True)
+        safe = bool(safe and independent and proof.get('taint_reaches_sink') is False
+                    and proof.get('safe_release_verified') is True)
+        if state != 'UNKNOWN' and not (taint or safe):
+            blocked.append('INDEPENDENT_LOCAL_PROOF_NOT_CONFIRMED')
     entry = endpoint(ast,cls,method,row) if bound else {'observed':False}
     mapped=[r for r in snapshot.get('servlet_mappings',[]) if r['class']=='.'.join(filter(None,[ast.get('package_name'),cls.get('class_name')]))]
     if entry.get('framework')=='SERVLET' and mapped:entry.update(route_mapped=True,mappings=mapped)

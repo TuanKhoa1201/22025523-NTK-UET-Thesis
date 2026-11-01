@@ -111,6 +111,36 @@ class V2Tests(unittest.TestCase):
         self.assertTrue(r['normalized_evidence']['receiver_origin'])
         self.assertTrue(r['normalized_evidence']['slot_binding_verified'])
 
+    def test_repository_relative_snapshot_survives_subpath_cleanup_and_replay(self):
+        import shutil
+        f, _ = self.fixture('SqlServlet')
+        checkout = self.root/'checkout'
+        scoped = checkout/'src/main/java/sample'
+        scoped.mkdir(parents=True)
+        source = (self.root/'SqlServlet.java').read_bytes()
+        (scoped/'SqlServlet.java').write_bytes(source)
+        f['file_path'] = 'src/main/java/sample/SqlServlet.java'
+        provenance = {'resolved_commit_sha': 'a'*40, 'per_finding_records': [{
+            'finding_id': f['finding_id'], 'verified': True,
+            'file_sha256': hashlib.sha256(source).hexdigest()}]}
+        wrong = v.graph.collect(scoped, [f], provenance)
+        self.assertFalse(v.graph.normalize(f, wrong)['source_bound'])
+        self.assertTrue(any(x.startswith('FINDING_SOURCE_UNAVAILABLE:') for x in wrong['limitations']))
+        snapshot = v.graph.collect(checkout, [f], provenance)
+        self.assertEqual(snapshot['resolved_commit_sha'], 'a'*40)
+        self.assertTrue(v.graph.normalize(f, snapshot)['local_taint_proven'])
+        saved = self.store.publish_complete(f, SCAN, snapshot)
+        shutil.rmtree(checkout)
+        self.assertTrue(self.store.replay(SCAN, f['finding_id'], saved['revision'])['replay_verified'])
+
+    def test_missing_or_forged_independent_proof_never_promotes_safe(self):
+        f, snapshot = self.fixture('EncodedServlet')
+        self.assertTrue(v.graph.normalize(f, snapshot)['local_safe_proven'])
+        snapshot['independent_local_proofs'] = {}
+        self.assertFalse(v.graph.normalize(f, snapshot)['local_safe_proven'])
+        _, result = v.assess(f, SCAN, snapshot, complete.MODE)
+        self.assertNotEqual(result['factor_codes']['TI'], 'N')
+
     def test_canonical_formal_names_and_positional_aliases(self):
         for name in ('ShellServlet','SqlServlet','FileServlet','HtmlServlet'):
             f,s=self.fixture(name)
@@ -288,6 +318,18 @@ class ExtendedBindingTests(unittest.TestCase):
         source=(FIX/'HtmlServlet.java').read_text().replace('out.println(value)','out.format("fixed", new Object[]{value})')
         f,s=self.fixture('HtmlServlet',source)
         self.assertIsNone(v.graph.normalize(f,s)['format_slot_binding'])
+
+    def test_literal_locale_format_binds_named_varargs_array(self):
+        source=(FIX/'HtmlServlet.java').read_text().replace(
+            'String value = request.getParameter("value");', 'String value = "fixed";').replace(
+            'out.println(value);', 'Object[] args = {"a", value};\n out.printf(java.util.Locale.US, "%s %s", args);')
+        f,s=self.fixture('HtmlServlet',source)
+        g=v.graph.normalize(f,s)
+        self.assertTrue(g['local_safe_proven'],g)
+        self.assertEqual(g['sink_slot'],'arg2')
+        self.assertEqual(g['format_slot_binding']['expression'],'args')
+        s['independent_local_proofs']={}
+        self.assertFalse(v.graph.normalize(f,s)['local_safe_proven'])
 
     def test_web_xml_mapping_passive(self):
         (self.root/'web.xml').write_text('<web-app><servlet><servlet-name>s</servlet-name><servlet-class>SqlServlet</servlet-class></servlet><servlet-mapping><servlet-name>s</servlet-name><url-pattern>/query</url-pattern></servlet-mapping></web-app>')
