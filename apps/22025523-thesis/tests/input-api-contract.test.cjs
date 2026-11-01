@@ -25,3 +25,18 @@ test('syntax failure is distinguished from a successful zero-candidate scan',asy
   assert.match(inputErrorMessage({error_code:'JAVA_SYNTAX_ERROR'}),/lỗi cú pháp/);
   assert.match(inputErrorMessage({error_code:'JAVA_SYNTAX_ERROR'}),/\[JAVA_SYNTAX_ERROR\]/);
 });
+
+test('history follows backend summary pagination instead of silently keeping 25 recent scans',async()=>{
+  const requests=[];
+  const {api}=await loadApi(async url=>{requests.push(url);const page=Number(new URL(url).searchParams.get('page'));
+    return new Response(JSON.stringify({scans:[{scan_id:'SCAN-PAGE-'+page,job_state:'COMPLETED'}],total_pages:2}),{status:200});});
+  const result=await api.listScans();assert.equal(result.supported,true);assert.equal(result.truncated,false);
+  assert.deepEqual(result.items.map(x=>x.scan_id),['SCAN-PAGE-1','SCAN-PAGE-2']);assert.equal(requests.length,2);
+  assert(requests.every(url=>new URL(url).searchParams.get('page_size')==='100'));
+});
+
+test('history bounds requests and discloses summaries omitted by the client limit',async()=>{
+  let requests=0;
+  const {api}=await loadApi(async()=>{requests++;return new Response(JSON.stringify({scans:[{scan_id:'SCAN-'+requests}],total_pages:10000}),{status:200});});
+  const result=await api.listScans();assert.equal(requests,20);assert.equal(result.truncated,true);assert.equal(result.items.length,20);
+});

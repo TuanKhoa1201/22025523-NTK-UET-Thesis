@@ -42,6 +42,19 @@ export function readHistory() {
     .sort((a, b) => stamp(b) - stamp(a));
 }
 
+// The browser cache stays bounded. Rendering the authoritative backend history
+// must not silently inherit that cache's 50-record retention limit.
+export function mergeHistoryRecords(cached, remote, hidden = []) {
+  const byId=new Map();
+  for(const record of [...cached,...remote]){
+    if(!record?.scanId)continue;
+    const defined=Object.fromEntries(Object.entries(record).filter(([,value])=>value!==undefined));
+    byId.set(record.scanId,{...byId.get(record.scanId),...defined});
+  }
+  const hiddenIds=new Set(hidden.map(record=>record.scanId));
+  return [...byId.values()].filter(record=>!hiddenIds.has(record.scanId)).sort((a,b)=>stamp(b)-stamp(a));
+}
+
 export function historyRecordFromBackend(item) {
   const totals = item.triage_totals || {};
   // Transport status OK is not the job lifecycle state.

@@ -106,13 +106,28 @@ async function optionalList(path, options = {}) {
     const items = Array.isArray(data)
       ? data
       : data?.jobs ?? data?.scans ?? data?.items ?? data?.results ?? data?.data?.jobs ?? data?.data?.scans;
-    return {supported: Array.isArray(items), items: Array.isArray(items) ? items : []};
+    return {supported: Array.isArray(items), items: Array.isArray(items) ? items : [],
+      totalPages: Number(data?.total_pages) || 1};
   } catch (error) {
     if (error instanceof ApiError && [404, 405, 501].includes(error.status)) {
       return {supported: false, items: []};
     }
     throw error;
   }
+}
+
+async function scanHistory(options) {
+  const items=[];
+  // Only lightweight scan summaries; never full finding payloads. Bound the
+  // number of requests and disclose truncation instead of hiding old scans.
+  const maxPages=20;
+  for(let page=1;page<=maxPages;page+=1){
+    const result=await optionalList(`/api/scans?page=${page}&page_size=100`,options);
+    if(!result.supported)return {...result,items};
+    items.push(...result.items);
+    if(page>=result.totalPages)return {supported:true,items,truncated:false};
+  }
+  return {supported:true,items,truncated:true};
 }
 
 // CWSS Inference V2 is independent from legacy /cwss/page (V1).
@@ -241,7 +256,7 @@ export const api = {
     timeoutMs: 15000
   }),
   listScanJobs: (options) => optionalList('/api/scan-jobs', options),
-  listScans: (options) => optionalList('/api/scans', options),
+  listScans: (options) => scanHistory(options),
   cwssPage: (scanId, page = 1, pageSize = 50, options = {}) => request(
     `/api/scans/${encodeURIComponent(scanId)}/cwss/page?page=${page}&page_size=${pageSize}`,
     {...options, timeoutMs: 30000}

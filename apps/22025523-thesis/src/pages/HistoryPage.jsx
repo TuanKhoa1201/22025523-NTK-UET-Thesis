@@ -3,7 +3,7 @@ import {Link} from 'react-router-dom';
 import {Card, PageHeader, Badge, DataNotice, EmptyState, Icon} from '../components/common/Ui';
 import {ApiError, api} from '../services/api';
 import {scanQuery} from '../services/liveScan';
-import {readHistory, upsertHistory, historyRecordFromBackend, hideHistoryRecord, readHiddenHistory, restoreHistoryRecord} from '../services/scanHistory';
+import {readHistory, upsertHistory, historyRecordFromBackend, hideHistoryRecord, readHiddenHistory, restoreHistoryRecord, mergeHistoryRecords} from '../services/scanHistory';
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('vi-VN') : '—');
 const fmtMs = (ms) => (Number.isFinite(ms) ? `${(ms / 1000).toFixed(2)} giây` : '—');
@@ -84,26 +84,32 @@ function ConfirmHide({record, onCancel, onConfirm}) {
 
 export default function HistoryPage() {
   const [records, setRecords] = useState(() => readHistory());
+  const [backendRecords, setBackendRecords] = useState([]);
   const [hiddenRecords, setHiddenRecords] = useState(() => readHiddenHistory());
   const [gap, setGap] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
   const [notice, setNotice] = useState('');
-  const availability = useAvailability(records);
+  const backendIds = new Set(backendRecords.map(record=>record.scanId));
+  const availability = useAvailability(records.filter(record=>!backendIds.has(record.scanId)));
   const demo = window.sessionStorage.getItem('22025523-demo-result') === 'true';
 
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
       let supported = false;
+      const received=[];
       for (const load of [api.listScanJobs, api.listScans]) {
         try {
           const result = await load({signal: controller.signal});
           if (!result.supported) continue;
           supported = true;
+          if (result.truncated) setGap('Đã tải giới hạn 2.000 scan gần nhất; lịch sử backend còn các trang cũ hơn. Các scan đó vẫn được giữ và có thể mở bằng scan_id.');
           result.items.forEach((item) => {
             const scanId = item.scan_id ?? item.id;
             if (!scanId) return;
-            upsertHistory(historyRecordFromBackend(item), {authoritative: true});
+            const record=historyRecordFromBackend(item);
+            received.push(record);
+            upsertHistory(record, {authoritative: true});
           });
         } catch {
           /* list endpoint unavailable or network error; cached IDs still shown */
@@ -111,7 +117,8 @@ export default function HistoryPage() {
       }
       if (controller.signal.aborted) return;
       if (!supported) setGap('API gap: backend chưa công bố endpoint danh sách (GET /api/scan-jobs, GET /api/scans không khả dụng hoặc lỗi). Chỉ hiển thị các scan_id đã biết và đối chiếu từng ID với backend.');
-      setRecords(readHistory());
+      setBackendRecords(received);
+      setRecords(mergeHistoryRecords(readHistory(),received,readHiddenHistory()));
       setHiddenRecords(readHiddenHistory());
     })();
     return () => controller.abort();
@@ -120,7 +127,7 @@ export default function HistoryPage() {
   const confirmHide = () => {
     if (!pendingDelete) return;
     hideHistoryRecord(pendingDelete);
-    setRecords(readHistory());
+    setRecords(mergeHistoryRecords(readHistory(),backendRecords,readHiddenHistory()));
     setHiddenRecords(readHiddenHistory());
     setNotice(`Đã ẩn ${pendingDelete.scanId} khỏi lịch sử trên trình duyệt này. Không có dữ liệu backend nào bị xóa.`);
     setPendingDelete(null);
@@ -128,7 +135,7 @@ export default function HistoryPage() {
 
   const restore = (scanId) => {
     restoreHistoryRecord(scanId);
-    setRecords(readHistory());
+    setRecords(mergeHistoryRecords(readHistory(),backendRecords,readHiddenHistory()));
     setHiddenRecords(readHiddenHistory());
     setNotice(`Đã khôi phục ${scanId} vào lịch sử trên trình duyệt này.`);
   };
