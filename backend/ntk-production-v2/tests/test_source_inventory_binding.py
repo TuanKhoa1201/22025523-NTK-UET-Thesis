@@ -1,5 +1,6 @@
 """Content hashes for every cached source must bind to the current checkout."""
 import hashlib
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,6 +8,21 @@ import ntk_web_backend_service as service
 
 
 class CachedSourceTests(unittest.TestCase):
+    def test_mode_only_cache_change_is_ignored_but_changed_bytes_and_untracked_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);source=root/'Plain.java';source.write_text('class Plain {}')
+            def git(*args):
+                return subprocess.run(['git','-C',str(root),*args],check=True,capture_output=True,text=True)
+            git('init','-q');git('config','core.filemode','true');git('add','Plain.java')
+            git('-c','user.name=NTK acceptance','-c','user.email=acceptance@example.invalid','commit','-qm','fixture')
+            source.chmod(0o755)
+            self.assertTrue(service.cached_checkout_is_clean(root))
+            self.assertEqual(git('config','--get','core.filemode').stdout.strip(),'true')
+            source.write_text('class Changed {}')
+            self.assertFalse(service.cached_checkout_is_clean(root))
+            source.write_text('class Plain {}');(root/'Extra.java').write_text('class Extra {}')
+            self.assertFalse(service.cached_checkout_is_clean(root))
+
     def test_middle_file_change_or_missing_hash_invalidates_inventory(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

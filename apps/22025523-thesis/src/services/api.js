@@ -1,12 +1,25 @@
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8765').replace(/\/$/, '');
 
 export class ApiError extends Error {
-  constructor(message, {status, timedOut = false, cause} = {}) {
+  constructor(message, {status, timedOut = false, cause, payload} = {}) {
     super(message, {cause});
     this.name = 'ApiError';
     this.status = status;
     this.timedOut = timedOut;
+    this.payload = payload;
+    this.code = payload?.error_code;
   }
+}
+
+export function inputErrorMessage(payload) {
+  const code = payload?.error_code || payload?.stage_error_code;
+  const detail = payload?.error_message || payload?.stage_error_message || 'Không thể phân tích dữ liệu đầu vào.';
+  const message = ['NO_JAVA_FILES_FOUND','NO_JAVA_FILES_IN_ZIP','NO_JAVA_FILES_MATCHED_FILTERS'].includes(code)
+    ? 'Không tìm thấy mã nguồn Java trong phạm vi đã cung cấp. NTK hiện hỗ trợ Java cho CWE-22, CWE-78, CWE-79 và CWE-89.'
+    : code === 'JAVA_SYNTAX_ERROR'
+      ? 'Mã nguồn .java có lỗi cú pháp hoặc không phải Java hợp lệ; không thể kết luận về lỗ hổng.'
+      : detail;
+  return code ? `${message} [${code}]` : message;
 }
 
 async function request(path, options = {}) {
@@ -30,7 +43,9 @@ async function request(path, options = {}) {
 
     if (!response.ok) {
       const message = await response.text();
-      throw new ApiError(message || `Yêu cầu thất bại (${response.status})`, {status: response.status});
+      let payload;
+      try { payload = JSON.parse(message); } catch { /* non-JSON gateway error */ }
+      throw new ApiError(payload ? inputErrorMessage(payload) : message || `Yêu cầu thất bại (${response.status})`, {status: response.status, payload});
     }
     if (response.status === 204) return null;
 
@@ -186,6 +201,12 @@ async function cwssV2ScenarioFinding(scanId, findingId, options = {}) {
 }
 
 export const api = {
+  createZipJob: (file, options = {}) => {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    // Binary endpoint is asynchronous and enforces archive limits server-side.
+    return request('/api/scan-jobs', {...options, method:'POST', body, timeoutMs:60000});
+  },
   cwssV2ScenarioPage,
   cwssV2ScenarioFinding,
   cwssV2ForFindingIds,

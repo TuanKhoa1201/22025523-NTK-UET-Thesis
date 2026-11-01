@@ -71,6 +71,34 @@ class FalseSuppressionTests(unittest.TestCase):
  Runtime.getRuntime().exec(value); // SINK''',
                     f' String {name}() {{ return "echo fixed"; }}'), 'SUPPRESS')
 
+    def test_unknown_switch_case_or_default_cannot_erase_other_paths(self):
+        for selector in ['request.getParameter("choice").charAt(0)', 'selectorValue()']:
+            with self.subTest(selector=selector):
+                self.assertNotEqual(self.decision('''
+ String value = choose(request.getParameter("cmd"), '''+selector+''');
+ Runtime.getRuntime().exec(value); // SINK''', '''
+ char selectorValue() { return 'a'; }
+ String choose(String input, char selector) {
+   String chosen;
+   switch(selector) {
+     case 'a': chosen = input; break;
+     default: chosen = "echo fixed"; break;
+   }
+   return chosen;
+ }'''), 'SUPPRESS')
+
+    def test_constant_switch_stops_at_break_and_recognizes_default(self):
+        for selector, expected in [('1','REPORT'),('3','SUPPRESS')]:
+            with self.subTest(selector=selector):
+                self.assertEqual(self.decision('''
+ String value;
+ switch('''+selector+''') {
+   case 1: value = request.getParameter("cmd"); break;
+   case 2: value = "echo two"; break;
+   default: value = "echo fixed"; break;
+ }
+ Runtime.getRuntime().exec(value); // SINK'''), expected)
+
     def test_array_writes_cannot_release_constant_proof(self):
         for mutation in ('args[2] = request.getParameter("cmd");',
                          'args[index] = request.getParameter("cmd");',

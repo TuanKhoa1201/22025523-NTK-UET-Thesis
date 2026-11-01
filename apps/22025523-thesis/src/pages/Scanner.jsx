@@ -3,7 +3,7 @@ import {Link, useOutletContext} from 'react-router-dom';
 import {Card, PageHeader, Badge, DataNotice, Icon} from '../components/common/Ui';
 import SecurityAnalysisScene from '../components/scanner/SecurityAnalysisScene';
 import {CoveragePanel, FailureDetails, StageOverview} from '../components/scanner/JobPanels';
-import {api} from '../services/api';
+import {api, inputErrorMessage} from '../services/api';
 import {currentStageIndex, resolveStages, skipNote} from '../services/jobModel';
 import {loadLiveScan, scanQuery} from '../services/liveScan';
 import {readHistory, upsertHistory} from '../services/scanHistory';
@@ -84,6 +84,10 @@ export default function Scanner() {
   const [tab, setTab] = useState('github');
   const [url, setUrl] = useState('');
   const [forceFresh, setForceFresh] = useState(false);
+  const [gitRef, setGitRef] = useState('');
+  const [targetSubpath, setTargetSubpath] = useState('');
+  const [maxFiles, setMaxFiles] = useState('');
+  const [scopePolicy, setScopePolicy] = useState('STRICT_FAIL_ON_LIMIT');
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -150,7 +154,9 @@ export default function Scanner() {
             const total = Number(data.scan?.total_e2e_duration_ms);
             setBackendMs(Number.isFinite(total) ? total : null);
             setLiveStage('COMPLETED');
-            setLiveStatus('Hoàn tất: dữ liệu đã lưu; summary và trang findings đầu tiên tải thành công');
+            setLiveStatus(data.counts.total === 0
+              ? 'Đã hoàn thành phân tích. Không phát hiện ứng viên lỗ hổng thuộc phạm vi quy tắc hiện tại.'
+              : 'Hoàn tất: dữ liệu đã lưu; summary và trang findings đầu tiên tải thành công');
           } catch (failure) {
             if (!stopped && !controller.signal.aborted) setError(`Job đã hoàn tất nhưng không tải được findings: ${failure.message}`);
           }
@@ -162,7 +168,7 @@ export default function Scanner() {
           if (startRef.current) setElapsedMs(Date.now() - startRef.current);
           setBusy(false);
           setLiveStatus('Backend đã dừng job với trạng thái FAILED');
-          setError(job.error_message || (typeof job.error === 'string' ? job.error : job.error?.message) || job.message || 'Backend đã đánh dấu job là FAILED.');
+          setError(inputErrorMessage(job));
           if (job.scan_id) upsertHistory({scanId: job.scan_id, status: 'FAILED'});
           return;
         }
@@ -186,7 +192,7 @@ export default function Scanner() {
   }, [jobId]);
 
   useEffect(() => {
-    if (jobId) return undefined;
+    if (jobId || busy || pendingRef.current) return undefined;
     const scanId = window.sessionStorage.getItem('22025523-scan-id');
     if (!scanId) return undefined;
     const controller = new AbortController();
@@ -202,10 +208,10 @@ export default function Scanner() {
         if (!controller.signal.aborted) setError(failure.message);
       });
     return () => controller.abort();
-  }, [jobId]);
+  }, [jobId, busy]);
 
   const startLive = async () => {
-    if (pendingRef.current) return;
+    if (pendingRef.current || busy) return;
     setError('');
     if (backend.status !== 'CONNECTED') {
       const statusMessage = backend.status === 'CHECKING'
@@ -215,15 +221,29 @@ export default function Scanner() {
       setLiveStatus(statusMessage);
       return;
     }
-    if (tab !== 'github') {
-      setError('API tải ZIP trực tiếp chưa được đối chiếu với hợp đồng backend. Vui lòng dùng URL GitHub trong lúc chờ xác nhận.');
+    if (tab === 'zip' && (!file || !/\.zip$/i.test(file.name))) {
+      setError('Chọn tệp .zip chứa mã nguồn Java.');
       return;
     }
-    if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(url.trim())) {
+    const uploadLimit = backend.health?.source_inventory_limits?.max_zip_upload_bytes ?? 25*1024*1024;
+    if (tab === 'zip' && file.size > uploadLimit) {
+      setError(`Tệp ZIP vượt giới hạn ${Math.round(uploadLimit/1024/1024)} MB [MAX_ZIP_UPLOAD_BYTES_EXCEEDED]`);
+      return;
+    }
+    if (tab === 'github' && !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(url.trim())) {
       setError('Nhập URL repository GitHub công khai hợp lệ.');
       return;
     }
+    if (tab === 'github' && maxFiles && (!Number.isInteger(Number(maxFiles)) || Number(maxFiles)<1 || Number(maxFiles)>(backend.health?.source_inventory_limits?.max_source_files_ceiling ?? 10000))) {
+      setError('Giới hạn file Java phải là số nguyên trong giới hạn backend.');
+      return;
+    }
     pendingRef.current = true;
+    // A new submission owns the status panel. Do not restore the previous
+    // scan while its job ID is cleared or overwrite this request's HTTP error.
+    window.sessionStorage.removeItem(JOB_KEY);
+    window.sessionStorage.removeItem(JOB_KEY + '-started');
+    window.sessionStorage.removeItem('22025523-scan-id');
     const controller = new AbortController();
     requestRef.current = controller;
     const startedAt = new Date().toISOString();
@@ -244,10 +264,16 @@ export default function Scanner() {
     try {
       setLiveStage('WAITING_FOR_RESPONSE');
       setLiveStatus('Đang chờ backend tạo job phân tích');
-      const result = await api.createScanJob(
-        url.trim(), undefined, {signal: controller.signal},
-        forceFresh ? {force_fresh_scan: true, force_new_job: true} : {}
-      );
+      const isCommit = /^[a-f0-9]{7,40}$/i.test(gitRef.trim());
+      const result = tab === 'zip'
+        ? await api.createZipJob(file, {signal:controller.signal})
+        : await api.createScanJob(url.trim(), isCommit ? gitRef.trim() : undefined, {signal:controller.signal}, {
+            ...(gitRef.trim() && !isCommit ? {branch:gitRef.trim()} : {}),
+            ...(targetSubpath.trim() ? {target_subpath:targetSubpath.trim()} : {}),
+            ...(maxFiles ? {max_files_limit:Number(maxFiles)} : {}),
+            scan_scope_policy:scopePolicy,
+            ...(forceFresh ? {force_fresh_scan:true,force_new_job:true} : {})
+          });
       if (typeof result?.job_id !== 'string' || !result.job_id) {
         throw new Error('Backend chưa trả về job_id theo hợp đồng hiện tại. Không thể theo dõi job này.');
       }
@@ -257,7 +283,7 @@ export default function Scanner() {
       if (submittedId) {
         window.sessionStorage.setItem('22025523-scan-id', submittedId);
         setLiveScanId(submittedId);
-        upsertHistory({scanId: submittedId, jobId: result.job_id, repoUrl: url.trim(), inputMode: 'GITHUB', startedAt, status: result.state || 'QUEUED'});
+        upsertHistory({scanId: submittedId, jobId: result.job_id, repoUrl:tab==='github'?url.trim():undefined, fileName:tab==='zip'?file.name:undefined, inputMode:tab==='zip'?'ZIP':'GITHUB', startedAt, status: result.state || 'QUEUED'});
       }
       setJobId(result.job_id);
       setLiveJob(result);
@@ -265,7 +291,7 @@ export default function Scanner() {
       setLiveStatus('Đã nhận job từ backend');
     } catch (failure) {
       if (!controller.signal.aborted) {
-        setError(failure.message?.startsWith('Backend') ? failure.message : `Không thể kết nối máy chủ phân tích. Vui lòng kiểm tra dịch vụ backend trước khi chạy quét trực tiếp. ${failure.message || ''}`);
+        setError(failure.message || 'Không thể kết nối máy chủ phân tích.');
         setLiveStatus('Không thể xác nhận trạng thái quét');
         setLiveStage('FAILED');
         setBusy(false);
@@ -310,6 +336,17 @@ export default function Scanner() {
                   <Badge>HTTPS</Badge>
                 </div>
                 <p>Backend phân tích theo ruleset CWE được hỗ trợ; không có ứng viên thì LLM không chạy và không khẳng định mã nguồn an toàn.</p>
+                <label htmlFor="git-ref">Git branch hoặc commit SHA (để trống: mặc định)</label>
+                <input id="git-ref" value={gitRef} disabled={busy} onChange={e=>setGitRef(e.target.value)} />
+                <label htmlFor="target-subpath">Thư mục trong repository (tùy chọn)</label>
+                <input id="target-subpath" value={targetSubpath} disabled={busy} onChange={e=>setTargetSubpath(e.target.value)} />
+                <label htmlFor="max-java-files">Giới hạn file Java (tùy chọn, không vượt ceiling backend)</label>
+                <input id="max-java-files" type="number" min="1" value={maxFiles} disabled={busy} onChange={e=>setMaxFiles(e.target.value)} />
+                <label htmlFor="scan-scope-policy">Khi vượt giới hạn</label>
+                <select id="scan-scope-policy" value={scopePolicy} disabled={busy} onChange={e=>setScopePolicy(e.target.value)}>
+                  <option value="STRICT_FAIL_ON_LIMIT">Dừng và báo giới hạn</option>
+                  <option value="BOUNDED_PARTIAL_SCAN">Chỉ quét một phần, công bố PARTIAL</option>
+                </select>
                 <label className="scanner-fresh-option" style={{display: 'flex', alignItems: 'center', gap: 10, marginTop: 12}}>
                   <input type="checkbox" checked={forceFresh} disabled={busy} onChange={(event) => setForceFresh(event.target.checked)} />
                   <span>Chạy mới không dùng cache để kiểm chứng suy luận thật (tốn thời gian và tài nguyên GPU)</span>
@@ -324,7 +361,7 @@ export default function Scanner() {
                 <span className="button-secondary">{file ? 'Chọn tệp khác' : 'Chọn tệp ZIP'}</span>
               </button>
             )}
-            {tab === 'zip' && <div className="inline-warning"><Icon name="AlertTriangle" />Tải ZIP LIVE đang chờ xác nhận hợp đồng API.</div>}
+            {tab === 'zip' && <DataNotice>ZIP được gửi bằng multipart tới /api/scan-jobs. Backend kiểm tra archive, Java và giới hạn; không chạy script hoặc build trong ZIP. Các file không phải Java không được phân tích.</DataNotice>}
             {error && <div className="inline-error" role="alert"><Icon name="AlertTriangle" />{error}</div>}
             <div className="scanner-submit">
               <div><strong>Phạm vi phân tích</strong><span>Java source · OpenGrep · IRIS · Qwen LoRA</span></div>
@@ -359,7 +396,7 @@ export default function Scanner() {
           {liveScanId && <p>Mã phiên: <code>{liveScanId}</code></p>}
           {liveStage === 'COMPLETED' && liveCounts && liveCounts.total === 0 && <p>Không phát hiện finding nào trong ruleset hiện tại và phạm vi mã nguồn đã phân tích. Điều này không khẳng định ứng dụng Java an toàn.</p>}
           {busy && <p>Đang phân tích — chưa có thời gian hoàn tất dự kiến.</p>}
-          {resultId && <Link className="button-secondary" to={`/findings${scanQuery(resultId)}`}>{liveScanId ? 'Mở trang kết quả' : `Mở phiên gần nhất · ${resultId}`}</Link>}
+          {resultId && liveStage !== 'FAILED' && <Link className="button-secondary" to={`/findings${scanQuery(resultId)}`}>{liveScanId ? 'Mở trang kết quả' : `Mở phiên gần nhất · ${resultId}`}</Link>}
           {liveScanId && !busy && <Link className="button-secondary" to={`/replay?scan=${encodeURIComponent(liveScanId)}`}>Phát lại trace đã ghi</Link>}
         </section>
         {jobFailed && <FailureDetails job={liveJob} />}

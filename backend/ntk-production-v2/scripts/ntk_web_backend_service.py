@@ -616,6 +616,7 @@ def discover_and_verify_java_source_inventory(
     layout_info = detect_java_project_layout(resolved_ws_root if resolved_ws_root.is_dir() else scan_root.parent)
 
     all_candidate_paths: List[Path] = []
+    non_java_files_ignored = 0
     skipped_build_dir_count = 0
     if scan_root.is_file():
         if scan_root.suffix == ".java":
@@ -623,9 +624,12 @@ def discover_and_verify_java_source_inventory(
     else:
         for p in sorted(scan_root.rglob("*")):
             if p.is_symlink():
-                p.unlink(missing_ok=True)
                 continue
-            if not p.is_file() or p.suffix != ".java":
+            if not p.is_file():
+                continue
+            if p.suffix != ".java":
+                if not any(part in _SKIP_BUILD_AND_VCS_DIRS for part in p.relative_to(resolved_ws_root).parts[:-1]):
+                    non_java_files_ignored += 1
                 continue
             rp = p.resolve()
             if not str(rp).startswith(str(resolved_ws_root)):
@@ -698,6 +702,8 @@ def discover_and_verify_java_source_inventory(
             "exclude_globs": clean_exc,
             "project_layout_detected": layout_info,
             "java_files_discovered": total_discovered_count,
+            "non_java_files_ignored": non_java_files_ignored,
+            "coverage_scope": "JAVA_SOURCE_ONLY_SUPPORTED_CWES_NOT_WHOLE_REPOSITORY_SECURITY",
             "java_files_matched_after_filters": matched_count,
             "java_files_scanned": scanned_count,
             "java_files_skipped": total_skipped,
@@ -742,12 +748,12 @@ def discover_and_verify_java_source_inventory(
         }
 
     if matched_count == 0:
-        err_code = "NO_JAVA_FILES_MATCHED_FILTERS" if total_discovered_count > 0 else "NO_JAVA_FILES_FOUND"
+        err_code = "NO_JAVA_FILES_MATCHED_FILTERS" if total_discovered_count > 0 or target_subpath else "NO_JAVA_FILES_FOUND"
         err_msg = (
             f"Discovered {total_discovered_count} .java files in {scan_root.name}, "
             f"but 0 files matched filters (include_globs={clean_inc}, exclude_globs={clean_exc})"
             if total_discovered_count > 0
-            else f"No .java files found in {scan_root}"
+            else f"No Java source files found in the supplied scope. NTK supports Java only (CWE-22, CWE-78, CWE-79, CWE-89)."
         )
         cov_diag = _build_cov_diag(
             0, 0, 0, "FAILED_STAGE_02_NO_JAVA_FILES", incomplete_reasons + [err_code]
@@ -997,6 +1003,20 @@ def compute_scoring_summary(
     }
 
 
+def cached_checkout_is_clean(root: Path, git_bin: str = 'git', env=None) -> bool:
+    """Check bytes/untracked files without trusting DrvFS executable-bit metadata.
+
+    Uploaded/cloned code is never executed. Commit and per-source SHA checks
+    remain mandatory; this command does not change repository configuration.
+    """
+    result = subprocess.run(
+        [git_bin, '-c', 'core.filemode=false', '-C', str(root),
+         'status', '--porcelain', '--untracked-files=all'],
+        capture_output=True, text=True, env=dict(env or os.environ, GIT_OPTIONAL_LOCKS='0'),
+        timeout=10, check=False)
+    return result.returncode == 0 and not result.stdout.strip()
+
+
 def cached_inventory_matches_sources(root: Path, inventory: Dict[str, Any]) -> bool:
     """Never reuse inventory hashes merely because the first/last file exist."""
     hashes = inventory.get('file_sha256_map') or {}
@@ -1170,10 +1190,7 @@ def acquire_github_java_repository(
         sha_matches = True
         if commit_sha and not cand_sha.lower().startswith(str(commit_sha).strip().lower()):
             sha_matches = False
-        dirty = subprocess.run(
-            list(git_sec_flags) + ['-C', str(persistent_checkout_dir), 'status', '--porcelain', '--untracked-files=all'],
-            capture_output=True, text=True, env=dict(git_env, GIT_OPTIONAL_LOCKS='0'), timeout=10, check=False)
-        if dirty.returncode != 0 or dirty.stdout.strip():
+        if not cached_checkout_is_clean(persistent_checkout_dir, cfg.git_bin, git_env):
             # Preserve a modified cache for inspection instead of deleting it or
             # attributing uncommitted bytes to the recorded Git commit.
             return {'status': 'ERROR', 'error_code': 'CACHED_CHECKOUT_NOT_CLEAN',
@@ -1212,10 +1229,7 @@ def acquire_github_java_repository(
                 check=False,
             )
             m_sha = (rev_m.stdout or "").strip()
-            mirror_status = subprocess.run(
-                [cfg.git_bin, '-C', str(mirror_path), 'status', '--porcelain', '--untracked-files=all'],
-                capture_output=True, text=True, env=dict(git_env, GIT_OPTIONAL_LOCKS='0'), timeout=10, check=False)
-            if mirror_status.returncode == 0 and not mirror_status.stdout.strip() and rev_m.returncode == 0 and len(m_sha) == 40 and (
+            if cached_checkout_is_clean(mirror_path, cfg.git_bin, git_env) and rev_m.returncode == 0 and len(m_sha) == 40 and (
                 not commit_sha or m_sha.lower().startswith(str(commit_sha).strip().lower())
             ):
                 tmp_seed = scan_cache.git_checkouts_dir / f"seed_{uuid.uuid4().hex[:10]}"
@@ -1457,15 +1471,7 @@ def acquire_github_java_repository(
     inventory_cache_hit = False
     inv: Optional[Dict[str, Any]] = None
     if is_cached_checkout and not force_fresh_scan:
-        wt_status = subprocess.run(
-            list(git_sec_flags) + ["-C", str(clone_dir), "status", "--porcelain", "-uno"],
-            capture_output=True,
-            text=True,
-            env=git_env,
-            timeout=10.0,
-            check=False,
-        )
-        wt_clean = wt_status.returncode == 0 and not (wt_status.stdout or "").strip()
+        wt_clean = cached_checkout_is_clean(clone_dir, cfg.git_bin, git_env)
         cached_inv = scan_cache.get_json("source_inventory", inv_cache_key) if wt_clean else None
         if isinstance(cached_inv, dict) and cached_inv.get("status") == "OK":
             rel_list = cached_inv.get("java_files", [])
@@ -2248,7 +2254,9 @@ def acquire_java_zip_archive(
 
                 rel_clean = "/".join(parts)
                 ext = os.path.splitext(parts[-1])[1].lower()
-                if ext in _FORBIDDEN_ARCHIVE_EXTENSIONS:
+                # Passive Python source in a mixed archive is ignored, never
+                # extracted or executed. Binary/bytecode/script restrictions stay.
+                if ext in _FORBIDDEN_ARCHIVE_EXTENSIONS and ext != '.py':
                     shutil.rmtree(extract_dir, ignore_errors=True)
                     return _fail_zip_stage(
                         2,
@@ -2334,6 +2342,9 @@ def acquire_java_zip_archive(
         scan_scope_policy=eff_scope_policy,
     )
     cov_diag = inv_res.get("coverage_diagnostics", {})
+    cov_diag['non_java_files_ignored'] = sum(
+        1 for info in infos if not info.is_dir() and not info.filename.lower().endswith('.java'))
+    cov_diag['coverage_scope'] = 'JAVA_SOURCE_ONLY_SUPPORTED_CWES_NOT_WHOLE_REPOSITORY_SECURITY'
     if inv_res.get("status") != "OK":
         err_code = str(inv_res.get("error_code", "NO_JAVA_FILES_IN_ZIP"))
         if err_code == "NO_JAVA_FILES_FOUND":
@@ -2556,6 +2567,32 @@ def scan_java_sources_and_triage(
     total_discovered_bytes = int(inv_res.get("source_bytes_discovered", 0))
     total_scanned_bytes = int(inv_res.get("source_bytes_scanned", total_discovered_bytes))
     was_filtered_or_truncated = bool(inv_res.get("was_filtered_or_truncated", False))
+    effective_rel_root = Path(rel_base_dir or (src_path if src_path.is_dir() else src_path.parent)).resolve()
+
+    # Syntax-only JavacTask.parse: no annotation processors, attribution, project
+    # build or untrusted code execution. A .java suffix alone is not validation.
+    triage_mod.prewarm_javac_ast_cache(
+        java_files, java_bin=str(Path(cfg.javac_bin).with_name('java')),
+        javac_bin=cfg.javac_bin, timeout_sec=cfg.subprocess_timeout_sec)
+    parse_failures = []
+    for path in java_files:
+        text = path.read_text(encoding='utf-8', errors='replace')
+        ast = triage_mod.parse_java_source_with_javac_ast(
+            text, str(path), java_bin=str(Path(cfg.javac_bin).with_name('java')), javac_bin=cfg.javac_bin)
+        if ast is None or ast.get('parse_success') is False:
+            parse_failures.append({'file_path': str(path.relative_to(Path(effective_rel_root))),
+                                   'diagnostics': (ast or {}).get('parse_errors', ['JAVA_PARSER_UNAVAILABLE'])})
+    if parse_failures:
+        code = 'JAVA_SYNTAX_ERROR' if any(f['diagnostics'] != ['JAVA_PARSER_UNAVAILABLE'] for f in parse_failures) else 'JAVA_PARSER_UNAVAILABLE'
+        message = 'Java syntax could not be validated; no vulnerability-free result is claimed.'
+        cov_diag.update(java_parse_failures=parse_failures, coverage_status='FAILED_OR_INCOMPLETE',
+                        analysis_coverage_status='FAILED_OR_INCOMPLETE')
+        tracker.update_coverage_diagnostics(cov_diag)
+        tracker.fail_stage(2, code, message)
+        return {'status':'ERROR', 'error_code':code, 'error_message':message,
+                'stage_error_code':code, 'stage_error_message':message,
+                'findings':[], 'actual_gpu_inference_calls':0, 'coverage_diagnostics':cov_diag,
+                'pipeline_trace':tracker.to_pipeline_trace_dict(coverage_diagnostics=cov_diag)}
 
     # Optional javac check (explicitly timed inside Stage 02)
     t0_javac = time.perf_counter()
@@ -2842,7 +2879,7 @@ def scan_java_sources_and_triage(
             shas_to_lookup.append(sha_txt)
 
     if use_cache and not force_fresh_ast_for_telemetry and shas_to_lookup:
-        cached_asts = scan_cache.get_many_json("javac_ast_files", shas_to_lookup)
+        cached_asts = scan_cache.get_many_json("javac_ast_files:" + triage_mod.AST_ANALYSIS_VERSION, shas_to_lookup)
         for sha_k, ast_val in cached_asts.items():
             if isinstance(ast_val, dict):
                 triage_mod._JAVAC_AST_CACHE[sha_k] = ast_val
@@ -2872,7 +2909,7 @@ def scan_java_sources_and_triage(
                     if fp_raw and str(effective_rel_root) and fp_raw.startswith(str(effective_rel_root)):
                         ast_copy["file_path"] = fp_raw[len(str(effective_rel_root)) :].lstrip("/\\")
                     to_persist_asts[s_k] = ast_copy
-            scan_cache.put_many_json("javac_ast_files", to_persist_asts)
+            scan_cache.put_many_json("javac_ast_files:" + triage_mod.AST_ANALYSIS_VERSION, to_persist_asts)
 
     candidate_contexts: List[Tuple[Dict[str, Any], str, int, str, str, int, str]] = []
     for hit in og_hits_sorted:

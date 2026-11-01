@@ -111,13 +111,15 @@ def handle(state, path, query):
             findings = payload.get('findings') or []
             total_count = payload.get('total_matching', len(findings))
         db_file = workflow.directory(state) / 'complete' / 'cwss-assessments.sqlite3'
-        if not db_file.is_file():
+        if findings and not db_file.is_file():
             return 404, {'status': 'ERROR', 'error_code': 'CWSS_V2_SNAPSHOT_NOT_FOUND'}
         sqlite_url = 'file:' + quote(str(db_file), safe='/') + '?mode=ro'
-        with closing(sqlite3.connect(sqlite_url, uri=True, timeout=15)) as db:
-            results = [{'finding_id': f['finding_id'],
-                        'cwss': _scenario_assessment(db, scan_id, f, context)}
-                       for f in findings]
+        results = []
+        if findings:
+            with closing(sqlite3.connect(sqlite_url, uri=True, timeout=15)) as db:
+                results = [{'finding_id': f['finding_id'],
+                            'cwss': _scenario_assessment(db, scan_id, f, context)}
+                           for f in findings]
         return 200, {
             'status': 'OK', 'scan_id': scan_id, 'page': page, 'page_size': page_size,
             'total_matching': total_count, 'scenario_id': PROFILE,
