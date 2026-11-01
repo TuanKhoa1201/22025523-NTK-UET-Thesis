@@ -228,3 +228,17 @@ Lệnh chỉ áp dụng execution policy cho tiến trình PowerShell đó, khô
 ### Chốt phạm vi
 
 Kết quả public không chứa private DTO hay screenshot: `docs/cwss-inference-v2/FINAL_DEMO_VALIDATION.json`. Bằng chứng chi tiết chỉ local dưới `work/final-validation/`. Bản sửa UI đã commit tại `0892b2e`; scripts nghiệm thu/khởi động và báo cáo được commit tiếp và push cùng trên nhánh `cwss-inference-v2-220`, không merge main. Không còn blocker trong các bước nghiệm thu được yêu cầu. Các giới hạn nghiên cứu, reviewer status read-only, bounded scan và phạm vi browser/boot nêu trên vẫn giữ nguyên. Dừng sửa tính năng mới sau khi đồng bộ nhánh.
+
+## Nghiệm thu mở rộng theo yêu cầu mới — 02/11/2026
+
+Yêu cầu mới mở rộng sang 8 dự án, non-Java/mixed/invalid input và ground truth 6+40 OWASP cases. Kết quả và phạm vi mới được công bố ở [NTK_MULTIPROJECT_ACCEPTANCE_REPORT.md](NTK_MULTIPROJECT_ACCEPTANCE_REPORT.md), [8-project report](NTK_8_PROJECT_E2E_REPORT.md), [input report](NTK_INPUT_VALIDATION_REPORT.md), [accuracy report](NTK_DETECTION_ACCURACY_REPORT.md) và [OWASP ground truth](NTK_GROUND_TRUTH_EVALUATION.md).
+
+**Trạng thái tổng thể cho phạm vi mở rộng: PARTIAL**, vì 3 scan chỉ quét 16 files và detector còn điểm mù Spark traversal. Không thay thế kết quả thực của đợt demo trước bằng tuyên bố full coverage. Cả 8 dự án đã có scan production mới; 82 findings có source hash bound và đủ 16 metrics ở 2 modes; Petclinic 49 Java có 0 candidates/0 Qwen/0 CWSS assessments. Tất cả raw artifacts mới nằm ở ignored `work/e2e-multiproject-acceptance/`.
+
+Đã sửa validation cú pháp Java, mixed ZIP, empty CWSS API, upload/ref/subpath/scope trên Scanner, race restore lỗi input, false cache dirtiness do executable bit trên DrvFS và false SUPPRESS qua switch/default. AST V5 có cache namespace mới; các scans trước sửa không bị xóa hay ghi đè. Case OWASP 02241 đổi SUPPRESS→REVIEW sau sửa; kết quả 40 trước/sau giữ riêng và không gọi recheck là independent unseen evaluation.
+
+Lượt cuối: **237 backend tests + 13 frontend tests + 2 metric tests PASS**; **33 browser checks + 12 trang demo PASS**, thêm 3 checks sau khi UI tải xong cho zero/safe/unknown. Build 445 modules PASS; smoke OpenGrep 6 candidates/Javac 3 methods PASS. Real25 SHA256SUMS 7 entries PASS, tests dùng đúng NTK_REAL25_DIR; dataset/expected scores giữ nguyên. CWSS weights không đổi; model/LoRA không thay đổi hoặc retrain.
+
+Đã sao lưu SQLite trước khi nạp bản sửa demo khi không có job; không thay thế database. Backend demo PID cuối **43996**, backend kiểm thử riêng PID **44621**; frontend demo 5173 và frontend test 5174 vẫn chạy. Model demo cuda:0, LoRA cuda:0, offline/no cloud; model test đã trở về NOT_LOADED sau khi hoàn thành inference để nhường VRAM. **37 checks scan cũ vẫn PASS**, triage 2/6/2, điểm 006/008/009/010 vẫn 84.0/0.0/86.0/0.0, JSON scan cũ giữ nguyên hash. Scan GitHub fresh sau sửa **SCAN-20261101183021-AADAB9** chạy 5 GPU inference thật. **48 checks sau restart** xác nhận 8 scan mới và source evidence đọc lại được từ persistence. Launcher CheckOnly PASS; chưa reboot Windows thật.
+
+Source/tests/tooling commit **5fa5159** đã push nhánh `cwss-inference-v2-220`; báo cáo/CSV public đi tiếp cùng nhánh và được kiểm tra remote ref khi bàn giao. Không merge main, không commit private dataset/model/cache/SQLite/screenshots. Các giới hạn accuracy: 40 cases có 75% REVIEW, recall tự REPORT 15%, chưa chứng minh leakage-free; full configuration ablation chưa chạy. Dừng sửa tính năng mới sau lần chốt này.

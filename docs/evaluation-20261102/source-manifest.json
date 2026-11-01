@@ -1,0 +1,184 @@
+[
+  {
+    "project": "WebGoat",
+    "upstream": "https://github.com/WebGoat/WebGoat.git",
+    "upstream_commit": "5357a65e054976cd7d79b81ef3906ded050ed921",
+    "archive_sha256": "c3d096ac797135961297290a83bf9a70458f193d3e50c99a1a6a51eab83e2da4",
+    "java_bytes_match_commit": true,
+    "java_discovered": 354,
+    "java_scanned": 16,
+    "java_skipped": 338,
+    "coverage": "PARTIAL_BOUNDED",
+    "scan_id": "SCAN-20261101182104-AD4FF8",
+    "selection": {
+      "max_files_limit": 16,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN",
+      "file_allowlist": [
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/PathTraversal.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUpload.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadBase.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadFix.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadRemoveUserInput.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadRetrieval.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileZipSlip.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionAdvanced.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionChallenge.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionChallengeLogin.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionLesson6a.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionLesson6b.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionQuiz.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjection.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson10.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson2.java"
+      ]
+    }
+  },
+  {
+    "project": "mini_vulnerable_java_CVE-89_1.0",
+    "upstream": "https://github.com/TuanKhoa1201/mini-vulnerable-java.git",
+    "upstream_commit": "920fef72e1b8bc9f67c80772033f89b9efb0f5b5",
+    "archive_sha256": "ab5acbb40658686645b8f4a41d9fb7916a0c0b73a8f2840db2ffb3e3d42f14ae",
+    "java_bytes_match_commit": true,
+    "java_discovered": 11,
+    "java_scanned": 11,
+    "java_skipped": 0,
+    "coverage": "FULL_SOURCE_COVERAGE",
+    "scan_id": "SCAN-20261101182138-6DFEEC",
+    "selection": {
+      "max_files_limit": 200,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN"
+    }
+  },
+  {
+    "project": "owasp_benchmark_CVE-2026-0005_1.0",
+    "upstream": "https://github.com/OWASP-Benchmark/BenchmarkJava.git",
+    "upstream_commit": "0352dbb5a4f1e9c29edb2d648bd869bd9f431dcd",
+    "archive_sha256": "778c73d04e3cd2501a3e533c863c1e01b087576f1ae21d3c53aebd8bddcc0e15",
+    "java_bytes_match_commit": true,
+    "java_discovered": 2766,
+    "java_scanned": 16,
+    "java_skipped": 2750,
+    "coverage": "PARTIAL_BOUNDED",
+    "scan_id": "SCAN-20261101182148-2F9E73",
+    "selection": {
+      "max_files_limit": 16,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN",
+      "file_allowlist": [
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00001.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00002.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00003.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00004.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00005.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00006.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00007.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00008.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00009.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00010.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00011.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00012.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00013.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00014.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00015.java",
+        "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00016.java"
+      ]
+    }
+  },
+  {
+    "project": "spark_CVE-2016-9177_fixed",
+    "upstream": "https://github.com/perwendel/spark.git",
+    "upstream_commit": "efcb46c710e3f56805b9257a63d1306882f4faf9",
+    "archive_sha256": "9eca9ddd6b0e293a08917fa49e235e753c5451815c3fd61ef0eabdb9262755f7",
+    "java_bytes_match_commit": true,
+    "java_discovered": 167,
+    "java_scanned": 167,
+    "java_skipped": 0,
+    "coverage": "FULL_SOURCE_COVERAGE",
+    "scan_id": "SCAN-20261101182214-794D59",
+    "selection": {
+      "max_files_limit": 200,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN"
+    }
+  },
+  {
+    "project": "spark_CVE-2016-9177_vuln",
+    "upstream": "https://github.com/perwendel/spark.git",
+    "upstream_commit": "ce57dfb949ed183405f75dee8cf3262b45c9b3b5",
+    "archive_sha256": "044c2c387b443b510f56075c0e3ce694fdf6cff32d51f54ee0702af4a79f9780",
+    "java_bytes_match_commit": true,
+    "java_discovered": 168,
+    "java_scanned": 168,
+    "java_skipped": 0,
+    "coverage": "FULL_SOURCE_COVERAGE",
+    "scan_id": "SCAN-20261101182228-873348",
+    "selection": {
+      "max_files_limit": 200,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN"
+    }
+  },
+  {
+    "project": "spring-petclinic",
+    "upstream": "https://github.com/spring-projects/spring-petclinic.git",
+    "upstream_commit": "f182358d02e4a68e52bdbabf55ca7800288511e7",
+    "archive_sha256": "903728cda20921cba04fd75efda53ec6c8183ece1674d8c9bfbc7e5044f997e9",
+    "java_bytes_match_commit": true,
+    "java_discovered": 49,
+    "java_scanned": 49,
+    "java_skipped": 0,
+    "coverage": "FULL_SOURCE_COVERAGE",
+    "scan_id": "SCAN-20261101182238-CB2409",
+    "selection": {
+      "max_files_limit": 200,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN"
+    }
+  },
+  {
+    "project": "sqli_mini_CVE-2026-TEST-0001_1.0",
+    "upstream": null,
+    "upstream_commit": null,
+    "archive_sha256": "bd62ee027c85c4dc2a5850dac67b92e48788113ac0c9130d391041f11c6c5a9a",
+    "java_bytes_match_commit": null,
+    "java_discovered": 1,
+    "java_scanned": 1,
+    "java_skipped": 0,
+    "coverage": "FULL_SOURCE_COVERAGE",
+    "scan_id": "SCAN-20261101182244-9171E5",
+    "selection": {
+      "max_files_limit": 200,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN"
+    }
+  },
+  {
+    "project": "webgoat_sql_CVE-2026-0006_1.0",
+    "upstream": "https://github.com/WebGoat/WebGoat.git",
+    "upstream_commit": "5357a65e054976cd7d79b81ef3906ded050ed921",
+    "archive_sha256": "1f854bd53519bb596e5101abd372cc51e73e1ced9c89d6b4a690aaf05b338aca",
+    "java_bytes_match_commit": true,
+    "java_discovered": 354,
+    "java_scanned": 16,
+    "java_skipped": 338,
+    "coverage": "PARTIAL_BOUNDED",
+    "scan_id": "SCAN-20261101182250-D3C5C9",
+    "selection": {
+      "max_files_limit": 16,
+      "scan_scope_policy": "BOUNDED_PARTIAL_SCAN",
+      "file_allowlist": [
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/PathTraversal.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUpload.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadBase.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadFix.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadRemoveUserInput.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileUploadRetrieval.java",
+        "src/main/java/org/owasp/webgoat/lessons/pathtraversal/ProfileZipSlip.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionAdvanced.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionChallenge.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionChallengeLogin.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionLesson6a.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionLesson6b.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/advanced/SqlInjectionQuiz.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjection.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson10.java",
+        "src/main/java/org/owasp/webgoat/lessons/sqlinjection/introduction/SqlInjectionLesson2.java"
+      ]
+    }
+  }
+]

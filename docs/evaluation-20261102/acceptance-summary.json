@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-02",
+  "branch": "cwss-inference-v2-220",
+  "baseline_commit": "39c647c86594b09d69a8ed2ac541f547c1131150",
+  "source_commit": "5fa5159fc70fb8a73d655cbe151a0dcd618572d7",
+  "flags": {
+    "NTK_8_PROJECT_E2E": "PARTIAL",
+    "NON_JAVA_INPUT_HANDLING": "PASS",
+    "ZERO_FINDINGS_HANDLING": "PASS",
+    "MIXED_LANGUAGE_SOURCE_HANDLING": "PASS",
+    "VULNERABILITY_DETECTION_ACCURACY": "EVALUATED",
+    "CWSS_V2_PROVENANCE": "PASS",
+    "FRONTEND_ACCEPTANCE": "PASS",
+    "BACKEND_ACCEPTANCE": "PASS",
+    "GITHUB_SYNC_STATUS": "SYNCED",
+    "DEMO_STATUS": "READY"
+  },
+  "tests": {
+    "final_backend_passed": 237,
+    "final_frontend_passed": 13,
+    "evaluation_arithmetic_passed": 2,
+    "final_failed": 0,
+    "earlier_failures_preserved_locally": true,
+    "browser_project_input_checks": 33,
+    "browser_demo_pages": 12,
+    "settled_ui_state_checks": 3,
+    "demo_api_checks": 37,
+    "post_restart_checks": 48,
+    "real25_checksum_entries_passed": 7
+  },
+  "projects_tested": 8,
+  "projects_partial": 3,
+  "final_project_findings": 82,
+  "source_bound_findings": 82,
+  "cwss_metric_rows": 2624,
+  "stage_rows": 80,
+  "recorded_new_gpu_inference_calls": 40,
+  "evaluation40": {
+    "unseen_leakage_free": "NOT_PROVEN",
+    "after_fix_set_status": "REGRESSION_AFTER_EVALUATION_DISCOVERY",
+    "TP": 3,
+    "FP": 0,
+    "TN": 20,
+    "FN": 17,
+    "binary_convention": "REPORT_ONLY_REVIEW_AS_NEGATIVE",
+    "review_rate": 0.75,
+    "automatic_decision_coverage": 0.25,
+    "full_configuration_ablation": "NOT_RUN"
+  },
+  "demo_url": "http://127.0.0.1:5173/#/results?scan_id=SCAN-20261101164045-3AA266",
+  "fresh_demo_scan": "SCAN-20261101183021-AADAB9",
+  "experimental_frontend": "http://127.0.0.1:5174",
+  "experimental_api": "http://127.0.0.1:8766",
+  "limitations": [
+    "Three project scans are partial, 16 Java files each",
+    "Spark traversal vulnerability is not distinguished",
+    "40-case training overlap cannot be excluded",
+    "No full configuration ablation or reboot test",
+    "Reported pipeline timers exclude complete client/publication wall time"
+  ]
+}
