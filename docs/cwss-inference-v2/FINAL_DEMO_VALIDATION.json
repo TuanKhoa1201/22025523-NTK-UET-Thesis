@@ -1,0 +1,115 @@
+{
+  "date": "2026-11-02",
+  "base_commit": "557d8be3f073d8be7f6dc840a9dd8181a95a682c",
+  "status": "PASS",
+  "scope": "Final defense demo acceptance; research/deployment limitations remain documented",
+  "scan_id": "SCAN-20261101164045-3AA266",
+  "real25": {
+    "sha256sum_files_verified": 7,
+    "tests_passed": 2,
+    "tests_failed": 0,
+    "private_data_published": false
+  },
+  "frontend_tests": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "browser": {
+    "engine": "Edg/156.0.4314.58",
+    "pages": [
+      {
+        "page": "overview",
+        "status": "PASS",
+        "table_rows": 0
+      },
+      {
+        "page": "scanner",
+        "status": "PASS",
+        "table_rows": 0
+      },
+      {
+        "page": "history",
+        "status": "PASS",
+        "table_rows": 0
+      },
+      {
+        "page": "results",
+        "status": "PASS",
+        "table_rows": 10
+      },
+      {
+        "page": "finding-detail",
+        "status": "PASS",
+        "table_rows": 16
+      },
+      {
+        "page": "review",
+        "status": "PASS",
+        "table_rows": 0
+      },
+      {
+        "page": "scoring",
+        "status": "PASS",
+        "table_rows": 16
+      },
+      {
+        "page": "reports",
+        "status": "PASS",
+        "table_rows": 0
+      },
+      {
+        "page": "dataset",
+        "status": "PASS",
+        "table_rows": 20
+      },
+      {
+        "page": "training",
+        "status": "PASS",
+        "table_rows": 3
+      },
+      {
+        "page": "evaluation",
+        "status": "PASS",
+        "table_rows": 3
+      },
+      {
+        "page": "replay",
+        "status": "PASS",
+        "table_rows": 10
+      }
+    ],
+    "javascript_exceptions": 0,
+    "http_error_responses": 0,
+    "report_download_verified": true,
+    "screenshots_local_only": 19,
+    "mobile_sanity": "Results 390x844"
+  },
+  "api_checks_passed": 37,
+  "triage": {
+    "total": 10,
+    "report": 2,
+    "review": 6,
+    "suppress": 2
+  },
+  "scenario_scores": {
+    "FINDING-006-CWE078-doPost-L69": 84.0,
+    "FINDING-008-CWE079-doPost-L65": 0.0,
+    "FINDING-009-CWE089-doPost-L58": 86.0,
+    "FINDING-010-CWE079-doPost-L54": 0.0
+  },
+  "startup": {
+    "existing_backend_and_frontend": "PASS",
+    "isolated_backend_smoke_checks_passed": 4,
+    "production_restarted": false,
+    "windows_reboot_tested": false,
+    "frontend_cold_start_tested": false,
+    "database_replaced": false
+  },
+  "remaining_limits": [
+    "No whole-program or deployed exploitability guarantee",
+    "No new ground-truth accuracy audit",
+    "Only Edge desktop and one responsive sanity viewport tested",
+    "No physical Windows reboot or OS autostart test; explicit safe launcher supplied"
+  ]
+}

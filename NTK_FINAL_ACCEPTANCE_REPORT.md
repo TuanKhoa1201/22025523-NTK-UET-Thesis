@@ -1,8 +1,8 @@
 # NTK — Báo cáo nghiệm thu cuối
 
-Ngày kiểm tra: 01/11/2026. Worktree: `NTK-CWSS-V2-220`.
+Ngày kiểm tra pipeline: 01/11/2026. Nghiệm thu bổ sung Real25 và trình duyệt: 02/11/2026. Worktree: `NTK-CWSS-V2-220`.
 
-**Kết quả: PARTIAL về nghiệm thu toàn bộ website; pipeline, Real10 proof, API và build đã kiểm chứng thành công.** Chưa có kiểm thử tương tác/hiển thị bằng trình duyệt tự động. Không tuyên bố đã kiểm tra trực quan mọi trang hoặc đã xác nhận khả năng khai thác thực tế.
+**Kết quả cuối: PASS trong phạm vi demo bảo vệ và các tiêu chí nghiệm thu được yêu cầu.** Pipeline, Real10 proof, Real25 private, API, build và 12 trang bằng Edge thực đã được kiểm chứng. PASS không có nghĩa đã chứng minh khả năng khai thác thực tế, kiểm thử mọi trình duyệt hoặc thực hiện reboot Windows thật; xem mục 10 về phạm vi và giới hạn.
 
 ## 1. Môi trường và dữ liệu được bảo vệ
 
@@ -101,8 +101,9 @@ Artifacts công khai không chứa source snapshots hay dataset records:
 | Kiểm tra | Kết quả |
 |---|---|
 | Backend unittest discovery | **224 tests PASS**, 0 failures/errors |
-| Private Real25 DTO group | SKIPPED: chưa cung cấp `NTK_REAL25_DIR`; không giả PASS |
-| Frontend Node tests | **7 PASS**, 0 failed, 0 skipped trong lượt có scan ID thực |
+| Private Real25 DTO group | **2 PASS**, 0 failed, 0 skipped; SHA256SUMS 7/7 hợp lệ; nghiệm thu bổ sung 02/11 |
+| Frontend Node tests | **10 PASS**, 0 failed, 0 skipped trong lượt có scan ID thực; thêm regression cho History |
+| Trình duyệt thật | **12 trang PASS**, Edge headless 156.0.4314.58; screenshots và tương tác đã kiểm tra |
 | Adapter frontend → backend thực | PASS: ID joins, hai CWSS modes, detail, model, dataset, report, trace và 404 |
 | API/CORS acceptance | **37 checks PASS** |
 | Dataset records/JSONL/CSV | **12 requests HTTP 200** cho 4 datasets |
@@ -115,13 +116,13 @@ Artifacts công khai không chứa source snapshots hay dataset records:
 | Backend health/model | HTTP 200 tại `http://127.0.0.1:8765`; CUDA loaded |
 | Secrets / diff whitespace | Không phát hiện secret theo các mẫu rõ ràng; `git diff --check` sạch |
 
-Các lỗi phát hiện trong quá trình thực thi đã được sửa và kiểm tra lại: collector root mismatch; printf varargs binding; checkpoint mặc định trỏ ổ F cũ; Dataset dùng đường dẫn cũ; index V1 không chấp nhận null score; frontend contract tests chưa cập nhật API V2; mã hóa tiếng Việt khi truyền script qua PowerShell. Lượt kiểm tra cuối không còn các lỗi này. Bộ private DTO và kiểm thử trực quan là giới hạn chưa hoàn tất.
+Các lỗi phát hiện trong quá trình thực thi đã được sửa và kiểm tra lại: collector root mismatch; printf varargs binding; checkpoint mặc định trỏ ổ F cũ; Dataset dùng đường dẫn cũ; index V1 không chấp nhận null score; frontend contract tests chưa cập nhật API V2; mã hóa tiếng Việt khi truyền script qua PowerShell. Đợt bổ sung sửa breadcrumb cho route Results/Detail/Replay và ánh xạ lifecycle/UTC metadata của History. Lượt kiểm tra cuối không còn các lỗi này. Real25 và kiểm thử trực quan đã hoàn tất trong phạm vi mục 10.
 
 ## 7. Website và runtime cuối
 
 Đã kiểm tra build/routing/API cho Tổng quan, Scanner GitHub, tiến trình 10 giai đoạn, History, Findings, Detail, Review, Scoring, Reports, Architecture, Dataset, Training, Evaluation và Trace Replay. Training/Evaluation lấy model provenance và historical receipt từ `/api/model`, không hiển thị các chỉ số hardcode trước đó như phép đo runtime mới. Review không có scan phải yêu cầu chọn scan LIVE.
 
-**Giới hạn:** không cài Playwright/Puppeteer và không có browser automation tool trong phiên này; chưa nghiệm thu tương tác trực quan cho 14 trang, responsive layout hoặc thao tác tải file trong trình duyệt. Backend chưa có quy trình chuyên gia xác nhận được UI kết nối; UI giữ reviewer status read-only thay vì tự xác nhận.
+**Kiểm thử trình duyệt bổ sung:** dùng Edge có sẵn qua Chrome DevTools Protocol và WebSocket tích hợp của Node 24, không cài Playwright/Puppeteer. Đã kiểm tra 12 trang được yêu cầu, tải report trong browser và sanity responsive trang Results. Chưa kiểm thử mọi tổ hợp viewport/browser hoặc accessibility đầy đủ. Backend chưa có quy trình chuyên gia xác nhận được UI kết nối; UI giữ reviewer status read-only thay vì tự xác nhận.
 
 Backend cuối chạy trên cổng 8765, frontend hiện có trên 5173. Backend dùng bản sao storage để giữ lịch sử, thêm scan mới trong **`work/acceptance/runtime/storage`**, cache trong `work/acceptance/runtime/cache`. Runtime gốc dưới `/home/tuankhoa/ntk-production-runtime-20261028/ntk-e2e-20261101-E56FC8` được giữ. Paths model/dataset private chỉ được đọc; không commit dữ liệu này.
 
@@ -155,13 +156,75 @@ Git sử dụng WSL, nhánh `cwss-inference-v2-220`; remote branch trước đ�
 Không suy rộng local static proof thành whole-program soundness, khả năng khai thác từ Internet hoặc accuracy toàn GitHub. Không công bố số TP/FP ground-truth mới khi chưa có audit độc lập.
 
 ```text
-NTK_THESIS_E2E_READY=PARTIAL
+NTK_THESIS_E2E_READY=PASS
 CWSS_REAL10_PROOF_STATUS=PASS_10_SOURCE_BOUND_2_TAINT_2_SAFE_6_UNKNOWN
 LEGACY_HEURISTIC_REMOVAL_STATUS=PRODUCTION_REMOVED_HISTORY_COMPATIBILITY_RETAINED
-FRONTEND_STATUS=BUILD_AND_LIVE_API_PASS_VISUAL_NOT_TESTED
+FRONTEND_STATUS=PASS_EDGE_12_PAGES_BUILD_AND_LIVE_API
 BACKEND_STATUS=PASS_LOCAL_CUDA_10_STAGES
-TESTS_PASSED=224_BACKEND_7_FRONTEND_37_API_60_REPLAY
+TESTS_PASSED=224_BACKEND_BASELINE_2_REAL25_10_FRONTEND_12_BROWSER_37_API_60_REPLAY_4_STARTUP
 TESTS_FAILED=0_FINAL_RUN
 GITHUB_SYNC_STATUS=PASS_BRANCH_PUSHED
 DEMO_URL=http://127.0.0.1:5173/#/results?scan_id=SCAN-20261101164045-3AA266
 ```
+
+## 10. Nghiệm thu bổ sung sau commit 557d8be — 02/11/2026
+
+### Real25 private
+
+Đã đọc đúng `/home/tuankhoa/ntk-production-runtime-20261028/cwss-v2-real25`, kiểm tra SHA256SUMS **7/7 files**, đặt `NTK_REAL25_DIR` trong môi trường tiến trình rồi chạy `test_ntk_cwss_v2.Real25PrivateDTOTests` với Python virtualenv và JDK 17 nêu trên. **Cả hai tests PASS, không skipped**: đối chiếu 25 findings và HTTP modes/replay sau persisted index. Không có regression; không sửa expected scores hoặc private DTO. Kiểm tra SHA256SUMS lại sau tests vẫn khớp. Không đưa private DTO, nội dung records, snapshots hay screenshots Dataset lên GitHub.
+
+Log chỉ lưu local: `work/final-validation/real25-tests.log`, `real25-checksums.json`. Bộ 224 backend tests ở mục 6 là lượt nền trước đó; đợt này chạy riêng nhóm Real25 còn thiếu vì không sửa production backend.
+
+### Trình duyệt thật và lỗi đã sửa
+
+Edge **156.0.4314.58**, profile riêng trong `work/final-validation/edge-profile`, headless, CDP chỉ localhost. Không dùng browser profile của người dùng, không cài dependency mới. `tools/verify-demo-browser.cjs` thực thi Node WebSocket/CDP.
+
+| Trang | Kết quả thực tế |
+|---|---|
+| Overview | Render đúng tiếng Việt; đợi stats tải xong; số liệu từ backend, không còn ảnh chụp trạng thái đang tải |
+| Scanner | Form GitHub, 10 bước và validation URL không hợp lệ hoạt động; không gửi scan CUDA mới trong lượt browser này |
+| History | Đọc history thực; các scan COMPLETED hiện HOÀN TẤT, đúng repository, UTC timestamps, counters và link findings/report/replay |
+| Results | 10 rows; 2 REPORT / 6 REVIEW / 2 SUPPRESS; cả hai CWSS modes tải và join đúng ID |
+| Finding Detail | Finding 009 hiện 86.0; bảng đủ 16 metrics; source provenance và IRIS/Qwen evidence hiển thị |
+| Review | Tab REPORT có 2, REVIEW có 6, SUPPRESS có 2 rows; không thay đổi reviewer verdict |
+| CWSS Scoring | 16 metric, công thức MITRE và chú thích reference assumption hiển thị đúng |
+| Reports | Bấm nút tải; nhận sự kiện download completed của browser; parse tệp JSON và đối chiếu scan_id |
+| Dataset | Manifest, 4 datasets và bảng records tải thực; screenshot chứa dữ liệu nên chỉ giữ local |
+| Training | Model path identity, adapter SHA, CUDA device và receipt từ backend hiển thị |
+| Evaluation | Historical receipt có chú thích phạm vi; không trình bày như phép đo accuracy E2E mới |
+| Trace Replay | 10 rows; next đến stage 10, reset/play/pause hoạt động; không tạo scan mới |
+
+Đã xem screenshots; lượt cuối có **0 JavaScript runtime exceptions, 0 HTTP responses lỗi**, 0 alerts không mong đợi trên các trang, không phát hiện mojibake trong DOM text. Các trang desktop kiểm tra ở 1440×1000; sanity Results ở 390×844. Có **19 PNG screenshots**, page text, download và `browser-acceptance.json` trong `work/final-validation/browser/`. Không commit/publish thư mục này.
+
+Hai lỗi được sửa, không mở rộng tính năng:
+
+1. `AppShell.jsx`: route `/results`, `/finding/:id` trước đó không khớp nav `/findings`, nên breadcrumb rơi về Tổng quan và menu không active. Nay dùng route alias đúng; Replay có tên breadcrumb riêng.
+2. `HistoryPage.jsx` / `scanHistory.js`: response `status=OK` từng ghi đè lifecycle COMPLETED và bỏ sót `repository_url`, `_utc` timestamps, `triage_totals`. Nay normalize lifecycle đúng, chỉ dùng state hợp lệ và cho backend sửa metadata cache cũ mà không xóa field chưa có. Ba regression tests mới PASS; không cập nhật database backend.
+
+Build sau sửa: PASS, 445 modules; Node frontend tests: **10/10 PASS** gồm adapter nối backend thật. Cảnh báo bundle >500 kB còn tồn tại, không phải lỗi build.
+
+### Scan, service và khởi động demo
+
+Đã chạy lại verifier 37 API checks cho **`SCAN-20261101164045-3AA266`**, vẫn PASS. Xác nhận trực tiếp: 10 findings, triage 2/6/2, scenario 006/008/009/010 lần lượt **84.0, 0.0, 86.0, 0.0**; bảng 16 metrics, source hashes, commit và provenance đúng. Không tạo scan ID mới trong đợt nghiệm thu này.
+
+Backend 8765 và frontend 5173 vẫn chạy; PID production backend giữ **15125** trong đợt kiểm tra này. Đã xác minh directory runtime/cache/model/dataset/JDK tồn tại, base model config tồn tại và tính lại SHA adapter safetensors khớp `176b9b32ada029ba38a561b0937ccb75cb18c720979dbb58824fdcc112d2ce84`. Không thay đổi checkpoint hay dependency.
+
+Thêm `tools/start-demo.ps1`, `tools/start_demo_backend.py` và hướng dẫn `tools/README.md`:
+
+- Kiểm tra service identity, PID/command, port, JDK 17, paths, scan và database sẵn có; gọi WSL bằng `--exec` để giữ nguyên path.
+- Healthy service được tái sử dụng. PID thuộc tiến trình khác hoặc port bị chiếm bị từ chối; không tự kill/restart hay ghi đè database. Thiếu runtime/checkpoint thì báo lỗi, không tạo store rỗng thay thế.
+- Windows frontend chạy hidden; WSL backend dùng local/offline model và đúng private dataset. Không đăng ký autostart task trên Windows.
+- **Đã thực hiện thật:** `-CheckOnly` và chạy launcher thường trên demo hiện có đều PASS, không restart. Trên **bản sao runtime riêng** ở cổng 8767: cold-start, gọi lại idempotent, health-check và từ chối foreign PID đều PASS (**4 checks**). Tiến trình backend test được dừng sau khi xác minh đúng PID/script/port; production và database gốc được giữ.
+- **Chưa thực hiện:** reboot Windows thật; cold-start nhánh frontend của launcher trên cổng 5173 vì frontend đang dùng cho demo. Đã kiểm tra nhánh tái sử dụng frontend thật và lệnh/cấu hình khởi động; không tuyên bố đã kiểm thử reboot hoặc autostart hệ điều hành.
+
+Sau khi mở lại máy, dùng một lệnh từ worktree:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-demo.ps1
+```
+
+Lệnh chỉ áp dụng execution policy cho tiến trình PowerShell đó, không đổi policy hệ thống. Giữ nguyên `work/acceptance/runtime` trên máy trước buổi bảo vệ vì directory này không được commit. Model có thể `NOT_LOADED` sau khởi động mới cho đến khi chạy scan cần inference; đọc findings/reports/replay lịch sử không cần huấn luyện hoặc tải model qua mạng.
+
+### Chốt phạm vi
+
+Kết quả public không chứa private DTO hay screenshot: `docs/cwss-inference-v2/FINAL_DEMO_VALIDATION.json`. Bằng chứng chi tiết chỉ local dưới `work/final-validation/`. Bản sửa UI đã commit tại `0892b2e`; scripts nghiệm thu/khởi động và báo cáo được commit tiếp và push cùng trên nhánh `cwss-inference-v2-220`, không merge main. Không còn blocker trong các bước nghiệm thu được yêu cầu. Các giới hạn nghiên cứu, reviewer status read-only, bounded scan và phạm vi browser/boot nêu trên vẫn giữ nguyên. Dừng sửa tính năng mới sau khi đồng bộ nhánh.
