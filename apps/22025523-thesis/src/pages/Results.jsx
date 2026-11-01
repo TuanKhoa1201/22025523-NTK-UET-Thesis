@@ -11,6 +11,8 @@ const PAGE_SIZE=50;
 const num=(value)=> (value===undefined || value===null || value==='' || !Number.isFinite(Number(value)) ? null : Number(value));
 const fmt=(value)=> (value===null ? '—' : value.toLocaleString());
 const toneOf=(decision)=> (decision==='REPORT' ? 'red' : decision==='REVIEW' ? 'amber' : decision==='SUPPRESS' ? 'green' : 'neutral');
+const cwssText=(row)=> row.cwssScore===null ? 'Chưa có' : `${row.cwssScore.toFixed(1)}/100`;
+const scenarioText=(v)=> v && Number.isFinite(Number(v.cwss_score)) ? `${Number(v.cwss_score).toFixed(1)}/100 (giả định)` : 'Chưa có kịch bản';
 
 function useActiveScanId() {
   const [params]=useSearchParams();
@@ -54,7 +56,20 @@ function LiveFindings({scanId}) {
   const [page,setPage]=useState(1);
   const [summaryState,retrySummary]=useRemote((signal)=> api.scanSummary(scanId,{signal}),[scanId]);
   const [pageState,retryPage]=useRemote((signal)=> api.findingsPage(scanId,page,PAGE_SIZE,{signal}),[scanId,page]);
-  const [cwssState,retryCwss]=useRemote((signal)=> api.cwssPage(scanId,page,PAGE_SIZE,{signal}),[scanId,page]);
+  const [cwssState,retryCwss]=useRemote((signal)=>
+    pageState.status==='success'
+      ? api.cwssV2ForFindingIds(
+          scanId,
+          (Array.isArray(pageState.data?.findings) ? pageState.data.findings : []).map((item)=>item?.finding_id).filter(Boolean),
+          {signal}
+        ).then((data)=>({...data,page}))
+      : Promise.resolve({status:'PENDING_FINDINGS',scan_id:scanId,page,assessments:[]}),
+    [scanId,page,pageState.status,pageState.data]);
+  const [scenarioState,retryScenario]=useRemote((signal)=>
+    pageState.status==='success'
+      ? api.cwssV2ScenarioPage(scanId,page,PAGE_SIZE,{signal})
+      : Promise.resolve({status:'PENDING_FINDINGS',scan_id:scanId,page,assessments:[]}),
+    [scanId,page,pageState.status,pageState.data]);
   useEffect(()=> { setPage(1); },[scanId]);
   const pageData=pageState.data;
   const rows=useMemo(()=> {
@@ -69,25 +84,36 @@ function LiveFindings({scanId}) {
         .filter((entry)=> entry?.finding_id && entry?.cwss && typeof entry.cwss==='object')
         .map((entry)=> [entry.finding_id,entry.cwss])
     );
+    // Ranking order and source order differ: always bind by finding_id.
+    const byScenario=new Map(
+      (scenarioState.status==='success' && scenarioState.data?.scan_id===scanId &&
+       Number(scenarioState.data?.page)===page && Array.isArray(scenarioState.data?.assessments)
+        ? scenarioState.data.assessments : [])
+        .map((entry)=>[entry.finding_id,entry.cwss])
+    );
     return Array.isArray(list) ? list.map((item)=> ({
       ...normalizeFinding({
         ...item,
         ...(byFinding.has(item?.finding_id) ? {cwss:byFinding.get(item.finding_id)} : {})
       }),
-      detailUrl:item?.detail_url
+      detailUrl:item?.detail_url,
+      cwssScenario:byScenario.get(item?.finding_id)||null
     })) : [];
-  },[pageData,cwssState.status,cwssState.data,scanId,page]);
+  },[pageData,cwssState.status,cwssState.data,scenarioState.status,scenarioState.data,scanId,page]);
   const totalMatching=num(pageData?.total_matching);
   const totalPages=num(pageData?.total_pages) ?? (totalMatching!==null ? Math.max(1,Math.ceil(totalMatching/PAGE_SIZE)) : null);
   const hasNext=totalPages!==null ? page<totalPages : rows.length===PAGE_SIZE;
   return (
     <>
       <PageHeader eyebrow="PHIÊN PHÂN TÍCH" title="Kết quả phát hiện" description={`Scan LIVE: ${scanId}`} actions={<Link to="/scanner" className="button-secondary"><Icon name="Plus" />Phiên phân tích mới</Link>} />
-      <DataNotice>Live backend results are paginated (page_size={PAGE_SIZE}). CWSS 1.0.1 is a weakness-priority score (0-100), not TP probability, CVSS or the legacy triage heuristic. REPORT is not an expert-confirmed verdict.</DataNotice>
-      {cwssState.status==='loading' && <DataNotice>Loading per-finding CWSS assessments for this page...</DataNotice>}
-      {cwssState.status==='error' && <DataNotice>CWSS is unavailable; detection results remain unchanged. {cwssState.error} <button className="button-secondary" onClick={retryCwss}>Retry CWSS</button></DataNotice>}
+      <DataNotice>Điểm CWSS V2 được tính bằng công thức MITRE. Điểm kịch bản doanh nghiệp quan trọng có kết nối Internet dựa trên giả định tham chiếu, không phải môi trường đã xác minh. Điểm GENERAL_JAVA được giữ để đối chiếu. REPORT không đồng nghĩa lỗ hổng đã được chuyên gia xác nhận.</DataNotice>
+      {cwssState.status==='loading' && <DataNotice>Đang tải 16 metric CWSS V2...</DataNotice>}
+      {cwssState.status==='error' && <DataNotice>Không tải được CWSS V2; bằng chứng và quyết định triage vẫn giữ nguyên. {cwssState.error} <button className="button-secondary" onClick={retryCwss}>Thử lại</button></DataNotice>}
       {cwssState.status==='success' && (cwssState.data?.scan_id!==scanId || Number(cwssState.data?.page)!==page) && <DataNotice>CWSS response did not match the current scan/page; scores have not been attached.</DataNotice>}
-      {cwssState.status==='success' && cwssState.data?.scan_id===scanId && Number(cwssState.data?.page)===page && <DataNotice>CWSS attached to {rows.filter((row)=> row.cwss).length}/{rows.length} findings on this page. Context profile: {cwssState.data?.profile_available ? 'available' : 'not yet published'}; unverified metrics remain Unknown.</DataNotice>}
+      {cwssState.status==='success' && cwssState.data?.status!=='PENDING_FINDINGS' && cwssState.data?.scan_id===scanId && Number(cwssState.data?.page)===page && <DataNotice>Đã gắn CWSS V2 mặc định cho {rows.filter((row)=> row.cwss).length}/{rows.length} finding. MITRE_DEFAULT không phải bằng chứng triển khai. {cwssState.data?.status==='INCOMPLETE' ? 'Một số assessment chưa khớp finding_id.' : ''}</DataNotice>}
+      {scenarioState.status==='loading' && <DataNotice>Đang tính CWSS V2 theo kịch bản giả định...</DataNotice>}
+      {scenarioState.status==='error' && <DataNotice>Chưa tải được kịch bản giả định: {scenarioState.error}. Điểm mặc định và triage vẫn không thay đổi. <button className="button-secondary" onClick={retryScenario}>Thử lại</button></DataNotice>}
+      {scenarioState.status==='success' && scenarioState.data?.status==='OK' && <DataNotice>Đã tính kịch bản tham chiếu trên {rows.filter((row)=>row.cwssScenario).length}/{rows.length} finding. Dữ liệu giả định về tài sản, Internet, xác thực, biện pháp bảo vệ và khả năng khai thác KHÔNG phải chứng cứ thực tế. Bấm Chi tiết để xem REFERENCE_ASSUMPTION và nguồn từng metric.</DataNotice>}
       {summaryState.status==='error' && <DataNotice>Không tải được summary (không chặn danh sách): {summaryState.error} <button className="button-secondary" onClick={retrySummary}>Thử lại</button></DataNotice>}
       <SummaryStats scanId={scanId} summary={summaryState.data} pageData={pageData} />
       <section className="section-block">
@@ -98,8 +124,8 @@ function LiveFindings({scanId}) {
           {pageState.status==='error' && <button className="button-secondary" onClick={retryPage}>Thử lại</button>}
           {pageState.status==='success' && !rows.length && <EmptyState title="Scan không có finding" text="Backend trả về 0 findings cho scan này. Điều này không có nghĩa ứng dụng an toàn." />}
           {pageState.status==='success' && rows.length>0 && (
-            <div className="table-wrap"><table><thead><tr><th>Finding</th><th>CWE</th><th>File · line</th><th>Severity</th><th>CWSS 1.0.1</th><th>Legacy heuristic</th><th>Triage</th><th></th></tr></thead><tbody>
-              {rows.map((row)=> <tr key={row.id}><td className="mono">{row.id}</td><td><Badge tone="blue">{row.cwe||'—'}</Badge></td><td className="mono" title={row.file}>{String(row.file).split('/').slice(-1)}:{row.line}</td><td>{row.severity||'—'}</td><td className="mono">{row.cwssScore===null ? 'Not available' : `${row.cwssScore.toFixed(1)}/100${row.cwssUnknownMetrics > 0 ? ' (provisional)' : ''}`}</td><td className="mono">{row.score===null ? '—' : row.score.toFixed(2)}</td><td><Badge tone={toneOf(row.decision)}>{row.decision||'—'}</Badge></td><td><Link className="table-link" to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`} state={{detailUrl:row.detailUrl}}>Chi tiết <Icon name="ArrowUpRight" /></Link></td></tr>)}
+            <div className="table-wrap"><table><thead><tr><th>Finding</th><th>CWE</th><th>File · line</th><th>Severity</th><th>CWSS V2 (kịch bản giả định)</th><th>GENERAL_JAVA</th><th>Triage</th><th></th></tr></thead><tbody>
+              {rows.map((row)=> <tr key={row.id}><td className="mono">{row.id}</td><td><Badge tone="blue">{row.cwe||'—'}</Badge></td><td className="mono" title={row.file}>{String(row.file).split('/').slice(-1)}:{row.line}</td><td>{row.severity||'—'}</td><td className="mono">{scenarioText(row.cwssScenario)}</td><td className="mono">{cwssText(row)}</td><td><Badge tone={toneOf(row.decision)}>{row.decision||'—'}</Badge></td><td><Link className="table-link" to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`} state={{detailUrl:row.detailUrl}}>Chi tiết <Icon name="ArrowUpRight" /></Link></td></tr>)}
             </tbody></table></div>
           )}
           <div className="table-toolbar">
@@ -118,26 +144,25 @@ function LiveDetailPage({scanId,id,detailUrl}) {
   // finding_seq resolves the CWSS page; never attach an assessment by position alone.
   const [state,retry]=useRemote(async (signal)=> {
     const detail=await api.findingDetail(scanId,id,detailUrl,{signal});
-    const seq=Number(detail?.finding_seq);
-    const cwssPage=Number.isInteger(seq) && seq>0 ? Math.ceil(seq/PAGE_SIZE) : 1;
     let cwss=null;
+    let scenario=null;
+    let scenarioError='';
     let cwssStatus='UNAVAILABLE';
     let cwssError='';
     try {
-      const result=await api.cwssPage(scanId,cwssPage,PAGE_SIZE,{signal});
-      if (result?.scan_id!==scanId || Number(result?.page)!==cwssPage) {
-        cwssStatus='SCAN_OR_PAGE_MISMATCH';
-      } else {
-        const assessments=Array.isArray(result?.assessments) ? result.assessments : [];
-        const match=assessments.find((entry)=> entry?.finding_id===id);
-        cwss=match?.cwss && typeof match.cwss==='object' ? match.cwss : null;
-        cwssStatus=cwss ? 'AVAILABLE' : 'FINDING_NOT_IN_CWSS_PAGE';
-      }
+      cwss=await api.cwssV2Finding(scanId,id,{signal});
+      cwssStatus='CWSS_V2_AVAILABLE';
     } catch (error) {
       if (signal.aborted) throw error;
       cwssError=String(error?.message || error);
     }
-    return {detail,cwss,cwssStatus,cwssError};
+    try {
+      scenario=await api.cwssV2ScenarioFinding(scanId,id,{signal});
+    } catch(error) {
+      if (signal.aborted) throw error;
+      scenarioError=String(error?.message || error);
+    }
+    return {detail,cwss,scenario,scenarioError,cwssStatus,cwssError};
   },[scanId,id,detailUrl]);
   const detail=state.data?.detail;
   const flat=detail ? {
@@ -146,6 +171,7 @@ function LiveDetailPage({scanId,id,detailUrl}) {
     ...(state.data?.cwss ? {cwss:state.data.cwss} : {})
   } : null;
   const row=flat ? normalizeFinding(flat) : null;
+  const displayed=state.data?.scenario || row?.cwss;
   const back=`/findings${scanQuery(scanId)}`;
   return (
     <>
@@ -153,29 +179,52 @@ function LiveDetailPage({scanId,id,detailUrl}) {
       {state.status==='loading' && <DataNotice>Loading finding evidence and the associated CWSS profile...</DataNotice>}
       {state.status==='error' && <><EmptyState title="Cannot load finding detail" text={state.error} icon="AlertTriangle" /><button className="button-secondary" onClick={retry}>Retry</button></>}
       {row && <>
-        <DataNotice>CWSS measures weakness priority, not detection confidence or CVSS severity. The legacy heuristic remains separate for explaining triage decisions.</DataNotice>
+        <DataNotice>Điểm CWSS V2 là mức ưu tiên điểm yếu có điều kiện, không phải xác suất TP hoặc CVSS. Nhóm metric REFERENCE_ASSUMPTION dựa trên bối cảnh giả định; quyết định REPORT/REVIEW/SUPPRESS là nhánh phân loại riêng.</DataNotice>
         <div className="finding-summary">
           <StatCard label="Severity" value={row.severity || 'N/A'} note="Scanner severity, not CWSS" icon="ShieldAlert" tone="amber" />
-          <StatCard label="CWSS 1.0.1" value={row.cwssScore===null ? 'Not available' : `${row.cwssScore.toFixed(1)}/100${row.cwssUnknownMetrics > 0 ? ' (provisional)' : ''}`} note={row.cwss ? `${row.cwssUnknownMetrics} Unknown metrics / ${row.cwss.assessment_status || 'NOT_REVIEWED'}` : state.data?.cwssStatus || 'UNAVAILABLE'} icon="Gauge" />
-          <StatCard label="Legacy heuristic" value={row.score===null ? 'N/A' : row.score.toFixed(2)} note="Not a probability or CWSS" icon="Gauge" />
+          <StatCard label="CWSS V2 - kịch bản giả định" value={scenarioText(state.data?.scenario)} note="Giả định doanh nghiệp quan trọng, Internet; chưa xác minh triển khai" icon="Gauge" />
+          <StatCard label="CWSS V2 - GENERAL_JAVA" value={cwssText(row)} note="Đối chiếu theo trọng số mặc định MITRE" icon="Gauge" />
           <StatCard label="Triage" value={row.decision || 'N/A'} note="Not independently confirmed" icon="ScanEye" tone="violet" />
         </div>
-        {!row.cwss && <DataNotice>CWSS was not attached to this finding ({state.data?.cwssStatus || 'UNAVAILABLE'}). {state.data?.cwssError || ''} The original finding and triage evidence are unchanged.</DataNotice>}
-        {row.cwss && <Card title="CWSS 1.0.1 - 16 metrics, status and evidence">
-          <p>Metric values without independently reviewed context remain Unknown. Scores with incomplete metrics are provisional and must not be presented as TP probabilities.</p>
-          <pre><code>{JSON.stringify({
-            score:row.cwss.cwss_score,
-            status:row.cwss.assessment_status,
-            completeness:row.cwss.assessment_completeness,
-            unknown_metrics:row.cwss.unknown_metrics,
-            vector:row.cwss.vector,
-            metric_sources:row.cwss.metric_sources,
-            profile_applied:row.cwss.profile_applied,
-            review_audit:row.cwss.review_audit,
-            machine_evidence_leads_not_proof:row.cwss.machine_evidence_leads_not_proof
-          },null,2)}</code></pre>
+        {!displayed && <DataNotice>Chưa có CWSS cho finding này. {state.data?.cwssError || ''}</DataNotice>}
+        {!state.data?.scenario && state.data?.scenarioError && <DataNotice>Không tải được kịch bản giả định: {state.data.scenarioError}. Dữ liệu GENERAL_JAVA vẫn còn.</DataNotice>}
+        {displayed && <Card title="CWSS Inference V2 — 16 metric và nguồn gốc">
+          <p><strong>{state.data?.scenario ? 'KỊCH BẢN GIẢ ĐỊNH, KHÔNG PHẢI RỦI RO ĐÃ XÁC MINH' : 'GENERAL_JAVA — giá trị mặc định'}</strong></p>
+          <p>Mode: {displayed.mode} | Profile: {displayed.reference_profile} | Version: {displayed.inference_version}.</p>
+          <div className="table-wrap"><table>
+            <thead><tr><th>Metric</th><th>Code</th><th>Weight</th><th>Classification</th><th>Rule</th><th>Reason / provenance</th></tr></thead>
+            <tbody>{Object.entries(displayed.metric_assessments || {}).map(([name,m])=>(
+              <tr key={name}><td className="mono">{name}</td><td>{m.code}</td>
+                <td className="mono">{String(m.weight)}</td><td>{m.classification}</td>
+                <td className="mono">{m.rule_id}</td><td>{m.reason}<div className="muted-text">{Array.isArray(m.evidence) ? m.evidence.join(' | ') : ''}</div></td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+          <details><summary>Đối chiếu số học và provenance / GENERAL_JAVA</summary><pre><code>{JSON.stringify({
+            scenario_score:displayed.cwss_score_exact,
+            scenario_subscores:displayed.three_subscores,
+            reference_context_hash:displayed.reference_context_hash,
+            scenario_policy_hash:displayed.metric_assessments?.TI?.provenance?.policy_hash,
+            baseline_general_java:row.cwss ? {
+              score:row.cwss.cwss_score,
+              subscores:row.cwss.three_subscores,
+              metric_assessments:row.cwss.metric_assessments
+            } : null,
+            normalized_evidence:displayed.normalized_evidence
+          },null,2)}</code></pre></details>
         </Card>}
-        <Card title="Original backend finding record"><pre><code>{JSON.stringify(detail,null,2)}</code></pre></Card>
+        <Card title="Bằng chứng OpenGrep / IRIS / Qwen từ backend"><pre><code>{JSON.stringify({
+        finding_id:id,
+        cwe:flat?.cwe,
+        file_path:flat?.file_path,
+        line_number:flat?.line_number,
+        scanner_rule_id:flat?.scanner_rule_id,
+        matched_code:flat?.matched_code,
+        iris_evidence:flat?.iris_evidence,
+        llm_api_role:flat?.llm_api_role,
+        source_provenance_record:flat?.source_provenance_record,
+        triage_decision:flat?.triage_decision || flat?.decision,
+      },null,2)}</code></pre></Card>
       </>}
     </>
   );
@@ -229,7 +278,7 @@ export function FindingsTable({rows=demoFindings,scanId=''}) {
       <SectionTitle title="Danh sách findings" text="Candidate finding cần được đọc cùng evidence, policy và trạng thái review." />
       <Card className="table-card">
         <div className="table-toolbar"><input placeholder="Tìm ID, CWE, file..." value={query} onChange={(event)=> setQuery(event.target.value)} /><select value={decision} onChange={(event)=> setDecision(event.target.value)}><option>Tất cả quyết định</option><option>REPORT</option><option>REVIEW</option><option>SUPPRESS</option></select></div>
-        {filtered.length ? <div className="table-wrap"><table><thead><tr><th>Finding</th><th>CWE / loại vấn đề</th><th>File · line</th><th>Severity</th><th>Heuristic score</th><th>Triage</th><th></th></tr></thead><tbody>{filtered.map((row)=> <tr key={row.id}><td className="mono">{row.id}</td><td><Badge tone="blue">{row.cwe||'—'}</Badge><br />{row.title}</td><td className="mono">{String(row.file).split('/').slice(-1)}:{row.line}</td><td><Badge tone={row.severity==='High' ? 'red' : 'amber'}>{row.severity||'—'}</Badge></td><td className="mono">{row.score===null||row.score===undefined ? '—' : row.score.toFixed(2)}</td><td><Badge tone={toneOf(row.decision)}>{row.decision||'—'}</Badge></td><td><Link className="table-link" to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`}>Chi tiết <Icon name="ArrowUpRight" /></Link></td></tr>)}</tbody></table></div> : <EmptyState title="Không tìm thấy finding" text="Thay đổi bộ lọc hoặc từ khóa tìm kiếm." />}
+        {filtered.length ? <div className="table-wrap"><table><thead><tr><th>Finding</th><th>CWE / loại vấn đề</th><th>File · line</th><th>Severity</th><th>Triage</th><th></th></tr></thead><tbody>{filtered.map((row)=> <tr key={row.id}><td className="mono">{row.id}</td><td><Badge tone="blue">{row.cwe||'—'}</Badge><br />{row.title}</td><td className="mono">{String(row.file).split('/').slice(-1)}:{row.line}</td><td><Badge tone={row.severity==='High' ? 'red' : 'amber'}>{row.severity||'—'}</Badge></td><td><Badge tone={toneOf(row.decision)}>{row.decision||'—'}</Badge></td><td><Link className="table-link" to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`}>Chi tiết <Icon name="ArrowUpRight" /></Link></td></tr>)}</tbody></table></div> : <EmptyState title="Không tìm thấy finding" text="Thay đổi bộ lọc hoặc từ khóa tìm kiếm." />}
       </Card>
     </section>
   );
@@ -252,10 +301,10 @@ function DemoFindingDetail({id}) {
     <>
       <PageHeader eyebrow={`FINDING · ${finding.id}`} title={finding.title} description={`${finding.file}:${finding.line} · ${finding.cwe}`} actions={<Badge tone="amber">BẢN GHI MINH HỌA</Badge>} />
       <DataNotice>Finding synthetic minh họa — không phải kết quả phát hiện thực tế.</DataNotice>
-      <div className="finding-summary"><StatCard label="Severity" value={finding.severity} note="Mức độ từ dữ liệu demo" icon="ShieldAlert" tone="amber" /><StatCard label="Heuristic score" value={finding.score.toFixed(2)} note="Không phải xác suất" icon="Gauge" /><StatCard label="Triage" value={finding.decision} note="Chưa có chuyên gia xác nhận" icon="ScanEye" tone="violet" /></div>
+      <div className="finding-summary"><StatCard label="Severity" value={finding.severity} note="Mức độ từ dữ liệu demo" icon="ShieldAlert" tone="amber" /><StatCard label="Triage" value={finding.decision} note="Chưa có chuyên gia xác nhận" icon="ScanEye" tone="violet" /></div>
       <Card title="Evidence explorer">
         <div className="evidence-tabs">{tabs.map((item)=> <button className={tab===item ? 'active' : ''} key={item} onClick={()=> setTab(item)}>{item}</button>)}</div>
-        <div className="evidence-panel"><h3>{tab}</h3><p>{tab==='OpenGrep' ? 'Rule match candidate và vị trí code trong dữ liệu synthetic.' : tab==='IRIS' ? 'Chưa có verified dataflow trace trong ví dụ này.' : tab==='Language Model' ? `API role minh họa: ${finding.role}. Đây không phải xác nhận lỗ hổng.` : tab==='Scoring' ? `Base score 0.70 cùng policy minh họa; score cuối ${finding.score.toFixed(2)}.` : finding.reason}</p></div>
+        <div className="evidence-panel"><h3>{tab}</h3><p>{tab==='OpenGrep' ? 'Rule match candidate và vị trí code trong dữ liệu synthetic.' : tab==='IRIS' ? 'Chưa có verified dataflow trace trong ví dụ này.' : tab==='Language Model' ? `API role minh họa: ${finding.role}. Đây không phải xác nhận lỗ hổng.` : tab==='Scoring' ? 'CWSS V2 chưa được tính cho dữ liệu synthetic minh họa.' : finding.reason}</p></div>
       </Card>
       <section className="section-block"><SectionTitle title="Code context" text="Đoạn mã minh họa, không phải source code từ repository thật." /><Card className="code-card"><div className="code-header"><span className="mono">{finding.file}</span><Badge>JAVA · SAMPLE</Badge></div><pre><code>{` 81 public List<User> findUser(String input) {\n 82 String query="SELECT * FROM users WHERE name='" + input + "'";\n 83 // Candidate location for review\n 84 return statement.executeQuery(query);\n 85}`}</code></pre></Card></section>
     </>

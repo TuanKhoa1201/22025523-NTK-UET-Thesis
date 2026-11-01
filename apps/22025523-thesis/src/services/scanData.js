@@ -34,10 +34,8 @@ function findValue(payload, keys, depth = 0) {
 
 export function normalizeFinding(item) {
   const location = item?.location || item?.source_location || {};
-  const scoreValue = firstValue(item, ['final_heuristic_score', 'confidence_score', 'final_score', 'sast_score', 'heuristic_score', 'score'])
-    ?? firstValue(item?.evidence_fusion, ['final_heuristic_score', 'confidence_score', 'final_score', 'score']);
-  const score = scoreValue === undefined ? null : Number(scoreValue);
   const cwss = item?.cwss && typeof item.cwss === 'object' ? item.cwss : null;
+  const cwssScenario = item?.cwssScenario && typeof item.cwssScenario === 'object' ? item.cwssScenario : null;
 
   return {
     id: firstValue(item, ['finding_id', 'candidate_id', 'id', 'key']) ?? '',
@@ -46,11 +44,15 @@ export function normalizeFinding(item) {
     file: firstValue(item, ['file_path', 'source_file', 'path', 'file']) ?? location.file ?? location.path ?? '',
     line: firstValue(item, ['line_number', 'source_line', 'line']) ?? location.line ?? '',
     severity: firstValue(item, ['severity', 'priority', 'risk_level']) ?? '',
-    score: Number.isFinite(score) ? score : null,
+    score: null, // Historical numeric fusion scores are never current priority.
     cwss,
+    cwssScenario,
+    cwssScenarioScore: cwssScenario && Number.isFinite(Number(cwssScenario.cwss_score)) ? Number(cwssScenario.cwss_score) : null,
     cwssScore: cwss && Number.isFinite(Number(cwss.cwss_score)) ? Number(cwss.cwss_score) : null,
-    cwssUnknownMetrics: cwss ? Number(cwss.unknown_metric_count) : null,
-    scoreBreakdown: firstValue(item, ['score_breakdown']) ?? firstValue(item?.evidence_fusion, ['score_breakdown']),
+    cwssUnknownMetrics: cwss ? Number(cwss.unknown_metric_count ?? cwss.assessment_completeness?.unknown_count ?? 0) : null,
+    cwssProvisional: Boolean(cwss && cwss.fully_verified !== true),
+    cwssInferenceVersion: cwss?.inference_version ?? null,
+    cwssDefaultMetrics: cwss ? Number(cwss.default_metric_count ?? cwss.assessment_completeness?.default_metric_count ?? 0) : null,
     decision: firstValue(item, ['triage_decision', 'decision', 'policy_decision', 'triage']) ?? '',
     role: firstValue(item, ['api_role', 'role', 'classification']) ?? '',
     evidence: firstValue(item, ['evidence', 'evidence_summary', 'dataflow', 'ast_evidence']),

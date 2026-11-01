@@ -100,7 +100,96 @@ async function optionalList(path, options = {}) {
   }
 }
 
+// CWSS Inference V2 is independent from legacy /cwss/page (V1).
+// Ranking sorts by CWSS rather than the indexed findings order. Never join rows
+// by page position: locate each requested finding by its stable finding_id.
+async function cwssV2ForFindingIds(scanId, findingIds, options = {}) {
+  const ids = [...new Set((findingIds || []).filter((id) => typeof id === 'string' && id))];
+  if (!ids.length) return {status: 'OK', scan_id: scanId, assessments: [], requested_count: 0, matched_count: 0};
+  const wanted = new Set(ids);
+  const found = new Map();
+  const pageSize = 200;
+  for (let page = 1; page <= 40 && found.size < wanted.size; page += 1) {
+    const response = await request(
+      `/api/scans/${encodeURIComponent(scanId)}/cwss/v1/ranking?mode=CWSS_AUTO_COMPLETE&page=${page}&page_size=${pageSize}`,
+      {...options, timeoutMs: options.timeoutMs ?? 60000}
+    );
+    if (response?.scan_id !== scanId || response?.requested_mode !== 'CWSS_AUTO_COMPLETE' || !Array.isArray(response?.findings)) {
+      throw new ApiError('CWSS V2 ranking response failed contract checks.');
+    }
+    for (const item of response.findings) {
+      if (!wanted.has(item?.finding_id)) continue;
+      if (item.inference_version !== 'NTK_CWSS_INFERENCE_V2' || !item.metric_assessments || Object.keys(item.metric_assessments).length !== 16) {
+        throw new ApiError('A ranking item is missing its 16-metric CWSS V2 provenance.');
+      }
+      found.set(item.finding_id, item);
+    }
+    const total = Number(response.total_matching);
+    if (!response.findings.length || (Number.isFinite(total) && page * pageSize >= total)) break;
+  }
+  return {
+    status: found.size === wanted.size ? 'OK' : 'INCOMPLETE',
+    scan_id: scanId,
+    inference_version: 'NTK_CWSS_INFERENCE_V2',
+    requested_count: wanted.size,
+    matched_count: found.size,
+    assessments: [...found].map(([finding_id, cwss]) => ({finding_id, cwss}))
+  };
+}
+
+async function cwssV2Finding(scanId, findingId, options = {}) {
+  const response = await request(
+    `/api/scans/${encodeURIComponent(scanId)}/cwss/v1/findings/${encodeURIComponent(findingId)}/automatic`,
+    {...options, timeoutMs: options.timeoutMs ?? 60000}
+  );
+  const result = response?.auto_complete;
+  if (response?.scan_id !== scanId || response?.finding_id !== findingId || result?.inference_version !== 'NTK_CWSS_INFERENCE_V2' || Object.keys(result?.metric_assessments || {}).length !== 16) {
+    throw new ApiError('Finding CWSS_AUTO_COMPLETE is not a valid V2 16-metric assessment.');
+  }
+  return result;
+}
+
+// Explicitly hypothetical V2 scenario, computed by the local Python CWSS engine.
+// Client never supplies arbitrary metric codes and never changes triage.
+const SCENARIO_PROFILE = 'BUSINESS_CRITICAL_INTERNET_FACING';
+async function cwssV2ScenarioPage(scanId, page = 1, pageSize = 50, options = {}) {
+  const path = `/api/scans/${encodeURIComponent(scanId)}/cwss/v2/scenario?profile=${SCENARIO_PROFILE}&page=${page}&page_size=${pageSize}`;
+  const response = await request(path, {...options, timeoutMs: options.timeoutMs ?? 60000});
+  if (response?.status !== 'OK' || response?.scan_id !== scanId ||
+      response?.scenario_id !== SCENARIO_PROFILE || response?.hypothetical !== true ||
+      response?.verified_deployment !== false || Number(response?.page) !== page ||
+      !Array.isArray(response?.assessments)) {
+    throw new ApiError('CWSS V2 conditional scenario response is invalid.');
+  }
+  for (const entry of response.assessments) {
+    const score = entry?.cwss;
+    if (!entry?.finding_id || score?.finding_id !== entry.finding_id ||
+        score?.inference_version !== 'NTK_CWSS_INFERENCE_V2' ||
+        score?.reference_profile !== SCENARIO_PROFILE ||
+        Object.keys(score?.metric_assessments || {}).length !== 16) {
+      throw new ApiError('CWSS V2 scenario lacks valid metric provenance.');
+    }
+  }
+  return response;
+}
+async function cwssV2ScenarioFinding(scanId, findingId, options = {}) {
+  const path = `/api/scans/${encodeURIComponent(scanId)}/cwss/v2/scenario?profile=${SCENARIO_PROFILE}&finding_id=${encodeURIComponent(findingId)}`;
+  const response = await request(path, {...options, timeoutMs: options.timeoutMs ?? 60000});
+  const entry = Array.isArray(response?.assessments) ? response.assessments.find((row) => row?.finding_id === findingId) : null;
+  if (response?.scan_id !== scanId || response?.hypothetical !== true ||
+      response?.verified_deployment !== false || !entry?.cwss ||
+      entry.cwss.inference_version !== 'NTK_CWSS_INFERENCE_V2' ||
+      Object.keys(entry.cwss.metric_assessments || {}).length !== 16) {
+    throw new ApiError('CWSS V2 hypothetical finding response is invalid.');
+  }
+  return entry.cwss;
+}
+
 export const api = {
+  cwssV2ScenarioPage,
+  cwssV2ScenarioFinding,
+  cwssV2ForFindingIds,
+  cwssV2Finding,
   health: (options) => request('/api/health', options),
   model: (options) => request('/api/model', options),
   startGithubScan: (repositoryUrl, commitSha, options = {}) => {

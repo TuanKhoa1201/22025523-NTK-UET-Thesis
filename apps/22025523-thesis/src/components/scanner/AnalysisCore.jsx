@@ -7,7 +7,7 @@ const modules=[
   {name:'IRIS',short:'CONTEXT',icon:'GitBranch',description:'Bổ sung ngữ cảnh Java và bằng chứng dataflow.'},
   {name:'Qwen + LoRA',short:'ROLE INFERENCE',icon:'Cpu',description:'Phân loại vai trò API; không tự xác nhận lỗ hổng.'},
   {name:'Evidence Fusion',short:'FUSION',icon:'Share2',description:'Kết hợp tín hiệu từ các nguồn bằng chứng.'},
-  {name:'SAST Scoring',short:'SCORING',icon:'Gauge',description:'Tính điểm heuristic theo policy và dữ liệu hiện có.'},
+  {name:'SAST Scoring',short:'SCORING',icon:'Gauge',description:'Kiểm tra bằng chứng; ưu tiên điểm yếu theo MITRE CWSS V2.'},
   {name:'Alert Triage',short:'TRIAGE',icon:'ShieldCheck',description:'Phân nhóm REPORT, REVIEW và SUPPRESS.'}
 ];
 

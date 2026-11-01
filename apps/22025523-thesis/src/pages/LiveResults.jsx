@@ -35,9 +35,9 @@ export function LiveResultsBody({data, table}) {
   return (
     <>
       <PageHeader eyebrow="PHIÊN PHÂN TÍCH" title="Kết quả phân tích thực tế" description={`Dữ liệu từ backend cho scan ${data.scanId}.`} actions={<Link to="/scanner" className="button-secondary"><Icon name="Plus" />Phiên phân tích mới</Link>} />
-      <DataNotice>Thống kê tổng lấy từ summary backend; biểu đồ và danh sách bên dưới chỉ dựa trên {data.pagination?.loaded ?? rows.length} finding đầu tiên đã nạp. CWSS 1.0.1 là điểm ưu tiên điểm yếu, không phải xác suất TP hay CVSS. Điểm legacy heuristic được giữ riêng để đối chiếu.</DataNotice>
-      {findingsPayload?.cwss_status === 'UNAVAILABLE' && <DataNotice>Không tải được thông tin CWSS; kết quả phát hiện và triage từ backend vẫn được giữ nguyên. Kiểm tra API /cwss/page và log backend.</DataNotice>}
-      {rows.some((row) => row.cwss) && <DataNotice>CWSS đã được tính cho {rows.filter((row) => row.cwss).length} finding trên trang này; các metric chưa được xác minh vẫn là Unknown. Không suy ra mức độ an toàn từ điểm CWSS tạm thời.</DataNotice>}
+      <DataNotice>Thống kê tổng lấy từ summary backend; biểu đồ và danh sách bên dưới chỉ dựa trên {data.pagination?.loaded ?? rows.length} finding đầu tiên đã nạp. CWSS V2 là điểm ưu tiên điểm yếu theo 16 metric, không phải xác suất TP hay CVSS. Điểm theo kịch bản giả định chỉ có ý nghĩa khi đọc cùng nguồn từng metric.</DataNotice>
+      {findingsPayload?.cwss_status === 'UNAVAILABLE' && <DataNotice>Không tải được thông tin CWSS; kết quả phát hiện và triage từ backend vẫn được giữ nguyên. Kiểm tra API /cwss/v1/ranking?mode=CWSS_AUTO_COMPLETE và log backend.</DataNotice>}
+      {rows.some((row) => row.cwss) && <DataNotice>CWSS Inference V2 đã gắn cho {rows.filter((row) => row.cwss).length} finding. MITRE_DEFAULT và các giả định tham chiếu không phải bằng chứng xác minh môi trường.</DataNotice>}
       <div className="stats-grid">
         <StatCard label="Candidate findings" value={counts.total} note={`LIVE · ${data.scanId}`} icon="Bug" />
         <StatCard label="REPORT" value={counts.report} note="Ưu tiên kiểm tra" icon="ShieldAlert" tone="amber" />
@@ -80,22 +80,31 @@ export function LiveFindingDetail({data, id}) {
       <PageHeader eyebrow={`FINDING · ${row.id}`} title={row.title || row.id} description={`${row.file}${row.line ? `:${row.line}` : ''} · ${row.cwe}`} actions={<Link to={back} className="button-secondary">Danh sách</Link>} />
       <div className="finding-summary">
         <StatCard label="Severity" value={row.severity || '—'} note="Từ backend" icon="ShieldAlert" tone="amber" />
-        <StatCard label="CWSS 1.0.1" value={row.cwssScore === null ? 'Chưa có' : row.cwssScore.toFixed(1) + '/100' + (row.cwssUnknownMetrics ? ' · Tạm tính' : '')} note={row.cwss ? `${row.cwssUnknownMetrics} metric Unknown · ${row.cwss.assessment_status}` : 'Chưa tích hợp dữ liệu CWSS'} icon="Gauge" />
-        <StatCard label="Legacy heuristic" value={row.score === null ? '—' : row.score.toFixed(2)} note="Không phải xác suất, không phải CWSS" icon="Gauge" />
+        <StatCard label="CWSS V2 - GENERAL_JAVA" value={row.cwssScore === null ? 'Chưa có' : row.cwssScore.toFixed(1) + '/100' + (row.cwssProvisional ? ' (provisional)' : '')} note={row.cwss ? `${row.cwssUnknownMetrics} metric Unknown · ${row.cwss.assessment_status}` : 'Chưa tích hợp dữ liệu CWSS'} icon="Gauge" />
+        <StatCard label="CWSS V2 - giả định" value={row.cwssScenarioScore === null ? 'Chưa có' : row.cwssScenarioScore.toFixed(1) + '/100'} note="REFERENCE_ASSUMPTION — không phải bối cảnh được xác minh" icon="Gauge" />
         <StatCard label="Triage" value={row.decision || '—'} note="Chưa có xác nhận chuyên gia" icon="ScanEye" tone="violet" />
       </div>
-      {row.cwss && <Card title="CWSS 1.0.1 — vector 16 metric, bằng chứng và trạng thái">
+      {row.cwss && <Card title="CWSS Inference V2 - 16 metrics, evidence and status">
         <p>Điểm ưu tiên điểm yếu, không suy ra True Positive hoặc độ nghiêm trọng CVSS. Các metric Unknown cần ngữ cảnh được xác minh.</p>
         <pre><code>{JSON.stringify({
           score: row.cwss.cwss_score,
           status: row.cwss.assessment_status,
           unknown_metrics: row.cwss.unknown_metrics,
-          vector: row.cwss.vector,
-          metric_sources: row.cwss.metric_sources,
-          review_audit: row.cwss.review_audit
+          vector: row.cwss.metric_vector,
+          metric_assessments: row.cwss.metric_assessments,
+          three_subscores: row.cwss.three_subscores,
+          normalized_evidence: row.cwss.normalized_evidence,
+          inference_version: row.cwss.inference_version
         }, null, 2)}</code></pre>
       </Card>}
-      <Card title="Bản ghi backend nguyên bản"><pre><code>{JSON.stringify(row.raw, null, 2)}</code></pre></Card>
+      <Card title="Bằng chứng backend (không hiển thị điểm xếp hạng cũ)"><pre><code>{JSON.stringify({
+        finding_id:row.id,
+        file_path:row.file,
+        line_number:row.line,
+        cwe:row.cwe,
+        evidence:row.evidence,
+        triage:row.decision,
+      },null,2)}</code></pre></Card>
       <Badge tone="blue">{row.collections.join(' · ')}</Badge>
     </>
   );

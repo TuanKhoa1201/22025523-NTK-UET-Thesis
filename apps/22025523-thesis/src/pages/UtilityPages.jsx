@@ -67,7 +67,7 @@ function PagedReview({scanId}) {
         {pageState.status==='error' && <EmptyState title="Không tải được danh sách" text={pageState.error} icon="AlertTriangle" />}
         {pageState.status==='error' && <button className="button-secondary" onClick={retryPage}>Thử lại</button>}
         {pageState.status==='success' && !rows.length && <EmptyState title={`Không có finding ${tab}`} text="Backend trả về 0 finding cho bộ lọc này." />}
-        {pageState.status==='success' && rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tone}>{row.decision || tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}{row.score===null || row.score===undefined ? '' : ` · score ${row.score.toFixed(2)}`}</p><p>{evidenceText(row)}</p></div><Link to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`} state={{detailUrl:row.detailUrl}} className="button-secondary">Xem evidence <Icon name="ArrowRight" /></Link></div>)}
+        {pageState.status==='success' && rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tone}>{row.decision || tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}</p><p>{evidenceText(row)}</p></div><Link to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`} state={{detailUrl:row.detailUrl}} className="button-secondary">Xem evidence <Icon name="ArrowRight" /></Link></div>)}
         <div className="table-toolbar">
           <button className="button-secondary" disabled={page<=1 || pageState.status==='loading'} onClick={()=> setPage((value)=> Math.max(1,value-1))}>Trước</button>
           <span>Trang {page}{totalPages!==null ? ` / ${totalPages}` : ''} · khớp bộ lọc: {showNum(matching)}</span>
@@ -129,7 +129,7 @@ export function Review() {
   const [params]=useSearchParams();
   const scanId=params.get('scan_id') || window.sessionStorage.getItem(ACTIVE_KEY) || '';
   if (scanId) return <PagedReview scanId={scanId} />;
-  return <DemoReview />;
+  return <><PageHeader title="Xác minh cảnh báo" /><EmptyState title="Chưa chọn scan LIVE" text="Mở lịch sử quét hoặc tạo scan Java để xem bằng chứng từ backend." /><Link to="/history">Lịch sử quét</Link></>;
 }
 
 function DemoReview() {
@@ -235,7 +235,7 @@ export function About() {
       </Card>
       <section className="section-block">
         <SectionTitle title="Đóng góp nghiên cứu" />
-        <div className="contribution-grid">{['Tích hợp các thành phần phân tích mã nguồn.','Xây dựng và kiểm soát chất lượng dữ liệu API role.','Fine-tuning mô hình chuyên biệt bằng LoRA.','Hợp nhất bằng chứng và chấm điểm heuristic.','Phân loại cảnh báo để hỗ trợ xác minh.','Triển khai giao diện có khả năng kết nối API.'].map((item,index)=> <div className="contribution" key={item}><span>0{index+1}</span><p>{item}</p></div>)}</div>
+        <div className="contribution-grid">{['Tích hợp các thành phần phân tích mã nguồn.','Xây dựng và kiểm soát chất lượng dữ liệu API role.','Fine-tuning mô hình chuyên biệt bằng LoRA.','Hợp nhất bằng chứng và ưu tiên theo MITRE CWSS V2.','Phân loại cảnh báo để hỗ trợ xác minh.','Triển khai giao diện có khả năng kết nối API.'].map((item,index)=> <div className="contribution" key={item}><span>0{index+1}</span><p>{item}</p></div>)}</div>
       </section>
       <DataNotice>Giới hạn: khả năng phát hiện phụ thuộc ruleset, phạm vi phân tích và bằng chứng backend. Không khẳng định phát hiện mọi lỗ hổng hoặc loại bỏ hoàn toàn false positive.</DataNotice>
     </>

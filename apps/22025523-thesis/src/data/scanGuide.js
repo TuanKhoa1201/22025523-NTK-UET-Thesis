@@ -71,10 +71,10 @@ export const scanGuide=[
   },
   {
     title:'Chấm điểm SAST',
-    purpose:'Tính điểm heuristic theo scoring policy của hệ thống.',
-    input:'Điểm nền, điều chỉnh theo role và bằng chứng AST liên quan.',
-    process:'Áp dụng các nhánh policy, bao gồm safety floor hoặc safe release khi hợp lệ.',
-    output:'Final heuristic score cùng breakdown.',
+    purpose:'Chuẩn bị bằng chứng cho MITRE CWSS Inference V2.',
+    input:'Source SHA, AST, sink-slot và bằng chứng luồng dữ liệu.',
+    process:'Xác minh semantic release; CWSS 16 metric được công bố sau xác minh provenance.',
+    output:'MITRE CWSS V2 cùng nguồn gốc từng metric.',
     meaning:'Hỗ trợ ưu tiên và giải thích; điểm không phải xác suất vulnerability.',
     icon:'Gauge',
     visual:'scoring'
@@ -82,7 +82,7 @@ export const scanGuide=[
   {
     title:'Xác minh cảnh báo',
     purpose:'Phân luồng finding theo bằng chứng và điều kiện triage.',
-    input:'Finding, score breakdown, evidence và policy metadata.',
+    input:'Finding, semantic evidence và policy metadata.',
     process:'Đánh giá điều kiện REPORT, REVIEW hoặc SUPPRESS.',
     output:'Quyết định triage và reason codes; dữ liệu vẫn có thể được audit.',
     meaning:'Hướng sự chú ý tới cảnh báo cần xử lý mà không khẳng định quá mức.',

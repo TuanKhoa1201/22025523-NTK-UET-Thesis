@@ -406,7 +406,7 @@ export function CoveragePanel({job, counts}) {
         {none && !loading && <DataNotice>Backend chưa cung cấp metadata coverage; không có số liệu nào được suy diễn.</DataNotice>}
         {zeroCandidates
           ? <p className="panel-note">Backend xác nhận scan này có 0 ứng viên. Điều đó không chứng minh rằng không tồn tại lỗ hổng; kết quả phụ thuộc ruleset và phạm vi phân tích được hỗ trợ.</p>
-          : <p className="panel-note">Kết quả phụ thuộc ruleset, phạm vi CWE được hỗ trợ và heuristic triage. FULL_SOURCE_COVERAGE chỉ mô tả việc xử lý source đủ điều kiện theo cấu hình scan, không khẳng định bao phủ mọi loại CWE.</p>}
+          : <p className="panel-note">Kết quả phụ thuộc ruleset, phạm vi CWE được hỗ trợ và triage dựa trên bằng chứng. FULL_SOURCE_COVERAGE chỉ mô tả việc xử lý source đủ điều kiện theo cấu hình scan, không khẳng định bao phủ mọi loại CWE.</p>}
         {(partialCoverage || incompleteReasons !== null && incompleteReasons !== undefined) && <p className="panel-note">Backend báo phạm vi phân tích chưa đầy đủ; diễn giải kết quả trong giới hạn coverage và lý do thiếu hụt được liệt kê ở trên.</p>}
       </Card>
     </section>
