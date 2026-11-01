@@ -9,7 +9,9 @@ export default function AppShell() {
   const [backend, setBackend] = useState({status: 'CHECKING', health: null});
   const connected = backend.status === 'CONNECTED';
   const location = useLocation();
-  const current = navGroups.flatMap((group) => group.items).find(([path]) => path === location.pathname);
+  const navigationPath = location.pathname === '/results' || location.pathname.startsWith('/finding/')
+    ? '/findings' : location.pathname;
+  const current = navGroups.flatMap((group) => group.items).find(([path]) => path === navigationPath);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,7 +55,7 @@ export default function AppShell() {
             <div className="nav-group" key={group.title}>
               {!collapsed && <div className="nav-group-title">{group.title}</div>}
               {group.items.map(([path, label, icon]) => (
-                <NavLink end={path === '/'} to={path} key={path} title={collapsed ? label : undefined} className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+                <NavLink end={path === '/'} to={path} key={path} title={collapsed ? label : undefined} className={({isActive}) => `nav-item ${isActive || path === navigationPath ? 'active' : ''}`}>
                   <Icon name={icon} /><span>{label}</span>
                 </NavLink>
               ))}
@@ -75,7 +77,7 @@ export default function AppShell() {
         <header className="topbar">
           <div className="breadcrumbs">
             <span>22025523</span><Icon name="ChevronRight" />
-            <strong>{current?.[1] || 'Tổng quan'}</strong>
+            <strong>{current?.[1] || (location.pathname === '/replay' ? 'Phát lại trace' : 'Tổng quan')}</strong>
           </div>
           <div className="topbar-actions">
             <span className={`connection-pill ${connected ? 'connected' : ''}`}>

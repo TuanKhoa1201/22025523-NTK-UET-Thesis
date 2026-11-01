@@ -3,7 +3,7 @@ import {Link} from 'react-router-dom';
 import {Card, PageHeader, Badge, DataNotice, EmptyState, Icon} from '../components/common/Ui';
 import {ApiError, api} from '../services/api';
 import {scanQuery} from '../services/liveScan';
-import {readHistory, upsertHistory, hideHistoryRecord, readHiddenHistory, restoreHistoryRecord} from '../services/scanHistory';
+import {readHistory, upsertHistory, historyRecordFromBackend, hideHistoryRecord, readHiddenHistory, restoreHistoryRecord} from '../services/scanHistory';
 
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('vi-VN') : '—');
 const fmtMs = (ms) => (Number.isFinite(ms) ? `${(ms / 1000).toFixed(2)} giây` : '—');
@@ -103,18 +103,7 @@ export default function HistoryPage() {
           result.items.forEach((item) => {
             const scanId = item.scan_id ?? item.id;
             if (!scanId) return;
-            upsertHistory({
-              scanId,
-              jobId: item.job_id,
-              repoUrl: item.repo_url,
-              fileName: item.file_name,
-              inputMode: item.input_mode,
-              status: String(item.state ?? item.status ?? '').toUpperCase() || undefined,
-              startedAt: item.created_at ?? item.started_at,
-              completedAt: item.completed_at ?? item.finished_at,
-              backendMs: item.total_e2e_duration_ms,
-              restoration: item.restoration_type ?? item.restoration_status
-            });
+            upsertHistory(historyRecordFromBackend(item), {authoritative: true});
           });
         } catch {
           /* list endpoint unavailable or network error; cached IDs still shown */
