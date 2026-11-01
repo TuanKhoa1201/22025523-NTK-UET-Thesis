@@ -2,7 +2,7 @@
   "date": "2026-11-02",
   "branch": "cwss-inference-v2-220",
   "baseline_commit": "39c647c86594b09d69a8ed2ac541f547c1131150",
-  "source_commit": "5fa5159fc70fb8a73d655cbe151a0dcd618572d7",
+  "source_commit": "1a8c7ecfd6b64edc725aef254f851f7d398691da",
   "flags": {
     "NTK_8_PROJECT_E2E": "PARTIAL",
     "NON_JAVA_INPUT_HANDLING": "PASS",
@@ -17,7 +17,7 @@
   },
   "tests": {
     "final_backend_passed": 237,
-    "final_frontend_passed": 13,
+    "final_frontend_passed": 17,
     "evaluation_arithmetic_passed": 2,
     "final_failed": 0,
     "earlier_failures_preserved_locally": true,
@@ -26,7 +26,10 @@
     "settled_ui_state_checks": 3,
     "demo_api_checks": 37,
     "post_restart_checks": 48,
-    "real25_checksum_entries_passed": 7
+    "real25_checksum_entries_passed": 7,
+    "history_browser_from_empty_cache": "PASS",
+    "visible_history_rows": 92,
+    "all_eight_project_ids_visible": true
   },
   "projects_tested": 8,
   "projects_partial": 3,
@@ -57,5 +60,6 @@
     "40-case training overlap cannot be excluded",
     "No full configuration ablation or reboot test",
     "Reported pipeline timers exclude complete client/publication wall time"
-  ]
+  ],
+  "engine_input_fix_commit": "5fa5159fc70fb8a73d655cbe151a0dcd618572d7"
 }

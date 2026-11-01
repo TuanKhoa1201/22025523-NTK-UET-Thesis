@@ -24,6 +24,7 @@ Raw requests/responses, ZIPs, code snapshots, private paths/registries, screensh
 | Cache Git bị coi dirty dù source bytes không đổi | DrvFS đổi executable bit sau checkout | `git -c core.filemode=false status` chỉ cho lệnh kiểm tra; không sửa config; nội dung/untracked/commit/SHA vẫn kiểm tra |
 | Library local inventory từng xóa symlink | Inventory gọi unlink | Bỏ qua symlink và bảo toàn source; HTTP local path mode vẫn tắt |
 | Một OWASP true case bị SUPPRESS sai | Case/default switch cùng control scope; thiếu break/default metadata | Scope điều kiện cho CaseTree; metadata; AST V5 và namespace cache mới; case đổi SUPPRESS→REVIEW; không ép REPORT/score |
+| History không hiện đủ scan cũ từ browser cache rỗng | API chỉ lấy trang đầu 25 scan; UI đọc ngược từ cache giới hạn 50 | Đọc summary phân trang; render danh sách backend độc lập cache; cache vẫn 50, giới hạn tải 2.000 có cảnh báo; browser xác nhận đủ 92 scan và 8 dự án |
 
 Không sửa rule, threshold, CWSS weights hoặc ground truth để làm PASS. Lỗi switch được sửa sau khi thấy kết quả đánh giá nên lượt 40 sau sửa được công bố là hồi quy sau phát hiện lỗi; không gọi là tập độc lập chưa từng thấy.
 
@@ -35,13 +36,14 @@ Các lần thử chưa đạt và lỗi harness được giữ trong logs: Java 
 |---|---|
 | Backend full unittest suite | **237/237 PASS**, gồm CWSS V2, source collector, AST/false suppression, input safety, lifecycle/index/report, Real25 |
 | Evaluation metric unit tests | **2/2 PASS**; ba convention REVIEW, undefined denominator không bị điền metric giả |
-| Frontend Node tests | **13/13 PASS**, gồm adapter nối backend thật và multipart/error contract |
+| Frontend Node tests | **17/17 PASS**, gồm adapter nối backend thật, multipart/error contract, pagination và cache history |
 | React production build | **PASS**, 445 modules; cảnh báo bundle >500 kB còn tồn tại |
 | OpenGrep/Javac smoke | **PASS**, 6 fixture candidates, 3 methods AST; JDK 17 |
 | API GitHub | **11 ca PASS** theo expected contract, gồm 4 ngôn ngữ, README, mixed, URL/ref/source errors |
 | API ZIP/safe/unknown | **21 ca PASS** theo contract; library tests bổ sung symlink, upload/entries/decompression/file/ratio limits với fixtures nhỏ |
 | Browser Edge thật | **33 checks PASS** cho 8 project Results, input/error/partial/empty states; double-click chỉ 1 POST |
 | Browser bổ sung sau khi dữ liệu tải xong | **3 states PASS**: zero không có `/100`, safe có SUPPRESS/0.0, unknown có REVIEW |
+| History từ browser cache rỗng | **PASS**, 92/92 scan hiển thị, đủ 8 project IDs; FAILED và COMPLETED phân biệt đúng |
 | Website demo | **12/12 trang PASS**, desktop + Results mobile sanity; report download hoàn thành; replay đến stage 10 và play/pause |
 | Scan demo cũ | **37 API checks PASS**; 10 findings; REPORT/REVIEW/SUPPRESS = **2/6/2**; scenario 006/008/009/010 = **84.0/0.0/86.0/0.0** |
 | Persist sau restart backend kiểm thử | **48 API checks PASS** trên 8 scan cuối: source-bound CWSS, report, summary, findings, trace vẫn còn |
@@ -80,14 +82,17 @@ Kịch bản bảo vệ: mở scan demo cũ → finding 009/006 và bảng 16 me
 
 ## Files và Git
 
-Source/tests/tooling đã commit và push trên **cwss-inference-v2-220**, source commit **5fa5159** (tiếp từ 39c647c); không merge main/force push/reset/clean. Commit báo cáo đi tiếp trên cùng nhánh; SHA cuối được kiểm tra với remote ref sau push và ghi receipt local, hiển thị trong kết quả bàn giao.
+Source/tests/tooling đã commit và push trên **cwss-inference-v2-220**: engine/input commit **5fa5159**, History commit **1a8c7ec** (tiếp từ baseline 39c647c); không merge main/force push/reset/clean. Commit báo cáo đi tiếp trên cùng nhánh; SHA cuối được kiểm tra với remote ref sau push và ghi receipt local, hiển thị trong kết quả bàn giao.
 
-15 files source/tests/tooling thay đổi:
+19 files source/tests/tooling thay đổi:
 
 - `apps/22025523-thesis/src/pages/Scanner.jsx`
 - `apps/22025523-thesis/src/pages/Results.jsx`
 - `apps/22025523-thesis/src/services/api.js`
+- `apps/22025523-thesis/src/pages/HistoryPage.jsx`
+- `apps/22025523-thesis/src/services/scanHistory.js`
 - `apps/22025523-thesis/tests/input-api-contract.test.cjs`
+- `apps/22025523-thesis/tests/history-schema.test.cjs`
 - `backend/ntk-production-v2/scripts/javac_ast_bridge/NtkJavacAstExtractor.java`
 - `backend/ntk-production-v2/scripts/ntk_alert_verification.py`
 - `backend/ntk-production-v2/scripts/ntk_web_backend_service.py`
@@ -98,6 +103,7 @@ Source/tests/tooling đã commit và push trên **cwss-inference-v2-220**, sourc
 - `tools/run_multiproject_acceptance.py`
 - `tools/evaluate_benchmark.py`
 - `tools/verify-input-browser.cjs`
+- `tools/verify-history-browser.cjs`
 - `tools/tests/test_evaluation_metrics.py`
 
 Bổ sung 4 báo cáo chuyên đề, báo cáo tổng hợp này, appendix ở NTK_FINAL_ACCEPTANCE_REPORT.md, hướng dẫn tools và public metadata/CSV dưới docs/evaluation-20261102. Git ignore `/work/` đã có từ trước; không commit runtime artifacts. Secrets scan và staged-path audit thực hiện trước push. Dừng phát triển tính năng sau bàn giao này.
