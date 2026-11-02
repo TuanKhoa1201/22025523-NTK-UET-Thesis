@@ -418,6 +418,41 @@ class AssessmentStore:
         return {**selected, 'replay_verified': True}
 
 
+
+def scope_v2_snapshot(snapshot, finding):
+    """Lossless V2 graph projection: exact-finding source and AST only.
+
+    V2 normalize() consumes only the file named by finding_source_paths[fid]
+    and that file's Java AST, plus its own identity/sha/proof bindings and
+    unchanged global context/limitations/servlet mapping metadata. Never
+    project legacy V1 snapshots: its inference can inspect cross-file configs.
+
+    A snapshot with missing evidence stays UNKNOWN; this function cannot
+    promote source/taint/safety/metric claims. Preserve existing source hashes,
+    including the SHA check in the V2 assessor. Keep source tree/CodeQL data
+    unchanged; this only shrinks each *new* immutable assessment revision.
+    """
+    if not isinstance(snapshot, dict) or snapshot.get('inference_version') != automatic_v2.graph.VERSION:
+        return snapshot
+    fid = str(finding['finding_id'])
+    paths = snapshot.get('finding_source_paths') or {}
+    rel = paths.get(fid)
+    scoped = {key: copy.deepcopy(value) for key, value in snapshot.items()
+              if key not in ('files', 'java_ast', 'finding_source_paths',
+                             'analysis_source_bindings', 'finding_evidence_hashes',
+                             'independent_local_proofs')}
+    scoped['files'] = [copy.deepcopy(row) for row in snapshot.get('files', [])
+                       if isinstance(row, dict) and row.get('path') == rel]
+    asts = snapshot.get('java_ast') or {}
+    scoped['java_ast'] = {rel: copy.deepcopy(asts[rel])} if rel in asts else {}
+    for key in ('finding_source_paths', 'analysis_source_bindings',
+                'finding_evidence_hashes', 'independent_local_proofs'):
+        values = snapshot.get(key)
+        if isinstance(values, dict):
+            scoped[key] = {fid: copy.deepcopy(values[fid])} if fid in values else {}
+    scoped['cwss_snapshot_scope'] = 'CWSS_V2_EXACT_FINDING_SCOPE_V1'
+    return scoped
+
 def directory(state):
     return Path(os.environ.get('NTK_CWSS_ASSESSMENT_DIR', str(Path(state.storage_dir) / 'cwss-assessments')))
 

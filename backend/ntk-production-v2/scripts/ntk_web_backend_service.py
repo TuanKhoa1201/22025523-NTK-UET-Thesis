@@ -4474,15 +4474,24 @@ class NtkBackendState:
         if declared_context is not None:
             complete_snapshot["complete_reference_context"] = declared_context
         auto_store = cwss_workflow.AssessmentStore(cwss_workflow.directory(self))
+        # Reuse the complete store instead of re-opening/reinitializing it for
+        # every finding. Old (full) snapshots remain readable and replayable.
+        complete_store = cwss_workflow.AssessmentStore(cwss_workflow.directory(self)/'complete')
         for finding in record["findings"]:
-            auto_store.publish_automatic(finding, scan_id, snapshot)
+            # CWSS V2 scores only the exact source-bound finding/AST, plus
+            # shared context. Avoid serializing every unrelated Java AST and
+            # every unrelated finding into *each* of the 3 immutable profiles.
+            # V1 remains byte-for-byte on its previous storage path.
+            scoped_auto = cwss_workflow.scope_v2_snapshot(snapshot, finding)
+            scoped_complete = cwss_workflow.scope_v2_snapshot(complete_snapshot, finding)
+            auto_store.publish_automatic(finding, scan_id, scoped_auto)
             # Independent revision stream preserves existing evidence/estimate history.
             reviewed = [r for r in auto_store.history(scan_id, finding['finding_id'])
                         if r['profile']['mode'] == 'ASSESSED']
             attestation = ({'profile': reviewed[-1]['profile'], 'reviewer': reviewed[-1]['reviewer']}
                            if reviewed else None)
-            published_complete = cwss_workflow.AssessmentStore(cwss_workflow.directory(self)/'complete').publish_complete(
-                finding, scan_id, complete_snapshot, cwss_workflow.complete.selection(), attestation)
+            published_complete = complete_store.publish_complete(
+                finding, scan_id, scoped_complete, cwss_workflow.complete.selection(), attestation)
             if snapshot.get('inference_version') == cwss_workflow.automatic_v2.graph.VERSION:
                 finding['cwss'] = published_complete['assessment']
         from ntk_scan_aggregates import summarize
