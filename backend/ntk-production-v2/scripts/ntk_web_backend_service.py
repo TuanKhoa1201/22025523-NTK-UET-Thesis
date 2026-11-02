@@ -1042,6 +1042,25 @@ def cached_inventory_matches_sources(root: Path, inventory: Dict[str, Any]) -> b
     return True
 
 
+def mark_restricted_git_inventory(inventory: Dict[str, Any]) -> Dict[str, Any]:
+    """A materialized sparse/filter scope cannot establish repository coverage.
+
+    Applied to cache hits as well as freshly collected inventory; unknown
+    repository totals are never guessed from the selected checkout.
+    """
+    if inventory.get('status')!='OK':return inventory
+    result=dict(inventory)
+    cov=dict(inventory.get('coverage_diagnostics',{}))
+    reasons=list(cov.get('incomplete_analysis_reasons',[]))
+    if 'REPOSITORY_SCOPE_RESTRICTED' not in reasons:reasons.append('REPOSITORY_SCOPE_RESTRICTED')
+    cov.update(coverage_status='PARTIAL_BOUNDED',analysis_coverage_status='PARTIAL_BOUNDED',
+        legacy_analysis_coverage_status='PARTIAL_BOUNDED',repository_inventory_complete=False,
+        repository_total_java_files=None,inventory_count_scope='MATERIALIZED_SELECTED_CHECKOUT_ONLY',
+        incomplete_analysis_reasons=reasons)
+    result.update(coverage_diagnostics=cov,was_filtered_or_truncated=True)
+    return result
+
+
 def acquire_github_java_repository(
     repo_url: str,
     branch: Optional[str] = None,
@@ -1531,6 +1550,8 @@ def acquire_github_java_repository(
             "coverage_diagnostics": cov_diag,
         }
 
+    if file_allowlist or clean_subpath or clean_inc or clean_exc:
+        inv=mark_restricted_git_inventory(inv)
     acq_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     cov_diag = inv["coverage_diagnostics"]
     if stage_tracker is not None:

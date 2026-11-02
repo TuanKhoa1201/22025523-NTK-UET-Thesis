@@ -9,6 +9,21 @@ import ntk_web_backend_service as service
 
 
 class OpenGrepInventoryCoverageTests(unittest.TestCase):
+    def test_sparse_checkout_counts_do_not_establish_full_repository_coverage(self):
+        cached={'status':'OK','java_files_discovered':1,'java_files_scanned':1,
+                'coverage_diagnostics':{'coverage_status':'FULL_SOURCE_COVERAGE',
+                    'analysis_coverage_status':'COMPLETE_SCANNED','java_files_discovered':1}}
+        result=service.mark_restricted_git_inventory(cached)
+        self.assertEqual(result['coverage_diagnostics']['coverage_status'],'PARTIAL_BOUNDED')
+        self.assertIsNone(result['coverage_diagnostics']['repository_total_java_files'])
+        self.assertFalse(result['coverage_diagnostics']['repository_inventory_complete'])
+        self.assertEqual(result['java_files_scanned'],1)
+        self.assertTrue(result['was_filtered_or_truncated'])
+        self.assertEqual(cached['coverage_diagnostics']['coverage_status'],'FULL_SOURCE_COVERAGE')
+        self.assertEqual(service.mark_restricted_git_inventory(result),result)
+        failed={'status':'ERROR','error_code':'NO_JAVA_FILES_FOUND'}
+        self.assertEqual(service.mark_restricted_git_inventory(failed),failed)
+
     def test_real_scanner_includes_java_in_test_directory_and_respects_allowlist(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
