@@ -39,7 +39,7 @@ MODEL_VERSION_DEFAULT: str = "eo06_vnext31_trackb_main_epoch3"
 RULESET_VERSION_DEFAULT: str = "NTK_OPENGREP_JAVA_RULESET_V1.4"
 SCORING_POLICY_VERSION_DEFAULT: str = "NTK_BOUNDED_SAFETY_FLOOR_FUSION_V1.2"
 SCORE_KIND_DEFAULT: str = "HEURISTIC_EVIDENCE_FUSION_SCORE_NOT_CALIBRATED_PROBABILITY"
-AST_ANALYSIS_VERSION = "JAVAC_AST_V5_CONDITIONAL_SWITCH_CASES"
+AST_ANALYSIS_VERSION = "JAVAC_AST_V6_CLASS_INITIALIZER_SCOPE"
 
 INFRASTRUCTURE_PARAM_TYPES: Set[str] = {
     "Connection",
@@ -138,30 +138,51 @@ def ensure_javac_ast_bridge_compiled(
     javac_bin: str = "/usr/bin/javac",
     timeout_sec: float = 15.0,
 ) -> bool:
+    """Compile the AST extractor for Java 17, regardless of host javac version.
+
+    A .class timestamp by itself is insufficient: tests or worker processes
+    may compile the same bridge with javac 21 and subsequently execute it under
+    Java 17, which rejects its class-file major version 65. Require major 61
+    for every generated bridge class and rebuild with --release 17 if needed.
+    """
     inner_visitor_cls = JAVAC_BRIDGE_DIR / "NtkJavacAstExtractor$1MethodBodyVisitor.class"
-    if JAVAC_BRIDGE_CLASS.exists() and inner_visitor_cls.exists() and JAVAC_BRIDGE_JAVA.exists():
-        cls_files = list(JAVAC_BRIDGE_DIR.glob("NtkJavacAstExtractor*.class"))
-        java_mtime = JAVAC_BRIDGE_JAVA.stat().st_mtime
-        if cls_files and min(c.stat().st_mtime for c in cls_files) >= java_mtime:
+
+    def compiled_release17_current() -> bool:
+        if not (JAVAC_BRIDGE_JAVA.is_file() and JAVAC_BRIDGE_CLASS.is_file()
+                and inner_visitor_cls.is_file()):
+            return False
+        try:
+            compiled = list(JAVAC_BRIDGE_DIR.glob("NtkJavacAstExtractor*.class"))
+            if not compiled:
+                return False
+            source_mtime_ns = JAVAC_BRIDGE_JAVA.stat().st_mtime_ns
+            if any(cls.stat().st_mtime_ns < source_mtime_ns for cls in compiled):
+                return False
+            for cls in compiled:
+                with cls.open("rb") as stream:
+                    header = stream.read(8)
+                if (cls.stat().st_size < 16 or len(header) != 8 or header[:4] != b"\xca\xfe\xba\xbe"
+                        or int.from_bytes(header[6:8], "big") != 61):
+                    return False
             return True
-    if not JAVAC_BRIDGE_JAVA.exists() or not Path(javac_bin).exists():
+        except OSError:
+            return False
+
+    if compiled_release17_current():
+        return True
+    if not JAVAC_BRIDGE_JAVA.is_file() or not Path(javac_bin).is_file():
         return False
     try:
+        # Remove only generated class files, never the Java source or model/cache.
         for old_cls in JAVAC_BRIDGE_DIR.glob("NtkJavacAstExtractor*.class"):
-            try:
-                old_cls.unlink()
-            except Exception:
-                pass
+            old_cls.unlink()
         proc = subprocess.run(
-            [javac_bin, str(JAVAC_BRIDGE_JAVA)],
-            cwd=str(JAVAC_BRIDGE_DIR),
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            check=False,
+            [javac_bin, "--release", "17", str(JAVAC_BRIDGE_JAVA)],
+            cwd=str(JAVAC_BRIDGE_DIR), capture_output=True, text=True,
+            timeout=timeout_sec, check=False,
         )
-        return proc.returncode == 0 and JAVAC_BRIDGE_CLASS.exists() and inner_visitor_cls.exists()
-    except Exception:
+        return proc.returncode == 0 and compiled_release17_current()
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -1029,19 +1050,47 @@ def _analyze_with_openjdk_ast(
         if target_method is not None:
             break
 
-    if target_class is None:
-        target_class = classes[0]
     if target_method is None:
-        methods = target_class.get("methods", [])
-        if not methods:
+        # A class-level initializer must not borrow the method nearest to it.
+        # Identify the exact Javac BlockTree class member, otherwise retain an
+        # unverified context; do not invent a method span or taint proof.
+        init_sites = []
+        for cls in classes:
+            for initializer in cls.get("initializers", []):
+                start = int(initializer.get("start_line", 0))
+                end = int(initializer.get("end_line", 0))
+                if 0 < start <= int(match_line) <= end:
+                    init_sites.append((end - start, cls, initializer))
+        if not init_sites:
             return None
-        # Pick method closest to match_line
-        target_method = min(
-            methods,
-            key=lambda m: min(
-                abs(int(m.get("start_line", 0)) - int(match_line)),
-                abs(int(m.get("end_line", 0)) - int(match_line)),
+        _, target_class, initializer = min(init_sites, key=lambda item: item[0])
+        kind = "staticInitializer" if initializer.get("is_static") else "instanceInitializer"
+        cls_name = str(target_class.get("class_name", "UnknownClass"))
+        signature = f"void {kind}()"
+        return JavaAstSiteAnalysis(
+            file_path=file_path, match_line=match_line,
+            cwe=int(re.sub(r"\D", "", str(cwe)) or "0"),
+            package_name=pkg_name, class_name=cls_name,
+            enclosing_method=kind, enclosing_signature=signature,
+            untrusted_params=(),
+            target_callee_identity={
+                "package": pkg_name, "class": cls_name,
+                "method": kind, "signature": signature,
+            },
+            matched_code_line=matched_code_line,
+            source_sink_trace_status="NO_FLOW_DETECTED_INTRAPROCEDURAL_LIMIT",
+            taint_reaches_sink=False, taint_source_params=(),
+            taint_trace_steps=(matched_code_line,), sanitizer_status="NONE_DETECTED",
+            ast_evidence=shared.AstReleaseEvidence(
+                is_compile_time_constant_arg=False,
+                has_cwe_matched_sanitizer=False,
+                covered_sink_args=(),
+                ast_proof_node="JAVAC_CLASS_INITIALIZER_SCOPE_ONLY_NO_FLOW_PROOF",
+                ast_parser_engine="JAVAC_AST_INITIALIZER_SCOPE_ONLY",
             ),
+            extra_reason_codes=("RC_CLASS_INITIALIZER_FLOW_UNPROVEN",),
+            ast_parser_engine="JAVAC_AST_INITIALIZER_SCOPE_ONLY",
+            ast_overloaded_signature=signature,
         )
 
     cls_name = str(target_class.get("class_name", "UnknownClass"))

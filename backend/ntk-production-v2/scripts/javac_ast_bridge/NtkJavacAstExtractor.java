@@ -212,6 +212,7 @@ public class NtkJavacAstExtractor {
 
                     Set<String> staticFinalConsts = new HashSet<>();
                     List<String> fieldsJson = new ArrayList<>();
+                    List<String> initializersJson = new ArrayList<>();
 
                     for (Tree member : ct.getMembers()) {
                         if (member instanceof VariableTree) {
@@ -238,10 +239,25 @@ public class NtkJavacAstExtractor {
                         }
                     }
 
+                    // Class-body BlockTree members are static/instance initializers, not methods.
+                    for (Tree member : ct.getMembers()) {
+                        if (member instanceof BlockTree) {
+                            BlockTree block = (BlockTree) member;
+                            long start = srcPos.getStartPosition(cu, block);
+                            long end = srcPos.getEndPosition(cu, block);
+                            if (start >= 0 && end >= start) {
+                                initializersJson.add("{\"start_line\":" + lineMap.getLineNumber(start) +
+                                    ",\"end_line\":" + lineMap.getLineNumber(end) +
+                                    ",\"is_static\":" + block.isStatic() + "}");
+                            }
+                        }
+                    }
+
                     sb.append("{\"class_name\":\"").append(esc(ct.getSimpleName().toString())).append("\",");
                     sb.append("\"start_line\":").append(cStartLine).append(",");
                     sb.append("\"end_line\":").append(cEndLine).append(",");
                     sb.append("\"fields\":[").append(String.join(",", fieldsJson)).append("],");
+                    sb.append("\"initializers\":[").append(String.join(",", initializersJson)).append("],");
                     sb.append("\"methods\":[");
 
                     boolean firstMethod = true;

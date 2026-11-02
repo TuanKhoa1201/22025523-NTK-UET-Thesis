@@ -1963,6 +1963,8 @@ def verify_findings_against_source_tree(
         code_matches_line = False
         ast_method_verified = False
         ast_method_span: Optional[List[int]] = None
+        ast_initializer_verified = False
+        ast_initializer_span: Optional[List[int]] = None
         raw_og_verified = False
         raw_iris_verified = False
         failure_reasons: List[str] = []
@@ -1999,6 +2001,21 @@ def verify_findings_against_source_tree(
                             break
                     if ast_method_verified:
                         break
+                # Only an actual Javac class-member BlockTree may validate an
+                # initializer candidate. A nearby or preceding method is not proof.
+                if enclosing_method in ("staticInitializer", "instanceInitializer"):
+                    expected_static = enclosing_method == "staticInitializer"
+                    for cls in ast_dict.get("classes", []):
+                        for init in cls.get("initializers", []):
+                            start = int(init.get("start_line", 0))
+                            end = int(init.get("end_line", 0))
+                            if (0 < start <= line_no <= end
+                                    and bool(init.get("is_static")) == expected_static):
+                                ast_initializer_verified = True
+                                ast_initializer_span = [start, end]
+                                break
+                        if ast_initializer_verified:
+                            break
             iris_paths=f.get('original_iris_evidence',[])
             for path in iris_paths:
                 location=path.get('callsite_location',{})
@@ -2008,7 +2025,7 @@ def verify_findings_against_source_tree(
                     and int(path.get('cwe_id',0))==int(f.get('cwe_id',0)) and artifact.is_file()
                     and shared.sha256_bytes(artifact.read_bytes())==path.get('raw_artifact_sha256')):
                     raw_iris_verified=True;break
-            if not ast_method_verified and not raw_iris_verified:
+            if not (ast_method_verified or ast_initializer_verified or raw_iris_verified):
                 failure_reasons.append(
                     f"AST_ENCLOSING_METHOD_MISMATCH:method={enclosing_method!r}_not_spanning_line_{line_no}"
                 )
@@ -2024,7 +2041,7 @@ def verify_findings_against_source_tree(
             file_exists
             and line_in_range
             and code_matches_line
-            and (ast_method_verified or raw_iris_verified)
+            and (ast_method_verified or ast_initializer_verified or raw_iris_verified)
             and (raw_og_verified or raw_iris_verified)
             and len(failure_reasons) == 0
         )
@@ -2046,6 +2063,8 @@ def verify_findings_against_source_tree(
             "enclosing_method": enclosing_method,
             "ast_enclosing_method_verified": ast_method_verified,
             "ast_method_line_span": ast_method_span,
+            "ast_initializer_verified": ast_initializer_verified,
+            "ast_initializer_span": ast_initializer_span,
             "raw_opengrep_hit_verified": raw_og_verified,
             "raw_original_iris_path_verified": raw_iris_verified,
             "resolved_commit_sha": resolved_commit_sha,
@@ -3387,6 +3406,18 @@ def scan_java_sources_and_triage(
             f_dict['triage_status']={'REPORT':'LIKELY_TRUE_POSITIVE','REVIEW':'NEEDS_REVIEW','SUPPRESS':'LIKELY_FALSE_POSITIVE'}[decision]
             f_dict['disposition']='INDEPENDENT_EVIDENCE_POLICY:'+decision
             f_dict['reason_codes']=list(dict.fromkeys(f_dict['reason_codes']+extra_reasons))
+        if ast_info.ast_parser_engine == "JAVAC_AST_INITIALIZER_SCOPE_ONLY":
+            # The sink callsite is real, but this local engine did NOT analyze
+            # the initializer's dataflow. Keep it visible as REVIEW rather than
+            # inheriting a possibly false proof from the nearest method.
+            f_dict["decision"] = "REVIEW"
+            f_dict["triage_status"] = "NEEDS_REVIEW"
+            f_dict["kept_by_pipeline"] = True
+            f_dict["disposition"] = "CLASS_INITIALIZER_FLOW_NOT_PROVEN"
+            f_dict["reason_codes"] = list(dict.fromkeys(
+                list(f_dict.get("reason_codes", [])) +
+                ["RC_CLASS_INITIALIZER_FLOW_UNPROVEN"]
+            ))
         ok_schema, schema_errs = triage_mod.validate_finding_schema_v2_dict(f_dict)
         if not ok_schema:
             tracker.fail_stage(
