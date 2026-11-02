@@ -474,6 +474,15 @@ class PipelineStageTracker:
                 self.started_at_utc = _utc_now_iso()
             self.job_state = "RUNNING"
 
+    def describe_stage_engine(self, stage_number: int, name: str, engine_id: str, function: str) -> None:
+        """Name the engine actually executed; historical restored traces stay intact."""
+        with self._lock:
+            stage=self._stages[int(stage_number)]
+            stage['name']=name
+            stage['name_en']=name
+            stage['engine_id']=engine_id
+            stage['actual_backend_function']=function
+
     def start_stage(
         self,
         stage_number: int,

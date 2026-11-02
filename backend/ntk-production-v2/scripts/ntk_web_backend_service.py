@@ -3,7 +3,7 @@
 NTK Web MVP Backend Service & Local HTTP API Server (`ntk_web_backend_service.py`)
 Architecture: FROZEN_ARCHITECTURE_V1
   GitHub Java Repository -> Local Source Acquisition -> OpenGrep v1.25.0
-  -> IRIS Java AST/Dataflow (OpenJDK 17 JavacTask AST) -> Local Qwen2.5-Coder-0.5B-Instruct LoRA
+  -> Original IRIS/CodeQL (opt-in) or explicit NTK Javac AST fallback -> Local Qwen LoRA
   -> Semantic Evidence Policy -> CWSS V2 Priority -> Alert Verification & False Positive Triage (`FindingSchemaV2`)
   -> Local HTTP API (`127.0.0.1`) -> GretaAI Web UI
 
@@ -40,6 +40,7 @@ import urllib.parse
 import uuid
 import zipfile
 from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -52,6 +53,8 @@ import ntk_pipeline_telemetry_and_datasets as telemetry_mod
 import ntk_cwss_context_api as cwss_context_api
 import ntk_cwss_workflow as cwss_workflow
 import ntk_cwss_reference_scenario_api as cwss_reference_api
+import ntk_original_iris_adapter as original_iris_adapter
+from ntk_local_gpu_lock import gpu_inference_lock
 
 DEFAULT_BASE_MODEL_WSL = (
     "/home/tuankhoa/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-0.5B-Instruct/"
@@ -181,6 +184,8 @@ class NtkWebBackendConfig:
     scoring_policy_version: str = "NTK_EVIDENCE_TRIAGE_V1_CWSS_V2"
     cors_allowed_origins: Tuple[str, ...] = get_configured_cors_allowed_origins()
     keep_model_cached: bool = True
+    original_iris_mode: str = os.environ.get('NTK_ORIGINAL_IRIS_MODE','NTK_JAVAC_AST_FALLBACK')
+    original_iris_cwes: Tuple[int, ...] = tuple(int(c) for c in os.environ.get('NTK_ORIGINAL_IRIS_CWES','22,78,79,89').split(','))
 
 
 DEFAULT_OPENGREP_RULES_YAML: str = """rules:
@@ -1775,7 +1780,7 @@ def run_llm_inference_for_identities(
 
     outputs: List[Tuple[str, float]] = []
     per_identity_latencies_ms: List[float] = []
-    with _MODEL_INFERENCE_LOCK:
+    with _MODEL_INFERENCE_LOCK, gpu_inference_lock():
         tokenizer, model, dev = _get_or_load_model_bundle(cfg)
         load_meta = _CACHED_MODEL_BUNDLE[5] if _CACHED_MODEL_BUNDLE is not None else {}
         first_p = next(model.parameters())
@@ -1936,6 +1941,7 @@ def verify_findings_against_source_tree(
         ast_method_verified = False
         ast_method_span: Optional[List[int]] = None
         raw_og_verified = False
+        raw_iris_verified = False
         failure_reasons: List[str] = []
 
         if not file_exists:
@@ -1970,7 +1976,16 @@ def verify_findings_against_source_tree(
                             break
                     if ast_method_verified:
                         break
-            if not ast_method_verified:
+            iris_paths=f.get('original_iris_evidence',[])
+            for path in iris_paths:
+                location=path.get('callsite_location',{})
+                artifact=Path(path.get('raw_artifact_reference',''))
+                if (path.get('engine_id')=='IRIS_ORIGINAL_CODEQL' and path.get('verification_status')=='SOURCE_BOUND_CODEQL_PATH'
+                    and location.get('file_path')==rel_fp and location.get('line')==line_no and location.get('source_sha256')==file_sha256
+                    and int(path.get('cwe_id',0))==int(f.get('cwe_id',0)) and artifact.is_file()
+                    and shared.sha256_bytes(artifact.read_bytes())==path.get('raw_artifact_sha256')):
+                    raw_iris_verified=True;break
+            if not ast_method_verified and not raw_iris_verified:
                 failure_reasons.append(
                     f"AST_ENCLOSING_METHOD_MISMATCH:method={enclosing_method!r}_not_spanning_line_{line_no}"
                 )
@@ -1979,15 +1994,15 @@ def verify_findings_against_source_tree(
                 if hit_p.endswith(rel_fp) or rel_fp.endswith(hit_p):
                     raw_og_verified = True
                     break
-            if not raw_og_verified:
+            if not raw_og_verified and not raw_iris_verified:
                 failure_reasons.append("RAW_OPENGREP_HIT_NOT_FOUND_AT_FILE_AND_LINE")
 
         finding_ok = (
             file_exists
             and line_in_range
             and code_matches_line
-            and ast_method_verified
-            and raw_og_verified
+            and (ast_method_verified or raw_iris_verified)
+            and (raw_og_verified or raw_iris_verified)
             and len(failure_reasons) == 0
         )
         rec = {
@@ -2009,6 +2024,7 @@ def verify_findings_against_source_tree(
             "ast_enclosing_method_verified": ast_method_verified,
             "ast_method_line_span": ast_method_span,
             "raw_opengrep_hit_verified": raw_og_verified,
+            "raw_original_iris_path_verified": raw_iris_verified,
             "resolved_commit_sha": resolved_commit_sha,
             "verified": finding_ok,
             "status": "SOURCE_PROVENANCE_VERIFIED" if finding_ok else "SOURCE_PROVENANCE_MISMATCH",
@@ -2412,7 +2428,7 @@ def scan_java_sources_and_triage(
       Stage 02: Java source discovery, bounds validation, SHA-256 inventory & optional `/usr/bin/javac` check.
       Stage 03: Real `/usr/local/bin/opengrep scan --json` execution & deterministic candidate extraction.
       Stage 04: Code & API context extraction via OpenJDK 17 `JavacTask.parse()` (`NtkJavacAstExtractor`).
-      Stage 05: IRIS intraprocedural lexical-scope def-use taint & CWE sanitizer analysis (`analyze_java_site_ast_and_taint`).
+      Stage 05: Pinned original IRIS/CodeQL when enabled; explicitly named Javac fallback otherwise.
       Stage 06: Canonical IRIS prompt generation & Local Qwen2.5-0.5B EO06 LoRA inference.
       Stage 07: Neuro-symbolic Evidence Fusion (`FindingCandidate` + `verify_ast_release_evidence`).
       Stage 08: Semantic release checks; CWSS V2 published after source verification.
@@ -2699,6 +2715,7 @@ def scan_java_sources_and_triage(
                     {
                         "ruleset_version": cfg.ruleset_version,
                         "rules_sha256": rules_sha256,
+                        "execution_policy": "EXPLICIT_JAVA_INVENTORY_V2_NO_GIT_IGNORE",
                         "files": batch_rel_sha_pairs,
                     },
                     sort_keys=True,
@@ -2717,23 +2734,10 @@ def scan_java_sources_and_triage(
             else:
                 og_batch_cache_misses += 1
                 og_batches_executed += 1
-                if not was_filtered_or_truncated and total_batches == 1:
-                    cmd_args = [
-                        cfg.opengrep_bin,
-                        "scan",
-                        "--config",
-                        str(effective_rules_path),
-                        "--json",
-                        str(src_path),
-                    ]
-                else:
-                    cmd_args = [
-                        cfg.opengrep_bin,
-                        "scan",
-                        "--config",
-                        str(effective_rules_path),
-                        "--json",
-                    ] + batch_files
+                # Directory scanning applies implicit test/ignore exclusions.
+                # The validated inventory is the declared security scope.
+                cmd_args = [cfg.opengrep_bin, "scan", "--config", str(effective_rules_path),
+                            "--json", "--no-git-ignore"] + batch_files
 
                 og_proc = subprocess.run(
                     cmd_args,
@@ -2760,6 +2764,15 @@ def scan_java_sources_and_triage(
                         ),
                     }
                 b_json = json.loads(og_proc.stdout)
+                scanned_paths={Path(p).resolve() for p in b_json.get('paths',{}).get('scanned',[])}
+                missing_paths=sorted(str(p.resolve()) for p in batch_path_objs if p.resolve() not in scanned_paths)
+                if missing_paths:
+                    code='OPENGREP_JAVA_INVENTORY_NOT_FULLY_SCANNED'
+                    cov_diag['opengrep_missing_inventory_files']=missing_paths
+                    tracker.fail_stage(3,code,'OpenGrep did not scan every declared Java file.')
+                    return {'status':'ERROR','error_code':code,'findings':[],
+                        'error_message':'OpenGrep coverage is incomplete; no safe conclusion is available.',
+                        'coverage_diagnostics':cov_diag,'pipeline_trace':tracker.to_pipeline_trace_dict(coverage_diagnostics=cov_diag)}
                 b_results = b_json.get("results", [])
                 normalized_for_cache: List[Dict[str, Any]] = []
                 for h_item in b_results:
@@ -2804,6 +2817,9 @@ def scan_java_sources_and_triage(
                 },
             )
         og_json = {"results": og_hits, "errors": merged_errors}
+        cov_diag['opengrep_inventory_verified']=True
+        cov_diag['opengrep_java_files_scanned']=len(java_files)
+        cov_diag['opengrep_scope_policy']='EXPLICIT_JAVA_INVENTORY_V2_NO_GIT_IGNORE'
     except subprocess.TimeoutExpired:
         tracker.fail_stage(3, "OPENGREP_TIMEOUT", f"OpenGrep scan timed out after {cfg.subprocess_timeout_sec}s")
         return {
@@ -2934,14 +2950,39 @@ def scan_java_sources_and_triage(
         },
     )
 
-    # Stage 05: IRIS - Program Analysis (Lexical-scope def-use taint & CWE sanitizer analysis + Layer 5 cache)
+    # Stage 05: independent original IRIS plus explicitly identified local AST.
+    tracker.describe_stage_engine(5,'Program analysis — original IRIS / explicit Javac fallback',
+        cfg.original_iris_mode,'ntk_original_iris_adapter.run() / analyze_java_site_ast_and_taint()')
     tracker.start_stage(
         5,
         {
             "candidates_to_analyze": len(candidate_contexts),
-            "analysis_scope": "INTRAPROCEDURAL_DEF_USE_AND_STATIC_FINAL_CONSTANTS",
+            "analysis_scope": ('INTRAPROCEDURAL_DEF_USE_AND_STATIC_FINAL_CONSTANTS'
+                if cfg.original_iris_mode=='NTK_JAVAC_AST_FALLBACK' else 'UPSTREAM_CODEQL_JAVA_SCOPE_PLUS_LOCAL_INTRAPROCEDURAL'),
         },
     )
+    iris_config=dataclass_replace(original_iris_adapter.IrisConfig.from_env(),mode=cfg.original_iris_mode)
+    iris_identity=str((repo_provenance or {}).get('resolved_commit_sha') or (repo_provenance or {}).get('archive_sha256') or '')
+    original_iris=original_iris_adapter.run(effective_rel_root,java_files,iris_identity,
+        model_environment={'NTK_BASE_MODEL_PATH':cfg.base_model_path,'NTK_BEST_ADAPTER_PATH':cfg.best_adapter_path,
+            'NTK_INFERENCE_DEVICE':cfg.device,'JAVA_HOME':str(Path(cfg.javac_bin).parent.parent),'NTK_JAVAC_BIN':cfg.javac_bin},
+        config=iris_config,cwes=cfg.original_iris_cwes,force_fresh=force_fresh_scan)
+    tracker.describe_stage_engine(5,'Program analysis: '+original_iris['engine_mode'],
+        original_iris['engine_mode'],'ntk_original_iris_adapter.run() / analyze_java_site_ast_and_taint()')
+    if cfg.original_iris_mode=='ORIGINAL_IRIS_CODEQL_STRICT' and original_iris['analysis_status']!='COMPLETED':
+        code='ORIGINAL_IRIS_STRICT_REQUIREMENT_NOT_MET'
+        tracker.fail_stage(5,code,'; '.join(original_iris['reason_codes']))
+        return {'status':'ERROR','error_code':code,'error_message':'Original IRIS did not complete in strict mode.',
+            'original_iris':original_iris,'findings':[],'coverage_diagnostics':cov_diag,
+            'pipeline_trace':tracker.to_pipeline_trace_dict(coverage_diagnostics=cov_diag),
+            'actual_gpu_inference_calls':original_iris.get('actual_gpu_inference_calls',0)}
+    if cfg.original_iris_mode!='NTK_JAVAC_AST_FALLBACK':
+        union=original_iris_adapter.merge_callsite_evidence(copy.deepcopy(og_hits_sorted),original_iris.get('paths',[]),effective_rel_root)
+        candidate_contexts=[]
+        for entry in union:
+            hit=entry['hit'];hit['_ntk_detection_engines']=entry['engines'];hit['_ntk_original_iris_paths']=entry['iris_paths']
+            path=str(hit['path']);text=Path(path).read_text(encoding='utf-8',errors='replace')
+            candidate_contexts.append((hit,path,int(hit['start']['line']),hit['check_id'],hit['extra']['lines'].strip(),_infer_cwe_from_rule(hit),text))
     ast_analyses: List[Tuple[Dict[str, Any], int, triage_mod.JavaAstSiteAnalysis]] = []
     llm_requests: List[Tuple[int, Dict[str, str]]] = []
     site_cache_hits = 0
@@ -3028,6 +3069,12 @@ def scan_java_sources_and_triage(
             "candidates_analyzed": len(ast_analyses),
             "iris_site_cache_hits": site_cache_hits,
             "iris_site_cache_misses": site_cache_misses,
+            "original_iris_engine_mode": original_iris['engine_mode'],
+            "original_iris_analysis_status": original_iris['analysis_status'],
+            "original_iris_path_count": len(original_iris.get('paths',[])),
+            "original_iris_upstream_commit": original_iris.get('iris_upstream_commit'),
+            "original_iris_reason_codes": original_iris['reason_codes'],
+            "local_analysis_engine": 'NTK_JAVAC_AST_FALLBACK',
             "verified_taint_flows_detected": sum(1 for _, _, a in ast_analyses if a.taint_reaches_sink),
             "ast_release_candidates_identified": sum(
                 1
@@ -3305,6 +3352,18 @@ def scan_java_sources_and_triage(
             scoring_policy_version=cfg.scoring_policy_version,
         )
         f_dict = f_v2.to_dict()
+        paths=hit.get('_ntk_original_iris_paths',[])
+        f_dict['detection_engines']=hit.get('_ntk_detection_engines',['OPENGREP'])
+        f_dict['original_iris_evidence']=paths
+        f_dict['iris_evidence']['analysis_engine']='NTK_JAVAC_AST_FALLBACK'
+        if 'OPENGREP' not in f_dict['detection_engines']:f_dict['opengrep_evidence']={}
+        safe=f_dict['iris_evidence'].get('flow_proof_state')=='PROVEN_SAFE' or f_dict['fusion_score_breakdown'].get('explicit_ast_release_verified',False)
+        decision,extra_reasons=original_iris_adapter.fuse_decision(f_dict['decision'],safe,paths)
+        if extra_reasons:
+            f_dict['decision']=decision;f_dict['kept_by_pipeline']=decision!='SUPPRESS'
+            f_dict['triage_status']={'REPORT':'LIKELY_TRUE_POSITIVE','REVIEW':'NEEDS_REVIEW','SUPPRESS':'LIKELY_FALSE_POSITIVE'}[decision]
+            f_dict['disposition']='INDEPENDENT_EVIDENCE_POLICY:'+decision
+            f_dict['reason_codes']=list(dict.fromkeys(f_dict['reason_codes']+extra_reasons))
         ok_schema, schema_errs = triage_mod.validate_finding_schema_v2_dict(f_dict)
         if not ok_schema:
             tracker.fail_stage(
@@ -3358,6 +3417,8 @@ def scan_java_sources_and_triage(
         },
     )
     effective_readiness = readiness_status
+    if cfg.original_iris_mode!='NTK_JAVAC_AST_FALLBACK' and original_iris['analysis_status']!='COMPLETED':
+        effective_readiness='ORIGINAL_IRIS_PARTIAL_WITH_EXPLICIT_JAVAC_FALLBACK'
     if not source_prov_check["verified"]:
         effective_readiness = "SOURCE_PROVENANCE_MISMATCH"
 
@@ -3465,6 +3526,15 @@ def scan_java_sources_and_triage(
             },
         },
     }
+    original_gpu_calls = int(original_iris.get('actual_gpu_inference_calls', 0))
+    cache_statistics['layers']['original_iris_codeql'] = {
+        'hits': int(original_iris.get('cache_hit', False)),
+        'actual_gpu_inference_calls': original_gpu_calls,
+        'analysis_status': original_iris['analysis_status'],
+    }
+    # Keep Stage 06's own counter above; scan totals include the independent
+    # upstream model-mining/contextual worker as well.
+    actual_gpu_inference_calls += original_gpu_calls
 
     scoring_summary = {
         "scoring_policy_version": cfg.scoring_policy_version,
@@ -3488,7 +3558,8 @@ def scan_java_sources_and_triage(
     cov_diag["fully_processed_java_files"] = len(java_files)
     cov_diag["excluded_java_files"] = int(cov_diag.get("java_files_skipped", 0))
     cov_diag["per_reason_exclusions"] = cov_diag.get("skipped_files_breakdown", {})
-    cov_diag["opengrep_candidate_count"] = total_cands
+    cov_diag["opengrep_candidate_count"] = len(og_hits_sorted)
+    cov_diag['original_iris_engine_mode']=original_iris['engine_mode']
     cov_diag["unique_api_identities_classified"] = len(dedup_reqs)
     cov_diag["llm_inference_count"] = len(llm_requests)
     cov_diag["actual_gpu_inference_calls"] = actual_gpu_inference_calls
@@ -3508,7 +3579,11 @@ def scan_java_sources_and_triage(
 
     summary_block = {
         "total_scanner_candidates": total_cands,
-        "opengrep_candidate_count": total_cands,
+        "opengrep_candidate_count": len(og_hits_sorted),
+        "original_iris_path_count": len(original_iris.get('paths',[])),
+        "original_iris_gpu_inference_calls": original_gpu_calls,
+        "original_iris_only_candidates": sum(f['detection_engines']==['IRIS_ORIGINAL_CODEQL'] for f in all_findings),
+        "opengrep_iris_overlap_candidates": sum(len(f['detection_engines'])>1 for f in all_findings),
         "unique_api_identities_classified": len(dedup_reqs),
         "llm_inference_count": len(llm_requests),
         "llm_fresh_inference_requests": fresh_inference_requests,
@@ -3563,6 +3638,7 @@ def scan_java_sources_and_triage(
 
     rt_tel = get_model_runtime_telemetry(cfg)
     payload: Dict[str, Any] = {
+        'original_iris':original_iris,
         "status": "OK" if source_prov_check["verified"] else "SOURCE_PROVENANCE_MISMATCH",
         "api_version": "NTK_WEB_BACKEND_API_V2",
         "schema_version": "NTK_WEB_FINDING_SCHEMA_V2",
@@ -3595,7 +3671,7 @@ def scan_java_sources_and_triage(
         "fully_processed_java_files": summary_block["fully_processed_java_files"],
         "excluded_java_files": summary_block["excluded_java_files"],
         "per_reason_exclusions": summary_block["per_reason_exclusions"],
-        "opengrep_candidate_count": total_cands,
+        "opengrep_candidate_count": len(og_hits_sorted),
         "unique_api_identities_classified": len(dedup_reqs),
         "llm_inference_count": len(llm_requests),
         "actual_gpu_inference_calls": actual_gpu_inference_calls,
