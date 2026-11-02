@@ -1010,18 +1010,47 @@ def compute_scoring_summary(
     }
 
 
-def cached_checkout_is_clean(root: Path, git_bin: str = 'git', env=None) -> bool:
-    """Check bytes/untracked files without trusting DrvFS executable-bit metadata.
+class GitCheckoutVerificationError(RuntimeError):
+    """Git status failed before a checkout could be confirmed clean."""
 
-    Uploaded/cloned code is never executed. Commit and per-source SHA checks
-    remain mandatory; this command does not change repository configuration.
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def cached_checkout_is_clean(root: Path, git_bin: str = 'git', env=None) -> bool:
+    """Verify ALL tracked and untracked changes before source inventory reuse.
+
+    DrvFS /mnt/c can make a full Git status slower than ten seconds. Use a
+    bounded, configurable timeout, but NEVER treat timeout/exit failure as a
+    clean checkout. No user project code is executed by this check.
     """
-    result = subprocess.run(
-        [git_bin, '-c', 'core.filemode=false', '-C', str(root),
-         'status', '--porcelain', '--untracked-files=all'],
-        capture_output=True, text=True, env=dict(env or os.environ, GIT_OPTIONAL_LOCKS='0'),
-        timeout=10, check=False)
-    return result.returncode == 0 and not result.stdout.strip()
+    git_env = dict(env or os.environ, GIT_OPTIONAL_LOCKS='0')
+    try:
+        timeout = float(git_env.get('NTK_GIT_STATUS_TIMEOUT_SEC', '120'))
+    except (TypeError, ValueError) as exc:
+        raise GitCheckoutVerificationError('GIT_STATUS_TIMEOUT_CONFIG_INVALID',
+            'NTK_GIT_STATUS_TIMEOUT_SEC must be a number between 10 and 300 seconds') from exc
+    if not 10 <= timeout <= 300:
+        raise GitCheckoutVerificationError('GIT_STATUS_TIMEOUT_CONFIG_INVALID',
+            'NTK_GIT_STATUS_TIMEOUT_SEC must be between 10 and 300 seconds')
+    try:
+        result = subprocess.run(
+            [git_bin, '-c', 'core.filemode=false', '-C', str(root),
+             'status', '--porcelain', '--untracked-files=all'],
+            capture_output=True, text=True, env=git_env,
+            timeout=timeout, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise GitCheckoutVerificationError('GIT_STATUS_VERIFICATION_TIMEOUT',
+            f'Git checkout status could not finish within {timeout:g}s; source integrity NOT verified') from exc
+    except OSError as exc:
+        raise GitCheckoutVerificationError('GIT_STATUS_EXECUTION_FAILED',
+            f'Git checkout status could not run: {type(exc).__name__}') from exc
+    if result.returncode != 0:
+        detail = str(result.stderr or result.stdout or '').strip()[:220]
+        raise GitCheckoutVerificationError('GIT_STATUS_PROCESS_FAILED',
+            f'Git checkout status exited {result.returncode}: {detail}')
+    return not result.stdout.strip()
 
 
 def cached_inventory_matches_sources(root: Path, inventory: Dict[str, Any]) -> bool:
@@ -1216,9 +1245,18 @@ def acquire_github_java_repository(
         sha_matches = True
         if commit_sha and not cand_sha.lower().startswith(str(commit_sha).strip().lower()):
             sha_matches = False
-        if not cached_checkout_is_clean(persistent_checkout_dir, cfg.git_bin, git_env):
+        try:
+            cached_is_clean = cached_checkout_is_clean(persistent_checkout_dir, cfg.git_bin, git_env)
+        except GitCheckoutVerificationError as exc:
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(1, exc.code, str(exc))
+            return {'status': 'ERROR', 'error_code': exc.code, 'error_message': str(exc)}
+        if not cached_is_clean:
             # Preserve a modified cache for inspection instead of deleting it or
             # attributing uncommitted bytes to the recorded Git commit.
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(1, 'CACHED_CHECKOUT_NOT_CLEAN',
+                    'Cached checkout is modified; no source provenance asserted')
             return {'status': 'ERROR', 'error_code': 'CACHED_CHECKOUT_NOT_CLEAN',
                     'error_message': 'Cached checkout is modified/unverifiable; use force_fresh_scan.'}
         if rev_chk.returncode == 0 and len(cand_sha) == 40 and sha_matches:
@@ -1255,7 +1293,13 @@ def acquire_github_java_repository(
                 check=False,
             )
             m_sha = (rev_m.stdout or "").strip()
-            if cached_checkout_is_clean(mirror_path, cfg.git_bin, git_env) and rev_m.returncode == 0 and len(m_sha) == 40 and (
+            # A slow/unverifiable optional mirror must never be declared clean.
+            # We can safely fall back to a fresh remote checkout instead.
+            try:
+                mirror_is_clean = cached_checkout_is_clean(mirror_path, cfg.git_bin, git_env)
+            except GitCheckoutVerificationError:
+                mirror_is_clean = False
+            if mirror_is_clean and rev_m.returncode == 0 and len(m_sha) == 40 and (
                 not commit_sha or m_sha.lower().startswith(str(commit_sha).strip().lower())
             ):
                 tmp_seed = scan_cache.git_checkouts_dir / f"seed_{uuid.uuid4().hex[:10]}"
@@ -1497,8 +1541,20 @@ def acquire_github_java_repository(
     inventory_cache_hit = False
     inv: Optional[Dict[str, Any]] = None
     if is_cached_checkout and not force_fresh_scan:
-        wt_clean = cached_checkout_is_clean(clone_dir, cfg.git_bin, git_env)
-        cached_inv = scan_cache.get_json("source_inventory", inv_cache_key) if wt_clean else None
+        try:
+            wt_clean = cached_checkout_is_clean(clone_dir, cfg.git_bin, git_env)
+        except GitCheckoutVerificationError as exc:
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(2, exc.code, str(exc))
+            return {'status': 'ERROR', 'error_code': exc.code,
+                    'error_message': str(exc), 'repository_provenance': base_provenance}
+        if not wt_clean:
+            message = 'Git checkout has tracked or untracked modifications; source integrity not verified'
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(2, 'CACHED_CHECKOUT_NOT_CLEAN', message)
+            return {'status': 'ERROR', 'error_code': 'CACHED_CHECKOUT_NOT_CLEAN',
+                    'error_message': message, 'repository_provenance': base_provenance}
+        cached_inv = scan_cache.get_json("source_inventory", inv_cache_key)
         if isinstance(cached_inv, dict) and cached_inv.get("status") == "OK":
             rel_list = cached_inv.get("java_files", [])
             if cached_inventory_matches_sources(clone_dir, cached_inv):

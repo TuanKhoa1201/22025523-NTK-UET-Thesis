@@ -28,6 +28,23 @@ def start(runtime, port, check_only=False):
         raise ValueError('Demo runtime must be under this worktree/work; original runtime is never modified')
     config_path = runtime / 'launch-env.json'
     config = json.loads(config_path.read_text())
+    iris_mode = config.get('NTK_ORIGINAL_IRIS_MODE')
+    if iris_mode not in (None, 'NTK_JAVAC_AST_FALLBACK', 'ORIGINAL_IRIS_CODEQL'):
+        raise ValueError('Invalid demo IRIS mode (strict mode is not enabled by this launcher)')
+    if iris_mode == 'ORIGINAL_IRIS_CODEQL':
+        needed = ('NTK_ORIGINAL_IRIS_DIR','NTK_ORIGINAL_IRIS_COMMIT',
+                  'NTK_ORIGINAL_IRIS_CODEQL','NTK_ORIGINAL_IRIS_RUNTIME',
+                  'NTK_ORIGINAL_IRIS_LICENSE_ATTESTATION','NTK_ORIGINAL_IRIS_JAVA_ALL_PACK',
+                  'NTK_ORIGINAL_IRIS_REUSED_DATABASE','NTK_ORIGINAL_IRIS_REUSED_SOURCE_ROOT')
+        if any(not config.get(k) for k in needed):
+            raise ValueError('Original IRIS requires an explicit, complete launch configuration')
+        for k in needed:
+            if k == 'NTK_ORIGINAL_IRIS_COMMIT':
+                continue
+            if not Path(config[k]).exists():
+                raise ValueError('Original IRIS prerequisite missing: ' + k)
+        if runtime == Path(config['NTK_ORIGINAL_IRIS_RUNTIME']).resolve():
+            raise ValueError('Original IRIS execution runtime must remain isolated from demo storage')
     required = ['NTK_STORAGE_DIR','NTK_EXT4_CACHE_DIR','NTK_BASE_MODEL_PATH','NTK_BEST_ADAPTER_PATH','NTK_DATASET_DIR','JAVA_HOME']
     for key in required:
         if not Path(config[key]).is_dir():
@@ -58,6 +75,17 @@ def start(runtime, port, check_only=False):
     if current:
         if current.get('service') != 'ntk-iris-local-sast-backend' or Path(current.get('persistent_storage_dir','')).resolve() != store:
             raise ValueError('Port already serves another backend/runtime; refusing replacement')
+        if config.get('NTK_ORIGINAL_IRIS_MODE'):
+            if not own_live_pid:
+                raise RuntimeError('Cannot verify current backend PID for IRIS-mode comparison')
+            active_env = {}
+            for item in (proc_path/'environ').read_bytes().split(b'\0'):
+                if b'=' in item:
+                    k,v = item.split(b'=',1)
+                    active_env[k.decode(errors='replace')] = v.decode(errors='replace')
+            expected = str(config['NTK_ORIGINAL_IRIS_MODE'])
+            if active_env.get('NTK_ORIGINAL_IRIS_MODE','NTK_JAVAC_AST_FALLBACK') != expected:
+                raise RuntimeError('BACKEND_IRIS_MODE_STALE: restart only the verified NTK backend process')
         print(json.dumps({'status':'EXISTING','port':port,'pid':pid,'storage':str(store),'database_replaced':False}))
         return
     if check_only:
@@ -68,7 +96,22 @@ def start(runtime, port, check_only=False):
         if probe.connect_ex(('127.0.0.1',port)) == 0:
             raise RuntimeError('Port is occupied; refusing to replace its owner')
     env = dict(os.environ)
-    allowed = set(required) | {'NTK_JAVAC_BIN','NTK_INFERENCE_DEVICE','HF_HUB_OFFLINE','TRANSFORMERS_OFFLINE'}
+    allowed = set(required) | {'NTK_JAVAC_BIN','NTK_INFERENCE_DEVICE','HF_HUB_OFFLINE','TRANSFORMERS_OFFLINE'} | {
+        'NTK_INCLUDE_JAVA_BUILD_WRAPPERS',
+        'NTK_ORIGINAL_IRIS_CODEQL',
+        'NTK_ORIGINAL_IRIS_COMMIT',
+        'NTK_ORIGINAL_IRIS_DIR',
+        'NTK_ORIGINAL_IRIS_FULL_SOURCE_MODE',
+        'NTK_ORIGINAL_IRIS_JAVA_ALL_PACK',
+        'NTK_ORIGINAL_IRIS_LICENSE_ATTESTATION',
+        'NTK_ORIGINAL_IRIS_MAX_MODEL_CALLS',
+        'NTK_ORIGINAL_IRIS_MODE',
+        'NTK_ORIGINAL_IRIS_REUSED_DATABASE',
+        'NTK_ORIGINAL_IRIS_REUSED_SOURCE_ROOT',
+        'NTK_ORIGINAL_IRIS_RUNTIME',
+        'NTK_ORIGINAL_IRIS_SKIP_POSTHOC',
+        'NTK_ORIGINAL_IRIS_TIMEOUT_SEC',
+    }
     env.update({key:str(value) for key,value in config.items() if key in allowed})
     env.update(PYTHONDONTWRITEBYTECODE='1',HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1')
     env['PATH'] = str(Path(config['JAVA_HOME'])/'bin') + ':' + env.get('PATH','')
