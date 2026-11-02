@@ -1,0 +1,12 @@
+{
+  "scope": "recorded acceptance executions only",
+  "prototype_worker": 57,
+  "six_case_strict": 57,
+  "single_strict": 14,
+  "spark_v1": 128,
+  "spark_v2": 128,
+  "strict_http": 14,
+  "fresh_demo": 1,
+  "scope_cache_recheck": 0,
+  "recorded_generations_total": 399
+}

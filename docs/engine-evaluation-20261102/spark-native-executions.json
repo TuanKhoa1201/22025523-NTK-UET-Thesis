@@ -1,0 +1,82 @@
+[
+  {
+    "project": "spark_CVE-2016-9177_vuln",
+    "mining_policy": "v1",
+    "native_query_state": "COMPLETED",
+    "status": "IRIS_PARTIAL",
+    "reason_codes": [
+      "LOCAL_MODEL_CALL_BUDGET_EXCEEDED"
+    ],
+    "model_calls": 64,
+    "role_predictions": {
+      "none": 39,
+      "sink": 13,
+      "taint-propagator": 12
+    },
+    "raw_thread_flows": 0,
+    "duration_ms": 411030.513,
+    "sarif_sha256": "38bdfa7fb4e15952676120fac48e2c3e1477e26022c8bab8655622bbd25016d5",
+    "worker_sha256": null,
+    "target_cve_differentiation": "NOT_PROVEN"
+  },
+  {
+    "project": "spark_CVE-2016-9177_fixed",
+    "mining_policy": "v1",
+    "native_query_state": "COMPLETED",
+    "status": "IRIS_PARTIAL",
+    "reason_codes": [
+      "LOCAL_MODEL_CALL_BUDGET_EXCEEDED"
+    ],
+    "model_calls": 64,
+    "role_predictions": {
+      "none": 38,
+      "sink": 14,
+      "taint-propagator": 12
+    },
+    "raw_thread_flows": 0,
+    "duration_ms": 401742.153,
+    "sarif_sha256": "abffeeccfec60acf3d9e32a7dd21816b6928279e0e6c806a973dc0ecc6293f01",
+    "worker_sha256": null,
+    "target_cve_differentiation": "NOT_PROVEN"
+  },
+  {
+    "project": "spark_CVE-2016-9177_vuln",
+    "mining_policy": "v2",
+    "native_query_state": "COMPLETED",
+    "status": "IRIS_PARTIAL",
+    "reason_codes": [
+      "LOCAL_MODEL_CALL_BUDGET_EXCEEDED"
+    ],
+    "model_calls": 64,
+    "role_predictions": {
+      "none": 44,
+      "source": 18,
+      "sink": 2
+    },
+    "raw_thread_flows": 0,
+    "duration_ms": 414155.581,
+    "sarif_sha256": "5c16b1c0cc08b153b86e9464a3f2802fa717f8d51a1217225483bdd6ee4a0082",
+    "worker_sha256": "cff39354c7b99849b06adcd9dd1f889093618b30715a8c1681382dc62400ba75",
+    "target_cve_differentiation": "NOT_PROVEN"
+  },
+  {
+    "project": "spark_CVE-2016-9177_fixed",
+    "mining_policy": "v2",
+    "native_query_state": "COMPLETED",
+    "status": "IRIS_PARTIAL",
+    "reason_codes": [
+      "LOCAL_MODEL_CALL_BUDGET_EXCEEDED"
+    ],
+    "model_calls": 64,
+    "role_predictions": {
+      "none": 44,
+      "source": 18,
+      "sink": 2
+    },
+    "raw_thread_flows": 0,
+    "duration_ms": 380839.335,
+    "sarif_sha256": "f54ecee441afb95f56e03362fa2ffc46be2bb74da29c0b5c024434a569223688",
+    "worker_sha256": "cff39354c7b99849b06adcd9dd1f889093618b30715a8c1681382dc62400ba75",
+    "target_cve_differentiation": "NOT_PROVEN"
+  }
+]

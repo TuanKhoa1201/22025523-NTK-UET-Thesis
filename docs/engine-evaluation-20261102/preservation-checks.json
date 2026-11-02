@@ -1,0 +1,18 @@
+{
+  "old_scan_findings": 10,
+  "old_triage": {
+    "REPORT": 2,
+    "REVIEW": 6,
+    "SUPPRESS": 2
+  },
+  "old_scan_sha256": "70645502e5b86ba59231340a94c540c29c424c119c6650c6d579023b3050e891",
+  "old_scan_unchanged": true,
+  "adapter_sha256": "176b9b32ada029ba38a561b0937ccb75cb18c720979dbb58824fdcc112d2ce84",
+  "frozen_reports_unchanged": true,
+  "old_target_scenario_scores": {
+    "FINDING-006-CWE078-doPost-L69": 84.0,
+    "FINDING-008-CWE079-doPost-L65": 0.0,
+    "FINDING-009-CWE089-doPost-L58": 86.0,
+    "FINDING-010-CWE079-doPost-L54": 0.0
+  }
+}

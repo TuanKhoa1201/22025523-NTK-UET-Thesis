@@ -1,0 +1,11 @@
+{
+  "scan_id": "SCAN-20261102044459-B082A2",
+  "coverage_status": "PARTIAL_BOUNDED",
+  "source_identity": "f40c618c5a709afce350ef06ed2899c85cf586e9",
+  "repository_inventory_complete": false,
+  "repository_total_java_files": null,
+  "inventory_count_scope": "MATERIALIZED_SELECTED_CHECKOUT_ONLY",
+  "actual_gpu_inference_calls": 0,
+  "original_iris_cache_hit": true,
+  "engine_status": "COMPLETED"
+}

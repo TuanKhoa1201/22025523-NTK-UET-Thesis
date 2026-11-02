@@ -1,0 +1,23 @@
+{
+  "unit": "target-CWE finding; blocker counts overlap, not unique cases",
+  "review_cases": 30,
+  "target_review_findings": 30,
+  "counts": {
+    "89": {
+      "RC_ARRAY_STATE_UNPROVEN_AFTER_MUTATION_OR_ESCAPE": 2,
+      "RC_HELPER_RETURN_UNPROVEN": 5,
+      "RC_INSUFFICIENT_TAINT_TRACE_INTRAPROCEDURAL_LIMIT": 1
+    },
+    "22": {
+      "RC_INSUFFICIENT_TAINT_TRACE_INTRAPROCEDURAL_LIMIT": 2,
+      "RC_HELPER_RETURN_UNPROVEN": 4
+    },
+    "79": {
+      "RC_HELPER_RETURN_UNPROVEN": 6
+    },
+    "78": {
+      "RC_ARRAY_STATE_UNPROVEN_AFTER_MUTATION_OR_ESCAPE": 3,
+      "RC_HELPER_RETURN_UNPROVEN": 7
+    }
+  }
+}

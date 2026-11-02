@@ -1,0 +1,41 @@
+{
+  "analysis_source_commit": "5f6c8b584327547269a1f4c11236c85f04ba0882",
+  "scan_id": "SCAN-20261102043446-FCD123",
+  "source_commit": "f40c618c5a709afce350ef06ed2899c85cf586e9",
+  "actual_source_scope": "ONE_SELECTED_REGRESSION_CASE_NOT_FULL_BENCHMARK",
+  "api_coverage_label_before_scope_fix": "FULL_SOURCE_COVERAGE",
+  "iris_cwe_scope": [
+    78
+  ],
+  "original_iris_upstream": "3a12f45750f58135bcc58c7fdf4c20786b600e31",
+  "codeql_version": "2.25.6",
+  "original_iris_status": "COMPLETED",
+  "path_count": 1,
+  "actual_gpu_calls": 14,
+  "original_worker_gpu_calls": 12,
+  "stage06_gpu_calls": 2,
+  "cloud_calls_enabled": false,
+  "local_files_only": true,
+  "input_device": "cuda:0",
+  "output_device": "cuda:0",
+  "duration_ms": 304301.369,
+  "original_iris_duration_ms": 282595.66,
+  "findings": [
+    {
+      "finding_id": "FINDING-001-CWE078-doPost-L69",
+      "decision": "REPORT",
+      "engines": [
+        "OPENGREP"
+      ]
+    },
+    {
+      "finding_id": "FINDING-002-CWE078-doPost-L66",
+      "decision": "REVIEW",
+      "engines": [
+        "IRIS_ORIGINAL_CODEQL"
+      ]
+    }
+  ],
+  "fully_completed_stages": 10,
+  "model_adapter_sha256": "176b9b32ada029ba38a561b0937ccb75cb18c720979dbb58824fdcc112d2ce84"
+}
