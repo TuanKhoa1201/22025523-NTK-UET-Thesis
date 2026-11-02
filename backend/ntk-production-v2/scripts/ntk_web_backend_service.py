@@ -186,6 +186,7 @@ class NtkWebBackendConfig:
     keep_model_cached: bool = True
     original_iris_mode: str = os.environ.get('NTK_ORIGINAL_IRIS_MODE','NTK_JAVAC_AST_FALLBACK')
     original_iris_cwes: Tuple[int, ...] = tuple(int(c) for c in os.environ.get('NTK_ORIGINAL_IRIS_CWES','22,78,79,89').split(','))
+    include_java_build_wrappers: bool = os.environ.get('NTK_INCLUDE_JAVA_BUILD_WRAPPERS','0')=='1'
 
 
 DEFAULT_OPENGREP_RULES_YAML: str = """rules:
@@ -621,6 +622,7 @@ def discover_and_verify_java_source_inventory(
     layout_info = detect_java_project_layout(resolved_ws_root if resolved_ws_root.is_dir() else scan_root.parent)
 
     all_candidate_paths: List[Path] = []
+    skipped_directories = _SKIP_BUILD_AND_VCS_DIRS - ({'.mvn'} if cfg.include_java_build_wrappers else set())
     non_java_files_ignored = 0
     skipped_build_dir_count = 0
     if scan_root.is_file():
@@ -633,7 +635,7 @@ def discover_and_verify_java_source_inventory(
             if not p.is_file():
                 continue
             if p.suffix != ".java":
-                if not any(part in _SKIP_BUILD_AND_VCS_DIRS for part in p.relative_to(resolved_ws_root).parts[:-1]):
+                if not any(part in skipped_directories for part in p.relative_to(resolved_ws_root).parts[:-1]):
                     non_java_files_ignored += 1
                 continue
             rp = p.resolve()
@@ -644,7 +646,7 @@ def discover_and_verify_java_source_inventory(
                     "error_message": f"File {p} escaped workspace root",
                 }
             rel_parts = rp.relative_to(resolved_ws_root).parts[:-1]
-            if any(part in _SKIP_BUILD_AND_VCS_DIRS for part in rel_parts):
+            if any(part in skipped_directories for part in rel_parts):
                 skipped_build_dir_count += 1
                 continue
             all_candidate_paths.append(rp)
@@ -3660,6 +3662,13 @@ def scan_java_sources_and_triage(
     rt_tel = get_model_runtime_telemetry(cfg)
     payload: Dict[str, Any] = {
         'original_iris':original_iris,
+        'engine_coverage_contract': {
+            'full_java_source_inventory': 'PASS' if not cov_diag.get('opengrep_missing_inventory_files') and cov_status_canonical=='FULL_SOURCE_COVERAGE' else 'PARTIAL',
+            'full_ntk_engine_execution': 'PASS' if original_iris['analysis_status']=='COMPLETED' and cov_status_canonical=='FULL_SOURCE_COVERAGE' else 'PARTIAL',
+            'complete_semantic_dataflow_coverage': 'NOT_PROVEN',
+            'actual_program_analysis_mode': original_iris['engine_mode'],
+            'reason_codes': original_iris['reason_codes'],
+        },
         "status": "OK" if source_prov_check["verified"] else "SOURCE_PROVENANCE_MISMATCH",
         "api_version": "NTK_WEB_BACKEND_API_V2",
         "schema_version": "NTK_WEB_FINDING_SCHEMA_V2",
@@ -4445,6 +4454,8 @@ class NtkBackendState:
                 finding, scan_id, complete_snapshot, cwss_workflow.complete.selection(), attestation)
             if snapshot.get('inference_version') == cwss_workflow.automatic_v2.graph.VERSION:
                 finding['cwss'] = published_complete['assessment']
+        from ntk_scan_aggregates import summarize
+        record['full_scan_aggregates']=summarize(record['findings'])
         record["restoration_status"] = "LIVE_OR_FULL_PERSISTED_SCAN"
         record["has_full_scan_findings_payload"] = True
         if isinstance(record.get("pipeline_trace"), dict):

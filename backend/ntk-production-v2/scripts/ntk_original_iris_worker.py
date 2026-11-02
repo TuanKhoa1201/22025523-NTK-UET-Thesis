@@ -24,6 +24,14 @@ class ContractError(RuntimeError):
     pass
 
 
+def codeql_launcher(real_cli,full_source_mode=False):
+    launcher='#!'+sys.executable+'\nimport os,sys\na=sys.argv[1:]\n'
+    if full_source_mode:launcher+='a=[x for x in a if x != "--rerun"]\n'
+    launcher+="if a[:2] in [['query','run'],['database','analyze'],['database','create']]:\n"
+    launcher+=" i=a.index('--') if '--' in a else len(a)\n a[i:i]=[v for v in ['--threads=1','--ram=2048'] if not any(x==v.split('=')[0] or x.startswith(v.split('=')[0]+'=') for x in a[:i])]\n"
+    return launcher+'os.execv('+repr(real_cli)+',['+repr(real_cli)+']+a)\n'
+
+
 def mining_frontier_order(identity):
     """Spend bounded mining on framework boundaries before general utilities.
 
@@ -79,10 +87,7 @@ def main(request_file):
     metadata.write_text('project_slug,file,class,method,name\n')
     wrapper=workspace/'codeql-tools';wrapper.mkdir(exist_ok=True);(wrapper/'qlpacks').mkdir(exist_ok=True)
     real_cli=request['codeql_bin']
-    launcher='#!'+sys.executable+'\nimport os,sys\na=sys.argv[1:]\n'
-    launcher+="if a[:2] in [['query','run'],['database','analyze'],['database','create']]:\n"
-    launcher+=" i=a.index('--') if '--' in a else len(a)\n a[i:i]=['--threads=1','--ram=2048']\n"
-    launcher+='os.execv('+repr(real_cli)+',['+repr(real_cli)+']+a)\n'
+    launcher=codeql_launcher(real_cli,request.get('full_source_mode',False))
     (wrapper/'codeql').write_text(launcher);(wrapper/'codeql').chmod(0o755)
     config.CODEQL_DIR=str(wrapper);config.CODEQL_DB_PATH=str(databases)
     config.PROJECT_SOURCE_CODE_DIR=str(sources);config.PACKAGE_MODULES_PATH=str(packages)
@@ -98,6 +103,10 @@ def main(request_file):
     def record_call(value):
         model_calls.append(value)
         with (workspace/'model-calls.jsonl').open('a') as handle:handle.write(json.dumps(value)+'\n')
+    mining=None
+    if request.get('full_source_mode'):
+        from ntk_iris_full_mining import MiningSession
+        mining=MiningSession(request,cfg,record_call)
     class LocalModel:
         cwe=0
         api_rows={}
@@ -183,6 +192,10 @@ def main(request_file):
                 data['sink_args']=args;specs.append(data)
             return json.dumps(specs)
         def predict(self,prompts,batch_size=0,**kwargs):
+            if mining is not None and batch_size and prompts:
+                system=prompts[0][0]['content']
+                if '"tainted_input"' in system:return mining.parameters(prompts,self.function_rows,self.cwe)
+                if '"is_vulnerable"' not in system:return mining.api(prompts,self.cwe,self.api_rows)
             return [self.one(p) for p in prompts] if batch_size else self.one(prompts)
     model=LocalModel();iris.LLM.get_llm=staticmethod(lambda **kwargs:model)
     for cwe in request['cwes']:
@@ -208,10 +221,20 @@ def main(request_file):
                                 rows=list(csv.DictReader(handle))
                             model.api_rows={','.join(row[k] for k in ['package','clazz','func','full_signature']):
                                 dict(zip(['package','class','method','signature'],[row[k] for k in ['package','clazz','func','full_signature']])) for row in rows}
+                            if mining is not None:mining.prepare(pipeline,cwe,rows)
                         if _name=='query_gpt_for_func_param_src':
                             with open(pipeline.source_func_param_candidates_path) as handle:
                                 model.function_rows={tuple(row[k] for k in ['package','clazz','func','full_signature']):row for row in csv.DictReader(handle)}
-                        return _fn(*args,**kwargs)
+                        value=_fn(*args,**kwargs)
+                        if mining is not None and _name=='build_project_specific_query':
+                            from ntk_iris_codegen_extension import extend_generated_pack
+                            pipeline.ntk_standard_proof_query=extend_generated_pack(pipeline,int(cwe),upstream)
+                        if mining is not None and _name=='find_vulnerability' and Path(pipeline.query_output_result_sarif_path).exists():
+                            proof=pipeline.ntk_standard_proof_query;out=proof.with_suffix('.bqrs')
+                            subprocess.run([str(wrapper/'codeql'),'query','run',str(proof),'--database='+request['database'],
+                                '--output='+str(out)],check=True)
+                            subprocess.run([real_cli,'bqrs','decode',str(out),'--format=csv','--output='+str(proof.with_suffix('.csv'))],check=True)
+                        return value
                     except BaseException:
                         status='FAILED';raise
                     finally:stages.append({'cwe':cwe,'stage':_name,'state':status,'duration_ms':round((time.monotonic()-t)*1000,3)})
@@ -223,6 +246,9 @@ def main(request_file):
         sarif=Path(getattr(locals().get('pipeline'),'query_output_result_sarif_path',workspace/'missing'))
         pipeline_results.append({'cwe_id':cwe,'query_id':query,'analysis_status':state if sarif.is_file() else 'FAILED',
             'sarif':str(sarif),'duration_ms':round((time.monotonic()-started)*1000,3)})
+        proof=getattr(locals().get('pipeline'),'ntk_standard_proof_query',None)
+        if proof and proof.with_suffix('.csv').is_file():pipeline_results[-1]['standard_proof_csv']=str(proof.with_suffix('.csv'))
+    if mining is not None:blocked.extend(mining.issues)
     telemetry={**service._LAST_INFERENCE_TELEMETRY,**service.get_model_runtime_telemetry(cfg)}
     result={'engine_id':'IRIS_ORIGINAL_CODEQL','iris_upstream_commit':commit,'pipelines':pipeline_results,
         'stages':stages,'model_calls':model_calls,'model_telemetry':telemetry,'reason_codes':sorted(set(blocked)),
@@ -230,6 +256,10 @@ def main(request_file):
         'compatibility_extensions':['isolated_paths','pinned_existing_ql_packs','canonical_api_role_protocol','strict_contextual_validation','bounded_framework_frontier_scheduling'],
         'analysis_status':'IRIS_PARTIAL' if blocked or any(p['analysis_status']!='COMPLETED' for p in pipeline_results) else 'COMPLETED',
         'worker_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    if mining is not None:
+        result.update(actual_gpu_generation_batches=mining.batches,mining_coverage=mining.stats,
+            input_tokens=mining.total_input_tokens,generated_tokens=mining.total_output_tokens,
+            library_models_hash=mining.models.hash,optional_posthoc_status='DISABLED_UNVALIDATED_TASK' if request.get('skip_posthoc') else 'ATTEMPTED')
     Path(request['result_file']).write_text(json.dumps(result,indent=2)+'\n')
 
 

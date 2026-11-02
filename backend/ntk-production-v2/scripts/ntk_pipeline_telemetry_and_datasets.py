@@ -2849,6 +2849,8 @@ class NtkScanResultIndex:
             "summary": summary_block,
             "links": links,
         }
+        if isinstance(rec.get('full_scan_aggregates'),dict):
+            summary_payload['full_scan_aggregates']=rec['full_scan_aggregates']
         if isinstance(rec.get("restoration_metadata"), dict):
             summary_payload["restoration_metadata"] = dict(rec["restoration_metadata"])
         elif isinstance((eff_trace or {}).get("restoration_metadata"), dict):

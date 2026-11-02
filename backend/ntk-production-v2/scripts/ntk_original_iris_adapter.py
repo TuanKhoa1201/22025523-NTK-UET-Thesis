@@ -43,13 +43,23 @@ class IrisConfig:
     max_model_calls:int=64
     licensed_source_attestation:str=''
     skip_posthoc:bool=False
+    full_source_mode:bool=False
+    java_all_pack:str=''
+    reused_database:str=''
+    reused_source_root:str=''
     @classmethod
     def from_env(cls):
         return cls(mode=os.environ.get('NTK_ORIGINAL_IRIS_MODE','NTK_JAVAC_AST_FALLBACK'),
             upstream_dir=os.environ.get('NTK_ORIGINAL_IRIS_DIR',''),upstream_commit=os.environ.get('NTK_ORIGINAL_IRIS_COMMIT',''),
             codeql_bin=os.environ.get('NTK_ORIGINAL_IRIS_CODEQL',''),runtime_root=os.environ.get('NTK_ORIGINAL_IRIS_RUNTIME',''),
             licensed_source_attestation=os.environ.get('NTK_ORIGINAL_IRIS_LICENSE_ATTESTATION',''),
-            skip_posthoc=os.environ.get('NTK_ORIGINAL_IRIS_SKIP_POSTHOC','0')=='1')
+            skip_posthoc=os.environ.get('NTK_ORIGINAL_IRIS_SKIP_POSTHOC','0')=='1',
+            full_source_mode=os.environ.get('NTK_ORIGINAL_IRIS_FULL_SOURCE_MODE','0')=='1',
+            java_all_pack=os.environ.get('NTK_ORIGINAL_IRIS_JAVA_ALL_PACK',''),
+            reused_database=os.environ.get('NTK_ORIGINAL_IRIS_REUSED_DATABASE',''),
+            reused_source_root=os.environ.get('NTK_ORIGINAL_IRIS_REUSED_SOURCE_ROOT',''),
+            timeout_sec=float(os.environ.get('NTK_ORIGINAL_IRIS_TIMEOUT_SEC','600')),
+            max_model_calls=int(os.environ.get('NTK_ORIGINAL_IRIS_MAX_MODEL_CALLS','64')))
 
 
 def failure(code,mode='IRIS_UNAVAILABLE',detail=''):
@@ -75,6 +85,15 @@ def verify_license_attestation(filename,source_identity):
 
 def snapshot_sources(source_root,java_files,java_home='/usr/lib/jvm/java-17-openjdk-amd64'):
     root=Path(source_root).resolve();manifest={};packages=set();total=0
+    java_files=list(java_files)
+    for file in java_files:
+        path=Path(file)
+        if path.is_symlink():raise ValueError('IRIS_SOURCE_SYMLINK_REJECTED')
+        if not path.resolve().is_relative_to(root) or path.suffix!='.java':
+            raise ValueError('IRIS_SOURCE_SCOPE_ESCAPE')
+    import ntk_alert_verification as verification
+    verification.prewarm_javac_ast_cache([Path(p) for p in java_files],
+        java_bin=str(Path(java_home)/'bin/java'),javac_bin=str(Path(java_home)/'bin/javac'))
     for file in java_files:
         path=Path(file)
         if path.is_symlink():raise ValueError('IRIS_SOURCE_SYMLINK_REJECTED')
@@ -88,6 +107,34 @@ def snapshot_sources(source_root,java_files,java_home='/usr/lib/jvm/java-17-open
         if not ast or ast.get('parse_success') is not True:raise ValueError('IRIS_SOURCE_PARSE_NOT_VERIFIED')
         if ast.get('package_name'):packages.add(ast['package_name'])
     return manifest,sorted(packages),total
+
+
+def verify_public_source_binding(filename,source_identity,source_root,manifest):
+    """Verify reviewed license bytes and source bytes against a pinned Git tree.
+
+    This proves the attested input binding, not a legal opinion or that an
+    arbitrary GitHub URL makes a private source public.
+    """
+    entries=json.loads(Path(filename).read_text())['sources']
+    entry=next(e for e in entries if e.get('source_identity')==source_identity)
+    checkout=Path(entry['public_checkout_path']).resolve();commit=entry['resolved_commit']
+    if not re.fullmatch('[0-9a-f]{40}',commit):raise ValueError('LICENSE_COMMIT_REQUIRED')
+    def git(*args):
+        return subprocess.run(['git','-C',str(checkout),*args],capture_output=True,timeout=30,check=True).stdout
+    remote=git('remote','get-url','origin').decode().strip().removesuffix('.git')
+    if remote!=entry['upstream_url'].removesuffix('.git'):raise ValueError('LICENSE_REMOTE_MISMATCH')
+    license_bytes=git('show',commit+':'+entry['license_file'])
+    if digest(license_bytes)!=entry['license_sha256']:raise ValueError('LICENSE_BYTES_MISMATCH')
+    tree={}
+    for line in git('ls-tree','-r','-z',commit).split(b'\0'):
+        if not line:continue
+        meta,name=line.split(b'\t',1);mode,kind,sha=meta.split()
+        if kind==b'blob' and mode!=b'120000':tree[name.decode()]=sha.decode()
+    for relative,meta in manifest.items():
+        data=(Path(source_root)/relative).read_bytes()
+        blob=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+        if digest(data)!=meta['sha256'] or tree.get(relative)!=blob:raise ValueError('LICENSE_SOURCE_GIT_BLOB_MISMATCH')
+    return {'resolved_commit':commit,'license_sha256':digest(license_bytes),'java_git_blobs_verified':len(manifest)}
 
 
 def _location(location,source_root,manifest):
@@ -211,6 +258,36 @@ def _stop(process):
         except subprocess.TimeoutExpired:os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=3)
 
 
+def attach_standard_flow_context(paths,proof_csv,source_root,manifest):
+    """Require both endpoints of an independently executed stock CWE flow.
+
+    No result is not a safe proof. This only corroborates existing upstream
+    thread flows; it cannot manufacture a new path or a suppression.
+    """
+    proof=Path(proof_csv);pairs=set()
+    def location(row,prefix):
+        file=Path(row[prefix+'_file']).resolve()
+        return _location({'physicalLocation':{'artifactLocation':{'uri':file.as_uri()},
+            'region':{'startLine':int(row[prefix+'_line']),'startColumn':int(row[prefix+'_column'])}}},source_root,manifest)
+    def endpoint(loc):return (loc['file_path'],loc['line'],loc['column'])
+    with proof.open() as handle:
+        for row in csv.DictReader(handle):pairs.add((endpoint(location(row,'source')),endpoint(location(row,'sink'))))
+    for path in paths:
+        if (endpoint(path['source_location']),endpoint(path['sink_location'])) in pairs:
+            path.update(cwe_context_verified=True,cwe_context_policy='INDEPENDENT_STOCK_CODEQL_CWE_FLOW_V1',
+                contextual_proof_artifact=str(proof),contextual_proof_sha256=digest(proof.read_bytes()))
+
+
+def reusable_execution(worker,reasons,full_source_mode):
+    if not reasons:return True
+    # Reuse a completed, content-bound query execution with the SAME explicit
+    # contract limitations. This never promotes PARTIAL to COMPLETED. Budget,
+    # extraction, query, binding and cancellation failures are not reusable.
+    allowed={'API_ROLE_CONTRACT_UNSUPPORTED','NATIVE_PARAMETER_CONTRACT_UNSUPPORTED'}
+    return (full_source_mode and bool(worker.get('pipelines')) and set(reasons)<=allowed
+        and all(p.get('analysis_status')=='COMPLETED' for p in worker['pipelines']))
+
+
 def run(source_root,java_files,source_identity,model_environment=None,config=None,cwes=(22,78,79,89),cancel_event=None,force_fresh=False):
     cfg=config or IrisConfig.from_env();started=time.monotonic()
     if cfg.mode not in MODES:return failure('INVALID_IRIS_ENGINE_MODE','IRIS_FAILED')
@@ -230,13 +307,17 @@ def run(source_root,java_files,source_identity,model_environment=None,config=Non
         manifest,packages,total=snapshot_sources(source_root,java_files,cfg.java_home)
         if not manifest:raise ValueError('IRIS_NO_JAVA_SOURCE')
         if len(manifest)>cfg.max_java_files or total>cfg.max_source_bytes:raise ValueError('IRIS_SOURCE_RESOURCE_LIMIT')
+        license_binding=None
+        if cfg.full_source_mode:
+            license_binding=verify_public_source_binding(cfg.licensed_source_attestation,source_identity,source_root,manifest)
         env_model=model_environment or {}
         model_files={}
         for key,filename in [('NTK_BEST_ADAPTER_PATH','adapter_model.safetensors'),('NTK_BASE_MODEL_PATH','config.json')]:
             if env_model.get(key):
                 directory=Path(env_model[key]);files=[directory/filename]
                 if key=='NTK_BASE_MODEL_PATH':files+=sorted(directory.glob('*.safetensors'))
-                model_files[key]=digest({f.name:digest(f.read_bytes()) for f in files})
+                from ntk_engine_cache import file_hash
+                model_files[key]=digest({f.name:file_hash(f) for f in files})
         templates={str(p.relative_to(upstream)):digest(p.read_bytes()) for p in (upstream/'src').rglob('*') if p.suffix in ['.py','.ql','.qll']}
         identity={'adapter_version':ADAPTER_VERSION,'source_identity':source_identity,'source_manifest':manifest,'upstream_commit':head,
             'codeql_version':cli_version['version'],'codeql_build':cli_version.get('sha'),'upstream_templates':digest(templates),
@@ -244,23 +325,74 @@ def run(source_root,java_files,source_identity,model_environment=None,config=Non
             'worker_hash':digest(WORKER.read_bytes()),'adapter_hash':digest(Path(__file__).read_bytes()),
             'prompt_code_hash':digest(Path(__file__).with_name('ntk_iris_shared.py').read_bytes()),
             'build_mode':'NONE_JAVA_ONLY_NO_BUILD_SCRIPTS','policy':asdict(cfg)}
+        if cfg.full_source_mode:
+            from ntk_engine_cache import file_hash
+            from ntk_codeql_models import LibraryModels
+            identity['extension_hashes']={name:file_hash(Path(__file__).with_name(name+'.py')) for name in
+                ['ntk_engine_cache','ntk_codeql_models','ntk_iris_codegen_extension','ntk_iris_full_mining','ntk_local_role_batch']}
+            identity['library_models_hash']=LibraryModels(cfg.java_all_pack).hash
+            identity['java_all_pack_content_hash']=digest({p.relative_to(cfg.java_all_pack).as_posix():file_hash(p)
+                for p in Path(cfg.java_all_pack).rglob('*') if p.is_file() and p.suffix in ['.ql','.qll','.yml']})
+            identity['codeql_executable_hash']=file_hash(cfg.codeql_bin)
         key=digest(identity);runtime.mkdir(parents=True,exist_ok=True)
         cache=runtime/'bound-cache'/key/'result.json'
         if not force_fresh and cache.exists():
             entry=json.loads(cache.read_text());result=entry['result']
             if entry['identity']!=identity or digest(result)!=entry['result_sha256']:raise ValueError('IRIS_CACHE_IDENTITY_OR_PAYLOAD_MISMATCH')
+            artifacts={}
+            for path in result.get('paths',[]):
+                artifacts[path['raw_artifact_reference']]=path['raw_artifact_sha256']
+                if path.get('contextual_proof_artifact'):
+                    artifacts[path['contextual_proof_artifact']]=path['contextual_proof_sha256']
+            for filename,expected_sha in artifacts.items():
+                if digest(Path(filename).read_bytes())!=expected_sha:raise ValueError('IRIS_CACHE_PROOF_ARTIFACT_CHANGED')
+            if cfg.full_source_mode and cfg.reused_database:
+                from ntk_engine_cache import verify_source_archive
+                if verify_source_archive(cfg.reused_database,cfg.reused_source_root,manifest)!=result['database_receipt']['archive_verification']:
+                    raise ValueError('IRIS_CACHE_DATABASE_ARCHIVE_CHANGED')
+            if cfg.full_source_mode:
+                result={**result,'execution_origin':'VALIDATED_CACHE_REUSE','cached_execution_duration_ms':result['duration_ms'],
+                    'model_telemetry_from_cached_execution':True,'commands_from_cached_execution':True,
+                    'current_cwe_query_pipeline_invocations':0}
             result={**result,'cache_hit':True,'actual_gpu_inference_calls':0,'duration_ms':round((time.monotonic()-started)*1000,3)}
             return result
         work=runtime/'runs'/(key[:16]+'-'+str(time.time_ns()));work.mkdir(parents=True)
-        staged=work/'java-source';staged.mkdir()
-        for relative,meta in manifest.items():
-            target=staged/relative;target.parent.mkdir(parents=True,exist_ok=True);data=(Path(source_root)/relative).read_bytes()
-            if digest(data)!=meta['sha256']:raise ValueError('IRIS_SOURCE_CHANGED_DURING_SNAPSHOT')
-            target.write_bytes(data)
+        staged=work/'java-source';database_path=work/'database';database_receipt=None
+        env=dict(os.environ,HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',JAVA_HOME=cfg.java_home,
+            LGTM_INDEX_XML_MODE='none',LGTM_INDEX_PROPERTIES_FILES='false',PYTHONDONTWRITEBYTECODE='1')
+        env['PATH']=cfg.java_home+'/bin:/usr/bin:/bin'
+        if cfg.full_source_mode:
+            from ntk_engine_cache import database,verify_source_archive
+            if cfg.reused_database:
+                import yaml
+                database_path=Path(cfg.reused_database).resolve();staged=Path(cfg.reused_source_root).resolve()
+                metadata=yaml.safe_load((database_path/'codeql-database.yml').read_text())
+                if str(metadata.get('creationMetadata',{}).get('cliVersion'))!=cli_version['version']:
+                    raise ValueError('REUSED_DATABASE_CODEQL_VERSION_MISMATCH')
+                if (metadata.get('primaryLanguage')!='java' or metadata.get('finalised') is not True
+                    or metadata.get('buildMode')!='none' or Path(metadata.get('sourceLocationPrefix','')).resolve()!=staged):
+                    raise ValueError('REUSED_DATABASE_EXTRACTION_METADATA_MISMATCH')
+                verified=verify_source_archive(database_path,staged,manifest)
+                for relative,meta in manifest.items():
+                    if digest((staged/relative).read_bytes())!=meta['sha256']:raise ValueError('REUSED_DATABASE_STAGED_SOURCE_CHANGED')
+                database_receipt={'database_id':digest(verified),'archive_verification':verified,'cache_hit':True,
+                    'actual_creation_duration_ms':0,'reuse_mode':'EXPLICIT_VERIFIED_PREEXISTING_DATABASE_NOT_COLD_EXTRACTION'}
+            else:
+                database_path,staged,database_receipt=database(runtime/'persistent-cache',source_root,manifest,identity,
+                    cfg.codeql_bin,cfg.java_home,env,cfg.timeout_sec,cfg.max_rss_bytes,cancel_event)
+        else:
+            staged.mkdir()
+            for relative,meta in manifest.items():
+                target=staged/relative;target.parent.mkdir(parents=True,exist_ok=True);data=(Path(source_root)/relative).read_bytes()
+                if digest(data)!=meta['sha256']:raise ValueError('IRIS_SOURCE_CHANGED_DURING_SNAPSHOT')
+                target.write_bytes(data)
         request={'workspace':str(work/'upstream-execution'),'source_root':str(staged),'source_hash':digest(manifest),
-            'upstream_dir':str(upstream),'upstream_commit':head,'database':str(work/'database'),'packages':packages,
+            'upstream_dir':str(upstream),'upstream_commit':head,'database':str(database_path),'packages':packages,
             'codeql_bin':cfg.codeql_bin,'java_home':cfg.java_home,'cwes':list(cwes),'model_environment':env_model,
             'result_file':str(work/'worker-result.json'),'max_model_calls':cfg.max_model_calls,'skip_posthoc':cfg.skip_posthoc}
+        if cfg.full_source_mode:
+            request.update(full_source_mode=True,persistent_cache_root=str(runtime/'persistent-cache'),
+                java_all_pack=cfg.java_all_pack,model_identity=model_files)
         (work/'request.json').write_text(json.dumps(request,indent=2))
         env=dict(os.environ,HF_HUB_OFFLINE='1',TRANSFORMERS_OFFLINE='1',JAVA_HOME=cfg.java_home,
             LGTM_INDEX_XML_MODE='none',LGTM_INDEX_PROPERTIES_FILES='false',PYTHONDONTWRITEBYTECODE='1')
@@ -268,6 +400,7 @@ def run(source_root,java_files,source_identity,model_environment=None,config=Non
         db_cmd=[cfg.codeql_bin,'database','create',request['database'],'--language=java','--build-mode=none',
             '--source-root='+str(staged),'--search-path='+str(Path(cfg.codeql_bin).parent/'java'),'--threads=1','--ram=2048']
         commands=[('database',db_cmd),('iris',[cfg.python_bin,'-B',str(WORKER),str(work/'request.json')])]
+        if cfg.full_source_mode:commands=commands[1:]
         peak_rss=0;receipts=[];last_disk_check=0
         import psutil
         for label,argv in commands:
@@ -291,7 +424,7 @@ def run(source_root,java_files,source_identity,model_environment=None,config=Non
             receipts.append({'phase':label,'argv':argv,'exit_code':process.returncode,'duration_ms':round((time.monotonic()-t)*1000,3)})
             if process.returncode:raise RuntimeError('IRIS_'+label.upper()+'_PROCESS_FAILED:'+str(process.returncode))
         worker=json.loads(Path(request['result_file']).read_text());paths=[];reasons=list(worker['reason_codes'])
-        database_id=digest({'identity':identity,'metadata':digest((work/'database/codeql-database.yml').read_bytes())})
+        database_id=database_receipt['database_id'] if database_receipt else digest({'identity':identity,'metadata':digest((database_path/'codeql-database.yml').read_bytes())})
         sarif_count=0
         for pipeline in worker['pipelines']:
             sarif=Path(pipeline['sarif'])
@@ -306,6 +439,8 @@ def run(source_root,java_files,source_identity,model_environment=None,config=Non
             bound,rejected=bind_sarif(json.loads(sarif.read_text()),staged,manifest,pipeline['cwe_id'],provenance)
             api_csv=next((Path(request['workspace'])/'output').rglob('fetch_external_apis/results.csv'),None)
             if api_csv:attach_api_context(bound,api_csv,staged)
+            if cfg.full_source_mode and pipeline.get('standard_proof_csv'):
+                attach_standard_flow_context(bound,pipeline['standard_proof_csv'],staged,manifest)
             paths.extend(bound);reasons.extend(rejected)
         if not sarif_count:raise RuntimeError('UPSTREAM_CODEQL_TAINT_QUERY_NOT_EXECUTED')
         if any(p['analysis_status']!='COMPLETED' for p in worker['pipelines']):reasons.append('UPSTREAM_PIPELINE_INCOMPLETE')
@@ -313,11 +448,18 @@ def run(source_root,java_files,source_identity,model_environment=None,config=Non
             'analysis_status':'IRIS_PARTIAL' if reasons else 'COMPLETED','verification_status':'SOURCE_BOUND_CODEQL_PATH' if paths else 'NO_PATH_FOUND_NOT_SAFE_PROOF',
             'paths':paths,'reason_codes':sorted(set(reasons)),'cache_hit':False,'iris_upstream_commit':head,'codeql_version':cli_version['version'],
             'codeql_database_id':database_id,'source_commit_or_archive_sha':source_identity,'cloud_calls_enabled':False,
-            'actual_gpu_inference_calls':len(worker['model_calls']),'model_telemetry':worker['model_telemetry'],'source_files':len(manifest),
+            'actual_gpu_inference_calls':worker.get('actual_gpu_generation_batches',len(worker['model_calls'])),'model_telemetry':worker['model_telemetry'],'source_files':len(manifest),
             'cwe_scope':list(cwes),
             'source_coverage':'JAVA_ONLY_WITHOUT_BUILD_OR_RESOURCE_MODELS','duration_ms':round((time.monotonic()-started)*1000,3),
             'peak_process_tree_rss_bytes':peak_rss,'commands':receipts,'raw_artifact_reference':str(work)}
-        if not reasons:
+        if cfg.full_source_mode:
+            result.update(database_receipt=database_receipt,mining_coverage=worker.get('mining_coverage',{}),
+                stages=worker.get('stages',[]),input_tokens=worker.get('input_tokens'),generated_tokens=worker.get('generated_tokens'),
+                optional_posthoc_status=worker.get('optional_posthoc_status'),semantic_dataflow_coverage='NOT_PROVEN',license_source_binding=license_binding,
+                cwe_executions=worker['pipelines'],execution_origin='UPSTREAM_PROCESS_WITH_EXPLICIT_LAYER_CACHES',
+                current_cwe_query_pipeline_invocations=len(worker['pipelines']),model_telemetry_from_cached_execution=False,
+                commands_from_cached_execution=False)
+        if reusable_execution(worker,reasons,cfg.full_source_mode):
             cache.parent.mkdir(parents=True,exist_ok=True);cache.write_text(json.dumps({'identity':identity,'result':result,'result_sha256':digest(result)},indent=2))
         (work/'adapter-result.json').write_text(json.dumps(result,indent=2));return result
     except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as error:
