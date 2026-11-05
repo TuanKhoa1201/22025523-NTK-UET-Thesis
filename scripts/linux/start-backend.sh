@@ -6,7 +6,9 @@ CONFIG="$BACKEND/config/ntk_backend.env"
 [[ -f "$CONFIG" ]] || { echo "Thieu config/ntk_backend.env. Hay chay configure-backend.ps1." >&2; exit 2; }
 # Tep config chi duoc tao tai may nguoi dung, khong nam trong Git.
 # shellcheck disable=SC1090
+set -a
 source "$CONFIG"
+set +a
 : "${NTK_BASE_MODEL_PATH:?Can cau hinh model goc}"
 : "${NTK_BEST_ADAPTER_PATH:?Can cau hinh adapter LoRA}"
 [[ -s "$NTK_BASE_MODEL_PATH/config.json" ]] || { echo "Khong tim thay config.json cua model goc." >&2; exit 2; }

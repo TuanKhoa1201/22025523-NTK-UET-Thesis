@@ -10,7 +10,7 @@ try {
         & npm.cmd ci
         if ($LASTEXITCODE -ne 0) { throw "npm ci loi." }
     }
-    & node --test tests/*.test.cjs
+    & node --test
     if ($LASTEXITCODE -ne 0) { throw "Frontend tests khong dat." }
     & npm.cmd run build
     if ($LASTEXITCODE -ne 0) { throw "Frontend build khong dat." }
