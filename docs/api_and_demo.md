@@ -1,44 +1,45 @@
-# API, local demo and reproducibility
+# Kết nối API và kiểm thử bản demo
 
-## Deployment roles
+Hệ thống đồ án được vận hành cục bộ với frontend React/Vite trên Windows và backend Python trong WSL2. API mặc định ở `http://127.0.0.1:8765`, website dùng cổng Vite được thông báo khi chạy `npm run dev`.
 
-Laptop HP: React/Vite frontend, Git repository and browser. ADMIN-PC: Python API, OpenGrep, OpenJDK, locally stored Qwen base model and LoRA adapter, GPU execution and persistence. The frontend does not require GPU on the laptop.
+## Bắt đầu
 
-## Frontend
+Đọc `docs/chay-tren-may-khac.md`. Để kiểm tra backend:
 
-```bash
-cd apps/22025523-thesis
-npm ci
-npm run dev
+```powershell
+.\scripts\windows\check-backend.ps1
+.\scripts\windows\check-backend.ps1 -CheckDatasets
 ```
 
-On the laptop create an **ignored** `apps/22025523-thesis/.env.local` with `VITE_API_BASE_URL=<authorized backend URL>`. Do not commit that file. The URL becomes visible in built browser JavaScript; use authenticated/restricted network access. Avoid putting bearer tokens in frontend build variables. Do not run `npm audit fix --force` without reviewing the changes.
+Các đường dẫn có thể dùng trong bản đang chạy:
 
-## Documented endpoints (verify current service before release)
-
-| Endpoint | Intended purpose |
+| API | Mục đích |
 |---|---|
-| `GET /api/health` | Report service, model/device readiness and supported endpoints |
-| `POST /api/scan-jobs` | Launch an async scan |
-| `GET /api/scan-jobs/{job_id}` | Query job and progress |
-| `GET /api/scans/{scan_id}/pipeline-trace` | Inspect actual stage telemetry |
-| `GET /api/scans/{scan_id}/summary` | Result summary |
-| `GET /api/scans/{scan_id}/findings/page` | Paginated findings |
-| `GET /api/datasets/manifest` | Expose approved dataset metadata |
+| `GET /api/health` | Kiểm tra dịch vụ và khả năng sẵn sàng |
+| `GET /api/model` | Trạng thái model cục bộ |
+| `POST /api/scan-jobs` | Tạo tác vụ quét Java |
+| `GET /api/scan-jobs/{job_id}` | Tiến độ quét |
+| `GET /api/scans/{scan_id}/summary` | Tổng quan kết quả |
+| `GET /api/scans/{scan_id}/findings/page` | Phân trang cảnh báo |
+| `GET /api/scans/{scan_id}/pipeline-trace` | Nhật ký 10 giai đoạn |
+| `GET /api/datasets/manifest` | Nguồn gốc và thống kê dataset |
+| `GET /api/datasets/{dataset_id}/records` | Danh sách bản ghi |
+| `GET /api/datasets/{dataset_id}/export?format=csv` | Xuất CSV, JSONL hoặc XLSX |
 
-Use the backend's current `/api/health` output as the authoritative endpoint list. Avoid assuming every legacy frontend endpoint and data shape matches.
+Chỉ sử dụng route có thật trong phiên bản backend đang chạy. HTTP 200 chưa chứng minh nội dung đã đúng; cần kiểm tra số dòng, checksum, phân trang và trạng thái từng tác vụ.
 
-## E2E demonstration acceptance sequence
+## Chạy thử
 
-1. Verify that the API health status is OK and OpenGrep, Java, adapter and base model paths are available.
-2. Start React/Vite; confirm the browser reports backend connected (a successful PowerShell health call **alone** does not establish working browser CORS).
-3. Scan the bundled *mini-vulnerable-java* fixture or another controlled small Java project.
-4. Observe all ten stages from real backend telemetry, not animation-only timers.
-5. Wait for persistence and SQLite indexing before displaying `COMPLETED` as ready-to-view.
-6. Compare summary counts against **all paginated findings**, including `REPORT`, `REVIEW`, and `SUPPRESS` states.
-7. Confirm each finding links to trace, AST evidence, LoRA role classification and scoring breakdown.
-8. Repeat after refreshing the page; check persisted history and export output.
+1. Kiểm tra health, OpenGrep, JDK và adapter.
+2. Chạy fixture Java quy mô nhỏ trong `backend/ntk-production-v2/fixtures/`.
+3. Kiểm tra đủ 10 stage, tình trạng ghi lưu và khả năng tải lại kết quả.
+4. Đối chiếu summary với tất cả trang findings, không chỉ trang đầu.
+5. Phân biệt `PROVEN_TAINT`, `PROVEN_SAFE`, `UNKNOWN` và `REPORT`, `REVIEW`, `SUPPRESS`.
+6. Xem CWSS, nguồn metric và giả định của kịch bản tham chiếu.
+7. Với dataset gốc, kiểm tra manifest cùng xuất CSV, JSONL, XLSX.
 
-## Current verified boundary
+Bản kiểm thử thực tế ngày 05/11/2026 được ghi trong `evaluation/bao-cao-kiem-thu-da-xac-minh.md`.
 
-On 2026-10-28, the frontend production build succeeded and a remote backend `/api/health` returned `OK`. That does **not yet prove** full browser-based E2E scanning and result integrity. These require the tests above.
+## Bảo mật
+
+Không đặt khóa truy cập trong `.env.local` của Vite, không đưa token vào log và không công khai dịch vụ REST chỉ dựa vào hạn chế CORS. Hạn chế số lượng file và dung lượng khi tiếp nhận ZIP hoặc dự án ngoài.

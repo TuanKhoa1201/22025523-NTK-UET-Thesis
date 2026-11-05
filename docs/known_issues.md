@@ -1,10 +1,19 @@
-# Known issues and release gates (initial audit)
+# Những điểm cần lưu ý khi triển khai
 
-- **Backend startup script:** `backend/ntk-production-v2/bin/start_ntk_backend.sh` passes `--host` and `--storage-dir`. The production Python CLI was observed to accept `--serve-http` and `--port`, using `NTK_STORAGE_DIR` as an environment variable. Repair and smoke-test the script before running it directly.
-- **Stage-10 readiness:** A prior audit observed a transient `COMPLETED` state before scan JSON and SQLite findings indexing were ready. Treat this as a release-blocking consistency issue until reproduced and fixed.
-- **Frontend results:** `apps/22025523-thesis/src/services/liveScan.js` reads whole-scan and findings endpoints. Verify pagination and totals against the backend's indexed summaries; do not assume the short response contains all findings.
-- **HTTP authorization:** A public Tailscale Funnel route and permissive scan API without authentication are not appropriate for arbitrary external users. Restrict/access-control before public demo.
-- **Frontend dependencies:** An October 28 install reported nine npm audit advisories (seven moderate, two high). Review targeted changes; do not auto-force upgrades.
-- **Docs/packaging:** The backend handoff README refers to `backend/ntk-production-v2/docs/` (OpenAPI/contract documents), but these were not present in the 40-file public source import. Reconstruct from the actual implementation and verify against responses before declaring an official OpenAPI specification.
+Tình trạng được rà soát ngày 05/11/2026.
 
-These are evidence-backed integration concerns, not proof that every item is still failing on the running ADMIN-PC.
+| Vấn đề | Trạng thái | Hướng xử lý |
+|---|---|---|
+| Chạy trên máy mới cần model và checkpoint LoRA | Còn phụ thuộc artifact riêng | Chuẩn bị nguồn được cấp phép, đối chiếu SHA-256 và cấu hình đường dẫn WSL |
+| Dataset trên máy mới không có sẵn | Theo thiết kế | Chuyển giao riêng bốn file đã xác minh; không sinh bản ghi giả |
+| IRIS gốc cần CodeQL và upstream | Theo thiết kế | Cấu hình chế độ IRIS gốc và ghi log chế độ thực sự khi đánh giá |
+| Đánh giá độ chính xác SAST chưa có bộ ground truth hoàn chỉnh đã công bố | Cần bổ sung | Khóa corpus, đo TP/FP/FN và báo cáo riêng theo CWE |
+| Khả năng chạy GPU khác nhau theo phần cứng | Cần kiểm tra trên máy đích | Xác nhận CUDA, torch, driver, thời gian suy luận thực tế |
+| HTTP backend chưa phải dịch vụ công khai | Cần giới hạn truy cập | Chỉ chạy localhost; thêm xác thực và giới hạn tài nguyên nếu mở mạng |
+| Dependency cảnh báo phiên bản và bundle frontend lớn | Cần bảo trì | Đánh giá cập nhật có kiểm soát, không nâng cấp cưỡng ép trước bảo vệ |
+| Khởi động bằng Linux script có thể khác startup trước đó trên laptop | Cần chạy smoke trên máy thực tế | Dùng script mới, không ghi đè môi trường đang chạy nếu chưa kiểm chứng |
+| Phân trang và lưu trạng thái sau quét lớn | Cần kiểm thử định kỳ | So summary với toàn bộ findings, thử tải lại lịch sử sau refresh |
+
+Lỗi tham số CLI của startup script cũ đã được sửa trong bản `bin/start_ntk_backend.sh`. Bộ script Windows/WSL cấp repository được thêm để vận hành trên máy khác, nhưng chỉ được coi là nghiệm thu khi kiểm tra trực tiếp tại môi trường đích.
+
+Các vấn đề trên không đồng nghĩa hệ thống đang hoạt động lỗi trên laptop hiện tại.

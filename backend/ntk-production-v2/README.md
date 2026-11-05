@@ -1,67 +1,43 @@
-# NTK Java Neuro-Symbolic Vulnerability Scanner Backend (Production Source Release)
+# Backend hệ thống đồ án
 
-> **VNU-UET Graduation Thesis — Nguyen Tuan Khoa**
-> **Production Architecture:** OpenGrep OSS v1.25.0 + OpenJDK 17 `JavacTask` AST Intra-Procedural Dataflow + Fine-Tuned `Qwen2.5-Coder-0.5B-Instruct` LoRA (`eo06_vnext31_trackb_main`) + Heuristic SAST Evidence Fusion V1.2 + 10-Stage Live Telemetry & SQLite-Indexed REST Backend.
+Backend Python cung cấp API quét mã nguồn Java, dùng OpenGrep, phân tích AST với JDK 17, bộ kết nối IRIS, Qwen LoRA chạy cục bộ, bằng chứng triage, CWSS và lưu trữ JSON/SQLite.
 
----
+## Thành phần chính
 
-## 1. Relationship to Earlier `TuanKhoa1201/NTK-UET-Thesis` Repository
+| Thành phần | Mã nguồn |
+|---|---|
+| REST API, điều phối và suy luận | `scripts/ntk_web_backend_service.py` |
+| Tiến trình 10 bước và dữ liệu nghiên cứu | `scripts/ntk_pipeline_telemetry_and_datasets.py` |
+| Java AST, luồng dữ liệu, triage | `scripts/ntk_alert_verification.py` |
+| Java AST parser | `scripts/javac_ast_bridge/NtkJavacAstExtractor.java` |
+| Phân tích IRIS gốc khi được cấu hình | `scripts/ntk_original_iris_adapter.py`, `scripts/ntk_original_iris_worker.py` |
+| CWSS và nguồn metric | `scripts/ntk_cwss_workflow.py`, `scripts/ntk_cwss_v101.py` và các module hỗ trợ |
+| Huấn luyện model | `scripts/eo06_main_train_eval_e2e_pipeline.py` |
+| Bộ quy tắc Java | `rules/ntk_opengrep_java_ruleset_v1_4.yaml` |
+| Kiểm thử | `tests/`, `fixtures/` |
 
-The existing public repository `TuanKhoa1201/NTK-UET-Thesis` (branch `ntk-thesis-dataset-ft-scientific-repair`, HEAD `a704f8327f728a0eceee2a272f13b82d9f0d2320`) contains the earlier research phase (CodeQL / Qwen2.5-Coder-1.5B QLoRA / SAST V2.2 / Phase 6B).
+Chế độ mặc định là Java AST. Không được coi việc có adapter IRIS trong repository là đã chạy IRIS gốc khi thiếu CodeQL/upstream.
 
-This package (`NTK_PUBLIC_SOURCE_20261028.zip`) contains the **current production backend system** verified end-to-end during the EO06 and Pre-Web P0 audits:
-- **Stage 01 - 02:** Safe GitHub repository shallow clone / ZIP intake and Java `.java` source discovery.
-- **Stage 03:** OpenGrep OSS v1.25.0 candidate detection (`NTK_OPENGREP_JAVA_RULESET_V1.4` covering `CWE-089`, `CWE-078`, `CWE-022`, `CWE-079`).
-- **Stage 04 - 05:** Real OpenJDK 17 `JavacTask` AST parsing (`NtkJavacAstExtractor.java`) and intra-procedural dataflow/guard extraction (`ntk_alert_verification.py`).
-- **Stage 06:** Fine-tuned `Qwen/Qwen2.5-Coder-0.5B-Instruct` LoRA (`eo06_vnext31_trackb_main`, Epoch 3 `best_checkpoint`) 4-class API security role classification (`source`, `sink`, `taint-propagator`, `none`).
-- **Stage 07 - 09:** Evidence fusion (`NTK_EVIDENCE_FUSION_V1.2`), SAST risk scoring (`NTK_SAST_SCORING_V1.2`), and alert verification (`REPORT`, `REVIEW`, `SUPPRESS`).
-- **Stage 10:** Report synthesis, atomic JSON persistence, and SQLite finding pagination index (`NtkScanResultIndex`).
+## Chạy trên máy khác
 
----
+Hướng dẫn chuẩn nằm ở `../../docs/chay-tren-may-khac.md`. Trên WSL2:
 
-## 2. Repository Structure
+```bash
+bash scripts/linux/setup-runtime.sh
+bash scripts/linux/check-environment.sh
+bash scripts/linux/start-backend.sh
+```
 
-- `scripts/ntk_web_backend_service.py`: Main HTTP REST backend service and 10-stage scan orchestrator.
-- `scripts/ntk_pipeline_telemetry_and_datasets.py`: Real-time 10-stage monotonic telemetry (`PipelineStageTracker`), async job queue (`ScanJobManager`), verified EO06 dataset catalog (`VerifiedDatasetCatalog`), and SQLite result index (`NtkScanResultIndex`).
-- `scripts/ntk_alert_verification.py`: Intra-procedural Java AST dataflow & guard verifier (`NTK_ALERT_VERIFIER_V1.2`).
-- `scripts/ntk_iris_shared.py`: Prompt formatting, canonical 4-class label normalization, and CWE compatibility helpers.
-- `scripts/eo06_main_train_eval_e2e_pipeline.py`: EO06 LoRA fine-tuning, evaluation, and checkpoint selection pipeline.
-- `scripts/javac_ast_bridge/NtkJavacAstExtractor.java`: OpenJDK 17 `JavacTask` AST method/call/sink/guard extractor.
-- `scripts/rebuild_scan_index.py`: Offline CLI utility to rebuild `scan_result_index.sqlite3` from persisted scan JSON files.
-- `scripts/verify_public_smoke.py`: Self-contained smoke test for module imports, AST bridge, and OpenGrep ruleset.
-- `rules/ntk_opengrep_java_ruleset_v1_4.yaml`: Standalone OpenGrep Java ruleset (`CWE-089`, `CWE-078`, `CWE-022`, `CWE-079`).
-- `fixtures/mini-vulnerable-java/`: Small redistributable 4-file Java vulnerability test fixture.
-- `docs/`: OpenAPI 3.0 specification, Finding Schema V2, Web API contract, Live Progress API contract, and AST Dataflow Safety Audit.
-- `config/ntk_backend.env.example`: Portable environment variable template.
-- `environment/`: `requirements.txt` and `conda_env_iris.yml`.
-- `bin/`: `start_ntk_backend.sh`, `stop_ntk_backend.sh`, `verify_ntk_smoke.sh`, `rebuild_scan_index.sh`, `compile_javac_ast_bridge.sh`.
+Các script trên nằm ở cấp root repository, không phải bên trong thư mục backend. Cần có file `config/ntk_backend.env` riêng, model gốc, checkpoint LoRA và OpenGrep đã cài. Nếu cần trang dữ liệu, cấu hình thêm dataset VNext 3.1.
 
----
+Chỉ kiểm thử các phần không phụ thuộc model bằng:
 
-## 3. Quick Start on Laptop (Linux / WSL2 Ubuntu)
+```bash
+bash scripts/linux/test-backend-stdlib.sh
+```
 
-1. **Install System Prerequisites:**
-   - Python `3.10+` (Conda env `iris` recommended)
-   - OpenJDK `17` (`sudo apt install openjdk-17-jdk`)
-   - OpenGrep `v1.25.0` (`/usr/local/bin/opengrep`)
-   - Git `2.34+`
+## Phạm vi
 
-2. **Extract Private Reproduction & Results Archives (Outside Git Repo):**
-   ```bash
-   tar -xzf NTK_PRIVATE_REPRO_20261028.tar.gz -C ~/ntk_private_repro
-   tar -xzf NTK_PRIVATE_RESULTS_20261028.tar.gz -C ~/ntk_persisted_api_store
-   ```
+Hệ thống hỗ trợ Java, CWE-22, CWE-78, CWE-79, CWE-89. Model phân loại API role, còn triage hợp nhất nhiều bằng chứng và có trạng thái chưa đủ dữ liệu. CWSS là điểm ưu tiên, không phải phương pháp xác minh TP/FP.
 
-3. **Configure Environment:**
-   ```bash
-   cp config/ntk_backend.env.example config/ntk_backend.env
-   # Edit config/ntk_backend.env to point NTK_BASE_MODEL_PATH, NTK_BEST_ADAPTER_PATH,
-   # NTK_DATASET_DIR, and NTK_STORAGE_DIR to your local paths.
-   ```
-
-4. **Run Smoke Verification & Start Backend:**
-   ```bash
-   ./bin/verify_ntk_smoke.sh
-   ./bin/rebuild_scan_index.sh ~/ntk_persisted_api_store
-   ./bin/start_ntk_backend.sh
-   ```
+Không commit trọng số, dataset, SQLite, file kết quả quét, credential hoặc file cấu hình riêng. Những giá trị môi trường đã ghi trong `config/ntk_backend.env.example` chỉ là ví dụ.
