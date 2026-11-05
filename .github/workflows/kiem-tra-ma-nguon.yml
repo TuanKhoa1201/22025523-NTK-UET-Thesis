@@ -2,7 +2,7 @@ name: Kiem tra ma nguon he thong do an
 
 on:
   push:
-    branches: [main, hoan-thien-tai-lieu-va-trien-khai-20261105]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
