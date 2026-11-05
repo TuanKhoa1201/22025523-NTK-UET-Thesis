@@ -12,14 +12,14 @@ const app = src('App.jsx');
 const nav = src('data/research.js');
 
 // These are non-visual guards for the local P0.5 frontend. Live E2E requires backend.
-test('finding filters expose the full supported CWE scope, every triage class and scanner levels', () => {
+test('finding filters expose the full supported CWE scope, every triage class and IRIS proof states', () => {
   assert.match(findings, /IN_SCOPE_CWES/);
   assert.match(findings, /\['REPORT', 'REVIEW', 'SUPPRESS'\]/);
-  assert.match(findings, /\['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'Không rõ'\]/);
-  for (const key of ["'cwe'", "'decision'", "'severity'", "'sort'"]) assert.ok(findings.includes(key), key);
+  assert.match(findings, /IRIS_PROOF_STATES/);
+  for (const key of ["'cwe'", "'decision'", "'proofState'", "'sort'"]) assert.ok(findings.includes(key), key);
   assert.match(findings, /countOf\(rows, 'cwe', value\)/);
   assert.match(findings, /countOf\(rows, 'decision', value\)/);
-  assert.match(findings, /countOf\(rows, 'severity', value\)/);
+  assert.match(findings, /countOf\(rows, 'irisProofState', value\)/);
   assert.match(findings, /Không tìm thấy cảnh báo phù hợp/);
   assert.doesNotMatch(findings, /placeholder="CWSS (từ|đến)"/);
   assert.doesNotMatch(findings, /Mức scanner phản ánh độ nghiêm trọng của rule/);

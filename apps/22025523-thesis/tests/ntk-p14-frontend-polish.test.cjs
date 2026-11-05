@@ -25,7 +25,7 @@ test('P0.14 preserves complete-scan guard and backend CWSS source', () => {
   assert.match(live, /data\?\.complete \? buildAggregates\(data\.rows, data\.scores\)/);
   assert.match(charts, /agg\.byCwe/);
   assert.match(charts, /agg\.byDecision/);
-  assert.match(charts, /agg\.bySeverity/);
+  assert.match(charts, /agg\.byFlowProof/);
   assert.match(charts, /agg\.byScore/);
   assert.match(charts, /scoreInfo\.status === 'ok' && scoreInfo\.scored > 0/);
   assert.match(charts, /Ch\u01b0a \u0111\u1ee7 d\u1eef li\u1ec7u CWSS/);
@@ -34,10 +34,10 @@ test('P0.14 preserves complete-scan guard and backend CWSS source', () => {
 
 test('P0.14 charts are clearly distinguished, with muted palette and legends', () => {
   assert.match(charts, /const DECISION_COLORS = \{REPORT:/);
-  assert.match(charts, /const SEVERITY_COLORS = \{CRITICAL:/);
+  assert.match(charts, /const IRIS_PROOF_COLORS = \{PROVEN_TAINT:/);
   assert.match(charts, /const SCORE_COLORS = \[/);
   assert.match(charts, /const pie = \(entries\) =>/);
-  assert.match(charts, /const severityBar = \(entries\) =>/);
+  assert.match(charts, /const bar = \(entries, palette/);
   assert.match(charts, /const scoreBar = \(entries\) =>/);
   assert.match(charts, /opts=\{\{renderer: 'svg'\}\}/);
   assert.match(charts, /aria: \{enabled: true/);

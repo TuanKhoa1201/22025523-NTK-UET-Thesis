@@ -48,7 +48,7 @@ test('P0.9 chart palette changes appearance, not data source or score logic', ()
   assert.match(charts, /const GRID = '#494951'/);
   assert.match(charts, /agg\.byCwe/);
   assert.match(charts, /agg\.byDecision/);
-  assert.match(charts, /agg\.bySeverity/);
+  assert.match(charts, /agg\.byFlowProof/);
   assert.match(charts, /agg\.byScore/);
   assert.match(charts, /scoreInfo\.scored > 0/);
 });

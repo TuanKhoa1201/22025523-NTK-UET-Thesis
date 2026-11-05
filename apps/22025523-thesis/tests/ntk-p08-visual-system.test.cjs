@@ -32,7 +32,7 @@ test('P0.9 charts use graphite canvas contrast but preserve real aggregations', 
   assert.match(charts, /const GRID = '#494951'/);
   assert.match(charts, /agg\.byCwe/);
   assert.match(charts, /agg\.byDecision/);
-  assert.match(charts, /agg\.bySeverity/);
+  assert.match(charts, /agg\.byFlowProof/);
   assert.match(charts, /agg\.byScore/);
 });
 
