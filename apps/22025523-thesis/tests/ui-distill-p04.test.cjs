@@ -40,7 +40,7 @@ test('dashboard keeps real counts, safeguards and CWSS chart but removes noisy c
 });
 
 test('charts use only verifiable whole-scan data and keep full error fallback', () => {
-  for (const name of ['Findings theo CWE', 'Findings theo quy\u1ebft \u0111\u1ecbnh triage', 'M\u1ee9c c\u1ea3nh b\u00e1o theo scanner', 'Ph\u00e2n b\u1ed1 \u0111i\u1ec3m CWSS']) {
+  for (const name of ['Findings theo CWE', 'Findings theo quy\u1ebft \u0111\u1ecbnh triage', 'Tr\u1ea1ng th\u00e1i b\u1eb1ng ch\u1ee9ng IRIS', 'Ph\u00e2n b\u1ed1 \u0111i\u1ec3m CWSS']) {
     assert.ok(charts.includes(name), name);
   }
   assert.doesNotMatch(charts, /Findings theo ngu\u1ed3n ph\u00e1t hi\u1ec7n/);
