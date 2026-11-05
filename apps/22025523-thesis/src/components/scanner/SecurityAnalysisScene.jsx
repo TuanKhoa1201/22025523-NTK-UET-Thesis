@@ -2,6 +2,7 @@ import {useState} from 'react';
 import {Icon} from '../common/Ui';
 import {scanGuide} from '../../data/scanGuide';
 import ScanStageVisual from './ScanStageVisual';
+import {backendStageStatus, isLiveSessionReady} from './liveStagePresentation';
 
 const LIVE_NOTICE='Trực quan hóa kiến trúc trong khi backend đang phân tích. Các bước chuyển động không biểu thị tiến độ thực tế của từng engine.';
 const LIVE_STATUS={
@@ -11,33 +12,13 @@ const LIVE_STATUS={
   QUEUED:'JOB ĐANG XẾP HÀNG',
   RUNNING:'JOB ĐANG CHẠY',
   LOADING_RESULTS:'ĐANG TẢI KẾT QUẢ',
+  RESULTS_ERROR:'CHƯA THỂ TẢI KẾT QUẢ',
   COMPLETED:'BACKEND ĐÃ HOÀN TẤT',
   FAILED:'THẤT BẠI'
 };
 
-function backendStageStatus(index, live) {
-  const stage = live?.stages?.find((item, itemIndex) => {
-    const value = Number(item?.stage_number ?? item?.stage_no ?? item?.number);
-    return Number.isInteger(value) ? value === index + 1 : itemIndex === index;
-  });
-  const state = String(stage?.state ?? stage?.status ?? '').toUpperCase();
-  const duration = Number(stage?.duration_ms);
-  const measured = stage?.duration_ms !== null && stage?.duration_ms !== undefined && Number.isFinite(duration) ? ` · ${duration.toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3})} ms` : '';
-  if (live?.state === 'FAILED') {
-    const failedAt = Number(live.activeStage);
-    if (index + 1 === failedAt) return `Thất bại${measured}`;
-    if (index + 1 > failedAt && !state.includes('SKIP') && !['COMPLETED', 'COMPLETE', 'SUCCESS', 'SUCCEEDED', 'DONE'].includes(state)) return 'Không chạy (job đã FAILED)';
-  }
-  if (state.includes('SKIP')) return `Bỏ qua${stage?.reason ? ` · ${stage.reason}` : ''}`;
-  if (state.includes('FAIL')) return 'Thất bại';
-  if (['COMPLETED', 'COMPLETE', 'SUCCESS', 'SUCCEEDED', 'DONE'].includes(state)) return `Hoàn thành${measured}`;
-  if (['RUNNING', 'IN_PROGRESS', 'ACTIVE'].includes(state) || live?.state === 'RUNNING' && Number(live.activeStage) === index + 1) return 'Đang thực thi';
-  if (['QUEUED', 'PENDING', 'NOT_STARTED'].includes(state) || live?.state === 'QUEUED') return 'Chưa bắt đầu';
-  return 'Chưa có telemetry';
-}
-
 export default function SecurityAnalysisScene(props) {
-  return <SceneBody {...props} complete={props.complete || props.live?.stage==='COMPLETED'} />;
+  return <SceneBody {...props} complete={props.complete || isLiveSessionReady(props.live)} />;
 }
 
 function SceneBody({
@@ -47,13 +28,14 @@ function SceneBody({
   const [selected,setSelected]=useState(0);
   const backendStage = Number(live?.activeStage);
   const hasBackendStage = Number.isInteger(backendStage) && backendStage >= 1 && backendStage <= 10;
+  const ready = isLiveSessionReady(live);
   const active=live
-    ? hasBackendStage ? backendStage - 1 : live.state === 'COMPLETED' ? 9 : 0
+    ? hasBackendStage ? backendStage - 1 : ready || ['LOADING_RESULTS', 'RESULTS_ERROR'].includes(live.stage) ? 9 : 0
     : complete ? 9 : running || paused ? Math.max(0,Math.min(phase-1,9)) : selected;
   const step=scanGuide[active];
   const previous=active>0 ? scanGuide[active-1] : null;
   const next=active<9 ? scanGuide[active+1] : null;
-  const liveCounts=live && live.stage==='COMPLETED' ? live.counts : null;
+  const liveCounts = ready ? live.counts : null;
   const statusText=(index)=> live
     ? backendStageStatus(index, live)
     : complete || (running || paused) && index<phase-1
@@ -81,7 +63,7 @@ function SceneBody({
           </>)}
         </div>
       </header>
-      {live?.interrupted && <div className="inline-warning" role="status"><Icon name="AlertTriangle" />Gián đoạn kết nối — đang hiển thị trạng thái đã xác minh gần nhất.</div>}
+      {live?.interrupted && <div className="inline-warning" role="status"><Icon name="AlertTriangle" />Gián đoạn kết nối - đang hiển thị trạng thái đã xác minh gần nhất.</div>}
 
       <div className="guided-layout">
         <nav className="guided-stepper" aria-label="Các bước mô phỏng">
@@ -89,12 +71,12 @@ function SceneBody({
           {scanGuide.map((item,index)=> (
             <button
               key={item.title}
-              className={`guided-step ${index===active && (!live || hasBackendStage || live.state==='COMPLETED') ? 'active' : ''} ${statusText(index)==='Hoàn tất' ? 'done' : ''}`}
+              className={`guided-step ${index===active && (!live || hasBackendStage || ready || live.stage==='LOADING_RESULTS') ? 'active' : ''} ${(statusText(index)==='Hoàn tất' || statusText(index).startsWith('Hoàn thành')) ? 'done' : ''}`}
               onClick={()=> !live && !running && !paused && !complete && setSelected(index)}
               disabled={Boolean(live) || running || paused || complete}
-              aria-current={index===active && (!live || hasBackendStage || live.state==='COMPLETED') ? 'step' : undefined}
+              aria-current={index===active && (!live || hasBackendStage || ready || live.stage==='LOADING_RESULTS') ? 'step' : undefined}
             >
-              <span className="guided-step-number">{statusText(index)==='Hoàn tất' ? <Icon name="Check" /> : String(index+1).padStart(2,'0')}</span>
+              <span className="guided-step-number">{(statusText(index)==='Hoàn tất' || statusText(index).startsWith('Hoàn thành')) ? <Icon name="Check" /> : String(index+1).padStart(2,'0')}</span>
               <span className="guided-step-copy"><b>{item.title}</b><small>{statusText(index)}</small></span>
             </button>
           ))}
@@ -102,7 +84,7 @@ function SceneBody({
 
         <div className="guided-main">
           <div className="guided-status-row">
-            {live ? <span><i className={running ? 'pulse' : complete ? 'complete' : ''} />{LIVE_STATUS[live.stage] || live.state || 'SẴN SÀNG'}</span> : (
+            {live ? <span><i className={ready ? 'complete' : running ? 'pulse' : ''} />{live.stage === 'RUNNING' && active===9 && backendStageStatus(9,live).startsWith('Đang') ? 'ĐANG HOÀN TẤT PHIÊN' : LIVE_STATUS[live.stage] || live.state || 'SẴN SÀNG'}</span> : (
             <span><i className={running ? 'pulse' : complete ? 'complete' : ''} />{complete ? 'DEMO HOÀN TẤT' : running ? `ĐANG THỰC HIỆN · ${String(active+1).padStart(2,'0')} / 10` : paused ? 'ĐÃ TẠM DỪNG' : 'SẴN SÀNG TRÌNH DIỄN'}</span>
             )}
             <b>{formatDuration(elapsedMs)}</b>

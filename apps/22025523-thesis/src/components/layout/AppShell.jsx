@@ -9,7 +9,9 @@ export default function AppShell() {
   const [backend, setBackend] = useState({status: 'CHECKING', health: null});
   const connected = backend.status === 'CONNECTED';
   const location = useLocation();
-  const current = navGroups.flatMap((group) => group.items).find(([path]) => path === location.pathname);
+  const navigationPath = location.pathname === '/results' || location.pathname.startsWith('/finding/')
+    ? '/findings' : location.pathname;
+  const current = navGroups.flatMap((group) => group.items).find(([path]) => path === navigationPath);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -43,6 +45,7 @@ export default function AppShell() {
 
   return (
     <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      <a className="skip-link" href="#ntk-main">Đi tới nội dung chính</a>
       <aside className="sidebar">
         <NavLink to="/" className="brand">
           <UETLogo />
@@ -53,7 +56,7 @@ export default function AppShell() {
             <div className="nav-group" key={group.title}>
               {!collapsed && <div className="nav-group-title">{group.title}</div>}
               {group.items.map(([path, label, icon]) => (
-                <NavLink end={path === '/'} to={path} key={path} title={collapsed ? label : undefined} className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+                <NavLink end={path === '/'} to={path} key={path} title={collapsed ? label : undefined} className={({isActive}) => `nav-item ${isActive || path === navigationPath ? 'active' : ''}`}>
                   <Icon name={icon} /><span>{label}</span>
                 </NavLink>
               ))}
@@ -62,10 +65,10 @@ export default function AppShell() {
         </div>
         <div className="sidebar-bottom">
           <div className="sidebar-status">
-            <span className={`status-dot ${connected ? 'online' : ''}`} />
+            <span className={`status-dot ${connected ? 'online' : ''}`} aria-hidden="true" />
             {!collapsed && <span>{backend.status === 'CHECKING' ? 'Đang kiểm tra backend' : connected ? 'Backend đã kết nối' : 'Backend chưa kết nối'}</span>}
           </div>
-          <button className="collapse-button" onClick={() => setCollapsed(!collapsed)}>
+          <button className="collapse-button" type="button" aria-label={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'} onClick={() => setCollapsed(!collapsed)}>
             <Icon name={collapsed ? 'PanelLeftOpen' : 'PanelLeftClose'} />
             <span>{!collapsed && 'Thu gọn menu'}</span>
           </button>
@@ -75,15 +78,15 @@ export default function AppShell() {
         <header className="topbar">
           <div className="breadcrumbs">
             <span>22025523</span><Icon name="ChevronRight" />
-            <strong>{current?.[1] || 'Tổng quan'}</strong>
+            <strong>{current?.[1] || (location.pathname === '/replay' ? 'Phát lại trace' : 'Tổng quan')}</strong>
           </div>
           <div className="topbar-actions">
             <span className={`connection-pill ${connected ? 'connected' : ''}`}>
-              <i />{backend.status === 'CHECKING' ? 'ĐANG KIỂM TRA API' : connected ? 'KẾT NỐI THỰC' : 'API KHÔNG KHẢ DỤNG'}
+              <i aria-hidden="true" />{backend.status === 'CHECKING' ? 'ĐANG KIỂM TRA API' : connected ? 'KẾT NỐI THỰC' : 'API KHÔNG KHẢ DỤNG'}
             </span>
           </div>
         </header>
-        <main className="content-area">
+        <main id="ntk-main" className="content-area">
           <Outlet context={{backend}} />
           <footer className="footer">
             <span>22025523 <b>·</b> Nền tảng nghiên cứu phân tích mã nguồn</span>

@@ -3,10 +3,9 @@ import {Link} from 'react-router-dom';
 import {Card, PageHeader, Badge, DataNotice, EmptyState, Icon} from '../components/common/Ui';
 import {ApiError, api} from '../services/api';
 import {scanQuery} from '../services/liveScan';
-import {readHistory, upsertHistory, hideHistoryRecord, readHiddenHistory, restoreHistoryRecord} from '../services/scanHistory';
+import {readHistory, upsertHistory, historyRecordFromBackend, hideHistoryRecord, readHiddenHistory, restoreHistoryRecord, mergeHistoryRecords} from '../services/scanHistory';
+import {displaySource, formatScanTime, formatExecutionTime} from '../services/historyPresentation';
 
-const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('vi-VN') : '—');
-const fmtMs = (ms) => (Number.isFinite(ms) ? `${(ms / 1000).toFixed(2)} giây` : '—');
 
 function useAvailability(records) {
   const [map, setMap] = useState({});
@@ -30,30 +29,36 @@ function useAvailability(records) {
 function Row({record, availability, onDelete}) {
   const gone = availability === 'gone';
   const traceOnly = String(record.restoration || '').includes('TRACE_ONLY');
-  const tone = record.status === 'COMPLETED' ? 'green' : record.status === 'FAILED' ? 'red' : 'amber';
-  const running = ['RUNNING', 'QUEUED'].includes(String(record.status).toUpperCase());
+  const status = String(record.status || '').toUpperCase();
+  const tone = status === 'COMPLETED' ? 'green' : status === 'FAILED' ? 'red' : 'amber';
+  const running = ['RUNNING', 'QUEUED'].includes(status);
+  const statusLabel = status === 'COMPLETED' ? 'Hoàn tất' : status === 'FAILED' ? 'Thất bại' : running ? 'Đang xử lý' : 'Chưa xác nhận';
+  const source = displaySource(record);
   return (
-    <Card className="report-row">
-      <div>
-        <Badge tone={tone}>{record.status === 'COMPLETED' ? 'HOÀN TẤT' : record.status === 'FAILED' ? 'THẤT BẠI' : 'CHƯA XÁC NHẬN'}</Badge>
-        {record.restoration && <Badge tone="blue">{record.restoration}</Badge>}
-        <h3 className="mono">{record.scanId}</h3>
-        <p>{record.repoUrl || record.fileName || '—'}{record.commit ? ` · ${record.commit.slice(0, 12)}` : ''} · {record.inputMode || 'GITHUB'}</p>
-        <p>Bắt đầu: {fmtDate(record.startedAt || record.savedAt)} · Hoàn tất: {fmtDate(record.completedAt)} · Backend: {fmtMs(record.backendMs)}</p>
-        {traceOnly && <p>Chỉ khôi phục trace: không có chi tiết findings và hệ thống không dựng lại findings.</p>}
-        {record.status === 'COMPLETED'
-          ? <p>{record.candidates ?? '—'} ứng viên · REPORT {record.report ?? '—'} · REVIEW {record.review ?? '—'} · SUPPRESS {record.suppress ?? '—'}{record.verification ? ` · Nguồn: ${record.verification}` : ''}</p>
-          : record.status === 'FAILED'
-            ? <p>Backend báo job thất bại; mở trace để xem stage lỗi và duration đã ghi.</p>
-            : <p>Phiên đã gửi nhưng kết quả chưa được tải thành công.</p>}
-        {gone && <p className="inline-error">Phiên này không còn khả dụng trên backend hiện tại.</p>}
-        {availability === 'unknown' && <p>Chưa kiểm tra được trạng thái trên backend.</p>}
+    <Card className="report-row history-compact-row">
+      <div className="history-record-copy">
+        <div className="history-row-heading">
+          <Badge tone={tone}>{statusLabel}</Badge>
+          <span className="history-input-mode">Nguồn: {source.type}</span>
+        </div>
+        <div className="history-source">
+          {source.href
+            ? <a href={source.href} target="_blank" rel="noopener noreferrer" title={source.value} className="history-source-link">{source.value} <Icon name="ExternalLink" /></a>
+            : <strong title={source.value}>{source.value}</strong>}
+        </div>
+        <dl className="history-time-grid">
+          <div><dt>Bắt đầu</dt><dd>{formatScanTime(record.startedAt)}</dd></div>
+          <div><dt>Kết thúc</dt><dd>{formatScanTime(record.completedAt)}</dd></div>
+          <div><dt>Thời gian thực thi</dt><dd>{formatExecutionTime(record.backendMs)}</dd></div>
+        </dl>
+        {traceOnly && <p className="history-warning">Phiên này chỉ có dữ liệu tiến trình, chưa có kết quả chi tiết.</p>}
+        {gone && <p className="history-warning">Không còn truy cập được phiên này trên backend.</p>}
       </div>
-      <div className="history-actions">
-        {!traceOnly && <Link to={`/findings${scanQuery(record.scanId)}`} className="button-secondary">Xem findings <Icon name="ArrowRight" /></Link>}
-        {!traceOnly && <Link to={`/reports${scanQuery(record.scanId)}`} className="button-secondary"><Icon name="FileText" />Báo cáo</Link>}
-        <Link to={`/replay?scan=${encodeURIComponent(record.scanId)}`} className="button-secondary"><Icon name="Play" />Phát lại trace</Link>
-        <button className="button-secondary history-delete" type="button" disabled={running} aria-label={`Ẩn ${record.scanId} khỏi lịch sử`} onClick={() => onDelete(record)}><Icon name="Trash2" />Xóa</button>
+      <div className="history-actions" data-trace-only={traceOnly ? "true" : "false"} aria-label="Thao tác với phiên phân tích">
+        {!traceOnly && <Link to={`/findings${scanQuery(record.scanId)}`} className="button-secondary history-action history-action--results">Xem kết quả <Icon name="ArrowRight" /></Link>}
+        {!traceOnly && <Link to={`/reports${scanQuery(record.scanId)}`} className="button-secondary history-action history-action--report"><Icon name="FileText" />Báo cáo</Link>}
+        <Link to={`/replay?scan=${encodeURIComponent(record.scanId)}`} className="button-secondary history-action history-action--trace"><Icon name="Play" />Xem tiến trình</Link>
+        <button className="button-secondary history-delete history-action history-action--hide" type="button" disabled={running} aria-label={`Ẩn phiên phân tích khỏi lịch sử`} onClick={() => onDelete(record)}><Icon name="Trash2" />Ẩn</button>
       </div>
     </Card>
   );
@@ -61,21 +66,18 @@ function Row({record, availability, onDelete}) {
 
 function ConfirmHide({record, onCancel, onConfirm}) {
   if (!record) return null;
-  const source = record.inputMode === 'ZIP' ? (record.fileName || 'Tệp ZIP') : (record.repoUrl || '—');
+  const source = displaySource(record);
   return (
     <div className="history-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
       <section className="history-dialog card" role="dialog" aria-modal="true" aria-labelledby="history-delete-title">
-        <span className="eyebrow">ẨN PHIÊN TRÊN TRÌNH DUYỆT NÀY</span>
-        <h2 id="history-delete-title">Xác nhận xóa khỏi lịch sử</h2>
-        <p>Scan ID: <code>{record.scanId}</code></p>
-        <p>Repository / tệp ZIP: <span className="wrap-value">{source}</span></p>
-        <p>Ngày: {fmtDate(record.startedAt || record.savedAt)}</p>
-        <p>Trạng thái: {record.status || 'Chưa xác nhận'}</p>
-        <p className="history-dialog-warning">Thao tác này chỉ ẩn phiên trong lịch sử của trình duyệt hiện tại; không xóa dữ liệu hoặc artifact trên backend.</p>
-        <p>Bạn có chắc chắn muốn xóa phiên phân tích này khỏi lịch sử?</p>
+        <span className="eyebrow">LỊCH SỬ PHÂN TÍCH</span>
+        <h2 id="history-delete-title">Ẩn phiên này khỏi lịch sử?</h2>
+        <p>Nguồn: <span className="wrap-value">{source.value}</span></p>
+        <p>Bắt đầu: {formatScanTime(record.startedAt)}</p>
+        <p className="history-dialog-warning">Phiên chỉ được ẩn trên trình duyệt này. Dữ liệu quét vẫn được giữ trên backend.</p>
         <div className="history-dialog-actions">
           <button className="button-secondary" type="button" onClick={onCancel}>Hủy</button>
-          <button className="button-secondary history-delete" type="button" onClick={onConfirm}><Icon name="Trash2" />Xóa</button>
+          <button className="button-secondary history-delete" type="button" onClick={onConfirm}><Icon name="Trash2" />Ẩn phiên</button>
         </div>
       </section>
     </div>
@@ -84,45 +86,41 @@ function ConfirmHide({record, onCancel, onConfirm}) {
 
 export default function HistoryPage() {
   const [records, setRecords] = useState(() => readHistory());
+  const [backendRecords, setBackendRecords] = useState([]);
   const [hiddenRecords, setHiddenRecords] = useState(() => readHiddenHistory());
   const [gap, setGap] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
   const [notice, setNotice] = useState('');
-  const availability = useAvailability(records);
+  const backendIds = new Set(backendRecords.map(record=>record.scanId));
+  const availability = useAvailability(records.filter(record=>!backendIds.has(record.scanId)));
   const demo = window.sessionStorage.getItem('22025523-demo-result') === 'true';
 
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
       let supported = false;
+      const received=[];
       for (const load of [api.listScanJobs, api.listScans]) {
         try {
           const result = await load({signal: controller.signal});
           if (!result.supported) continue;
           supported = true;
+          if (result.truncated) setGap('Đang hiển thị các phiên gần đây. Một số phiên cũ hơn có thể chưa xuất hiện.');
           result.items.forEach((item) => {
             const scanId = item.scan_id ?? item.id;
             if (!scanId) return;
-            upsertHistory({
-              scanId,
-              jobId: item.job_id,
-              repoUrl: item.repo_url,
-              fileName: item.file_name,
-              inputMode: item.input_mode,
-              status: String(item.state ?? item.status ?? '').toUpperCase() || undefined,
-              startedAt: item.created_at ?? item.started_at,
-              completedAt: item.completed_at ?? item.finished_at,
-              backendMs: item.total_e2e_duration_ms,
-              restoration: item.restoration_type ?? item.restoration_status
-            });
+            const record=historyRecordFromBackend(item);
+            received.push(record);
+            upsertHistory(record, {authoritative: true});
           });
         } catch {
           /* list endpoint unavailable or network error; cached IDs still shown */
         }
       }
       if (controller.signal.aborted) return;
-      if (!supported) setGap('API gap: backend chưa công bố endpoint danh sách (GET /api/scan-jobs, GET /api/scans không khả dụng hoặc lỗi). Chỉ hiển thị các scan_id đã biết và đối chiếu từng ID với backend.');
-      setRecords(readHistory());
+      if (!supported) setGap('Không thể tải đủ lịch sử từ máy chủ. Các phiên đã lưu trên trình duyệt vẫn được hiển thị.');
+      setBackendRecords(received);
+      setRecords(mergeHistoryRecords(readHistory(),received,readHiddenHistory()));
       setHiddenRecords(readHiddenHistory());
     })();
     return () => controller.abort();
@@ -131,23 +129,23 @@ export default function HistoryPage() {
   const confirmHide = () => {
     if (!pendingDelete) return;
     hideHistoryRecord(pendingDelete);
-    setRecords(readHistory());
+    setRecords(mergeHistoryRecords(readHistory(),backendRecords,readHiddenHistory()));
     setHiddenRecords(readHiddenHistory());
-    setNotice(`Đã ẩn ${pendingDelete.scanId} khỏi lịch sử trên trình duyệt này. Không có dữ liệu backend nào bị xóa.`);
+    setNotice('Đã ẩn phiên này khỏi danh sách. Dữ liệu trên máy chủ không bị xóa.');
     setPendingDelete(null);
   };
 
   const restore = (scanId) => {
     restoreHistoryRecord(scanId);
-    setRecords(readHistory());
+    setRecords(mergeHistoryRecords(readHistory(),backendRecords,readHiddenHistory()));
     setHiddenRecords(readHiddenHistory());
-    setNotice(`Đã khôi phục ${scanId} vào lịch sử trên trình duyệt này.`);
+    setNotice('Đã khôi phục phiên vào lịch sử.');
   };
 
   return (
     <>
-      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Lịch sử phân tích" description="Danh sách scan được nạp từ backend khi API hỗ trợ, đối chiếu với các scan_id đã xem trên trình duyệt này." />
-      <DataNotice>{gap || 'Lịch sử được đối chiếu với backend theo danh sách job/scan đã lưu bền vững; localStorage chỉ là cache các scan_id đã xem. Xóa chỉ ẩn cục bộ, không xóa scan backend.'}</DataNotice>
+      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Lịch sử phân tích" />
+      {gap && <DataNotice>{gap}</DataNotice>}
       {notice && <div className="inline-success" role="status">{notice}</div>}
       {records.length === 0
         ? <EmptyState title="Chưa có phiên phân tích" text="Chạy một scan LIVE để phiên được ghi lại tại đây." icon="Clock" />
@@ -155,10 +153,14 @@ export default function HistoryPage() {
       {hiddenRecords.length > 0 && (
         <section className="section-block">
           <h2>Đã ẩn trên trình duyệt này</h2>
-          <p className="muted-text">Các phiên vẫn còn trên backend. Khôi phục sẽ bỏ tùy chọn ẩn cục bộ.</p>
+          <p className="muted-text">Có thể khôi phục các phiên đã ẩn. Dữ liệu quét không bị xóa khỏi máy chủ.</p>
           {hiddenRecords.map((record) => (
-            <Card className="report-row" key={record.scanId}>
-              <div><Badge tone="neutral">ĐÃ ẨN CỤC BỘ</Badge><h3 className="mono">{record.scanId}</h3><p>{record.repoUrl || record.fileName || '—'} · {record.status || 'Chưa xác nhận'}</p></div>
+            <Card className="report-row history-hidden-row" key={record.scanId}>
+              <div className="history-record-copy">
+                <Badge tone="neutral">Đã ẩn</Badge>
+                <strong className="history-hidden-source">{displaySource(record).value}</strong>
+                <p>Bắt đầu: {formatScanTime(record.startedAt)}</p>
+              </div>
               <button className="button-secondary" type="button" onClick={() => restore(record.scanId)}><Icon name="RotateCcw" />Khôi phục</button>
             </Card>
           ))}

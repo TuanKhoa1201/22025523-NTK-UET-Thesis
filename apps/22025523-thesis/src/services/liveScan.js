@@ -110,27 +110,39 @@ export async function loadLiveScan(scanId, signal) {
   const options = {signal, timeoutMs: 60000};
   // Do not request the full JSON findings payload (can exceed 90 MB for a large repository).
   // The canonical source of global counts is the lightweight indexed scan summary.
-  const [scan, page, cwssResult] = await Promise.all([
+  const [scan, page] = await Promise.all([
     api.scanSummary(scanId, options),
-    api.findingsPage(scanId, 1, 50, options),
-    api.cwssPage(scanId, 1, 50, options).catch((error) => ({status: 'UNAVAILABLE', error: String(error?.message || error)}))
+    api.findingsPage(scanId, 1, 50, options)
   ]);
   if (scan?.scan_id !== scanId) throw new Error('Phản hồi metadata không khớp scan_id đã chọn.');
   if (page?.scan_id !== scanId) throw new Error('Phản hồi findings phân trang không khớp scan_id đã chọn.');
   if (scan.has_full_scan_findings_payload === false) {
     throw new Error('Phiên quét chỉ có trace, không có dữ liệu findings đầy đủ.');
   }
-  // CWSS scores are independent weakness priorities and never replace TP/FP evidence.
-  // The overlay is read-only, versioned and may remain provisional when context is missing.
+  // Load only V2 assessments, joining by finding_id, not by ranking order.
+  // A failed CWSS request never mutates the verified OpenGrep/IRIS/LLM triage.
+  const findingIds = (Array.isArray(page?.findings) ? page.findings : [])
+    .map((finding) => finding?.finding_id).filter(Boolean);
+  const cwssResult = await api.cwssV2ForFindingIds(scanId, findingIds, options)
+    .catch((error) => ({status: 'UNAVAILABLE', error: String(error?.message || error), assessments: []}));
   const cwssByFinding = new Map(
     (Array.isArray(cwssResult?.assessments) ? cwssResult.assessments : [])
       .map((item) => [item.finding_id, item.cwss])
   );
+  const scenarioResult = await api.cwssV2ScenarioPage(scanId, 1, 50, options)
+    .catch((error) => ({status: 'UNAVAILABLE', error: String(error?.message || error), assessments: []}));
+  const scenarioMap = new Map(
+    (Array.isArray(scenarioResult?.assessments) ? scenarioResult.assessments : [])
+      .map((row) => [row.finding_id, row.cwss])
+  );
   const findingsPayload = {
     scan_id: scanId,
     cwss_status: cwssResult?.status || 'UNAVAILABLE',
+    cwss_scenario_status: scenarioResult?.status || 'UNAVAILABLE',
     findings: Array.isArray(page?.findings)
-      ? page.findings.map((item) => ({...item, ...(cwssByFinding.has(item.finding_id) ? {cwss: cwssByFinding.get(item.finding_id)} : {})}))
+      ? page.findings.map((item) => ({...item,
+          ...(cwssByFinding.has(item.finding_id) ? {cwss: cwssByFinding.get(item.finding_id)} : {}),
+          ...(scenarioMap.has(item.finding_id) ? {cwssScenario: scenarioMap.get(item.finding_id)} : {})}))
       : [],
     triage_totals: scan.triage_totals,
     summary: scan.summary,

@@ -36,5 +36,15 @@ export default [
       'no-case-declarations': 'off',
       'no-useless-catch': 'off'
     },
+  },
+  // CommonJS Node.js tests use Node globals and selected web API mocks.
+  {
+    files: ['tests/**/*.cjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.browser
+      }
+    }
   }
 ];

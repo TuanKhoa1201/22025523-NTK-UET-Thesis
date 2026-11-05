@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1050" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#d6d6da" stop-opacity="0"/>
+      <stop offset=".40" stop-color="#f7f7f8" stop-opacity=".69"/>
+      <stop offset=".50" stop-color="#74747c" stop-opacity=".27"/>
+      <stop offset=".75" stop-color="#c9c9cd" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#e2e2e3" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="wide" x1=".1" y1="0" x2=".8" y2="1">
+      <stop offset="0" stop-color="#505058" stop-opacity="0"/>
+      <stop offset=".45" stop-color="#a4a4aa" stop-opacity=".25"/>
+      <stop offset=".54" stop-color="#6d6d75" stop-opacity=".05"/>
+      <stop offset="1" stop-color="#e7e7eb" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#c7c7ce" stroke-opacity=".10" stroke-width=".55"/>
+    </pattern>
+    <filter id="soft"><feGaussianBlur stdDeviation="19"/></filter>
+    <mask id="soften"><rect width="1440" height="1050" fill="white"/><path d="M0 820H1440V1050H0Z" fill="#666"/></mask>
+  </defs>
+  <rect width="1440" height="1050" fill="url(#grid)" opacity=".52"/>
+  <path d="M345 505C640 400 767 58 1168 -90" stroke="url(#wide)" stroke-width="135" fill="none" filter="url(#soft)"/>
+  <path d="M345 505C640 400 767 58 1168 -90" stroke="url(#metal)" stroke-width="2.5" fill="none"/>
+  <path d="M0 840C410 700 665 604 911 476S1285 375 1480 298" stroke="url(#wide)" stroke-width="150" fill="none" filter="url(#soft)"/>
+  <path d="M0 840C410 700 665 604 911 476S1285 375 1480 298" stroke="url(#metal)" stroke-width="3" fill="none"/>
+  <path d="M300 1214C633 943 925 844 1480 627" stroke="url(#wide)" stroke-width="125" fill="none" filter="url(#soft)"/>
+  <path d="M300 1214C633 943 925 844 1480 627" stroke="url(#metal)" stroke-width="2.2" fill="none"/>
+  <g mask="url(#soften)" fill="none" stroke="#bdbdc5" stroke-opacity=".095" stroke-width=".65">
+    <path d="M325 535C690 396 774 63 1172 -78"/>
+    <path d="M354 540C709 395 790 65 1190 -73"/>
+    <path d="M384 545C735 398 806 62 1202 -72"/>
+    <path d="M11 862C425 724 669 619 918 495S1305 405 1450 320"/>
+    <path d="M22 874C440 736 677 629 934 508S1303 421 1449 337"/>
+    <path d="M32 886C450 749 692 644 948 527S1325 437 1462 354"/>
+    <path d="M280 1203C642 959 927 869 1439 646"/>
+    <path d="M280 1218C641 974 943 884 1438 664"/>
+  </g>
+</svg>

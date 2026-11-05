@@ -71,7 +71,7 @@ export function StageTiming({job, counts}) {
                   <td>{stage.name}<br /><small className="mono">{stage.key}</small></td>
                   <td>{stage.label}{stage.cat === 'RUNNING' && Number.isFinite(Number(stage.elapsed)) ? ` · elapsed ${fmtMs(stage.elapsed)}` : ''}</td>
                   <td>{fmtMs(stage.duration)}</td>
-                  <td>{stage.duration !== null && sum > 0 ? `${(stage.duration / sum * 100).toFixed(3)}%` : '—'}</td>
+                  <td>{stage.duration !== null && sum > 0 ? `${(stage.duration / sum * 100).toFixed(3)}%` : '-'}</td>
                   <td>{note && <p>{note}</p>}<JsonDetails summary={stage.summary} title="Mở stage summary metadata" /></td>
                 </tr>
               );
@@ -83,8 +83,8 @@ export function StageTiming({job, counts}) {
         <div className="model-card-grid">
           <div><span>TỔNG PIPELINE BACKEND (MONOTONIC)</span><strong>{fmtMs(total)}</strong></div>
           <div><span>TỔNG DURATION CÁC STAGE</span><strong>{fmtMs(sum)}</strong></div>
-          <div><span>CHÊNH LỆCH BACKEND (OVERHEAD)</span><strong>{Number.isFinite(total) && total >= sum ? fmtMs(total - sum) : '—'}</strong></div>
-          <div><span>STAGE DÀI NHẤT</span><strong>{longest ? `${longest.name} · ${fmtMs(longest.duration)}` : '—'}</strong></div>
+          <div><span>CHÊNH LỆCH BACKEND (OVERHEAD)</span><strong>{Number.isFinite(total) && total >= sum ? fmtMs(total - sum) : '-'}</strong></div>
+          <div><span>STAGE DÀI NHẤT</span><strong>{longest ? `${longest.name} · ${fmtMs(longest.duration)}` : '-'}</strong></div>
         </div>
       </Card>
     </section>
@@ -344,16 +344,12 @@ export function CoveragePanel({job, counts}) {
     return groups;
   }, {});
   const finalCandidates = rows.find(([label]) => label === 'Ứng viên cuối cùng (triage total)')?.[1];
-  const coverageStatus = rows.find(([label]) => label === 'Trạng thái coverage')?.[1];
-  const incompleteReasons = rows.find(([label]) => label === 'Lý do phân tích chưa đầy đủ')?.[1];
   const cache = rows.find(([label]) => label === 'Cache statistics')?.[1];
   const none = rows.every(([, value]) => value === null);
   const completed = ['COMPLETED', 'FAILED'].includes(state);
   const zeroCandidates = finalCandidates !== null
     && finalCandidates !== undefined
     && Number(finalCandidates) === 0;
-  const coverageText = String(coverageStatus ?? '').toUpperCase();
-  const partialCoverage = Boolean(coverageText && coverageText !== 'FULL_SOURCE_COVERAGE');
 
   return (
     <section className="section-block ntk-coverage-section">
@@ -404,10 +400,7 @@ export function CoveragePanel({job, counts}) {
           ))}
         </div>
         {none && !loading && <DataNotice>Backend chưa cung cấp metadata coverage; không có số liệu nào được suy diễn.</DataNotice>}
-        {zeroCandidates
-          ? <p className="panel-note">Backend xác nhận scan này có 0 ứng viên. Điều đó không chứng minh rằng không tồn tại lỗ hổng; kết quả phụ thuộc ruleset và phạm vi phân tích được hỗ trợ.</p>
-          : <p className="panel-note">Kết quả phụ thuộc ruleset, phạm vi CWE được hỗ trợ và heuristic triage. FULL_SOURCE_COVERAGE chỉ mô tả việc xử lý source đủ điều kiện theo cấu hình scan, không khẳng định bao phủ mọi loại CWE.</p>}
-        {(partialCoverage || incompleteReasons !== null && incompleteReasons !== undefined) && <p className="panel-note">Backend báo phạm vi phân tích chưa đầy đủ; diễn giải kết quả trong giới hạn coverage và lý do thiếu hụt được liệt kê ở trên.</p>}
+        {zeroCandidates && <p className="panel-note">Backend xác nhận scan này có 0 ứng viên. Điều đó không chứng minh rằng không tồn tại lỗ hổng; kết quả phụ thuộc ruleset và phạm vi phân tích được hỗ trợ.</p>}
       </Card>
     </section>
   );

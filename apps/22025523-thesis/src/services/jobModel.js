@@ -1,10 +1,10 @@
 export const STAGES = [
   ['PROJECT_INTAKE', 'Tiếp nhận dự án'],
   ['SOURCE_INVENTORY', 'Lập danh mục mã nguồn'],
-  ['OPENGREP_DETECTION', 'OpenGrep — Phát hiện ứng viên'],
+  ['OPENGREP_DETECTION', 'OpenGrep - Phát hiện ứng viên'],
   ['CONTEXT_EXTRACTION', 'Trích xuất ngữ cảnh'],
-  ['IRIS_PROGRAM_ANALYSIS', 'IRIS — Phân tích chương trình'],
-  ['LLM_INFERENCE', 'Qwen LoRA — Phân loại API'],
+  ['IRIS_PROGRAM_ANALYSIS', 'IRIS - Phân tích chương trình'],
+  ['LLM_INFERENCE', 'Qwen LoRA - Phân loại API'],
   ['EVIDENCE_FUSION', 'Hợp nhất bằng chứng'],
   ['SAST_SCORING', 'Chấm điểm SAST'],
   ['ALERT_VERIFICATION', 'Xác minh cảnh báo'],
@@ -24,11 +24,11 @@ export const CAT_LABEL = {
 export const NO_CANDIDATE_NOTE = 'Qwen LoRA không được gọi vì giai đoạn phát hiện tĩnh không tạo ra ứng viên API cần phân loại.';
 
 export function fmtMs(value) {
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '') return '-';
   const number = Number(value);
   return Number.isFinite(number)
     ? `${number.toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3})} ms`
-    : '—';
+    : '-';
 }
 
 export function findKey(object, key, depth = 0) {

@@ -14,17 +14,17 @@ test('the app routes real findings through the CWSS-enabled Results module',()=>
 });
 
 test('the active paginated results request CWSS for the matching scan/page',()=> {
-  assert.match(active,/api\.cwssPage\(scanId,page,PAGE_SIZE,\{signal\}\)/);
+  assert.match(active,/api\.cwssV2ForFindingIds\(/);
   assert.match(active,/cwssState\.data\?\.scan_id===scanId/);
   assert.match(active,/entry\?\.finding_id/);
-  assert.match(active,/CWSS 1\.0\.1/);
-  assert.match(active,/Legacy heuristic/);
+  assert.match(active,/CWSS V2/);
+  assert.doesNotMatch(active,/Legacy heuristic/);
 });
 
 test('direct finding detail loads the matching CWSS record without changing triage',()=> {
   assert.match(active,/api\.findingDetail\(scanId,id,detailUrl,\{signal\}\)/);
-  assert.match(active,/api\.cwssPage\(scanId,cwssPage,PAGE_SIZE,\{signal\}\)/);
-  assert.match(active,/entry\?\.finding_id===id/);
-  assert.match(active,/unknown_metrics:row\.cwss\.unknown_metrics/);
-  assert.match(active,/Original backend finding record/);
+  assert.match(active,/api\.cwssV2Finding\(scanId,id,\{signal\}\)/);
+  assert.match(active,/api\.cwssV2ScenarioFinding\(scanId,id,\{signal\}\)/);
+  assert.match(active,/metric_assessments/);
+  assert.match(active,/source_provenance_record:flat\?\.source_provenance_record/);
 });

@@ -47,19 +47,21 @@ test('large Java scan fetches only summary and 50 rows, without replacing global
       calls.push('page'); assert.equal(sid, scanId); assert.equal(page, 1);
       assert.equal(size, 50); return {scan_id: scanId, findings, total_count: 5251};
     },
-    cwssPage: async (sid, page, size) => {
+    cwssV2ForFindingIds: async (sid, ids) => {
       calls.push('cwss');
       assert.equal(sid, scanId);
-      assert.equal(page, 1);
-      assert.equal(size, 50);
+      assert.equal(ids.length, 50);
+      assert.equal(ids[0], "F-0");
+      assert.equal(ids[49], "F-49");
       return {status: 'UNAVAILABLE', assessments: []};
     },
+    cwssV2ScenarioPage: async (sid, page, size) => { calls.push('scenario'); assert.equal(sid, scanId); assert.equal(page, 1); assert.equal(size, 50); return {status:'UNAVAILABLE', assessments: []}; },
     scan: async () => {throw Error('must never fetch full scan');},
     findings: async () => {throw Error('must never fetch full findings');}
   };
   const {tested, saves} = loadFrontendContract(apiStub);
   const result = await tested.loadLiveScan(scanId);
-  assert.deepEqual(calls.sort(), ['cwss', 'page', 'summary']);
+  assert.deepEqual(calls.sort(), ['cwss', 'page', 'scenario', 'summary']);
   assert.equal(result.rows.length, 50);
   assert.equal(result.counts.total, 5251);
   assert.equal(result.counts.report, 500);

@@ -10,7 +10,7 @@ import {LiveGate} from './LiveResults';
 
 const REVIEW_PAGE_SIZE=50;
 const toNum=(value)=> (value===undefined || value===null || value==='' || !Number.isFinite(Number(value)) ? null : Number(value));
-const showNum=(value)=> (value===null ? '—' : value.toLocaleString());
+const showNum=(value)=> (value===null ? '-' : value.toLocaleString());
 
 function saveJson(name,payload) {
   const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
@@ -58,8 +58,7 @@ function PagedReview({scanId}) {
   const tone=tab==='REPORT' ? 'red' : tab==='REVIEW' ? 'amber' : 'green';
   return (
     <>
-      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Xác minh cảnh báo" description="Hàng đợi hỗ trợ analyst review. Không tự xác nhận findings trong giao diện." />
-      <DataNotice>Số liệu tab lấy từ summary.triage_totals của scan {scanId}; danh sách được lọc phía server theo decision (page_size={REVIEW_PAGE_SIZE}). Trạng thái chuyên gia chỉ có thể thay đổi khi backend cung cấp reviewer workflow.</DataNotice>
+      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Xác minh cảnh báo" />
       {summaryState.status==='error' && <DataNotice>Không tải được summary (không chặn danh sách): {summaryState.error} <button className="button-secondary" onClick={retrySummary}>Thử lại</button></DataNotice>}
       <div className="review-tabs">{['REPORT','REVIEW','SUPPRESS'].map((item)=> <button className={tab===item ? 'active' : ''} key={item} onClick={()=> setTab(item)}>{item}<span>{showNum(globalCount(item))}</span></button>)}</div>
       <Card className="review-list">
@@ -67,12 +66,13 @@ function PagedReview({scanId}) {
         {pageState.status==='error' && <EmptyState title="Không tải được danh sách" text={pageState.error} icon="AlertTriangle" />}
         {pageState.status==='error' && <button className="button-secondary" onClick={retryPage}>Thử lại</button>}
         {pageState.status==='success' && !rows.length && <EmptyState title={`Không có finding ${tab}`} text="Backend trả về 0 finding cho bộ lọc này." />}
-        {pageState.status==='success' && rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tone}>{row.decision || tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}{row.score===null || row.score===undefined ? '' : ` · score ${row.score.toFixed(2)}`}</p><p>{evidenceText(row)}</p></div><Link to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`} state={{detailUrl:row.detailUrl}} className="button-secondary">Xem evidence <Icon name="ArrowRight" /></Link></div>)}
-        <div className="table-toolbar">
+        {pageState.status==='success' && rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tone}>{row.decision || tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}</p>{row.evidence !== undefined && row.evidence !== null && row.evidence !== '' && <p>{evidenceText(row)}</p>}</div><Link to={`/finding/${encodeURIComponent(row.id)}${scanQuery(scanId)}`} state={{detailUrl:row.detailUrl}} className="button-secondary ntk-p14-review-action"><span>Xem evidence</span><Icon name="ArrowRight" /></Link></div>)}
+        <nav className="ntk-p05-review-pagination" aria-label="Phân trang xác minh cảnh báo">
           <button className="button-secondary" disabled={page<=1 || pageState.status==='loading'} onClick={()=> setPage((value)=> Math.max(1,value-1))}>Trước</button>
-          <span>Trang {page}{totalPages!==null ? ` / ${totalPages}` : ''} · khớp bộ lọc: {showNum(matching)}</span>
-          <button className="button-secondary" disabled={!hasNext || pageState.status==='loading'} onClick={()=> setPage((value)=> value+1)}>Sau</button>
-        </div>
+          <span className="ntk-p05-pagination-current">Trang <strong>{page}</strong> / {totalPages ?? '-'}</span>
+          <span className="ntk-p05-pagination-total">{showNum(matching)} cảnh báo</span>
+          <button className="button-secondary" disabled={!hasNext || pageState.status==='loading'} onClick={()=> setPage((value)=> value+1)}>Tiếp</button>
+        </nav>
       </Card>
     </>
   );
@@ -83,10 +83,9 @@ function LiveReview({data}) {
   const rows=data.rows.filter((row)=> row.decision===tab);
   return (
     <>
-      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Xác minh cảnh báo" description="Hàng đợi hỗ trợ analyst review. Không tự xác nhận findings trong giao diện." />
-      <DataNotice>Danh sách lấy từ backend cho scan {data.scanId}. Trạng thái chuyên gia chỉ có thể thay đổi khi backend cung cấp reviewer workflow.</DataNotice>
+      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Xác minh cảnh báo" />
       <div className="review-tabs">{['REPORT','REVIEW','SUPPRESS'].map((item)=> <button className={tab===item ? 'active' : ''} key={item} onClick={()=> setTab(item)}>{item}<span>{data.rows.filter((row)=> row.decision===item).length}</span></button>)}</div>
-      <Card className="review-list">{rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tab==='REPORT' ? 'red' : tab==='REVIEW' ? 'amber' : 'green'}>{tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}</p><p>{evidenceText(row)}</p></div><Link to={`/finding/${encodeURIComponent(row.id)}${scanQuery(data.scanId)}`} className="button-secondary">Xem evidence <Icon name="ArrowRight" /></Link></div>)}</Card>
+      <Card className="review-list">{rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tab==='REPORT' ? 'red' : tab==='REVIEW' ? 'amber' : 'green'}>{tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}</p>{row.evidence !== undefined && row.evidence !== null && row.evidence !== '' && <p>{evidenceText(row)}</p>}</div><Link to={`/finding/${encodeURIComponent(row.id)}${scanQuery(data.scanId)}`} className="button-secondary ntk-p14-review-action"><span>Xem evidence</span><Icon name="ArrowRight" /></Link></div>)}</Card>
     </>
   );
 }
@@ -110,7 +109,6 @@ function LiveReport({data}) {
   return (
     <>
       <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Trung tâm báo cáo" description="Báo cáo của scan LIVE đang chọn." />
-      <DataNotice>Dữ liệu LIVE từ backend cho scan {data.scanId}. Thống kê bên dưới là tổng scan từ summary; xuất dữ liệu đã nạp chỉ bao gồm payload findings hiện có, không thay thế báo cáo đầy đủ từ backend.</DataNotice>
       {summaryState.status==='loading' && <DataNotice>Đang tải thống kê tổng scan từ backend…</DataNotice>}
       {summaryState.status==='error' && <DataNotice>Không tải được thống kê tổng scan: {summaryState.error} <button className="button-secondary" onClick={retrySummary}>Thử lại</button></DataNotice>}
       <Card className="report-row"><div><Badge tone="blue">LIVE</Badge><h3>{data.scanId}</h3><p>{showNum(totalCandidates)} findings · REPORT {showNum(reportCount)} · REVIEW {showNum(reviewCount)} · SUPPRESS {showNum(suppressCount)}</p></div>
@@ -129,7 +127,7 @@ export function Review() {
   const [params]=useSearchParams();
   const scanId=params.get('scan_id') || window.sessionStorage.getItem(ACTIVE_KEY) || '';
   if (scanId) return <PagedReview scanId={scanId} />;
-  return <DemoReview />;
+  return <><PageHeader title="Xác minh cảnh báo" /><EmptyState title="Chưa chọn scan LIVE" text="Mở lịch sử quét hoặc tạo scan Java để xem bằng chứng từ backend." /><Link to="/history">Lịch sử quét</Link></>;
 }
 
 function DemoReview() {
@@ -137,10 +135,10 @@ function DemoReview() {
   const rows=demoFindings.filter((row)=> row.decision===tab);
   return (
     <>
-      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Xác minh cảnh báo" description="Hàng đợi hỗ trợ analyst review. Không tự xác nhận findings trong giao diện." />
+      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Xác minh cảnh báo" />
       <DataNotice>Danh sách là dữ liệu minh họa. Trạng thái chuyên gia chỉ có thể thay đổi khi backend cung cấp reviewer workflow.</DataNotice>
       <div className="review-tabs">{['REPORT','REVIEW','SUPPRESS'].map((item)=> <button className={tab===item ? 'active' : ''} key={item} onClick={()=> setTab(item)}>{item}<span>{demoFindings.filter((row)=> row.decision===item).length}</span></button>)}</div>
-      <Card className="review-list">{rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tab==='REPORT' ? 'red' : tab==='REVIEW' ? 'amber' : 'green'}>{tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}</p><p>{row.reason}</p></div><Link to={`/finding/${row.id}`} className="button-secondary">Xem evidence <Icon name="ArrowRight" /></Link></div>)}</Card>
+      <Card className="review-list">{rows.map((row)=> <div className="review-row" key={row.id}><div><Badge tone={tab==='REPORT' ? 'red' : tab==='REVIEW' ? 'amber' : 'green'}>{tab}</Badge><h3>{row.title}</h3><p className="mono">{row.id} · {row.cwe} · {row.file}:{row.line}</p><p>{row.reason}</p></div><Link to={`/finding/${row.id}`} className="button-secondary ntk-p14-review-action"><span>Xem evidence</span><Icon name="ArrowRight" /></Link></div>)}</Card>
       <div className="section-block"><SectionTitle title="Trạng thái chuyên gia" /><div className="status-grid">{['NOT_REVIEWED','CONFIRMED_TRUE_POSITIVE','CONFIRMED_FALSE_POSITIVE'].map((item)=> <Card key={item} title={item}><p>Chưa có thao tác reviewer được kết nối. Frontend không tự xác nhận hoặc ghi đè trạng thái.</p></Card>)}</div></div>
     </>
   );
@@ -165,9 +163,9 @@ function DemoReports() {
   };
   return (
     <>
-      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Trung tâm báo cáo" description="Lịch sử và bản xuất báo cáo sẽ lấy từ backend khi API report sẵn sàng." actions={demo && <button onClick={download} className="button-secondary"><Icon name="Download" />Xuất JSON minh họa</button>} />
-      <DataNotice>{demo ? 'Bản ghi báo cáo hiện tại là minh họa synthetic.' : 'Chưa có phiên phân tích thực để hiển thị. Nút xuất được bật khi có dữ liệu demo.'}</DataNotice>
-      {demo ? <Card className="report-row"><div><Badge tone="amber">DEMO</Badge><h3>Java Security Sample · Synthetic</h3><p>Sample scan · Findings minh họa · Không phải kết quả backend</p></div><Link to="/results" className="button-secondary">Xem report <Icon name="ArrowRight" /></Link></Card> : <EmptyState title="Chưa có báo cáo" text="Các phiên scan và báo cáo sẽ xuất hiện tại đây khi backend cung cấp dữ liệu." icon="FileText" />}
+      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Trung tâm báo cáo" actions={demo && <button onClick={download} className="button-secondary"><Icon name="Download" />Xuất JSON minh họa</button>} />
+      {demo && <DataNotice>Báo cáo minh họa, không phải kết quả phân tích thực tế.</DataNotice>}
+      {demo ? <Card className="report-row"><div><Badge tone="amber">DEMO</Badge><h3>Java Security Sample · Synthetic</h3><p>Sample scan · Findings minh họa · Không phải kết quả backend</p></div><Link to="/results" className="button-secondary">Xem report <Icon name="ArrowRight" /></Link></Card> : <><EmptyState title="Chưa chọn phiên phân tích" text="Mở một phiên trong Lịch sử phân tích để xem và tải báo cáo." icon="FileText" /><Link className="button-secondary" to="/history">Chọn phiên phân tích <Icon name="ArrowRight" /></Link></>}
     </>
   );
 }
@@ -212,14 +210,13 @@ export function Status() {
 export function About() {
   return (
     <>
-      <PageHeader eyebrow="THÔNG TIN HỌC THUẬT" title="Giới thiệu đề tài" description="Nền tảng nghiên cứu kết hợp phân tích tĩnh nguồn mở và mô hình ngôn ngữ để hỗ trợ đánh giá mã nguồn Java." />
+      <PageHeader eyebrow="THÔNG TIN HỌC THUẬT" title="Giới thiệu đề tài" description="Phát triển công cụ phát hiện lỗ hổng mã nguồn kết hợp phân tích tĩnh nguồn mở và mô hình ngôn ngữ lớn." />
       <div className="university-card">
         <UETLogo variant="about" />
         <div className="university-details">
           <Badge tone="blue">ĐỒ ÁN TỐT NGHIỆP</Badge>
           <h2>Trường Đại học Công nghệ<br />Đại học Quốc gia Hà Nội</h2>
           <p>VNU University of Engineering and Technology (VNU-UET)</p>
-          <span className="academic-disclaimer">Website giới thiệu sản phẩm đồ án; không phải cổng thông tin chính thức của nhà trường.</span>
         </div>
       </div>
       <Card className="thesis-card" title="Thông tin đề tài">
@@ -229,13 +226,13 @@ export function About() {
           <div><span>MÃ SINH VIÊN</span><strong className="mono">22025523</strong></div>
           <div><span>GIẢNG VIÊN HƯỚNG DẪN</span><strong>TS. Nguyễn Đại Thọ</strong></div>
           <div><span>LỚP</span><strong>K67-I-CN</strong></div>
-          <div><span>TRƯỜNG</span><strong>Trường Đại học Công nghệ — Đại học Quốc gia Hà Nội</strong></div>
+          <div><span>TRƯỜNG</span><strong>Trường Đại học Công nghệ - Đại học Quốc gia Hà Nội</strong></div>
           <div><span>LĨNH VỰC</span><strong>An toàn thông tin, phân tích mã nguồn và ứng dụng mô hình ngôn ngữ lớn</strong></div>
         </div>
       </Card>
       <section className="section-block">
         <SectionTitle title="Đóng góp nghiên cứu" />
-        <div className="contribution-grid">{['Tích hợp các thành phần phân tích mã nguồn.','Xây dựng và kiểm soát chất lượng dữ liệu API role.','Fine-tuning mô hình chuyên biệt bằng LoRA.','Hợp nhất bằng chứng và chấm điểm heuristic.','Phân loại cảnh báo để hỗ trợ xác minh.','Triển khai giao diện có khả năng kết nối API.'].map((item,index)=> <div className="contribution" key={item}><span>0{index+1}</span><p>{item}</p></div>)}</div>
+        <div className="contribution-grid">{['Tích hợp các thành phần phân tích mã nguồn.','Xây dựng và kiểm soát chất lượng dữ liệu API role.','Fine-tuning mô hình chuyên biệt bằng LoRA.','Hợp nhất bằng chứng và ưu tiên theo MITRE CWSS V2.','Phân loại cảnh báo để hỗ trợ xác minh.','Triển khai giao diện có khả năng kết nối API.'].map((item,index)=> <div className="contribution" key={item}><span>0{index+1}</span><p>{item}</p></div>)}</div>
       </section>
       <DataNotice>Giới hạn: khả năng phát hiện phụ thuộc ruleset, phạm vi phân tích và bằng chứng backend. Không khẳng định phát hiện mọi lỗ hổng hoặc loại bỏ hoàn toàn false positive.</DataNotice>
     </>

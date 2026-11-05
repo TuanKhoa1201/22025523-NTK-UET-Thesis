@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {Card,DataNotice,PageHeader,SectionTitle,Icon} from '../components/common/Ui';
+import {Card,PageHeader,SectionTitle,Icon} from '../components/common/Ui';
 
 const workflows=[
   {title:'A · Giai đoạn nghiên cứu và huấn luyện',tone:'violet',steps:['Nguồn dữ liệu','Provenance','Quality gates','Role annotation','LoRA fine-tuning','Evaluation','Checkpoint']},
@@ -11,7 +11,7 @@ const components=[
   {name:'IRIS / Java AST & Dataflow',icon:'GitBranch',role:'Phân tích cấu trúc và bằng chứng chương trình',input:'Cảnh báo ứng viên từ OpenGrep và ngữ cảnh mã nguồn Java liên quan.',output:'Bằng chứng AST,trạng thái phân tích luồng dữ liệu,bằng chứng xử lý an toàn và lý do cần xem xét.',contribution:'Giúp phân biệt mẫu mã đáng nghi với trường hợp có bằng chứng rõ hơn về luồng dữ liệu nguy hiểm hoặc cách xử lý an toàn.',limitation:'Phạm vi tập trung vào phân tích nội thủ tục và cấu trúc được hỗ trợ. Luồng phức tạp qua nhiều phương thức,lớp hoặc trạng thái động có thể chưa được chứng minh đầy đủ. AST hiện dựa trên OpenJDK JavacTask ở nơi được hỗ trợ;đây không phải xác minh ngữ nghĩa toàn diện cho mọi chương trình Java.',explanation:'IRIS xem xét cấu trúc chương trình và các bằng chứng luồng dữ liệu mà triển khai hỗ trợ. Kết quả giúp kiểm tra ngữ cảnh quanh cảnh báo,nhưng phạm vi phân tích có giới hạn.'},
   {name:'Qwen + LoRA',icon:'Cpu',role:'Phân loại vai trò API',input:'Ngữ cảnh API Java được chuẩn hóa theo định dạng suy luận của hệ thống.',output:'Nhãn source,sink,taint-propagator hoặc none cùng metadata nếu có.',contribution:'Bổ sung tín hiệu ngữ nghĩa cho các trường hợp mà quy tắc tĩnh chưa đủ rõ.',limitation:'Dự đoán có thể sai và không tự chứng minh lỗ hổng. Metrics fine-tuning đo phân loại API role,không phải độ chính xác phát hiện lỗ hổng toàn hệ thống.',explanation:'Mô hình Qwen được fine-tune bằng LoRA để phân loại vai trò API. Tín hiệu này bổ trợ đánh giá;nó không tự xác nhận hay loại trừ một lỗ hổng.'},
   {name:'Evidence Fusion',icon:'Share2',role:'Hợp nhất nguồn bằng chứng',input:'Scanner findings,bằng chứng AST/dataflow và dự đoán vai trò API.',output:'Bộ tín hiệu hợp nhất phục vụ scoring và phân loại cảnh báo.',contribution:'Giảm phụ thuộc vào một công cụ duy nhất và lưu nguồn gốc từng loại bằng chứng.',limitation:'Khi tín hiệu mâu thuẫn hoặc thiếu dữ liệu,hệ thống cần giữ trạng thái chưa chắc chắn thay vì suy diễn kết luận tuyệt đối.',explanation:'Lớp hợp nhất giữ các tín hiệu và provenance từ nhiều thành phần để scoring và triage có cơ sở giải thích hơn.'},
-  {name:'SAST Scoring',icon:'Gauge',role:'Đánh giá heuristic theo policy',input:'Base scanner score,vai trò API,trạng thái bằng chứng AST và điều kiện safety floor.',output:'Điểm cuối,giải thích các điều chỉnh và metadata chính sách.',contribution:'Hỗ trợ ưu tiên và giải thích cảnh báo một cách nhất quán.',limitation:'Hệ số là tham số heuristic do hệ thống nghiên cứu thiết kế. Điểm số không thay thế xác minh bằng chứng hoặc đánh giá thủ công.',explanation:'Policy heuristic biến các tín hiệu được chọn thành điểm hỗ trợ ưu tiên và giải thích;điểm không phải xác suất thống kê.'},
+  {name:'SAST Scoring',icon:'Gauge',role:'MITRE CWSS Inference V2',input:'Source SHA, AST, sink-slot và context có khai báo.',output:'16 metric CWSS cùng code, weight, classification và provenance.',contribution:'Ưu tiên điểm yếu độc lập với quyết định triage.',limitation:'Context tham chiếu là giả định nghiên cứu; CWSS không xác nhận TP/FP hoặc reachability.',explanation:'Kiểm tra semantic release ở bước 8; công bố CWSS sau xác minh nguồn. REPORT/REVIEW/SUPPRESS dùng bằng chứng, không dùng điểm số.'},
   {name:'Alert Verification & Triage',icon:'ShieldCheck',role:'Phân luồng cảnh báo theo bằng chứng',input:'Finding,score breakdown,bằng chứng AST và các tín hiệu liên quan.',output:'REPORT,REVIEW hoặc SUPPRESS cùng reason codes và audit trail.',contribution:'Ưu tiên cảnh báo cần xử lý mà vẫn giữ trường hợp chưa chắc chắn để kiểm tra.',limitation:'REPORT chưa phải chuyên gia xác nhận;SUPPRESS không chứng minh phần mềm an toàn. Trạng thái CONFIRMED chỉ thuộc quy trình review có chứng cứ.',explanation:'Triage chuyển bằng chứng thành luồng xử lý REPORT,REVIEW hoặc SUPPRESS,đồng thời giữ trạng thái cần review thay vì kết luận vượt quá dữ liệu.'}
 ];
 
@@ -20,7 +20,7 @@ export default function ArchitecturePage() {
   const item=components[selected];
   return (
     <>
-      <PageHeader eyebrow="NỀN TẢNG" title="Kiến trúc hệ thống" description="Hai giai đoạn nghiên cứu và vận hành được tách biệt;mỗi thành phần có đầu vào,đầu ra,đóng góp và giới hạn riêng." />
+      <PageHeader eyebrow="NỀN TẢNG" title="Kiến trúc hệ thống" />
       {workflows.map((workflow,index)=> <Workflow key={workflow.title} workflow={workflow} index={index} />)}
       <section className="section-block architecture-roles">
         <SectionTitle title="Vai trò và giới hạn của các thành phần" />
@@ -52,24 +52,34 @@ export default function ArchitecturePage() {
           </Card>
         </div>
       </section>
-      <DataNotice>REPORT là trạng thái ưu tiên theo policy,không phải xác nhận chuyên gia. SUPPRESS vẫn được lưu trong audit trail.</DataNotice>
     </>
   );
 }
 
 function Workflow({workflow,index}) {
+  const training = index === 0;
   return (
-    <section className={`architecture-workflow architecture-lane ${workflow.tone}`}>
-      <div className="lane-heading"><span>{String(index+1).padStart(2,'0')}</span><h2>{workflow.title}</h2><i /></div>
-      <div className="workflow-grid">
+    <section className={`ntk-p05-workflow ${training ? 'ntk-p05-training' : 'ntk-p05-runtime'}`} aria-label={workflow.title}>
+      <header className="ntk-p05-workflow-header">
+        <div className="ntk-p05-stage-marker">{training ? '01' : '02'}</div>
+        <div>
+          <span className="ntk-p05-stage-eyebrow">{training ? 'GIAI ĐOẠN NGHIÊN CỨU' : 'GIAI ĐOẠN VẬN HÀNH'}</span>
+          <h2>{workflow.title.replace(/^[AB] · /, '')}</h2>
+          <p>{training
+            ? 'Chuẩn bị dữ liệu, tinh chỉnh và đánh giá mô hình.'
+            : 'Phân tích mã nguồn, kết hợp bằng chứng và tổng hợp cảnh báo.'}</p>
+        </div>
+        <span className="ntk-p05-stage-count">{workflow.steps.length} bước</span>
+      </header>
+      <ol className="ntk-p05-workflow-steps">
         {workflow.steps.map((step,stepIndex)=> (
-          <div className="workflow-step" key={step}>
-            <span>{String(stepIndex+1).padStart(2,'0')}</span>
-            <b>{step}</b>
-            {stepIndex<workflow.steps.length-1 && <Icon name="ArrowRight" />}
-          </div>
+          <li className="ntk-p05-workflow-step" key={step}>
+            <span className="ntk-p05-step-number">{String(stepIndex+1).padStart(2,'0')}</span>
+            <strong>{step}</strong>
+            <span className="ntk-p05-step-arrow" aria-hidden="true">{stepIndex<workflow.steps.length-1 && <Icon name="ArrowRight" />}</span>
+          </li>
         ))}
-      </div>
+      </ol>
     </section>
   );
 }

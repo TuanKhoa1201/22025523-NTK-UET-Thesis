@@ -1,0 +1,99 @@
+/* P0.6: finding detail, evidence-first progressive disclosure. */
+.ntk-p06-detail { min-width: 0; }
+.ntk-p06-detail .page-header { margin-bottom: 24px; }
+.ntk-p06-detail .page-header p { max-width: 850px; overflow-wrap: anywhere; }
+.ntk-p06-hero { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(180px, .7fr) minmax(210px, .85fr); gap: 14px; }
+.ntk-p06-hero > .card { min-width: 0; min-height: 210px; padding: 22px; }
+.ntk-p06-intro { background: linear-gradient(135deg, #10253b 0%, #0f1a2a 74%); }
+.ntk-p06-intro-header { display: flex; align-items: center; gap: 12px; }
+.ntk-p06-intro-header > span:last-child { color: #9eb4ca; font-size: 12px; }
+.ntk-p06-intro h2 { font-size: clamp(19px, 2vw, 25px); line-height: 1.35; margin: 18px 0 9px; }
+.ntk-p06-intro > p, .ntk-p06-triage > p { color: #adbed0; font-size: 13px; line-height: 1.75; margin: 0; }
+.ntk-p06-minor-stat { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 16px; color: #91abc4; font-size: 11px; }
+.ntk-p06-minor-stat strong { color: #e1eaf4; font-size: 12px; }
+.ntk-p06-kicker { display: block; color: #93b6ce; font-weight: 750; font-size: 11px; letter-spacing: .09em; }
+.ntk-p06-score { display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(135deg, #102c3d, #111c2e); }
+.ntk-p06-score-number { display: flex; align-items: baseline; gap: 4px; margin-top: 16px; font-variant-numeric: tabular-nums; }
+.ntk-p06-score-number strong { color: #66d4ff; font-size: clamp(36px, 4vw, 54px); line-height: 1.05; letter-spacing: -.055em; }
+.ntk-p06-score-number .ntk-p06-score-empty { color: #a9b9c8; }
+.ntk-p06-score-number > span { color: #9cb1c6; font-size: 16px; }
+.ntk-p06-score > p { margin: 7px 0 0; color: #d3e2ed; font-size: 13px; }
+.ntk-p06-score > small { display: block; margin-top: 8px; color: #b2c4d4; font-size: 11px; line-height: 1.5; }
+.ntk-p06-score small button, .ntk-p06-technical-body p button { background: none; color: #67d3ff; border: 0; text-decoration: underline; padding: 0 3px; }
+.ntk-p06-triage { background: linear-gradient(145deg, #161d30, #101929); }
+.ntk-p06-decision { margin: 30px 0 16px; }
+.ntk-p06-decision .badge { font-size: 16px; font-weight: 750; border-radius: 9px; padding: 10px 15px; }
+.ntk-p06-section { margin-top: 30px; }
+.ntk-p06-section .section-title { margin-bottom: 13px; }
+.ntk-p06-section .section-title h2 { font-size: 21px; }
+.ntk-p06-location { padding: 22px; }
+.ntk-p06-location-grid { display: grid; grid-template-columns: 1.2fr .45fr 1.3fr; gap: 18px; }
+.ntk-p06-location-grid > div { min-width: 0; }
+.ntk-p06-location-grid span { display: block; color: #9bb4ca; font-size: 12px; margin-bottom: 7px; }
+.ntk-p06-location-grid strong { display: block; color: #ecf5ff; font-size: 15px; overflow-wrap: anywhere; }
+.ntk-p06-file-path { margin: 17px 0 0; padding-top: 15px; border-top: 1px solid #29394c; color: #8fb5d5; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.ntk-p06-code-wrap { margin-top: 20px; }
+.ntk-p06-code-wrap h3 { margin: 0 0 11px; color: #dceaf7; font-size: 14px; }
+.ntk-p06-code-wrap pre { max-height: 400px; overflow: auto; background: #071320; padding: 17px 19px; border: 1px solid #294059; border-radius: 10px; font: 12px/1.8 'JetBrains Mono', Consolas, monospace; color: #c4e5f8; white-space: pre; }
+.ntk-p06-code-wrap > small { font-size: 11px; color: #9fb3c6; }
+.ntk-p06-evidence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.ntk-p06-evidence-grid .card { padding: 20px; min-width: 0; }
+.ntk-p06-source-title { display: flex; align-items: center; gap: 10px; color: #6fd7ff; margin-bottom: 16px; }
+.ntk-p06-source-title svg { width: 19px; height: 19px; flex-shrink: 0; }
+.ntk-p06-source-title h3 { color: #dbeefa; margin: 0; font-size: 15px; }
+.ntk-p06-evidence-grid .card > strong { display: block; font-size: 14px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.ntk-p06-evidence-grid .card > p { color: #9eb5ca; margin: 8px 0 0; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.ntk-p06-guidance { border-color: #326854; background: linear-gradient(135deg, #0c2827, #101e2d); }
+.ntk-p06-guidance-label { color: #8adbb3; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 750; }
+.ntk-p06-guidance p { color: #e0ede8; font-size: 14px; line-height: 1.8; margin: 9px 0 0; }
+.ntk-p06-technical { margin-top: 32px; border: 1px solid #2a3e56; border-radius: 12px; background: #0c1726; overflow: hidden; }
+.ntk-p06-technical > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 22px; cursor: pointer; color: #d7e8f7; font-size: 14px; font-weight: 650; list-style: none; }
+.ntk-p06-technical > summary::-webkit-details-marker { display: none; }
+.ntk-p06-technical > summary > span { display: flex; align-items: center; gap: 11px; }
+.ntk-p06-technical > summary:hover { background: #12263b; }
+.ntk-p06-technical > summary:focus-visible, .ntk-p06-raw-json > summary:focus-visible { outline: 2px solid #5acfff; outline-offset: -3px; }
+.ntk-p06-technical[open] > summary > svg { transform: rotate(180deg); }
+.ntk-p06-technical-body { border-top: 1px solid #293950; padding: 19px 22px 23px; min-width: 0; }
+.ntk-p06-technical-body h3 { font-size: 15px; margin: 24px 0 15px; }
+.ntk-p06-technical-body > p { color: #aec2d6; font-size: 12px; line-height: 1.75; }
+.ntk-p06-technical-note { margin: 0 0 12px; }
+.ntk-p06-metric-table { min-width: 610px; }
+.ntk-p06-metric-table td { max-width: 420px; overflow-wrap: anywhere; }
+.ntk-p06-raw-json { border: 1px solid #2a3f57; border-radius: 8px; margin-top: 22px; overflow: hidden; }
+.ntk-p06-raw-json > summary { padding: 14px 16px; cursor: pointer; color: #9dd9f4; font-size: 12px; }
+.ntk-p06-raw-json pre { margin: 0; padding: 18px; max-height: 460px; overflow: auto; color: #c5e4f3; background: #08121e; font: 12px/1.7 'JetBrains Mono', Consolas, monospace; }
+@media (max-width: 1150px) {
+  .ntk-p06-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ntk-p06-intro { grid-column: 1 / -1; }
+  .ntk-p06-evidence-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ntk-p06-evidence-grid .card:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 740px) {
+  .ntk-p06-hero, .ntk-p06-evidence-grid { grid-template-columns: 1fr; }
+  .ntk-p06-intro, .ntk-p06-evidence-grid .card:last-child { grid-column: auto; }
+  .ntk-p06-hero > .card { min-height: unset; }
+  .ntk-p06-decision { margin: 15px 0 10px; }
+  .ntk-p06-location-grid { grid-template-columns: 1fr 1fr; gap: 18px; }
+  .ntk-p06-location-grid > div:last-child { grid-column: 1 / -1; }
+  .ntk-p06-technical > summary, .ntk-p06-technical-body { padding: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ntk-p06-technical > summary > svg { transition: none; }
+}
+
+/* P0.7: clearer evidence and Vietnamese CWSS factor explanations. */
+.ntk-p07-iris-origin { color: #79afc9 !important; font-size: 11px !important; border-top: 1px solid #263b4f; padding-top: 9px; }
+.ntk-p06-guidance p { margin-top: 0; }
+.ntk-p06-guidance-label { text-transform: none; font-size: 14px; letter-spacing: 0; margin-right: 3px; }
+.ntk-p07-weight-note { margin: 0 0 15px !important; font-size: 12px !important; }
+.ntk-p06-metric-table { min-width: 940px; }
+.ntk-p06-metric-table th { white-space: nowrap; }
+.ntk-p06-metric-table td { vertical-align: top; line-height: 1.6; }
+.ntk-p06-metric-table td:nth-child(1) { min-width: 160px; }
+.ntk-p06-metric-table td:nth-child(2) { min-width: 180px; }
+.ntk-p06-metric-table td:nth-child(3) { min-width: 95px; }
+.ntk-p06-metric-table td:nth-child(4) { min-width: 150px; }
+.ntk-p07-metric-title { display: block; font-size: 12px; color: #e2eef7; }
+.ntk-p07-metric-code { display: block; font: 11px/1.8 Consolas, monospace; color: #84b2cc; }
+.ntk-p07-value-code { color: #85abc3; font: 11px/1.5 Consolas, monospace; white-space: nowrap; }
+.ntk-p07-metric-weight { color: #89dfff; font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }

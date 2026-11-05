@@ -1,0 +1,35 @@
+/* Results dashboard: scoped presentation only; no alteration to backend values. */
+.rd-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rd-kpis .stat-card { min-width: 0; overflow: hidden; }
+.rd-kpis .stat-card strong { display: block; max-width: 100%; overflow-wrap: normal; word-break: normal; }
+.rd-kpis .rd-kpi-compact { display: inline-block; max-width: 100%; font-size: clamp(17px, 1.7vw, 23px); line-height: 1.4; overflow-wrap: anywhere; }
+.rd-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.rd-chart-note { margin: 8px 0 0; font-size: 12px; line-height: 1.5; }
+.rd-filters { display: grid; grid-template-columns: 2fr repeat(3, minmax(120px, 1fr)) 100px 100px minmax(150px, 1fr); gap: 8px; margin-bottom: 8px; }
+.rd-filters input, .rd-filters select {
+  display: block; min-width: 0; width: 100%; min-height: 42px;
+  padding: 9px 11px; border-radius: 8px; border: 1px solid #33465f;
+  background: #0d1b2d; color: #e6edf6; color-scheme: dark;
+}
+.rd-filters input::placeholder { color: #9cb0c6; opacity: 1; }
+.rd-filters select option { color: #e6edf6; background: #0d1b2d; }
+.rd-filters input:focus-visible, .rd-filters select:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; border-color: #38bdf8; }
+.rd-filters input:disabled, .rd-filters select:disabled { opacity: .55; cursor: not-allowed; }
+.rd-count { margin: 4px 0 12px; font-size: 13px; }
+.rd-table { table-layout: fixed; width: 100%; }
+.rd-table td, .rd-table th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-id { max-width: 220px; }
+.rd-file { max-width: 220px; }
+.ntk-p06-proof-stat { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 16px; color: #c2c2c9; font-size: 11px; }
+.ntk-p06-proof-stat > span { font-weight: 600; }
+.ntk-p06-proof-stat > p { flex-basis: 100%; margin: 0; color: #c2c2c9; font-size: 11px; line-height: 1.65; }
+@media (max-width: 1100px) {
+  .rd-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rd-table { table-layout: auto; }
+}
+@media (max-width: 1280px) { .rd-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1000px) { .rd-chart-grid { grid-template-columns: 1fr; } .rd-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .rd-kpis { grid-template-columns: 1fr; }
+  .rd-filters { grid-template-columns: 1fr 1fr; }
+}

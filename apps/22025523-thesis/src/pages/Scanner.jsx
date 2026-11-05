@@ -1,9 +1,9 @@
 import {useEffect, useRef, useState} from 'react';
 import {Link, useOutletContext} from 'react-router-dom';
-import {Card, PageHeader, Badge, DataNotice, Icon} from '../components/common/Ui';
+import {Card, PageHeader, Icon} from '../components/common/Ui';
 import SecurityAnalysisScene from '../components/scanner/SecurityAnalysisScene';
 import {CoveragePanel, FailureDetails, StageOverview} from '../components/scanner/JobPanels';
-import {api} from '../services/api';
+import {api, inputErrorMessage} from '../services/api';
 import {currentStageIndex, resolveStages, skipNote} from '../services/jobModel';
 import {loadLiveScan, scanQuery} from '../services/liveScan';
 import {readHistory, upsertHistory} from '../services/scanHistory';
@@ -27,7 +27,7 @@ function stageNumber(stage, index) {
 function formatMs(value) {
   return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
     ? `${Number(value).toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3})} ms`
-    : '—';
+    : '-';
 }
 
 function StageTiming({job, counts}) {
@@ -36,11 +36,6 @@ function StageTiming({job, counts}) {
   const byNumber = new Map(stages.map((stage, index) => [stageNumber(stage, index), stage]));
   const durations = [...byNumber.values()].map((stage) => Number(stage.duration_ms)).filter(Number.isFinite);
   const sum = durations.reduce((total, value) => total + value, 0);
-  const total = Number(job?.total_e2e_elapsed_ms ?? job?.total_e2e_duration_ms);
-  const longest = [...byNumber.entries()]
-    .filter(([, stage]) => stage.duration_ms !== null && stage.duration_ms !== undefined && Number.isFinite(Number(stage.duration_ms)))
-    .sort((a, b) => Number(b[1].duration_ms) - Number(a[1].duration_ms))[0];
-
   return (
     <section className="section-block">
       <h3>THỜI GIAN THỰC THI 10 GIAI ĐOẠN</h3>
@@ -61,18 +56,12 @@ function StageTiming({job, counts}) {
                   <td>{stage?.stage_name || stage?.name || STAGE_KEYS[index]}</td>
                   <td>{status}{active && Number.isFinite(elapsed) ? ` · elapsed ${formatMs(elapsed)}` : ''}{note ? ` · ${note}` : ''}</td>
                   <td>{formatMs(stage?.duration_ms)}</td>
-                  <td>{stage?.duration_ms !== null && stage?.duration_ms !== undefined && Number.isFinite(Number(stage?.duration_ms)) && sum > 0 ? `${(Number(stage.duration_ms) / sum * 100).toFixed(2)}%` : '—'}</td>
-                  <td className="mono">{stage?.summary_metadata ? JSON.stringify(stage.summary_metadata) : '—'}</td>
+                  <td>{stage?.duration_ms !== null && stage?.duration_ms !== undefined && Number.isFinite(Number(stage?.duration_ms)) && sum > 0 ? `${(Number(stage.duration_ms) / sum * 100).toFixed(2)}%` : '-'}</td>
+                  <td className="mono">{stage?.summary_metadata ? JSON.stringify(stage.summary_metadata) : '-'}</td>
                 </tr>
               );
             })}</tbody>
           </table>
-        </div>
-        <div className="model-card-grid">
-          <div><span>TỔNG E2E BACKEND</span><strong>{formatMs(total)}</strong></div>
-          <div><span>TỔNG DURATION CÁC STAGE</span><strong>{formatMs(sum)}</strong></div>
-          <div><span>OVERHEAD</span><strong>{Number.isFinite(total) && total >= sum ? formatMs(total - sum) : '—'}</strong></div>
-          <div><span>STAGE DÀI NHẤT</span><strong>{longest ? `${longest[1].stage_name || longest[1].name || STAGE_KEYS[longest[0] - 1]} · ${formatMs(longest[1].duration_ms)}` : '—'}</strong></div>
         </div>
       </Card>
     </section>
@@ -108,6 +97,16 @@ export default function Scanner() {
     requestRef.current?.abort();
   }, []);
 
+  // Resume the elapsed clock after a page reload while a known backend job
+  // remains active. No stage duration or scan result is simulated here.
+  useEffect(() => {
+    if (!jobId || !startRef.current || timerRef.current) return;
+    setElapsedMs(Math.max(0, Date.now() - startRef.current));
+    timerRef.current = window.setInterval(() => {
+      setElapsedMs(Math.max(0, Date.now() - startRef.current));
+    }, 250);
+  }, [jobId]);
+
   const scrollToSimulation = () => {
     requestAnimationFrame(() => simulationRef.current?.scrollIntoView({behavior: 'smooth', block: 'start'}));
   };
@@ -125,53 +124,78 @@ export default function Scanner() {
         setInterrupted(false);
         setLiveJob(job);
         const state = String(job?.state || '').toUpperCase();
-        setLiveStage(state || 'IDLE');
+        if (state !== 'COMPLETED') setLiveStage(state || 'IDLE');
         if (job?.scan_id) {
           window.sessionStorage.setItem('22025523-scan-id', job.scan_id);
           setLiveScanId(job.scan_id);
         }
         if (state === 'QUEUED' || state === 'RUNNING') {
           setLiveStatus(state === 'QUEUED'
-            ? 'Backend đã xếp job vào hàng chờ'
+            ? 'Đang chờ lượt phân tích'
             : job.publication_state === 'PERSISTING_RESULTS'
-              ? 'Đã chạy xong 10 giai đoạn; backend đang lưu JSON và lập chỉ mục findings…'
-              : `Backend đang thực thi${job.active_stage ? ` · stage ${job.active_stage}` : ''}`);
+              ? 'Đang hoàn tất và lưu kết quả phiên quét…'
+              : `Đang phân tích mã nguồn${job.active_stage ? ` · Bước ${job.active_stage}/10` : ''}`);
           pollTimer = window.setTimeout(poll, 750);
           return;
         }
-        if (state === 'COMPLETED' && job.scan_id) {
-          setLiveStatus('Đang tải summary và trang findings đầu tiên từ backend');
-          window.clearInterval(timerRef.current);
-          setElapsedMs(Date.now() - startRef.current);
+        if (state === 'COMPLETED') {
+          // A completed stage-10 trace is not a completed scan. Wait for the
+          // terminal job AND the matching backend findings before closing
+          // the visual pipeline and freezing its total elapsed time.
+          setLiveStage('LOADING_RESULTS');
+          setLiveStatus('Backend đã xử lý xong. Đang xác nhận kết quả phiên quét…');
+          if (!job.scan_id) {
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+            setLiveStage('RESULTS_ERROR');
+            setLiveStatus('Không có mã phiên để xác nhận kết quả.');
+            setError('Job báo hoàn tất nhưng chưa cung cấp scan_id hợp lệ.');
+            setBusy(false);
+            return;
+          }
           try {
             const data = await loadLiveScan(job.scan_id, controller.signal);
             if (stopped) return;
+            if (!data?.counts) throw new Error('Backend chưa cung cấp thống kê của phiên.');
+            const total = data.scan?.total_e2e_duration_ms;
+            setBackendMs(typeof total === 'number' && Number.isFinite(total) ? total : null);
             setLiveCounts(data.counts);
-            const total = Number(data.scan?.total_e2e_duration_ms);
-            setBackendMs(Number.isFinite(total) ? total : null);
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+            if (startRef.current) setElapsedMs(Math.max(0, Date.now() - startRef.current));
+            else if (typeof total === 'number' && Number.isFinite(total)) setElapsedMs(total);
             setLiveStage('COMPLETED');
-            setLiveStatus('Hoàn tất: dữ liệu đã lưu; summary và trang findings đầu tiên tải thành công');
+            setLiveStatus(data.counts.total === 0
+              ? 'Quét hoàn tất. Chưa phát hiện cảnh báo trong phạm vi kiểm tra.'
+              : 'Quét hoàn tất. Kết quả đã sẵn sàng.');
           } catch (failure) {
-            if (!stopped && !controller.signal.aborted) setError(`Job đã hoàn tất nhưng không tải được findings: ${failure.message}`);
+            if (stopped || controller.signal.aborted) return;
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+            if (startRef.current) setElapsedMs(Math.max(0, Date.now() - startRef.current));
+            setLiveStage('RESULTS_ERROR');
+            setLiveStatus('Backend kết thúc nhưng chưa xác nhận được kết quả.');
+            setError(`Không thể tải kết quả của phiên ${job.scan_id}: ${failure.message}`);
           }
           setBusy(false);
           return;
         }
         if (state === 'FAILED') {
           window.clearInterval(timerRef.current);
-          if (startRef.current) setElapsedMs(Date.now() - startRef.current);
+          timerRef.current = null;
+          if (startRef.current) setElapsedMs(Math.max(0, Date.now() - startRef.current));
           setBusy(false);
-          setLiveStatus('Backend đã dừng job với trạng thái FAILED');
-          setError(job.error_message || (typeof job.error === 'string' ? job.error : job.error?.message) || job.message || 'Backend đã đánh dấu job là FAILED.');
+          setLiveStatus('Quét không thành công.');
+          setError(inputErrorMessage(job));
           if (job.scan_id) upsertHistory({scanId: job.scan_id, status: 'FAILED'});
           return;
         }
-        setLiveStatus('Backend trả về trạng thái job chưa xác định; sẽ thử GET lại.');
+        setLiveStatus('Chưa xác định được tiến trình. Đang thử kết nối lại.');
         pollTimer = window.setTimeout(poll, 1500);
       } catch (failure) {
         if (!stopped && !controller.signal.aborted) {
           setInterrupted(true);
-          setLiveStatus(`Mất kết nối khi polling; sẽ thử GET lại. ${failure.message}`);
+          setLiveStatus(`Mất kết nối khi theo dõi. Đang thử lại. ${failure.message}`);
           pollTimer = window.setTimeout(poll, 1500);
         }
       }
@@ -186,7 +210,7 @@ export default function Scanner() {
   }, [jobId]);
 
   useEffect(() => {
-    if (jobId) return undefined;
+    if (jobId || busy || pendingRef.current) return undefined;
     const scanId = window.sessionStorage.getItem('22025523-scan-id');
     if (!scanId) return undefined;
     const controller = new AbortController();
@@ -195,17 +219,18 @@ export default function Scanner() {
       .then((data) => {
         setLiveCounts(data.counts);
         setLiveStage('COMPLETED');
-        const total = Number(data.scan?.total_e2e_duration_ms);
-        setBackendMs(Number.isFinite(total) ? total : null);
+        const total = data.scan?.total_e2e_duration_ms;
+        setBackendMs(typeof total === 'number' && Number.isFinite(total) ? total : null);
+        if (typeof total === 'number' && Number.isFinite(total)) setElapsedMs(total);
       })
       .catch((failure) => {
         if (!controller.signal.aborted) setError(failure.message);
       });
     return () => controller.abort();
-  }, [jobId]);
+  }, [jobId, busy]);
 
   const startLive = async () => {
-    if (pendingRef.current) return;
+    if (pendingRef.current || busy) return;
     setError('');
     if (backend.status !== 'CONNECTED') {
       const statusMessage = backend.status === 'CHECKING'
@@ -215,15 +240,25 @@ export default function Scanner() {
       setLiveStatus(statusMessage);
       return;
     }
-    if (tab !== 'github') {
-      setError('API tải ZIP trực tiếp chưa được đối chiếu với hợp đồng backend. Vui lòng dùng URL GitHub trong lúc chờ xác nhận.');
+    if (tab === 'zip' && (!file || !/\.zip$/i.test(file.name))) {
+      setError('Chọn tệp .zip chứa mã nguồn Java.');
       return;
     }
-    if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(url.trim())) {
+    const uploadLimit = backend.health?.source_inventory_limits?.max_zip_upload_bytes ?? 25*1024*1024;
+    if (tab === 'zip' && file.size > uploadLimit) {
+      setError(`Tệp ZIP vượt giới hạn ${Math.round(uploadLimit/1024/1024)} MB [MAX_ZIP_UPLOAD_BYTES_EXCEEDED]`);
+      return;
+    }
+    if (tab === 'github' && !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(url.trim())) {
       setError('Nhập URL repository GitHub công khai hợp lệ.');
       return;
     }
     pendingRef.current = true;
+    // A new submission owns the status panel. Do not restore the previous
+    // scan while its job ID is cleared or overwrite this request's HTTP error.
+    window.sessionStorage.removeItem(JOB_KEY);
+    window.sessionStorage.removeItem(JOB_KEY + '-started');
+    window.sessionStorage.removeItem('22025523-scan-id');
     const controller = new AbortController();
     requestRef.current = controller;
     const startedAt = new Date().toISOString();
@@ -243,11 +278,15 @@ export default function Scanner() {
     scrollToSimulation();
     try {
       setLiveStage('WAITING_FOR_RESPONSE');
-      setLiveStatus('Đang chờ backend tạo job phân tích');
-      const result = await api.createScanJob(
-        url.trim(), undefined, {signal: controller.signal},
-        forceFresh ? {force_fresh_scan: true, force_new_job: true} : {}
-      );
+      setLiveStatus('Đang gửi yêu cầu đến máy chủ');
+      // Giao diện đơn giản dùng nhánh mặc định, toàn bộ phạm vi Java và giới hạn an toàn của backend.
+      // Không gửi commit, subpath hoặc max_files_limit giả định thay cho lựa chọn người dùng.
+      const result = tab === 'zip'
+        ? await api.createZipJob(file, {signal:controller.signal})
+        : await api.createScanJob(url.trim(), undefined, {signal:controller.signal}, {
+            scan_scope_policy: 'STRICT_FAIL_ON_LIMIT',
+            ...(forceFresh ? {force_fresh_scan:true,force_new_job:true} : {})
+          });
       if (typeof result?.job_id !== 'string' || !result.job_id) {
         throw new Error('Backend chưa trả về job_id theo hợp đồng hiện tại. Không thể theo dõi job này.');
       }
@@ -257,15 +296,15 @@ export default function Scanner() {
       if (submittedId) {
         window.sessionStorage.setItem('22025523-scan-id', submittedId);
         setLiveScanId(submittedId);
-        upsertHistory({scanId: submittedId, jobId: result.job_id, repoUrl: url.trim(), inputMode: 'GITHUB', startedAt, status: result.state || 'QUEUED'});
+        upsertHistory({scanId: submittedId, jobId: result.job_id, repoUrl:tab==='github'?url.trim():undefined, fileName:tab==='zip'?file.name:undefined, inputMode:tab==='zip'?'ZIP':'GITHUB', startedAt, status: result.state || 'QUEUED'});
       }
       setJobId(result.job_id);
       setLiveJob(result);
       setLiveStage(String(result.state || 'QUEUED').toUpperCase());
-      setLiveStatus('Đã nhận job từ backend');
+      setLiveStatus('Yêu cầu phân tích đã được tiếp nhận');
     } catch (failure) {
       if (!controller.signal.aborted) {
-        setError(failure.message?.startsWith('Backend') ? failure.message : `Không thể kết nối máy chủ phân tích. Vui lòng kiểm tra dịch vụ backend trước khi chạy quét trực tiếp. ${failure.message || ''}`);
+        setError(failure.message || 'Không thể kết nối máy chủ phân tích.');
         setLiveStatus('Không thể xác nhận trạng thái quét');
         setLiveStage('FAILED');
         setBusy(false);
@@ -277,12 +316,20 @@ export default function Scanner() {
     }
   };
 
-  const backendStatusMessage = {
-    CHECKING: 'Đang kiểm tra backend',
-    CONNECTED: `Backend đã kết nối${backend.health?.service ? ` · ${backend.health.service}` : ''}`,
-    DISCONNECTED: 'Backend chưa kết nối',
-    ERROR: 'Không thể xác minh backend'
-  }[backend.status] || 'Chưa xác minh trạng thái backend';
+  const statusMessage = liveStatus || (liveStage === 'COMPLETED'
+    ? 'Đã tải kết quả phiên phân tích gần nhất.'
+    : ({
+    CHECKING: 'Đang kiểm tra kết nối máy chủ…',
+    CONNECTED: 'Sẵn sàng phân tích dự án Java.',
+    DISCONNECTED: 'Chưa kết nối được máy chủ phân tích.',
+    ERROR: 'Không thể kết nối đến máy chủ phân tích.'
+    }[backend.status] || 'Chưa có phiên phân tích đang chạy.'));
+  const simpleStatus = liveStage === 'COMPLETED' ? 'Hoàn tất'
+    : liveStage === 'FAILED' ? 'Thất bại'
+      : liveStage === 'QUEUED' ? 'Đang chờ'
+        : busy || ['RUNNING', 'SUBMITTING', 'WAITING_FOR_RESPONSE'].includes(liveStage)
+          ? 'Đang phân tích'
+          : null;
 
   const latest = readHistory().find((record) => record.status === 'COMPLETED');
   const resultId = liveScanId || latest?.scanId || '';
@@ -293,7 +340,7 @@ export default function Scanner() {
 
   return (
     <>
-      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Phân tích dự án" description="Phân tích mã nguồn Java bằng OpenGrep, IRIS và Qwen LoRA. Tiến trình 10 giai đoạn được đồng bộ theo dữ liệu thực từ backend." actions={<Badge tone="green">LIVE API</Badge>} />
+      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Phân tích dự án" description="Nhập liên kết GitHub hoặc tải tệp ZIP chứa mã nguồn Java để bắt đầu." />
       <div className="scanner-layout">
         <div className="scanner-main">
           <div className="tab-switcher">
@@ -302,18 +349,35 @@ export default function Scanner() {
           </div>
           <Card className="scanner-input-card">
             {tab === 'github' ? (
-              <div className="input-section">
-                <label htmlFor="repo-url">URL repository Java công khai</label>
-                <div className="input-with-icon">
-                  <Icon name="Github" />
-                  <input id="repo-url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://github.com/owner/repository" />
-                  <Badge>HTTPS</Badge>
+              <div className="input-section ntk-p15-repo-section">
+                <div className="ntk-p15-field-header">
+                  <label htmlFor="repo-url">Liên kết dự án GitHub</label>
+                  <span className="ntk-p15-field-meta">Java / Public</span>
                 </div>
-                <p>Backend phân tích theo ruleset CWE được hỗ trợ; không có ứng viên thì LLM không chạy và không khẳng định mã nguồn an toàn.</p>
-                <label className="scanner-fresh-option" style={{display: 'flex', alignItems: 'center', gap: 10, marginTop: 12}}>
-                  <input type="checkbox" checked={forceFresh} disabled={busy} onChange={(event) => setForceFresh(event.target.checked)} />
-                  <span>Chạy mới không dùng cache để kiểm chứng suy luận thật (tốn thời gian và tài nguyên GPU)</span>
-                </label>
+                <div className="input-with-icon ntk-p15-repo-input">
+                  <Icon name="Github" />
+                  <input
+                    id="repo-url"
+                    type="url"
+                    value={url}
+                    disabled={busy}
+                    onChange={(event) => setUrl(event.target.value)}
+                    placeholder="https://github.com/owner/repository"
+                    aria-describedby="repo-url-help"
+                    autoComplete="url"
+                    spellCheck={false}
+                  />
+                </div>
+                <p id="repo-url-help" className="scanner-input-hint ntk-p15-repo-hint"><Icon name="Info" />Chỉ hỗ trợ dự án Java công khai.</p>
+                <details className="scanner-advanced ntk-p15-advanced">
+                  <summary><span className="ntk-p15-advanced-title"><Icon name="Sliders" />Tùy chọn kiểm thử</span><Icon name="ChevronDown" /></summary>
+                  <div className="ntk-p15-advanced-body">
+                    <label className="scanner-fresh-option ntk-p15-fresh-option">
+                      <input type="checkbox" checked={forceFresh} disabled={busy} onChange={(event) => setForceFresh(event.target.checked)} />
+                      <span><strong>Quét mới không dùng bộ nhớ đệm</strong><small>Có thể mất nhiều thời gian hơn.</small></span>
+                    </label>
+                  </div>
+                </details>
               </div>
             ) : (
               <button className={`dropzone ${file ? 'has-file' : ''}`} onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {event.preventDefault(); setFile(event.dataTransfer.files[0] || null);}}>
@@ -324,10 +388,9 @@ export default function Scanner() {
                 <span className="button-secondary">{file ? 'Chọn tệp khác' : 'Chọn tệp ZIP'}</span>
               </button>
             )}
-            {tab === 'zip' && <div className="inline-warning"><Icon name="AlertTriangle" />Tải ZIP LIVE đang chờ xác nhận hợp đồng API.</div>}
+            {tab === 'zip' && <p className="scanner-input-hint">Chỉ phân tích mã nguồn Java trong tệp ZIP.</p>}
             {error && <div className="inline-error" role="alert"><Icon name="AlertTriangle" />{error}</div>}
-            <div className="scanner-submit">
-              <div><strong>Phạm vi phân tích</strong><span>Java source · OpenGrep · IRIS · Qwen LoRA</span></div>
+            <div className="scanner-submit scanner-submit--minimal">
               <button className="button-primary" disabled={busy} onClick={startLive}>
                 <Icon name="ScanSearch" />{busy ? 'Đang phân tích…' : 'Bắt đầu phân tích'}<Icon name="ArrowRight" />
               </button>
@@ -336,35 +399,33 @@ export default function Scanner() {
         </div>
         <aside className="scanner-aside">
           <StageOverview job={liveJob} />
-          <Card title="Phạm vi và tính minh bạch">
-            <ul className="clean-list">
-              <li>Giải nén an toàn và kiểm tra archive thuộc backend.</li>
-              <li>ZIP LIVE chỉ hoạt động khi API chính thức sẵn sàng.</li>
-              <li>Mọi kết quả và tiến trình đều lấy từ backend; không có dữ liệu giả.</li>
-              <li>REPORT chưa đồng nghĩa chuyên gia đã xác nhận.</li>
-            </ul>
-          </Card>
         </aside>
       </div>
       <div ref={simulationRef} className="simulation-anchor">
-        <SecurityAnalysisScene live={{stage: liveStage, state: String(liveJob?.state || liveStage).toUpperCase(), activeStage: liveStage === 'COMPLETED' ? 10 : activeStage, stages: liveJob?.stages || [], counts: liveCounts, interrupted}} phase={livePhase} elapsedMs={elapsedMs} running={busy} />
-        <section className="card live-scan-status" aria-live="polite">
-          <span className="eyebrow">LIVE API · TRẠNG THÁI TỪ BACKEND</span>
-          <h2>Phiên phân tích trực tiếp</h2>
-          <p>{liveStatus || backendStatusMessage}</p>
-          <p>Trạng thái vòng đời: <code>{liveStage}</code></p>
-          {interrupted && <p className="inline-warning">Gián đoạn kết nối: đang giữ trạng thái đã xác minh gần nhất và thử GET lại.</p>}
-          <p>Thời gian kể từ lúc gửi yêu cầu (đo tại trình duyệt, không phải thời gian thực thi backend): <strong>{Math.floor(elapsedMs / 1000)} giây</strong></p>
-          {backendMs !== null && <p>Thời gian xử lý do backend báo cáo (total_e2e_duration_ms): <strong>{(backendMs / 1000).toFixed(2)} giây</strong></p>}
-          {liveScanId && <p>Mã phiên: <code>{liveScanId}</code></p>}
-          {liveStage === 'COMPLETED' && liveCounts && liveCounts.total === 0 && <p>Không phát hiện finding nào trong ruleset hiện tại và phạm vi mã nguồn đã phân tích. Điều này không khẳng định ứng dụng Java an toàn.</p>}
-          {busy && <p>Đang phân tích — chưa có thời gian hoàn tất dự kiến.</p>}
-          {resultId && <Link className="button-secondary" to={`/findings${scanQuery(resultId)}`}>{liveScanId ? 'Mở trang kết quả' : `Mở phiên gần nhất · ${resultId}`}</Link>}
-          {liveScanId && !busy && <Link className="button-secondary" to={`/replay?scan=${encodeURIComponent(liveScanId)}`}>Phát lại trace đã ghi</Link>}
+        <SecurityAnalysisScene live={{stage: liveStage, state: String(liveJob?.state || liveStage).toUpperCase(), activeStage: ['COMPLETED', 'LOADING_RESULTS', 'RESULTS_ERROR'].includes(liveStage) || liveJob?.publication_state === 'PERSISTING_RESULTS' ? 10 : activeStage, stages: liveJob?.stages || [], counts: liveCounts, publicationState: liveJob?.publication_state, resultsReady: liveStage === 'COMPLETED' && liveCounts !== null && Boolean(liveScanId) && (!liveJob?.scan_id || liveJob.scan_id === liveScanId), interrupted}} phase={livePhase} elapsedMs={elapsedMs} running={busy} />
+        <section className="card live-scan-status live-scan-status--compact" aria-live="polite">
+          <div className="scan-status-heading">
+            <h2>Tiến trình quét</h2>
+            {simpleStatus && <span className={`scan-status-chip ${liveStage === 'FAILED' ? 'scan-status-chip--failed' : ''}`}>{simpleStatus}</span>}
+          </div>
+          <p className="scan-status-message">{statusMessage}</p>
+          {interrupted && <p className="inline-warning">Kết nối bị gián đoạn. Hệ thống đang thử kết nối lại.</p>}
+          {backendMs !== null && <p>Thời gian xử lý: <strong>{(backendMs / 1000).toLocaleString('vi-VN', {maximumFractionDigits: 1})} giây</strong></p>}
+          {liveStage === 'COMPLETED' && liveCounts && liveCounts.total === 0 && <p>Không tìm thấy cảnh báo thuộc phạm vi quét; kết quả này không chứng minh mã nguồn hoàn toàn an toàn.</p>}
+          <div className="scan-status-actions">
+            {resultId && liveStage !== 'FAILED' && <Link className="button-secondary" to={`/findings${scanQuery(resultId)}`}>{liveScanId ? 'Xem kết quả' : 'Mở phiên gần nhất'} <Icon name="ArrowRight" /></Link>}
+            {liveScanId && !busy && <Link className="scan-status-replay" to={`/replay?scan=${encodeURIComponent(liveScanId)}`}>Xem lại quá trình quét <Icon name="ArrowRight" /></Link>}
+          </div>
         </section>
         {jobFailed && <FailureDetails job={liveJob} />}
-        {liveJob && <StageTiming job={liveJob} counts={liveCounts} />}
-        {liveJob && <CoveragePanel job={liveJob} counts={liveCounts} />}
+        {(liveJob || liveScanId) && (
+          <details className="scanner-technical-details">
+            <summary>Thông tin kỹ thuật phiên quét</summary>
+            {liveScanId && <p>Mã phiên: <code>{liveScanId}</code></p>}
+            {liveJob && <StageTiming job={liveJob} counts={liveCounts} />}
+            {liveJob && <CoveragePanel job={liveJob} counts={liveCounts} />}
+          </details>
+        )}
       </div>
     </>
   );

@@ -20,7 +20,7 @@ export const scanGuide=[
     visual:'inventory'
   },
   {
-    title:'OpenGrep — Phát hiện ứng viên',
+    title:'OpenGrep - Phát hiện ứng viên',
     purpose:'Tìm các mẫu mã nguồn có dấu hiệu rủi ro theo quy tắc.',
     input:'Mã nguồn Java và ruleset phân tích tĩnh.',
     process:'Quét mẫu, đối chiếu quy tắc và thu thập vị trí khớp.',
@@ -40,7 +40,7 @@ export const scanGuide=[
     visual:'context'
   },
   {
-    title:'IRIS — Phân tích chương trình',
+    title:'IRIS - Phân tích chương trình',
     purpose:'Bổ sung ngữ cảnh cấu trúc và bằng chứng chương trình được hỗ trợ.',
     input:'Candidate findings và ngữ cảnh Java.',
     process:'Phân tích cấu trúc AST, trạng thái dataflow và bằng chứng xử lý an toàn khi có.',
@@ -50,7 +50,7 @@ export const scanGuide=[
     visual:'iris'
   },
   {
-    title:'Qwen LoRA — Phân loại API',
+    title:'Qwen LoRA - Phân loại API',
     purpose:'Nhận diện vai trò API trong ngữ cảnh bảo mật.',
     input:'Ngữ cảnh API Java đã chuẩn hóa.',
     process:'Mô hình fine-tuned dự đoán source, sink, taint-propagator hoặc none.',
@@ -71,10 +71,10 @@ export const scanGuide=[
   },
   {
     title:'Chấm điểm SAST',
-    purpose:'Tính điểm heuristic theo scoring policy của hệ thống.',
-    input:'Điểm nền, điều chỉnh theo role và bằng chứng AST liên quan.',
-    process:'Áp dụng các nhánh policy, bao gồm safety floor hoặc safe release khi hợp lệ.',
-    output:'Final heuristic score cùng breakdown.',
+    purpose:'Chuẩn bị bằng chứng cho MITRE CWSS Inference V2.',
+    input:'Source SHA, AST, sink-slot và bằng chứng luồng dữ liệu.',
+    process:'Xác minh semantic release; CWSS 16 metric được công bố sau xác minh provenance.',
+    output:'MITRE CWSS V2 cùng nguồn gốc từng metric.',
     meaning:'Hỗ trợ ưu tiên và giải thích; điểm không phải xác suất vulnerability.',
     icon:'Gauge',
     visual:'scoring'
@@ -82,7 +82,7 @@ export const scanGuide=[
   {
     title:'Xác minh cảnh báo',
     purpose:'Phân luồng finding theo bằng chứng và điều kiện triage.',
-    input:'Finding, score breakdown, evidence và policy metadata.',
+    input:'Finding, semantic evidence và policy metadata.',
     process:'Đánh giá điều kiện REPORT, REVIEW hoặc SUPPRESS.',
     output:'Quyết định triage và reason codes; dữ liệu vẫn có thể được audit.',
     meaning:'Hướng sự chú ý tới cảnh báo cần xử lý mà không khẳng định quá mức.',

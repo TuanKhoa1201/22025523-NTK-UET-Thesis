@@ -9,17 +9,17 @@ import './styles/scene3d.css';
 import './styles/scanner-resilience.css';
 import './styles/ntk-final.css';
 import './styles/production-readiness.css';
+import './styles/ntk-p05.css';
+import './styles/ntk-p06.css';
 import AppShell from './components/layout/AppShell';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Overview from './pages/Overview';
 import Scanner from './pages/Scanner';
 import DatasetExplorer from './pages/DatasetExplorer';
-import {Evaluation, Training} from './pages/ResearchPages';
 import ArchitecturePage from './pages/Architecture';
 import ScoringPage from './pages/Scoring';
 import {FindingDetail, Results} from './pages/Results';
 import {About, Reports, Review} from './pages/UtilityPages';
-import StatusPage from './pages/StatusPage';
 import TraceReplay from './pages/TraceReplay';
 import History from './pages/HistoryPage';
 
@@ -53,10 +53,7 @@ function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/architecture" element={<ArchitecturePage />} />
           <Route path="/dataset" element={<DatasetExplorer />} />
-          <Route path="/training" element={<Training />} />
           <Route path="/scoring" element={<ScoringPage />} />
-          <Route path="/evaluation" element={<Evaluation />} />
-          <Route path="/status" element={<StatusPage />} />
           <Route path="/about" element={<About />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

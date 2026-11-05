@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react';
 import {Link, useSearchParams} from 'react-router-dom';
-import {Card, PageHeader, DataNotice, Icon} from '../components/common/Ui';
+import {Card, PageHeader, Icon} from '../components/common/Ui';
 import ScanStageVisual from '../components/scanner/ScanStageVisual';
 import {scanGuide} from '../data/scanGuide';
 import {api} from '../services/api';
@@ -47,10 +47,9 @@ export default function TraceReplay() {
   const step = scanGuide[index];
   return (
     <>
-      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Phát lại trace đã ghi" description="Chế độ Recorded Replay: chỉ đọc trace đã lưu (GET), không tạo scan mới." />
-      <DataNotice>Thời gian phát lại chỉ là thời lượng trình diễn. Duration trong bảng là số liệu backend đã ghi.</DataNotice>
-      <Card className="scanner-input-card">
-        <div className="table-toolbar">
+      <PageHeader eyebrow="ỨNG DỤNG PHÂN TÍCH" title="Phát lại trace đã ghi" />
+      <Card className="scanner-input-card ntk-p15-replay-lookup-card">
+        <div className="table-toolbar ntk-p15-replay-lookup">
           <input value={input} onChange={(event) => setInput(event.target.value)} placeholder="SCAN-..." />
           <button className="button-secondary" onClick={() => setParams(input ? {scan: input.trim()} : {})}>Tải trace</button>
           {scanId && <Link className="button-secondary" to={`/findings${scanQuery(scanId)}`}>Xem findings</Link>}
@@ -59,12 +58,17 @@ export default function TraceReplay() {
       {error && <div className="inline-error" role="alert">{error}</div>}
       {trace && (
         <>
-          <div className="guided-actions">
-            <button className="button-secondary" onClick={() => setPlaying((value) => !value)}><Icon name={playing ? 'Pause' : 'Play'} />{playing ? 'Tạm dừng' : 'Phát'}</button>
-            <button className="button-secondary" disabled={index === 0} onClick={() => setIndex(index - 1)}>Trước</button>
-            <button className="button-secondary" disabled={index === 9} onClick={() => setIndex(index + 1)}>Sau</button>
-            <button className="button-secondary" onClick={() => { setIndex(0); setPlaying(false); }}>Về đầu</button>
-            {[0.5, 1, 2].map((value) => <button key={value} className={`button-secondary ${speed === value ? 'active' : ''}`} onClick={() => setSpeed(value)}>{value}×</button>)}
+          <div className="guided-actions ntk-p15-replay-controls" role="toolbar" aria-label="Điều khiển phát lại">
+            <div className="ntk-p15-replay-transport" role="group" aria-label="Điều hướng từng bước">
+              <button type="button" className="button-secondary ntk-p15-play-button" aria-pressed={playing} onClick={() => setPlaying((value) => !value)}><Icon name={playing ? 'Pause' : 'Play'} />{playing ? 'Tạm dừng' : 'Phát'}</button>
+              <button type="button" className="button-secondary" disabled={index === 0} onClick={() => setIndex(index - 1)}><Icon name="ChevronLeft" />Trước</button>
+              <button type="button" className="button-secondary" disabled={index === 9} onClick={() => setIndex(index + 1)}>Sau<Icon name="ChevronRight" /></button>
+              <button type="button" className="button-secondary" onClick={() => { setIndex(0); setPlaying(false); }}><Icon name="RotateCcw" />Về đầu</button>
+            </div>
+            <div className="ntk-p15-replay-speed" role="group" aria-label="Tốc độ phát lại">
+              <span>Tốc độ</span>
+              {[0.5, 1, 2].map((value) => <button type="button" key={value} aria-pressed={speed === value} className={`button-secondary ${speed === value ? 'active' : ''}`} onClick={() => setSpeed(value)}>{value}×</button>)}
+            </div>
           </div>
           <ScanStageVisual step={step} index={index} previous={index > 0 ? scanGuide[index - 1] : null} next={index < 9 ? scanGuide[index + 1] : null} live />
           <Card className="table-card">

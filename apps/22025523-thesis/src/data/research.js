@@ -15,15 +15,12 @@ export const navGroups = [
     items: [
       ['/architecture', 'Kiến trúc hệ thống', 'GitBranch'],
       ['/dataset', 'Dữ liệu nghiên cứu', 'Database'],
-      ['/training', 'Quy trình huấn luyện', 'Cpu'],
-      ['/scoring', 'Phương pháp chấm điểm', 'Sliders'],
-      ['/evaluation', 'Đánh giá thực nghiệm', 'BarChart']
+      ['/scoring', 'Phương pháp chấm điểm', 'Sliders']
     ]
   },
   {
     title: 'HỆ THỐNG',
     items: [
-      ['/status', 'Trạng thái hệ thống', 'Activity'],
       ['/about', 'Giới thiệu đề tài', 'Info']
     ]
   }
@@ -50,7 +47,7 @@ export const pipelinePhases = [
   ['IRIS Program Analysis', 'Bổ sung ngữ cảnh Java và bằng chứng luồng dữ liệu.', 'GitBranch'],
   ['Language Model Inference', 'Phân loại vai trò API: source, sink, propagator hoặc none.', 'Cpu'],
   ['Evidence Fusion', 'Kết hợp tín hiệu; không xem một nguồn đơn lẻ là kết luận tuyệt đối.', 'Share'],
-  ['SAST Scoring', 'Tính điểm heuristic theo policy và bằng chứng hiện có.', 'Sliders'],
+  ['SAST Scoring', 'Kiểm tra bằng chứng; ưu tiên điểm yếu theo MITRE CWSS V2.', 'Sliders'],
   ['Alert Verification', 'Phân loại cảnh báo thành REPORT, REVIEW hoặc SUPPRESS.', 'Shield'],
   ['Hoàn tất & báo cáo', 'Tổng hợp kết quả trong phạm vi phiên phân tích.', 'FileText']
 ];

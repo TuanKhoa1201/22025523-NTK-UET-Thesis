@@ -61,24 +61,32 @@ export default function Scene3D({phase, onFailure}) {
         canvas,
         antialias: true,
         alpha: false,
-        powerPreference: 'default',
+        powerPreference: 'high-performance',
         failIfMajorPerformanceCaveat: false
       });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-      renderer.setClearColor('#07111d', 1);
+      renderer.setPixelRatio(Math.min(2, Math.max(1.5, window.devicePixelRatio || 1)));
+      renderer.setClearColor('#030305', 1);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.28;
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color('#07111d');
+      scene.background = new THREE.Color('#030305');
 
-      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80);
-      camera.position.set(0, 0, 8);
-      camera.lookAt(0, 0, 0);
+      const camera = new THREE.PerspectiveCamera(39, 1, 0.1, 80);
+      camera.position.set(0, 0, 7.45);
+      camera.lookAt(0, 0, -0.1);
 
-      scene.add(new THREE.AmbientLight(0xffffff, 1.1));
-      const keyLight = new THREE.DirectionalLight(0x9cecff, 1.4);
-      keyLight.position.set(3, 5, 6);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.72));
+      const keyLight = new THREE.DirectionalLight(0xffffff, 2.10);
+      keyLight.position.set(-3, 5, 6);
       scene.add(keyLight);
+      const rimLight = new THREE.DirectionalLight(0xf0f0f5, 1.05);
+      rimLight.position.set(3, -2, -2);
+      scene.add(rimLight);
+      const fillLight = new THREE.DirectionalLight(0xc0c2cc, 0.55);
+      fillLight.position.set(3, 0, 5);
+      scene.add(fillLight);
 
       atmosphere = createSceneAtmosphere(THREE, scene);
       scanScene = createScanScene(THREE, scene);
@@ -90,6 +98,7 @@ export default function Scene3D({phase, onFailure}) {
         const height = Math.max(1, Math.floor(bounds.height));
         renderer.setSize(width, height, false);
         camera.aspect = width / height;
+        camera.position.z = camera.aspect < 1.15 ? 10.1 : camera.aspect < 1.4 ? 8.65 : 7.45;
         camera.updateProjectionMatrix();
       };
 

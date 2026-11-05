@@ -7,7 +7,7 @@ const modules=[
   {name:'IRIS',short:'CONTEXT',icon:'GitBranch',description:'Bổ sung ngữ cảnh Java và bằng chứng dataflow.'},
   {name:'Qwen + LoRA',short:'ROLE INFERENCE',icon:'Cpu',description:'Phân loại vai trò API; không tự xác nhận lỗ hổng.'},
   {name:'Evidence Fusion',short:'FUSION',icon:'Share2',description:'Kết hợp tín hiệu từ các nguồn bằng chứng.'},
-  {name:'SAST Scoring',short:'SCORING',icon:'Gauge',description:'Tính điểm heuristic theo policy và dữ liệu hiện có.'},
+  {name:'SAST Scoring',short:'SCORING',icon:'Gauge',description:'Kiểm tra bằng chứng; ưu tiên điểm yếu theo MITRE CWSS V2.'},
   {name:'Alert Triage',short:'TRIAGE',icon:'ShieldCheck',description:'Phân nhóm REPORT, REVIEW và SUPPRESS.'}
 ];
 
@@ -88,9 +88,9 @@ export default function AnalysisCore({phase=0,running=false,complete=false,onSel
           <div><small>THÀNH PHẦN ĐANG CHỌN</small><b>{modules[active]?.name}</b><p>{modules[active]?.description}</p></div>
         </div>
         <div className="triage-output">
-          <span><i className="report-dot" />REPORT <b>{complete ? '01' : '—'}</b></span>
-          <span><i className="review-dot" />REVIEW <b>{complete ? '02' : '—'}</b></span>
-          <span><i className="suppress-dot" />SUPPRESS <b>{complete ? '01' : '—'}</b></span>
+          <span><i className="report-dot" />REPORT <b>{complete ? '01' : '-'}</b></span>
+          <span><i className="review-dot" />REVIEW <b>{complete ? '02' : '-'}</b></span>
+          <span><i className="suppress-dot" />SUPPRESS <b>{complete ? '01' : '-'}</b></span>
         </div>
       </div>
       <div className="engine-disclaimer">Sơ đồ và số đếm trong chế độ này là dữ liệu mô phỏng, không phải trạng thái xử lý từ backend.</div>

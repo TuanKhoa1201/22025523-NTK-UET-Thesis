@@ -1,0 +1,209 @@
+/*
+ * NTK P0.10 | Monochrome Dark Tech - clarity pass.
+ * Loaded after P0.9. Visual refinements only: no scan, API, scoring, or routing changes.
+ * The UET logo is the original color PNG supplied for the thesis.
+ */
+:root {
+  font-synthesis: none;
+  --ntk-shadow: 0 10px 24px rgba(0, 0, 0, .19), inset 0 1px 0 rgba(255,255,255,.065);
+}
+
+html, body, .app-shell {
+  font-synthesis: none;
+}
+body {
+  -webkit-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Keep text sharp instead of giving headlines a diffuse artificial glow. */
+.hero h1, .page-header h1, .section-title h2,
+.section-block > h2, .section-block > h3,
+.card h2, .card h3, .card h4 {
+  text-shadow: none;
+}
+.hero h1 {
+  font-weight: 700;
+  letter-spacing: -.038em;
+  line-height: 1.14;
+}
+.hero h1 em {
+  font-weight: 700;
+  background: linear-gradient(180deg, #fafafa 0%, #d4d4d9 54%, #9b9ba4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.page-header h1 {
+  font-weight: 690;
+  letter-spacing: -.035em;
+  line-height: 1.21;
+}
+.section-title h2, .section-block > h2 {
+  font-weight: 680;
+  letter-spacing: -.025em;
+  line-height: 1.3;
+}
+.card h2, .card h3, .card h4,
+.pillar-card h3, .stat-card strong,
+.history-source-link, .history-source > strong {
+  letter-spacing: -.012em;
+}
+.page-header p, .hero-copy > p, .pillar-card p,
+.report-row p, .history-input-mode, .history-time-grid dt,
+.history-time-grid dd, .thesis-grid strong {
+  text-shadow: none;
+}
+.hero-copy > p { color: #dddde1; line-height: 1.72; }
+.page-header p, .section-title p { color: #cbcad0; }
+.brand b { font-weight: 700; letter-spacing: .008em; }
+.nav-item { font-weight: 520; }
+.nav-item.active { font-weight: 650; }
+.breadcrumbs strong { font-weight: 650; }
+
+/* Defined surfaces and 1px edges make information easier to distinguish. */
+.card, .stat-card, .pillar-card, .journey-card, .dataset-stat,
+.table-card, .ntk-p05-workflow, .architecture-explanation,
+.ntk-p05-distribution, .formula-card, .worked-example,
+.scoring-concept, .decision-card, .university-card,
+.thesis-card, .contribution, .history-dialog,
+.scanner-input-card, .scanner-aside > .card, .research-banner {
+  border-width: 1px;
+  border-style: solid;
+  border-color: #737379;
+  box-shadow: var(--ntk-shadow);
+}
+.card, .stat-card, .pillar-card, .journey-card,
+.dataset-stat, .thesis-card, .university-card {
+  background: linear-gradient(155deg, rgba(48,48,52,.97), rgba(33,33,37,.98) 82%);
+}
+.card-heading h3, .pillar-card h3, .stat-card strong { color: #f8f8f9; }
+.pillar-card p, .stat-card small, .history-time-grid dt { color: #c6c6ce; }
+.stat-card strong { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* Crisp interactions, without changing any button behavior. */
+.button-primary, .button-secondary,
+.pagination button, .guided-actions button {
+  text-shadow: none;
+  border-width: 1px;
+  font-weight: 620;
+  line-height: 1.35;
+}
+.button-primary { font-weight: 680; }
+.button-secondary:focus-visible, .button-primary:focus-visible,
+.history-source-link:focus-visible {
+  outline: 2px solid #f1f1f2;
+  outline-offset: 3px;
+}
+.topbar { border-bottom-color: #626267; backdrop-filter: blur(8px); }
+.sidebar { border-right-color: #5f5f64; }
+.nav-item.active {
+  border-color: #d2d2d6;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.1),
+              0 0 0 2px #1a1a1d, 0 0 0 3px #bdbdc1;
+}
+
+/* Original blue-white UET mark: never desaturate this identity asset. */
+.uet-image-tile, .uet-image-tile img,
+.brand .uet-image-tile, .university-card .uet-image-tile {
+  filter: none !important;
+  -webkit-filter: none !important;
+  opacity: 1;
+  mix-blend-mode: normal;
+}
+.uet-image-tile {
+  background: #fff;
+  border: 1px solid #e1e3e7;
+  box-shadow: 0 1px 0 rgba(255,255,255,.10);
+}
+.uet-image-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+  transform: none;
+}
+
+/* Scan history: fixed two-by-two command grid, not a wrapping button cloud. */
+.history-compact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 324px;
+  align-items: center;
+  column-gap: 26px;
+  border-left: 2px solid #d0d0d4;
+}
+.history-compact-row > .history-record-copy { min-width: 0; }
+.history-compact-row .history-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 46px;
+  gap: 10px;
+  width: 324px;
+  max-width: 324px;
+  justify-content: stretch;
+  align-items: stretch;
+  flex-wrap: nowrap;
+}
+.history-compact-row .history-actions > .history-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 46px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 630;
+  white-space: nowrap;
+  text-align: center;
+}
+.history-compact-row .history-actions > .history-action svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+.history-action--results { grid-column: 1; grid-row: 1; }
+.history-action--report { grid-column: 2; grid-row: 1; }
+.history-action--trace { grid-column: 1; grid-row: 2; }
+.history-action--hide { grid-column: 2; grid-row: 2; }
+/* Trace-only history rows expose only valid actions; do not reserve empty slots. */
+.history-actions[data-trace-only="true"] .history-action--trace { grid-column: 1; grid-row: 1; }
+.history-actions[data-trace-only="true"] .history-action--hide { grid-column: 2; grid-row: 1; }
+.history-action--hide {
+  color: #f0c5c8;
+  background: #34282c;
+  border-color: #98686d;
+}
+.history-action--hide:hover:not(:disabled) { color:#fff; background:#493238; border-color:#c18d95; }
+.history-action--hide:disabled { opacity: .5; cursor: not-allowed; }
+.history-source-link { overflow-wrap: anywhere; }
+.history-time-grid dd { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1380px) {
+  .history-compact-row { grid-template-columns: minmax(0, 1fr); row-gap: 18px; }
+  .history-compact-row .history-actions { justify-self: start; }
+}
+@media (max-width: 600px) {
+  .history-compact-row .history-actions {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .history-compact-row .history-actions > .history-action { font-size: 11px; padding: 8px 5px; gap: 5px; }
+  .history-compact-row .history-actions > .history-action svg { width: 13px; height: 13px; }
+  .hero h1 { letter-spacing: -.03em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-compact-row .history-actions > .history-action { transition: none; }
+}
+@media print {
+  .history-compact-row .history-actions { display: none; }
+  .uet-image-tile, .uet-image-tile img { filter: none !important; }
+}
