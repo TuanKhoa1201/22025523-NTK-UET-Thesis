@@ -3,7 +3,7 @@ Write-Host "KIEM TRA MOI TRUONG HE THONG DO AN" -ForegroundColor Cyan
 foreach ($tool in @("git", "node", "npm", "wsl.exe")) {
     $cmd = Get-Command $tool -ErrorAction SilentlyContinue
     if (-not $cmd) { throw "Thieu chuong trinh tren Windows: $tool" }
-    Write-Host "Windows $tool: OK"
+    Write-Host "Windows ${tool}: OK"
 }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $linuxRepo = ((& wsl.exe --exec wslpath -a -u $repo) | Out-String).Trim()
