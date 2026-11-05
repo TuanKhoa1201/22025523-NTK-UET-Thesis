@@ -1,4 +1,4 @@
-# 22025523 - NTK Java Vulnerability Detection Platform
+﻿# 22025523 - NTK Java Vulnerability Detection Platform
 
 Graduation thesis at VNU University of Engineering and Technology.
 
@@ -33,9 +33,7 @@ npm run dev
 
 ## Development status
 
-Frontend production build and remote backend health check passed.
-Full browser-based E2E regression testing remains in progress.
-Startup configuration and scan-result readiness issues are under repair.
+Đã kiểm thử quy trình quét mã nguồn Java và kết nối dữ liệu nghiên cứu trên laptop. Kết quả quét giới hạn phạm vi đã được lưu và truy xuất lại; đánh giá độ chính xác độc lập tiếp tục là phần việc nghiên cứu.
 
 ## Research history
 
@@ -52,3 +50,16 @@ Current production code is organized separately in this repository.
 See THIRD_PARTY_NOTICES.md and backend/ntk-production-v2/LICENSE.
 The project is an academic prototype. Findings require verification.
 Private datasets, scan archives and model weights are not bundled.
+
+## Kết quả kiểm thử mới nhất - 05/11/2026
+
+Hệ thống đồ án đã chạy thành công quy trình quét mã nguồn Java trên laptop,
+từ phát hiện vị trí nghi vấn, đối chiếu bằng chứng đến hỗ trợ phân loại API,
+chấm điểm ưu tiên và lưu kết quả. Trong lần kiểm thử với 100 tệp Java thuộc
+OWASP BenchmarkJava, hệ thống ghi nhận 154 cảnh báo. Đây là lần quét giới hạn
+phạm vi, không phải đánh giá toàn bộ dự án hoặc chứng nhận độ chính xác.
+
+Bộ dữ liệu nghiên cứu đã được xác minh checksum và kiểm tra chức năng
+xuất CSV, JSONL, XLSX. Xem thêm tại
+[kết quả kiểm thử hệ thống](docs/ket-qua-kiem-thu-he-thong-2026-11-05.md).
+Dữ liệu nội bộ và trọng số mô hình không được đưa lên repository.
