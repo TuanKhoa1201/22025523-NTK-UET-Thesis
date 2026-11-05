@@ -171,6 +171,20 @@ public class NtkJavacAstExtractor {
             String pkgName = pkgTree != null ? pkgTree.toString() : "";
 
             sb.append("{\"file_path\":\"").append(esc(filePath)).append("\",");
+            List<String> parseErrors = new ArrayList<>();
+            for (Diagnostic<? extends JavaFileObject> diagnostic : diagnostics.getDiagnostics()) {
+                if (diagnostic.getKind() == Diagnostic.Kind.ERROR && diagnostic.getSource() != null
+                        && diagnostic.getSource().toUri().equals(cu.getSourceFile().toUri())) {
+                    parseErrors.add(diagnostic.getCode() + " at line " + diagnostic.getLineNumber());
+                }
+            }
+            sb.append("\"parse_success\":").append(parseErrors.isEmpty()).append(",");
+            sb.append("\"parse_errors\":[");
+            for (int errorIndex = 0; errorIndex < parseErrors.size(); errorIndex++) {
+                if (errorIndex > 0) sb.append(",");
+                sb.append("\"").append(esc(parseErrors.get(errorIndex))).append("\"");
+            }
+            sb.append("],");
             sb.append("\"package_name\":\"").append(esc(pkgName)).append("\",");
 
             sb.append("\"imports\":[");
@@ -198,6 +212,7 @@ public class NtkJavacAstExtractor {
 
                     Set<String> staticFinalConsts = new HashSet<>();
                     List<String> fieldsJson = new ArrayList<>();
+                    List<String> initializersJson = new ArrayList<>();
 
                     for (Tree member : ct.getMembers()) {
                         if (member instanceof VariableTree) {
@@ -224,10 +239,25 @@ public class NtkJavacAstExtractor {
                         }
                     }
 
+                    // Class-body BlockTree members are static/instance initializers, not methods.
+                    for (Tree member : ct.getMembers()) {
+                        if (member instanceof BlockTree) {
+                            BlockTree block = (BlockTree) member;
+                            long start = srcPos.getStartPosition(cu, block);
+                            long end = srcPos.getEndPosition(cu, block);
+                            if (start >= 0 && end >= start) {
+                                initializersJson.add("{\"start_line\":" + lineMap.getLineNumber(start) +
+                                    ",\"end_line\":" + lineMap.getLineNumber(end) +
+                                    ",\"is_static\":" + block.isStatic() + "}");
+                            }
+                        }
+                    }
+
                     sb.append("{\"class_name\":\"").append(esc(ct.getSimpleName().toString())).append("\",");
                     sb.append("\"start_line\":").append(cStartLine).append(",");
                     sb.append("\"end_line\":").append(cEndLine).append(",");
                     sb.append("\"fields\":[").append(String.join(",", fieldsJson)).append("],");
+                    sb.append("\"initializers\":[").append(String.join(",", initializersJson)).append("],");
                     sb.append("\"methods\":[");
 
                     boolean firstMethod = true;
@@ -419,6 +449,8 @@ public class NtkJavacAstExtractor {
                             long cEndLine = cEnd >= 0 ? lineMap.getLineNumber(cEnd) : cStartLine;
                             casesJson.add(
                                 "{\"labels\":" + strListJson(pendingLabels) + "," +
+                                "\"is_default\":" + pendingLabels.contains("default") + "," +
+                                "\"has_break\":" + (lastStmt.getKind() == Tree.Kind.BREAK) + "," +
                                 "\"start_line\":" + groupStartLine + "," +
                                 "\"end_line\":" + cEndLine + "}"
                             );
@@ -437,6 +469,16 @@ public class NtkJavacAstExtractor {
                     "\"cases\":[" + String.join(",", casesJson) + "]}"
                 );
                 return super.visitSwitch(st, parentScope);
+            }
+
+            @Override
+            public Void visitCase(CaseTree ct, Integer parentScope) {
+                // Case statements need conditional control scopes even without
+                // braces. An assignment in the final case/default cannot kill
+                // definitions from other possible switch paths.
+                int caseScope = nextScopeId[0]++;
+                parentScopeMap.put(caseScope, parentScope);
+                return super.visitCase(ct, caseScope);
             }
 
             @Override

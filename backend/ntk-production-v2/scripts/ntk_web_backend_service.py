@@ -3,8 +3,8 @@
 NTK Web MVP Backend Service & Local HTTP API Server (`ntk_web_backend_service.py`)
 Architecture: FROZEN_ARCHITECTURE_V1
   GitHub Java Repository -> Local Source Acquisition -> OpenGrep v1.25.0
-  -> IRIS Java AST/Dataflow (OpenJDK 17 JavacTask AST) -> Local Qwen2.5-Coder-0.5B-Instruct LoRA
-  -> Bounded Safety Floor (0.55) -> Alert Verification & False Positive Triage (`FindingSchemaV2`)
+  -> Original IRIS/CodeQL (opt-in) or explicit NTK Javac AST fallback -> Local Qwen LoRA
+  -> Semantic Evidence Policy -> CWSS V2 Priority -> Alert Verification & False Positive Triage (`FindingSchemaV2`)
   -> Local HTTP API (`127.0.0.1`) -> GretaAI Web UI
 
 Guarantees:
@@ -20,6 +20,7 @@ Guarantees:
 import argparse
 import base64
 import collections
+import copy
 import fnmatch
 import gc
 import hashlib
@@ -39,6 +40,7 @@ import urllib.parse
 import uuid
 import zipfile
 from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -49,6 +51,10 @@ import ntk_alert_verification as triage_mod
 import ntk_iris_shared as shared
 import ntk_pipeline_telemetry_and_datasets as telemetry_mod
 import ntk_cwss_context_api as cwss_context_api
+import ntk_cwss_workflow as cwss_workflow
+import ntk_cwss_reference_scenario_api as cwss_reference_api
+import ntk_original_iris_adapter as original_iris_adapter
+from ntk_local_gpu_lock import gpu_inference_lock
 
 DEFAULT_BASE_MODEL_WSL = (
     "/home/tuankhoa/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-0.5B-Instruct/"
@@ -70,7 +76,7 @@ DEFAULT_CORS_ALLOWED_ORIGINS: Tuple[str, ...] = (
 )
 DEFAULT_CORS_ALLOW_METHODS = "GET, POST, OPTIONS"
 DEFAULT_CORS_ALLOW_HEADERS = (
-    "Content-Type, Accept, Origin, X-Requested-With, X-Archive-Filename, X-Scan-Id, Cache-Control, Pragma"
+    "Content-Type, Accept, Origin, X-Requested-With, X-Archive-Filename, X-Scan-Id, Cache-Control, Pragma, Authorization"
 )
 DEFAULT_CORS_MAX_AGE = "600"
 
@@ -175,9 +181,12 @@ class NtkWebBackendConfig:
     device: str = field(default_factory=lambda: resolve_configured_inference_device()[0])
     model_version: str = triage_mod.MODEL_VERSION_DEFAULT
     ruleset_version: str = triage_mod.RULESET_VERSION_DEFAULT
-    scoring_policy_version: str = triage_mod.SCORING_POLICY_VERSION_DEFAULT
+    scoring_policy_version: str = "NTK_EVIDENCE_TRIAGE_V1_CWSS_V2"
     cors_allowed_origins: Tuple[str, ...] = get_configured_cors_allowed_origins()
     keep_model_cached: bool = True
+    original_iris_mode: str = os.environ.get('NTK_ORIGINAL_IRIS_MODE','NTK_JAVAC_AST_FALLBACK')
+    original_iris_cwes: Tuple[int, ...] = tuple(int(c) for c in os.environ.get('NTK_ORIGINAL_IRIS_CWES','22,78,79,89').split(','))
+    include_java_build_wrappers: bool = os.environ.get('NTK_INCLUDE_JAVA_BUILD_WRAPPERS','0')=='1'
 
 
 DEFAULT_OPENGREP_RULES_YAML: str = """rules:
@@ -613,6 +622,8 @@ def discover_and_verify_java_source_inventory(
     layout_info = detect_java_project_layout(resolved_ws_root if resolved_ws_root.is_dir() else scan_root.parent)
 
     all_candidate_paths: List[Path] = []
+    skipped_directories = _SKIP_BUILD_AND_VCS_DIRS - ({'.mvn'} if cfg.include_java_build_wrappers else set())
+    non_java_files_ignored = 0
     skipped_build_dir_count = 0
     if scan_root.is_file():
         if scan_root.suffix == ".java":
@@ -620,9 +631,12 @@ def discover_and_verify_java_source_inventory(
     else:
         for p in sorted(scan_root.rglob("*")):
             if p.is_symlink():
-                p.unlink(missing_ok=True)
                 continue
-            if not p.is_file() or p.suffix != ".java":
+            if not p.is_file():
+                continue
+            if p.suffix != ".java":
+                if not any(part in skipped_directories for part in p.relative_to(resolved_ws_root).parts[:-1]):
+                    non_java_files_ignored += 1
                 continue
             rp = p.resolve()
             if not str(rp).startswith(str(resolved_ws_root)):
@@ -632,7 +646,7 @@ def discover_and_verify_java_source_inventory(
                     "error_message": f"File {p} escaped workspace root",
                 }
             rel_parts = rp.relative_to(resolved_ws_root).parts[:-1]
-            if any(part in _SKIP_BUILD_AND_VCS_DIRS for part in rel_parts):
+            if any(part in skipped_directories for part in rel_parts):
                 skipped_build_dir_count += 1
                 continue
             all_candidate_paths.append(rp)
@@ -695,6 +709,8 @@ def discover_and_verify_java_source_inventory(
             "exclude_globs": clean_exc,
             "project_layout_detected": layout_info,
             "java_files_discovered": total_discovered_count,
+            "non_java_files_ignored": non_java_files_ignored,
+            "coverage_scope": "JAVA_SOURCE_ONLY_SUPPORTED_CWES_NOT_WHOLE_REPOSITORY_SECURITY",
             "java_files_matched_after_filters": matched_count,
             "java_files_scanned": scanned_count,
             "java_files_skipped": total_skipped,
@@ -739,12 +755,12 @@ def discover_and_verify_java_source_inventory(
         }
 
     if matched_count == 0:
-        err_code = "NO_JAVA_FILES_MATCHED_FILTERS" if total_discovered_count > 0 else "NO_JAVA_FILES_FOUND"
+        err_code = "NO_JAVA_FILES_MATCHED_FILTERS" if total_discovered_count > 0 or target_subpath else "NO_JAVA_FILES_FOUND"
         err_msg = (
             f"Discovered {total_discovered_count} .java files in {scan_root.name}, "
             f"but 0 files matched filters (include_globs={clean_inc}, exclude_globs={clean_exc})"
             if total_discovered_count > 0
-            else f"No .java files found in {scan_root}"
+            else f"No Java source files found in the supplied scope. NTK supports Java only (CWE-22, CWE-78, CWE-79, CWE-89)."
         )
         cov_diag = _build_cov_diag(
             0, 0, 0, "FAILED_STAGE_02_NO_JAVA_FILES", incomplete_reasons + [err_code]
@@ -979,7 +995,7 @@ def compute_scoring_summary(
     return {
         "scoring_policy_version": scoring_policy_version,
         "safety_floor": safety_floor,
-        "score_semantics": triage_mod.SCORE_KIND_DEFAULT,
+        "score_semantics": "EVIDENCE_POLICY_NOT_CALIBRATED_PROBABILITY_CWSS_V2_PRIORITY",
         "total_scored_findings": n_sc,
         "null_or_nan_score_count": null_or_nan_count,
         "all_scores_non_null_and_within_unit_interval": bool(null_or_nan_count == 0 and unit_interval_ok),
@@ -992,6 +1008,88 @@ def compute_scoring_summary(
         "decision_score_breakdown": dec_summary,
         "sample_finding_scores": samples,
     }
+
+
+class GitCheckoutVerificationError(RuntimeError):
+    """Git status failed before a checkout could be confirmed clean."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+
+
+def cached_checkout_is_clean(root: Path, git_bin: str = 'git', env=None) -> bool:
+    """Verify ALL tracked and untracked changes before source inventory reuse.
+
+    DrvFS /mnt/c can make a full Git status slower than ten seconds. Use a
+    bounded, configurable timeout, but NEVER treat timeout/exit failure as a
+    clean checkout. No user project code is executed by this check.
+    """
+    git_env = dict(env or os.environ, GIT_OPTIONAL_LOCKS='0')
+    try:
+        timeout = float(git_env.get('NTK_GIT_STATUS_TIMEOUT_SEC', '120'))
+    except (TypeError, ValueError) as exc:
+        raise GitCheckoutVerificationError('GIT_STATUS_TIMEOUT_CONFIG_INVALID',
+            'NTK_GIT_STATUS_TIMEOUT_SEC must be a number between 10 and 300 seconds') from exc
+    if not 10 <= timeout <= 300:
+        raise GitCheckoutVerificationError('GIT_STATUS_TIMEOUT_CONFIG_INVALID',
+            'NTK_GIT_STATUS_TIMEOUT_SEC must be between 10 and 300 seconds')
+    try:
+        result = subprocess.run(
+            [git_bin, '-c', 'core.filemode=false', '-C', str(root),
+             'status', '--porcelain', '--untracked-files=all'],
+            capture_output=True, text=True, env=git_env,
+            timeout=timeout, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise GitCheckoutVerificationError('GIT_STATUS_VERIFICATION_TIMEOUT',
+            f'Git checkout status could not finish within {timeout:g}s; source integrity NOT verified') from exc
+    except OSError as exc:
+        raise GitCheckoutVerificationError('GIT_STATUS_EXECUTION_FAILED',
+            f'Git checkout status could not run: {type(exc).__name__}') from exc
+    if result.returncode != 0:
+        detail = str(result.stderr or result.stdout or '').strip()[:220]
+        raise GitCheckoutVerificationError('GIT_STATUS_PROCESS_FAILED',
+            f'Git checkout status exited {result.returncode}: {detail}')
+    return not result.stdout.strip()
+
+
+def cached_inventory_matches_sources(root: Path, inventory: Dict[str, Any]) -> bool:
+    """Never reuse inventory hashes merely because the first/last file exist."""
+    hashes = inventory.get('file_sha256_map') or {}
+    paths = inventory.get('java_files') or []
+    if not paths or set(paths) != set(hashes):
+        return False
+    root = root.resolve()
+    try:
+        for relative in paths:
+            path = root / relative
+            if (Path(relative).is_absolute() or '..' in Path(relative).parts
+                    or not path.resolve().is_relative_to(root)
+                    or any(p.is_symlink() for p in [path, *path.parents] if p != root.parent)
+                    or shared.sha256_bytes(path.read_bytes()) != hashes[relative]):
+                return False
+    except OSError:
+        return False
+    return True
+
+
+def mark_restricted_git_inventory(inventory: Dict[str, Any]) -> Dict[str, Any]:
+    """A materialized sparse/filter scope cannot establish repository coverage.
+
+    Applied to cache hits as well as freshly collected inventory; unknown
+    repository totals are never guessed from the selected checkout.
+    """
+    if inventory.get('status')!='OK':return inventory
+    result=dict(inventory)
+    cov=dict(inventory.get('coverage_diagnostics',{}))
+    reasons=list(cov.get('incomplete_analysis_reasons',[]))
+    if 'REPOSITORY_SCOPE_RESTRICTED' not in reasons:reasons.append('REPOSITORY_SCOPE_RESTRICTED')
+    cov.update(coverage_status='PARTIAL_BOUNDED',analysis_coverage_status='PARTIAL_BOUNDED',
+        legacy_analysis_coverage_status='PARTIAL_BOUNDED',repository_inventory_complete=False,
+        repository_total_java_files=None,inventory_count_scope='MATERIALIZED_SELECTED_CHECKOUT_ONLY',
+        incomplete_analysis_reasons=reasons)
+    result.update(coverage_diagnostics=cov,was_filtered_or_truncated=True)
+    return result
 
 
 def acquire_github_java_repository(
@@ -1147,6 +1245,20 @@ def acquire_github_java_repository(
         sha_matches = True
         if commit_sha and not cand_sha.lower().startswith(str(commit_sha).strip().lower()):
             sha_matches = False
+        try:
+            cached_is_clean = cached_checkout_is_clean(persistent_checkout_dir, cfg.git_bin, git_env)
+        except GitCheckoutVerificationError as exc:
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(1, exc.code, str(exc))
+            return {'status': 'ERROR', 'error_code': exc.code, 'error_message': str(exc)}
+        if not cached_is_clean:
+            # Preserve a modified cache for inspection instead of deleting it or
+            # attributing uncommitted bytes to the recorded Git commit.
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(1, 'CACHED_CHECKOUT_NOT_CLEAN',
+                    'Cached checkout is modified; no source provenance asserted')
+            return {'status': 'ERROR', 'error_code': 'CACHED_CHECKOUT_NOT_CLEAN',
+                    'error_message': 'Cached checkout is modified/unverifiable; use force_fresh_scan.'}
         if rev_chk.returncode == 0 and len(cand_sha) == 40 and sha_matches:
             br_chk = subprocess.run(
                 list(git_sec_flags) + ["-C", str(persistent_checkout_dir), "rev-parse", "--abbrev-ref", "HEAD"],
@@ -1181,7 +1293,13 @@ def acquire_github_java_repository(
                 check=False,
             )
             m_sha = (rev_m.stdout or "").strip()
-            if rev_m.returncode == 0 and len(m_sha) == 40 and (
+            # A slow/unverifiable optional mirror must never be declared clean.
+            # We can safely fall back to a fresh remote checkout instead.
+            try:
+                mirror_is_clean = cached_checkout_is_clean(mirror_path, cfg.git_bin, git_env)
+            except GitCheckoutVerificationError:
+                mirror_is_clean = False
+            if mirror_is_clean and rev_m.returncode == 0 and len(m_sha) == 40 and (
                 not commit_sha or m_sha.lower().startswith(str(commit_sha).strip().lower())
             ):
                 tmp_seed = scan_cache.git_checkouts_dir / f"seed_{uuid.uuid4().hex[:10]}"
@@ -1423,19 +1541,23 @@ def acquire_github_java_repository(
     inventory_cache_hit = False
     inv: Optional[Dict[str, Any]] = None
     if is_cached_checkout and not force_fresh_scan:
-        wt_status = subprocess.run(
-            list(git_sec_flags) + ["-C", str(clone_dir), "status", "--porcelain", "-uno"],
-            capture_output=True,
-            text=True,
-            env=git_env,
-            timeout=10.0,
-            check=False,
-        )
-        wt_clean = wt_status.returncode == 0 and not (wt_status.stdout or "").strip()
-        cached_inv = scan_cache.get_json("source_inventory", inv_cache_key) if wt_clean else None
+        try:
+            wt_clean = cached_checkout_is_clean(clone_dir, cfg.git_bin, git_env)
+        except GitCheckoutVerificationError as exc:
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(2, exc.code, str(exc))
+            return {'status': 'ERROR', 'error_code': exc.code,
+                    'error_message': str(exc), 'repository_provenance': base_provenance}
+        if not wt_clean:
+            message = 'Git checkout has tracked or untracked modifications; source integrity not verified'
+            if stage_tracker is not None:
+                stage_tracker.fail_stage(2, 'CACHED_CHECKOUT_NOT_CLEAN', message)
+            return {'status': 'ERROR', 'error_code': 'CACHED_CHECKOUT_NOT_CLEAN',
+                    'error_message': message, 'repository_provenance': base_provenance}
+        cached_inv = scan_cache.get_json("source_inventory", inv_cache_key)
         if isinstance(cached_inv, dict) and cached_inv.get("status") == "OK":
             rel_list = cached_inv.get("java_files", [])
-            if rel_list and (clone_dir / rel_list[0]).is_file() and (clone_dir / rel_list[-1]).is_file():
+            if cached_inventory_matches_sources(clone_dir, cached_inv):
                 abs_paths = [(clone_dir / r).resolve() for r in rel_list]
                 inv = dict(cached_inv)
                 inv["scan_root"] = str(scan_root)
@@ -1486,6 +1608,8 @@ def acquire_github_java_repository(
             "coverage_diagnostics": cov_diag,
         }
 
+    if file_allowlist or clean_subpath or clean_inc or clean_exc:
+        inv=mark_restricted_git_inventory(inv)
     acq_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     cov_diag = inv["coverage_diagnostics"]
     if stage_tracker is not None:
@@ -1735,7 +1859,7 @@ def run_llm_inference_for_identities(
 
     outputs: List[Tuple[str, float]] = []
     per_identity_latencies_ms: List[float] = []
-    with _MODEL_INFERENCE_LOCK:
+    with _MODEL_INFERENCE_LOCK, gpu_inference_lock():
         tokenizer, model, dev = _get_or_load_model_bundle(cfg)
         load_meta = _CACHED_MODEL_BUNDLE[5] if _CACHED_MODEL_BUNDLE is not None else {}
         first_p = next(model.parameters())
@@ -1872,7 +1996,7 @@ def verify_findings_against_source_tree(
 
         if rel_fp not in file_prov_cache:
             candidate_path = (resolved_base / rel_fp).resolve()
-            inside_root = str(candidate_path).startswith(str(resolved_base))
+            inside_root = candidate_path.is_relative_to(resolved_base)
             f_exists = inside_root and candidate_path.is_file()
             if not f_exists:
                 file_prov_cache[rel_fp] = (False, "", 0, [], None)
@@ -1895,7 +2019,10 @@ def verify_findings_against_source_tree(
         code_matches_line = False
         ast_method_verified = False
         ast_method_span: Optional[List[int]] = None
+        ast_initializer_verified = False
+        ast_initializer_span: Optional[List[int]] = None
         raw_og_verified = False
+        raw_iris_verified = False
         failure_reasons: List[str] = []
 
         if not file_exists:
@@ -1930,7 +2057,31 @@ def verify_findings_against_source_tree(
                             break
                     if ast_method_verified:
                         break
-            if not ast_method_verified:
+                # Only an actual Javac class-member BlockTree may validate an
+                # initializer candidate. A nearby or preceding method is not proof.
+                if enclosing_method in ("staticInitializer", "instanceInitializer"):
+                    expected_static = enclosing_method == "staticInitializer"
+                    for cls in ast_dict.get("classes", []):
+                        for init in cls.get("initializers", []):
+                            start = int(init.get("start_line", 0))
+                            end = int(init.get("end_line", 0))
+                            if (0 < start <= line_no <= end
+                                    and bool(init.get("is_static")) == expected_static):
+                                ast_initializer_verified = True
+                                ast_initializer_span = [start, end]
+                                break
+                        if ast_initializer_verified:
+                            break
+            iris_paths=f.get('original_iris_evidence',[])
+            for path in iris_paths:
+                location=path.get('callsite_location',{})
+                artifact=Path(path.get('raw_artifact_reference',''))
+                if (path.get('engine_id')=='IRIS_ORIGINAL_CODEQL' and path.get('verification_status')=='SOURCE_BOUND_CODEQL_PATH'
+                    and location.get('file_path')==rel_fp and location.get('line')==line_no and location.get('source_sha256')==file_sha256
+                    and int(path.get('cwe_id',0))==int(f.get('cwe_id',0)) and artifact.is_file()
+                    and shared.sha256_bytes(artifact.read_bytes())==path.get('raw_artifact_sha256')):
+                    raw_iris_verified=True;break
+            if not (ast_method_verified or ast_initializer_verified or raw_iris_verified):
                 failure_reasons.append(
                     f"AST_ENCLOSING_METHOD_MISMATCH:method={enclosing_method!r}_not_spanning_line_{line_no}"
                 )
@@ -1939,15 +2090,15 @@ def verify_findings_against_source_tree(
                 if hit_p.endswith(rel_fp) or rel_fp.endswith(hit_p):
                     raw_og_verified = True
                     break
-            if not raw_og_verified:
+            if not raw_og_verified and not raw_iris_verified:
                 failure_reasons.append("RAW_OPENGREP_HIT_NOT_FOUND_AT_FILE_AND_LINE")
 
         finding_ok = (
             file_exists
             and line_in_range
             and code_matches_line
-            and ast_method_verified
-            and raw_og_verified
+            and (ast_method_verified or ast_initializer_verified or raw_iris_verified)
+            and (raw_og_verified or raw_iris_verified)
             and len(failure_reasons) == 0
         )
         rec = {
@@ -1968,7 +2119,10 @@ def verify_findings_against_source_tree(
             "enclosing_method": enclosing_method,
             "ast_enclosing_method_verified": ast_method_verified,
             "ast_method_line_span": ast_method_span,
+            "ast_initializer_verified": ast_initializer_verified,
+            "ast_initializer_span": ast_initializer_span,
             "raw_opengrep_hit_verified": raw_og_verified,
+            "raw_original_iris_path_verified": raw_iris_verified,
             "resolved_commit_sha": resolved_commit_sha,
             "verified": finding_ok,
             "status": "SOURCE_PROVENANCE_VERIFIED" if finding_ok else "SOURCE_PROVENANCE_MISMATCH",
@@ -2214,7 +2368,9 @@ def acquire_java_zip_archive(
 
                 rel_clean = "/".join(parts)
                 ext = os.path.splitext(parts[-1])[1].lower()
-                if ext in _FORBIDDEN_ARCHIVE_EXTENSIONS:
+                # Passive Python source in a mixed archive is ignored, never
+                # extracted or executed. Binary/bytecode/script restrictions stay.
+                if ext in _FORBIDDEN_ARCHIVE_EXTENSIONS and ext != '.py':
                     shutil.rmtree(extract_dir, ignore_errors=True)
                     return _fail_zip_stage(
                         2,
@@ -2300,6 +2456,9 @@ def acquire_java_zip_archive(
         scan_scope_policy=eff_scope_policy,
     )
     cov_diag = inv_res.get("coverage_diagnostics", {})
+    cov_diag['non_java_files_ignored'] = sum(
+        1 for info in infos if not info.is_dir() and not info.filename.lower().endswith('.java'))
+    cov_diag['coverage_scope'] = 'JAVA_SOURCE_ONLY_SUPPORTED_CWES_NOT_WHOLE_REPOSITORY_SECURITY'
     if inv_res.get("status") != "OK":
         err_code = str(inv_res.get("error_code", "NO_JAVA_FILES_IN_ZIP"))
         if err_code == "NO_JAVA_FILES_FOUND":
@@ -2367,10 +2526,10 @@ def scan_java_sources_and_triage(
       Stage 02: Java source discovery, bounds validation, SHA-256 inventory & optional `/usr/bin/javac` check.
       Stage 03: Real `/usr/local/bin/opengrep scan --json` execution & deterministic candidate extraction.
       Stage 04: Code & API context extraction via OpenJDK 17 `JavacTask.parse()` (`NtkJavacAstExtractor`).
-      Stage 05: IRIS intraprocedural lexical-scope def-use taint & CWE sanitizer analysis (`analyze_java_site_ast_and_taint`).
+      Stage 05: Pinned original IRIS/CodeQL when enabled; explicitly named Javac fallback otherwise.
       Stage 06: Canonical IRIS prompt generation & Local Qwen2.5-0.5B EO06 LoRA inference.
       Stage 07: Neuro-symbolic Evidence Fusion (`FindingCandidate` + `verify_ast_release_evidence`).
-      Stage 08: Heuristic SAST Scoring (`evaluate_bounded_safety_floor` with `0.55` safety floor).
+      Stage 08: Semantic release checks; CWSS V2 published after source verification.
       Stage 09: Alert Verification (`verify_and_triage_finding` + `FindingSchemaV2` + `verify_findings_against_source_tree`).
       Stage 10: Report Synthesis & Trace Assembly.
     """
@@ -2522,6 +2681,32 @@ def scan_java_sources_and_triage(
     total_discovered_bytes = int(inv_res.get("source_bytes_discovered", 0))
     total_scanned_bytes = int(inv_res.get("source_bytes_scanned", total_discovered_bytes))
     was_filtered_or_truncated = bool(inv_res.get("was_filtered_or_truncated", False))
+    effective_rel_root = Path(rel_base_dir or (src_path if src_path.is_dir() else src_path.parent)).resolve()
+
+    # Syntax-only JavacTask.parse: no annotation processors, attribution, project
+    # build or untrusted code execution. A .java suffix alone is not validation.
+    triage_mod.prewarm_javac_ast_cache(
+        java_files, java_bin=str(Path(cfg.javac_bin).with_name('java')),
+        javac_bin=cfg.javac_bin, timeout_sec=cfg.subprocess_timeout_sec)
+    parse_failures = []
+    for path in java_files:
+        text = path.read_text(encoding='utf-8', errors='replace')
+        ast = triage_mod.parse_java_source_with_javac_ast(
+            text, str(path), java_bin=str(Path(cfg.javac_bin).with_name('java')), javac_bin=cfg.javac_bin)
+        if ast is None or ast.get('parse_success') is False:
+            parse_failures.append({'file_path': str(path.relative_to(Path(effective_rel_root))),
+                                   'diagnostics': (ast or {}).get('parse_errors', ['JAVA_PARSER_UNAVAILABLE'])})
+    if parse_failures:
+        code = 'JAVA_SYNTAX_ERROR' if any(f['diagnostics'] != ['JAVA_PARSER_UNAVAILABLE'] for f in parse_failures) else 'JAVA_PARSER_UNAVAILABLE'
+        message = 'Java syntax could not be validated; no vulnerability-free result is claimed.'
+        cov_diag.update(java_parse_failures=parse_failures, coverage_status='FAILED_OR_INCOMPLETE',
+                        analysis_coverage_status='FAILED_OR_INCOMPLETE')
+        tracker.update_coverage_diagnostics(cov_diag)
+        tracker.fail_stage(2, code, message)
+        return {'status':'ERROR', 'error_code':code, 'error_message':message,
+                'stage_error_code':code, 'stage_error_message':message,
+                'findings':[], 'actual_gpu_inference_calls':0, 'coverage_diagnostics':cov_diag,
+                'pipeline_trace':tracker.to_pipeline_trace_dict(coverage_diagnostics=cov_diag)}
 
     # Optional javac check (explicitly timed inside Stage 02)
     t0_javac = time.perf_counter()
@@ -2628,6 +2813,7 @@ def scan_java_sources_and_triage(
                     {
                         "ruleset_version": cfg.ruleset_version,
                         "rules_sha256": rules_sha256,
+                        "execution_policy": "EXPLICIT_JAVA_INVENTORY_V2_NO_GIT_IGNORE",
                         "files": batch_rel_sha_pairs,
                     },
                     sort_keys=True,
@@ -2646,23 +2832,10 @@ def scan_java_sources_and_triage(
             else:
                 og_batch_cache_misses += 1
                 og_batches_executed += 1
-                if not was_filtered_or_truncated and total_batches == 1:
-                    cmd_args = [
-                        cfg.opengrep_bin,
-                        "scan",
-                        "--config",
-                        str(effective_rules_path),
-                        "--json",
-                        str(src_path),
-                    ]
-                else:
-                    cmd_args = [
-                        cfg.opengrep_bin,
-                        "scan",
-                        "--config",
-                        str(effective_rules_path),
-                        "--json",
-                    ] + batch_files
+                # Directory scanning applies implicit test/ignore exclusions.
+                # The validated inventory is the declared security scope.
+                cmd_args = [cfg.opengrep_bin, "scan", "--config", str(effective_rules_path),
+                            "--json", "--no-git-ignore"] + batch_files
 
                 og_proc = subprocess.run(
                     cmd_args,
@@ -2689,6 +2862,15 @@ def scan_java_sources_and_triage(
                         ),
                     }
                 b_json = json.loads(og_proc.stdout)
+                scanned_paths={Path(p).resolve() for p in b_json.get('paths',{}).get('scanned',[])}
+                missing_paths=sorted(str(p.resolve()) for p in batch_path_objs if p.resolve() not in scanned_paths)
+                if missing_paths:
+                    code='OPENGREP_JAVA_INVENTORY_NOT_FULLY_SCANNED'
+                    cov_diag['opengrep_missing_inventory_files']=missing_paths
+                    tracker.fail_stage(3,code,'OpenGrep did not scan every declared Java file.')
+                    return {'status':'ERROR','error_code':code,'findings':[],
+                        'error_message':'OpenGrep coverage is incomplete; no safe conclusion is available.',
+                        'coverage_diagnostics':cov_diag,'pipeline_trace':tracker.to_pipeline_trace_dict(coverage_diagnostics=cov_diag)}
                 b_results = b_json.get("results", [])
                 normalized_for_cache: List[Dict[str, Any]] = []
                 for h_item in b_results:
@@ -2733,6 +2915,9 @@ def scan_java_sources_and_triage(
                 },
             )
         og_json = {"results": og_hits, "errors": merged_errors}
+        cov_diag['opengrep_inventory_verified']=True
+        cov_diag['opengrep_java_files_scanned']=len(java_files)
+        cov_diag['opengrep_scope_policy']='EXPLICIT_JAVA_INVENTORY_V2_NO_GIT_IGNORE'
     except subprocess.TimeoutExpired:
         tracker.fail_stage(3, "OPENGREP_TIMEOUT", f"OpenGrep scan timed out after {cfg.subprocess_timeout_sec}s")
         return {
@@ -2808,7 +2993,7 @@ def scan_java_sources_and_triage(
             shas_to_lookup.append(sha_txt)
 
     if use_cache and not force_fresh_ast_for_telemetry and shas_to_lookup:
-        cached_asts = scan_cache.get_many_json("javac_ast_files", shas_to_lookup)
+        cached_asts = scan_cache.get_many_json("javac_ast_files:" + triage_mod.AST_ANALYSIS_VERSION, shas_to_lookup)
         for sha_k, ast_val in cached_asts.items():
             if isinstance(ast_val, dict):
                 triage_mod._JAVAC_AST_CACHE[sha_k] = ast_val
@@ -2838,7 +3023,7 @@ def scan_java_sources_and_triage(
                     if fp_raw and str(effective_rel_root) and fp_raw.startswith(str(effective_rel_root)):
                         ast_copy["file_path"] = fp_raw[len(str(effective_rel_root)) :].lstrip("/\\")
                     to_persist_asts[s_k] = ast_copy
-            scan_cache.put_many_json("javac_ast_files", to_persist_asts)
+            scan_cache.put_many_json("javac_ast_files:" + triage_mod.AST_ANALYSIS_VERSION, to_persist_asts)
 
     candidate_contexts: List[Tuple[Dict[str, Any], str, int, str, str, int, str]] = []
     for hit in og_hits_sorted:
@@ -2863,14 +3048,39 @@ def scan_java_sources_and_triage(
         },
     )
 
-    # Stage 05: IRIS - Program Analysis (Lexical-scope def-use taint & CWE sanitizer analysis + Layer 5 cache)
+    # Stage 05: independent original IRIS plus explicitly identified local AST.
+    tracker.describe_stage_engine(5,'Program analysis — original IRIS / explicit Javac fallback',
+        cfg.original_iris_mode,'ntk_original_iris_adapter.run() / analyze_java_site_ast_and_taint()')
     tracker.start_stage(
         5,
         {
             "candidates_to_analyze": len(candidate_contexts),
-            "analysis_scope": "INTRAPROCEDURAL_DEF_USE_AND_STATIC_FINAL_CONSTANTS",
+            "analysis_scope": ('INTRAPROCEDURAL_DEF_USE_AND_STATIC_FINAL_CONSTANTS'
+                if cfg.original_iris_mode=='NTK_JAVAC_AST_FALLBACK' else 'UPSTREAM_CODEQL_JAVA_SCOPE_PLUS_LOCAL_INTRAPROCEDURAL'),
         },
     )
+    iris_config=dataclass_replace(original_iris_adapter.IrisConfig.from_env(),mode=cfg.original_iris_mode)
+    iris_identity=str((repo_provenance or {}).get('resolved_commit_sha') or (repo_provenance or {}).get('archive_sha256') or '')
+    original_iris=original_iris_adapter.run(effective_rel_root,java_files,iris_identity,
+        model_environment={'NTK_BASE_MODEL_PATH':cfg.base_model_path,'NTK_BEST_ADAPTER_PATH':cfg.best_adapter_path,
+            'NTK_INFERENCE_DEVICE':cfg.device,'JAVA_HOME':str(Path(cfg.javac_bin).parent.parent),'NTK_JAVAC_BIN':cfg.javac_bin},
+        config=iris_config,cwes=cfg.original_iris_cwes,force_fresh=force_fresh_scan)
+    tracker.describe_stage_engine(5,'Program analysis: '+original_iris['engine_mode'],
+        original_iris['engine_mode'],'ntk_original_iris_adapter.run() / analyze_java_site_ast_and_taint()')
+    if cfg.original_iris_mode=='ORIGINAL_IRIS_CODEQL_STRICT' and original_iris['analysis_status']!='COMPLETED':
+        code='ORIGINAL_IRIS_STRICT_REQUIREMENT_NOT_MET'
+        tracker.fail_stage(5,code,'; '.join(original_iris['reason_codes']))
+        return {'status':'ERROR','error_code':code,'error_message':'Original IRIS did not complete in strict mode.',
+            'original_iris':original_iris,'findings':[],'coverage_diagnostics':cov_diag,
+            'pipeline_trace':tracker.to_pipeline_trace_dict(coverage_diagnostics=cov_diag),
+            'actual_gpu_inference_calls':original_iris.get('actual_gpu_inference_calls',0)}
+    if cfg.original_iris_mode!='NTK_JAVAC_AST_FALLBACK':
+        union=original_iris_adapter.merge_callsite_evidence(copy.deepcopy(og_hits_sorted),original_iris.get('paths',[]),effective_rel_root)
+        candidate_contexts=[]
+        for entry in union:
+            hit=entry['hit'];hit['_ntk_detection_engines']=entry['engines'];hit['_ntk_original_iris_paths']=entry['iris_paths']
+            path=str(hit['path']);text=Path(path).read_text(encoding='utf-8',errors='replace')
+            candidate_contexts.append((hit,path,int(hit['start']['line']),hit['check_id'],hit['extra']['lines'].strip(),_infer_cwe_from_rule(hit),text))
     ast_analyses: List[Tuple[Dict[str, Any], int, triage_mod.JavaAstSiteAnalysis]] = []
     llm_requests: List[Tuple[int, Dict[str, str]]] = []
     site_cache_hits = 0
@@ -2957,6 +3167,12 @@ def scan_java_sources_and_triage(
             "candidates_analyzed": len(ast_analyses),
             "iris_site_cache_hits": site_cache_hits,
             "iris_site_cache_misses": site_cache_misses,
+            "original_iris_engine_mode": original_iris['engine_mode'],
+            "original_iris_analysis_status": original_iris['analysis_status'],
+            "original_iris_path_count": len(original_iris.get('paths',[])),
+            "original_iris_upstream_commit": original_iris.get('iris_upstream_commit'),
+            "original_iris_reason_codes": original_iris['reason_codes'],
+            "local_analysis_engine": 'NTK_JAVAC_AST_FALLBACK',
             "verified_taint_flows_detected": sum(1 for _, _, a in ast_analyses if a.taint_reaches_sink),
             "ast_release_candidates_identified": sum(
                 1
@@ -3168,29 +3384,28 @@ def scan_java_sources_and_triage(
         },
     )
 
-    # Stage 08: SAST Scoring (Bounded Safety Floor 0.55 heuristic scoring computation)
+    # Stage 08: semantic release checks. CWSS priority is published after source
+    # verification; no heuristic number participates in production triage.
     tracker.start_stage(
         8,
         {
             "candidates_to_score": len(fused_candidates),
-            "safety_floor_threshold": cfg.safety_floor,
+            "priority_engine": "NTK_CWSS_INFERENCE_V2",
             "scoring_policy_version": cfg.scoring_policy_version,
         },
     )
     floor_score_results: List[Dict[str, Any]] = []
     for _, _, cand, _, _ in fused_candidates:
-        floor_res = shared.evaluate_bounded_safety_floor(cand, safety_floor=cfg.safety_floor)
-        floor_score_results.append(floor_res)
+        release, reason = shared.verify_ast_release_evidence(cand)
+        floor_score_results.append({"explicit_ast_release_verified": release,
+                                    "ast_release_reason": reason})
 
     sast_scoring_ms = tracker.complete_stage(
         8,
         {
             "candidates_scored": len(floor_score_results),
-            "safety_floor_clamped_count": sum(1 for r in floor_score_results if r.get("safety_floor_applied")),
-            "post_release_veto_count": sum(1 for r in floor_score_results if r.get("post_release_veto_applied")),
-            "retained_after_ast_veto_count": sum(
-                1 for r in floor_score_results if r.get("retained_after_ast_veto")
-            ),
+            "numeric_score_used_for_decision": False,
+            "semantic_release_count": sum(1 for r in floor_score_results if r['explicit_ast_release_verified']),
         },
     )
 
@@ -3217,6 +3432,7 @@ def scan_java_sources_and_triage(
     ) in zip(ast_analyses, llm_outputs, callee_predictions, fused_candidates):
         man_rev = review_map.get(cand.finding_id)
         f_v2 = triage_mod.verify_and_triage_finding(
+            legacy_score_compatibility=False,
             finding_id=cand.finding_id,
             cwe=cwe_int,
             file_path=rel_file,
@@ -3234,6 +3450,30 @@ def scan_java_sources_and_triage(
             scoring_policy_version=cfg.scoring_policy_version,
         )
         f_dict = f_v2.to_dict()
+        paths=hit.get('_ntk_original_iris_paths',[])
+        f_dict['detection_engines']=hit.get('_ntk_detection_engines',['OPENGREP'])
+        f_dict['original_iris_evidence']=paths
+        f_dict['iris_evidence']['analysis_engine']='NTK_JAVAC_AST_FALLBACK'
+        if 'OPENGREP' not in f_dict['detection_engines']:f_dict['opengrep_evidence']={}
+        safe=f_dict['iris_evidence'].get('flow_proof_state')=='PROVEN_SAFE' or f_dict['fusion_score_breakdown'].get('explicit_ast_release_verified',False)
+        decision,extra_reasons=original_iris_adapter.fuse_decision(f_dict['decision'],safe,paths)
+        if extra_reasons:
+            f_dict['decision']=decision;f_dict['kept_by_pipeline']=decision!='SUPPRESS'
+            f_dict['triage_status']={'REPORT':'LIKELY_TRUE_POSITIVE','REVIEW':'NEEDS_REVIEW','SUPPRESS':'LIKELY_FALSE_POSITIVE'}[decision]
+            f_dict['disposition']='INDEPENDENT_EVIDENCE_POLICY:'+decision
+            f_dict['reason_codes']=list(dict.fromkeys(f_dict['reason_codes']+extra_reasons))
+        if ast_info.ast_parser_engine == "JAVAC_AST_INITIALIZER_SCOPE_ONLY":
+            # The sink callsite is real, but this local engine did NOT analyze
+            # the initializer's dataflow. Keep it visible as REVIEW rather than
+            # inheriting a possibly false proof from the nearest method.
+            f_dict["decision"] = "REVIEW"
+            f_dict["triage_status"] = "NEEDS_REVIEW"
+            f_dict["kept_by_pipeline"] = True
+            f_dict["disposition"] = "CLASS_INITIALIZER_FLOW_NOT_PROVEN"
+            f_dict["reason_codes"] = list(dict.fromkeys(
+                list(f_dict.get("reason_codes", [])) +
+                ["RC_CLASS_INITIALIZER_FLOW_UNPROVEN"]
+            ))
         ok_schema, schema_errs = triage_mod.validate_finding_schema_v2_dict(f_dict)
         if not ok_schema:
             tracker.fail_stage(
@@ -3287,6 +3527,8 @@ def scan_java_sources_and_triage(
         },
     )
     effective_readiness = readiness_status
+    if cfg.original_iris_mode!='NTK_JAVAC_AST_FALLBACK' and original_iris['analysis_status']!='COMPLETED':
+        effective_readiness='ORIGINAL_IRIS_PARTIAL_WITH_EXPLICIT_JAVAC_FALLBACK'
     if not source_prov_check["verified"]:
         effective_readiness = "SOURCE_PROVENANCE_MISMATCH"
 
@@ -3394,12 +3636,23 @@ def scan_java_sources_and_triage(
             },
         },
     }
+    original_gpu_calls = int(original_iris.get('actual_gpu_inference_calls', 0))
+    cache_statistics['layers']['original_iris_codeql'] = {
+        'hits': int(original_iris.get('cache_hit', False)),
+        'actual_gpu_inference_calls': original_gpu_calls,
+        'analysis_status': original_iris['analysis_status'],
+    }
+    # Keep Stage 06's own counter above; scan totals include the independent
+    # upstream model-mining/contextual worker as well.
+    actual_gpu_inference_calls += original_gpu_calls
 
-    scoring_summary = compute_scoring_summary(
-        all_findings,
-        safety_floor=cfg.safety_floor,
-        scoring_policy_version=cfg.scoring_policy_version,
-    )
+    scoring_summary = {
+        "scoring_policy_version": cfg.scoring_policy_version,
+        "priority_engine": "NTK_CWSS_INFERENCE_V2",
+        "legacy_score_status": "REMOVED_FROM_PRODUCTION",
+        "numeric_score_used_for_decision": False,
+        "total_findings": len(all_findings),
+    }
     cov_status_canonical = (
         "FULL_SOURCE_COVERAGE"
         if analysis_cov_status in ("COMPLETE_SCANNED", "FULL_SOURCE_COVERAGE")
@@ -3415,7 +3668,8 @@ def scan_java_sources_and_triage(
     cov_diag["fully_processed_java_files"] = len(java_files)
     cov_diag["excluded_java_files"] = int(cov_diag.get("java_files_skipped", 0))
     cov_diag["per_reason_exclusions"] = cov_diag.get("skipped_files_breakdown", {})
-    cov_diag["opengrep_candidate_count"] = total_cands
+    cov_diag["opengrep_candidate_count"] = len(og_hits_sorted)
+    cov_diag['original_iris_engine_mode']=original_iris['engine_mode']
     cov_diag["unique_api_identities_classified"] = len(dedup_reqs)
     cov_diag["llm_inference_count"] = len(llm_requests)
     cov_diag["actual_gpu_inference_calls"] = actual_gpu_inference_calls
@@ -3435,7 +3689,11 @@ def scan_java_sources_and_triage(
 
     summary_block = {
         "total_scanner_candidates": total_cands,
-        "opengrep_candidate_count": total_cands,
+        "opengrep_candidate_count": len(og_hits_sorted),
+        "original_iris_path_count": len(original_iris.get('paths',[])),
+        "original_iris_gpu_inference_calls": original_gpu_calls,
+        "original_iris_only_candidates": sum(f['detection_engines']==['IRIS_ORIGINAL_CODEQL'] for f in all_findings),
+        "opengrep_iris_overlap_candidates": sum(len(f['detection_engines'])>1 for f in all_findings),
         "unique_api_identities_classified": len(dedup_reqs),
         "llm_inference_count": len(llm_requests),
         "llm_fresh_inference_requests": fresh_inference_requests,
@@ -3449,7 +3707,7 @@ def scan_java_sources_and_triage(
         "review_escalation_rate": round(len(review_queue_findings) / total_cands, 4) if total_cands else 0.0,
         "suppressed_findings_preserved_for_audit": True,
         "source_provenance_verified": bool(source_prov_check["verified"]),
-        "score_semantics": triage_mod.SCORE_KIND_DEFAULT,
+        "score_semantics": "EVIDENCE_POLICY_NOT_CALIBRATED_PROBABILITY_CWSS_V2_PRIORITY",
         "scoring_summary": scoring_summary,
         "cache_statistics": cache_statistics,
         "source_mode": eff_source_mode,
@@ -3490,6 +3748,14 @@ def scan_java_sources_and_triage(
 
     rt_tel = get_model_runtime_telemetry(cfg)
     payload: Dict[str, Any] = {
+        'original_iris':original_iris,
+        'engine_coverage_contract': {
+            'full_java_source_inventory': 'PASS' if not cov_diag.get('opengrep_missing_inventory_files') and cov_status_canonical=='FULL_SOURCE_COVERAGE' else 'PARTIAL',
+            'full_ntk_engine_execution': 'PASS' if original_iris['analysis_status']=='COMPLETED' and cov_status_canonical=='FULL_SOURCE_COVERAGE' else 'PARTIAL',
+            'complete_semantic_dataflow_coverage': 'NOT_PROVEN',
+            'actual_program_analysis_mode': original_iris['engine_mode'],
+            'reason_codes': original_iris['reason_codes'],
+        },
         "status": "OK" if source_prov_check["verified"] else "SOURCE_PROVENANCE_MISMATCH",
         "api_version": "NTK_WEB_BACKEND_API_V2",
         "schema_version": "NTK_WEB_FINDING_SCHEMA_V2",
@@ -3498,7 +3764,7 @@ def scan_java_sources_and_triage(
         "integration_readiness_note": (
             f"Backend pipeline verified at status {effective_readiness}. "
             "OpenGrep v1.25.0 + OpenJDK 17 JavacTask AST/Dataflow + Qwen2.5-0.5B EO06 LoRA + "
-            "0.55 Bounded Safety Floor + Alert Triage (FindingSchemaV2) + Per-Finding Source Provenance Verification. "
+            "Evidence-based Triage + CWSS Inference V2 (FindingSchemaV2) + Per-Finding Source Provenance Verification. "
             "FULL_WEB_UI_E2E_VERIFIED is reserved until the GretaAI frontend UI is mounted."
         ),
         "architecture_version": "FROZEN_ARCHITECTURE_V1",
@@ -3522,7 +3788,7 @@ def scan_java_sources_and_triage(
         "fully_processed_java_files": summary_block["fully_processed_java_files"],
         "excluded_java_files": summary_block["excluded_java_files"],
         "per_reason_exclusions": summary_block["per_reason_exclusions"],
-        "opengrep_candidate_count": total_cands,
+        "opengrep_candidate_count": len(og_hits_sorted),
         "unique_api_identities_classified": len(dedup_reqs),
         "llm_inference_count": len(llm_requests),
         "actual_gpu_inference_calls": actual_gpu_inference_calls,
@@ -3619,6 +3885,13 @@ def scan_java_sources_and_triage(
     payload["report_synthesis_duration_ms"] = report_synthesis_ms
     payload["total_e2e_duration_ms"] = pipeline_trace_dict["total_e2e_elapsed_ms"]
     payload["pipeline_trace"] = pipeline_trace_dict
+    # Passive post-triage collection while checkout still exists; no pipeline stage changes.
+    # Finding paths and source-verification hashes are relative to effective_rel_root,
+    # NOT the potentially narrower target_subpath used by the scanner. Capture the
+    # snapshot before the acquisition wrapper removes a temporary checkout.
+    payload["cwss_automatic_collection"] = cwss_workflow.automatic_v2.graph.collect(
+        Path(effective_rel_root), all_findings, source_prov_check)
+    payload["cwss_complete_context"] = cwss_workflow.complete.collect_context(Path(effective_rel_root))
     return payload
 
 
@@ -3643,7 +3916,7 @@ def scan_github_repository_and_triage(
     End-to-end GitHub repository scan:
       GitHub HTTPS URL validation -> shallow/sparse git clone -> Java file verification
       -> OpenGrep scan -> OpenJDK 17 JavacTask AST/Dataflow -> Local Qwen2.5-0.5B EO06 LoRA
-      -> Bounded Safety Floor (0.55) -> Alert Triage (`FindingSchemaV2`)
+      -> Semantic Evidence Policy -> CWSS V2 Priority -> Alert Triage (`FindingSchemaV2`)
       -> Per-Finding Source Provenance Verification.
     """
     cfg = config or NtkWebBackendConfig()
@@ -3765,7 +4038,7 @@ def scan_java_zip_and_triage(
       Safe ZIP validation (Zip-Slip, symlink, bytecode, zip-bomb blocks)
       -> `.java`-only sandbox extraction (`compile_check=False` so untrusted code is never compiled/executed)
       -> OpenGrep scan -> OpenJDK 17 JavacTask AST/Dataflow -> Local Qwen2.5-0.5B EO06 LoRA
-      -> Bounded Safety Floor (0.55) -> Alert Triage (`FindingSchemaV2`)
+      -> Semantic Evidence Policy -> CWSS V2 Priority -> Alert Triage (`FindingSchemaV2`)
       -> Per-Finding Source Provenance Verification.
     """
     cfg = config or NtkWebBackendConfig()
@@ -3916,11 +4189,13 @@ def render_scan_html_report(scan_record: Dict[str, Any]) -> str:
         em = html.escape(str(f.get("enclosing_method", "")))
         dec = html.escape(str(f.get("decision", "")))
         ts = html.escape(str(f.get("triage_status", "")))
-        sc = html.escape(str(f.get("confidence_score", f.get("final_heuristic_score", ""))))
+        priority = f.get("cwss")
+        cwss_detail = (html.escape(json.dumps(priority, indent=2, ensure_ascii=False))
+                       if isinstance(priority, dict) else "CWSS not archived; use the CWSS assessment report API")
         rcs = html.escape(", ".join(f.get("reason_codes", [])))
         rows.append(
             f"<tr><td>{fid}</td><td>{cwe}</td><td>{fp}:{ln} (<code>{em}</code>)</td>"
-            f"<td><strong>{dec}</strong> ({ts})</td><td>{sc}</td><td>{rcs}</td></tr>"
+            f"<td><strong>{dec}</strong> ({ts})</td><td><pre>{cwss_detail}</pre></td><td>{rcs}</td></tr>"
         )
     rows_html = "\n".join(rows)
     return f"""<!DOCTYPE html>
@@ -3937,13 +4212,15 @@ th {{ background: #f4f4f4; }}
 </head>
 <body>
 <h1>NTK/IRIS Security Scan Report ({scan_id})</h1>
+<p>CWSS is weakness priority, not probability of a true positive. INCOMPLETE scores are not verified low risk.
+This archived report shows scan-time preliminary assessment; use the CWSS assessment report API for published revisions.</p>
 <p><strong>Source:</strong> {repo_url} | <strong>Commit / SHA:</strong> <code>{commit_sha}</code></p>
 <p><strong>Total Candidates:</strong> {summary.get('total_scanner_candidates', 0)} |
 <strong>REPORT:</strong> {summary.get('likely_true_positive_report_count', 0)} |
 <strong>REVIEW:</strong> {summary.get('needs_review_count', 0)} |
 <strong>SUPPRESS:</strong> {summary.get('suppressed_false_positives', 0)}</p>
 <table>
-<thead><tr><th>Finding ID</th><th>CWE</th><th>Location</th><th>Decision / Triage</th><th>Heuristic Score</th><th>Reason Codes</th></tr></thead>
+<thead><tr><th>Finding ID</th><th>CWE</th><th>Location</th><th>Decision / Triage</th><th>CWSS 1.0.1 / mode / status / metrics / subscores / evidence</th><th>Reason Codes</th></tr></thead>
 <tbody>
 {rows_html}
 </tbody>
@@ -4212,6 +4489,69 @@ class NtkBackendState:
     ) -> Dict[str, Any]:
         record = dict(scan_payload)
         record["scan_id"] = scan_id
+        record["sast_priority_policy"] = "CWSS_0_100_WITH_ASSESSMENT_STATE"
+        # The results index attaches per-finding source provenance from this scan
+        # record. Bind that SAME evidence before publishing immutable CWSS snapshots,
+        # otherwise subsequent API reads see a different source_evidence_hash (409).
+        original_findings = list(record.get("findings", []))
+        provenance = record.get("source_provenance_verification") or {}
+        provenance_rows = provenance.get("per_finding_records", []) if isinstance(provenance, dict) else []
+        by_id = {str(row["finding_id"]): row for row in provenance_rows
+                 if isinstance(row, dict) and row.get("finding_id")}
+        indexed_findings = []
+        for original in original_findings:
+            finding = dict(original)
+            source_record = by_id.get(str(finding.get("finding_id", "")))
+            if source_record is not None:
+                if (finding.get("source_provenance_record") is not None
+                        and finding["source_provenance_record"] != source_record):
+                    raise ValueError("CWSS source provenance disagrees with scan verification")
+                finding["source_provenance_record"] = copy.deepcopy(source_record)
+            indexed_findings.append(dict(finding, cwss=cwss_workflow.evaluate(finding, scan_id)))
+        record["findings"] = indexed_findings
+        # Sidecar only: do not overwrite existing assessments or triage decisions.
+        snapshot = record.pop("cwss_automatic_collection", None)
+        if snapshot is None:
+            snapshot = cwss_workflow.automatic.collect(None, record["findings"])
+        else:
+            snapshot = copy.deepcopy(snapshot)
+            bound_hashes = snapshot.get("finding_evidence_hashes")
+            if not isinstance(bound_hashes, dict):
+                raise ValueError("CWSS automatic collection lacks finding hash bindings")
+            for original, indexed in zip(original_findings, indexed_findings):
+                fid = str(original["finding_id"])
+                previous_hash = cwss_workflow.evidence_hash(original)
+                current_hash = cwss_workflow.evidence_hash(indexed)
+                if bound_hashes.get(fid) not in (previous_hash, current_hash):
+                    raise ValueError("CWSS automatic collection fingerprint changed")
+                bound_hashes[fid] = current_hash
+        complete_snapshot = dict(snapshot)
+        declared_context = record.pop("cwss_complete_context", None)
+        if declared_context is not None:
+            complete_snapshot["complete_reference_context"] = declared_context
+        auto_store = cwss_workflow.AssessmentStore(cwss_workflow.directory(self))
+        # Reuse the complete store instead of re-opening/reinitializing it for
+        # every finding. Old (full) snapshots remain readable and replayable.
+        complete_store = cwss_workflow.AssessmentStore(cwss_workflow.directory(self)/'complete')
+        for finding in record["findings"]:
+            # CWSS V2 scores only the exact source-bound finding/AST, plus
+            # shared context. Avoid serializing every unrelated Java AST and
+            # every unrelated finding into *each* of the 3 immutable profiles.
+            # V1 remains byte-for-byte on its previous storage path.
+            scoped_auto = cwss_workflow.scope_v2_snapshot(snapshot, finding)
+            scoped_complete = cwss_workflow.scope_v2_snapshot(complete_snapshot, finding)
+            auto_store.publish_automatic(finding, scan_id, scoped_auto)
+            # Independent revision stream preserves existing evidence/estimate history.
+            reviewed = [r for r in auto_store.history(scan_id, finding['finding_id'])
+                        if r['profile']['mode'] == 'ASSESSED']
+            attestation = ({'profile': reviewed[-1]['profile'], 'reviewer': reviewed[-1]['reviewer']}
+                           if reviewed else None)
+            published_complete = complete_store.publish_complete(
+                finding, scan_id, scoped_complete, cwss_workflow.complete.selection(), attestation)
+            if snapshot.get('inference_version') == cwss_workflow.automatic_v2.graph.VERSION:
+                finding['cwss'] = published_complete['assessment']
+        from ntk_scan_aggregates import summarize
+        record['full_scan_aggregates']=summarize(record['findings'])
         record["restoration_status"] = "LIVE_OR_FULL_PERSISTED_SCAN"
         record["has_full_scan_findings_payload"] = True
         if isinstance(record.get("pipeline_trace"), dict):
@@ -4370,6 +4710,18 @@ def create_ntk_http_server(
             path = parsed_url.path.rstrip("/") or "/"
             query = urllib.parse.parse_qs(parsed_url.query)
 
+            # Read-only CWSS V2 what-if preview; never publishes or edits assessments.
+            scenario_response = cwss_reference_api.handle(backend_state, path, query)
+            if scenario_response is not None:
+                self._send_json(*scenario_response)
+                return
+
+            cwss_response = cwss_workflow.handle(backend_state, "GET", path, query,
+                                                 authorization=self.headers.get("Authorization", ""))
+            if cwss_response is not None:
+                self._send_json(*cwss_response)
+                return
+
             if path == "/api/health":
                 cfg = backend_state.config
                 rt_tel = get_model_runtime_telemetry(cfg)
@@ -4462,8 +4814,8 @@ def create_ntk_http_server(
                         "adapter_arm_id": "eo06_vnext31_trackb_main",
                         "model_version": cfg.model_version,
                         "best_adapter_sha256": DEFAULT_BEST_ADAPTER_SHA256,
-                        "safety_floor": cfg.safety_floor,
-                        "score_semantics": triage_mod.SCORE_KIND_DEFAULT,
+                        "legacy_score_status": "REMOVED_FROM_PRODUCTION",
+                        "score_semantics": "EVIDENCE_POLICY_NOT_CALIBRATED_PROBABILITY_CWSS_V2_PRIORITY",
                         "ruleset_version": cfg.ruleset_version,
                         "rules_applied_count": DEFAULT_RULES_APPLIED_COUNT,
                         "supported_cwe_categories": list(SUPPORTED_CWE_CATEGORIES),
@@ -4992,6 +5344,27 @@ def create_ntk_http_server(
                 return
             parsed_url = urllib.parse.urlsplit(self.path)
             path = parsed_url.path.rstrip("/") or "/"
+
+            if cwss_workflow.ROUTE.fullmatch(path):
+                try:
+                    cwss_workflow.authorize(self.headers.get("Authorization", ""))
+                except (PermissionError, ValueError):
+                    self._send_json(401, {"error_code": "CWSS_AUTH_REQUIRED"})
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if not 0 < length <= 1024 * 1024:
+                        raise ValueError("CWSS JSON body must be 1..1048576 bytes")
+                    if not self.headers.get("Content-Type", "").lower().startswith("application/json"):
+                        raise ValueError("CWSS body must be application/json")
+                    body = json.loads(self.rfile.read(length))
+                except (ValueError, UnicodeError) as exc:
+                    self._send_json(422, {"error_code": "CWSS_VALIDATION_ERROR", "error_message": str(exc)})
+                    return
+                response = cwss_workflow.handle(backend_state, "POST", path,
+                    urllib.parse.parse_qs(parsed_url.query), body, self.headers.get("Authorization", ""))
+                self._send_json(*response)
+                return
 
             if path not in ("/api/scans", "/api/scans/zip", "/api/scan-jobs"):
                 self._send_json(

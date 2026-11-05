@@ -1208,7 +1208,7 @@ class FindingSchemaV1:
             "llm_prediction": dict(self.llm_prediction),
             "ast_evidence": dict(self.ast_evidence),
             "score_breakdown": dict(self.score_breakdown),
-            "final_heuristic_score": round(float(self.final_heuristic_score), 4),
+            "final_heuristic_score": round(float(self.final_heuristic_score), 4) if self.final_heuristic_score is not None else None,
             "is_calibrated_probability": bool(self.is_calibrated_probability),
             "kept_by_pipeline": bool(self.kept_by_pipeline),
             "disposition": self.disposition,
@@ -1283,7 +1283,7 @@ class FindingSchemaV2(FindingSchemaV1):
             {
                 "triage_status": self.triage_status,
                 "decision": self.decision,
-                "confidence_score": round(float(self.confidence_score), 4),
+                "confidence_score": round(float(self.confidence_score), 4) if self.confidence_score is not None else None,
                 "score_kind": self.score_kind,
                 "severity": self.severity,
                 "reason_codes": list(self.reason_codes),

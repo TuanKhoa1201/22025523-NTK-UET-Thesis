@@ -39,7 +39,7 @@ MODEL_VERSION_DEFAULT: str = "eo06_vnext31_trackb_main_epoch3"
 RULESET_VERSION_DEFAULT: str = "NTK_OPENGREP_JAVA_RULESET_V1.4"
 SCORING_POLICY_VERSION_DEFAULT: str = "NTK_BOUNDED_SAFETY_FLOOR_FUSION_V1.2"
 SCORE_KIND_DEFAULT: str = "HEURISTIC_EVIDENCE_FUSION_SCORE_NOT_CALIBRATED_PROBABILITY"
-AST_ANALYSIS_VERSION = "JAVAC_AST_V4_STANDARD_API_TRANSFERS"
+AST_ANALYSIS_VERSION = "JAVAC_AST_V6_CLASS_INITIALIZER_SCOPE"
 
 INFRASTRUCTURE_PARAM_TYPES: Set[str] = {
     "Connection",
@@ -138,30 +138,51 @@ def ensure_javac_ast_bridge_compiled(
     javac_bin: str = "/usr/bin/javac",
     timeout_sec: float = 15.0,
 ) -> bool:
+    """Compile the AST extractor for Java 17, regardless of host javac version.
+
+    A .class timestamp by itself is insufficient: tests or worker processes
+    may compile the same bridge with javac 21 and subsequently execute it under
+    Java 17, which rejects its class-file major version 65. Require major 61
+    for every generated bridge class and rebuild with --release 17 if needed.
+    """
     inner_visitor_cls = JAVAC_BRIDGE_DIR / "NtkJavacAstExtractor$1MethodBodyVisitor.class"
-    if JAVAC_BRIDGE_CLASS.exists() and inner_visitor_cls.exists() and JAVAC_BRIDGE_JAVA.exists():
-        cls_files = list(JAVAC_BRIDGE_DIR.glob("NtkJavacAstExtractor*.class"))
-        java_mtime = JAVAC_BRIDGE_JAVA.stat().st_mtime
-        if cls_files and min(c.stat().st_mtime for c in cls_files) >= java_mtime:
+
+    def compiled_release17_current() -> bool:
+        if not (JAVAC_BRIDGE_JAVA.is_file() and JAVAC_BRIDGE_CLASS.is_file()
+                and inner_visitor_cls.is_file()):
+            return False
+        try:
+            compiled = list(JAVAC_BRIDGE_DIR.glob("NtkJavacAstExtractor*.class"))
+            if not compiled:
+                return False
+            source_mtime_ns = JAVAC_BRIDGE_JAVA.stat().st_mtime_ns
+            if any(cls.stat().st_mtime_ns < source_mtime_ns for cls in compiled):
+                return False
+            for cls in compiled:
+                with cls.open("rb") as stream:
+                    header = stream.read(8)
+                if (cls.stat().st_size < 16 or len(header) != 8 or header[:4] != b"\xca\xfe\xba\xbe"
+                        or int.from_bytes(header[6:8], "big") != 61):
+                    return False
             return True
-    if not JAVAC_BRIDGE_JAVA.exists() or not Path(javac_bin).exists():
+        except OSError:
+            return False
+
+    if compiled_release17_current():
+        return True
+    if not JAVAC_BRIDGE_JAVA.is_file() or not Path(javac_bin).is_file():
         return False
     try:
+        # Remove only generated class files, never the Java source or model/cache.
         for old_cls in JAVAC_BRIDGE_DIR.glob("NtkJavacAstExtractor*.class"):
-            try:
-                old_cls.unlink()
-            except Exception:
-                pass
+            old_cls.unlink()
         proc = subprocess.run(
-            [javac_bin, str(JAVAC_BRIDGE_JAVA)],
-            cwd=str(JAVAC_BRIDGE_DIR),
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            check=False,
+            [javac_bin, "--release", "17", str(JAVAC_BRIDGE_JAVA)],
+            cwd=str(JAVAC_BRIDGE_DIR), capture_output=True, text=True,
+            timeout=timeout_sec, check=False,
         )
-        return proc.returncode == 0 and JAVAC_BRIDGE_CLASS.exists() and inner_visitor_cls.exists()
-    except Exception:
+        return proc.returncode == 0 and compiled_release17_current()
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -1029,19 +1050,47 @@ def _analyze_with_openjdk_ast(
         if target_method is not None:
             break
 
-    if target_class is None:
-        target_class = classes[0]
     if target_method is None:
-        methods = target_class.get("methods", [])
-        if not methods:
+        # A class-level initializer must not borrow the method nearest to it.
+        # Identify the exact Javac BlockTree class member, otherwise retain an
+        # unverified context; do not invent a method span or taint proof.
+        init_sites = []
+        for cls in classes:
+            for initializer in cls.get("initializers", []):
+                start = int(initializer.get("start_line", 0))
+                end = int(initializer.get("end_line", 0))
+                if 0 < start <= int(match_line) <= end:
+                    init_sites.append((end - start, cls, initializer))
+        if not init_sites:
             return None
-        # Pick method closest to match_line
-        target_method = min(
-            methods,
-            key=lambda m: min(
-                abs(int(m.get("start_line", 0)) - int(match_line)),
-                abs(int(m.get("end_line", 0)) - int(match_line)),
+        _, target_class, initializer = min(init_sites, key=lambda item: item[0])
+        kind = "staticInitializer" if initializer.get("is_static") else "instanceInitializer"
+        cls_name = str(target_class.get("class_name", "UnknownClass"))
+        signature = f"void {kind}()"
+        return JavaAstSiteAnalysis(
+            file_path=file_path, match_line=match_line,
+            cwe=int(re.sub(r"\D", "", str(cwe)) or "0"),
+            package_name=pkg_name, class_name=cls_name,
+            enclosing_method=kind, enclosing_signature=signature,
+            untrusted_params=(),
+            target_callee_identity={
+                "package": pkg_name, "class": cls_name,
+                "method": kind, "signature": signature,
+            },
+            matched_code_line=matched_code_line,
+            source_sink_trace_status="NO_FLOW_DETECTED_INTRAPROCEDURAL_LIMIT",
+            taint_reaches_sink=False, taint_source_params=(),
+            taint_trace_steps=(matched_code_line,), sanitizer_status="NONE_DETECTED",
+            ast_evidence=shared.AstReleaseEvidence(
+                is_compile_time_constant_arg=False,
+                has_cwe_matched_sanitizer=False,
+                covered_sink_args=(),
+                ast_proof_node="JAVAC_CLASS_INITIALIZER_SCOPE_ONLY_NO_FLOW_PROOF",
+                ast_parser_engine="JAVAC_AST_INITIALIZER_SCOPE_ONLY",
             ),
+            extra_reason_codes=("RC_CLASS_INITIALIZER_FLOW_UNPROVEN",),
+            ast_parser_engine="JAVAC_AST_INITIALIZER_SCOPE_ONLY",
+            ast_overloaded_signature=signature,
         )
 
     cls_name = str(target_class.get("class_name", "UnknownClass"))
@@ -2978,6 +3027,7 @@ def verify_and_triage_finding(
     model_version: str = MODEL_VERSION_DEFAULT,
     ruleset_version: str = RULESET_VERSION_DEFAULT,
     scoring_policy_version: str = SCORING_POLICY_VERSION_DEFAULT,
+    legacy_score_compatibility: bool = True,
 ) -> shared.FindingSchemaV2:
     """
     Executes Evidence Fusion (`evaluate_bounded_safety_floor`) and applies the deterministic
@@ -2997,9 +3047,11 @@ def verify_and_triage_finding(
         callee_prediction=callee_prediction,
         ast_evidence=ast_analysis.ast_evidence,
     )
-    floor_res = shared.evaluate_bounded_safety_floor(cand)
-    explicit_release = bool(floor_res["explicit_ast_release_verified"])
-    release_reason = str(floor_res["ast_release_reason"])
+    # Production decisions depend on semantic evidence, never a numeric score.
+    # The old scorer remains opt-in for historical API/replay compatibility.
+    explicit_release, release_reason = shared.verify_ast_release_evidence(cand)
+    floor_res = (shared.evaluate_bounded_safety_floor(cand)
+                 if legacy_score_compatibility else {})
 
     reason_codes: List[str] = ["RC_OPENGREP_CANDIDATE_MATCH"]
     for rc in ast_analysis.extra_reason_codes:
@@ -3033,7 +3085,7 @@ def verify_and_triage_finding(
         triage_status = "LIKELY_FALSE_POSITIVE"
         decision = "SUPPRESS"
         kept_by_pipeline = False
-        effective_score = 0.0
+        effective_score = 0.0 if legacy_score_compatibility else None
         reason_codes.append(f"RC_AUTO_SUPPRESS_AST_VERIFIED:{release_reason}")
         disposition = f"SUPPRESSED_FALSE_POSITIVE (AST_SAFETY_RELEASE:{release_reason})"
     elif (
@@ -3050,7 +3102,7 @@ def verify_and_triage_finding(
         triage_status = "LIKELY_TRUE_POSITIVE"
         decision = "REPORT"
         kept_by_pipeline = True
-        effective_score = float(floor_res["final_score"])
+        effective_score = float(floor_res["final_score"]) if legacy_score_compatibility else None
         if release_reason != "NO_AST_RELEASE_CLAIMED":
             reason_codes.append(f"RC_AST_RELEASE_REJECTED:{release_reason}")
         else:
@@ -3063,8 +3115,8 @@ def verify_and_triage_finding(
         triage_status = "NEEDS_REVIEW"
         decision = "REVIEW"
         kept_by_pipeline = True
-        effective_score = float(floor_res["final_score"])
-        if floor_res["safety_floor_applied"]:
+        effective_score = float(floor_res["final_score"]) if legacy_score_compatibility else None
+        if floor_res.get("safety_floor_applied"):
             reason_codes.append("RC_SAFETY_FLOOR_055_CLAMPED")
         if ast_analysis.taint_reaches_sink and llm_role != "sink":
             reason_codes.append("RC_CONFLICT_IRIS_TAINT_VS_LLM_ROLE")
@@ -3170,6 +3222,13 @@ def verify_and_triage_finding(
             "Heuristic neuro-symbolic evidence fusion score in [0.0, 1.0]; "
             "NOT a calibrated statistical probability."
         ),
+    } if legacy_score_compatibility else {
+        "policy": "NTK_EVIDENCE_TRIAGE_V1",
+        "legacy_score_status": "REMOVED_FROM_PRODUCTION",
+        "explicit_ast_release_verified": explicit_release,
+        "ast_release_reason": release_reason,
+        "numeric_score_used_for_decision": False,
+        "priority_engine": "NTK_CWSS_INFERENCE_V2",
     }
 
     return shared.FindingSchemaV2(
@@ -3204,14 +3263,14 @@ def verify_and_triage_finding(
             "output_context": ast_analysis.ast_evidence.output_context,
         },
         score_breakdown=fusion_score_breakdown,
-        final_heuristic_score=round(float(effective_score), 4),
+        final_heuristic_score=round(float(effective_score), 4) if effective_score is not None else None,
         is_calibrated_probability=False,
         kept_by_pipeline=kept_by_pipeline,
         disposition=disposition,
         triage_status=triage_status,
         decision=decision,
-        confidence_score=round(float(effective_score), 4),
-        score_kind=SCORE_KIND_DEFAULT,
+        confidence_score=round(float(effective_score), 4) if effective_score is not None else None,
+        score_kind=SCORE_KIND_DEFAULT if legacy_score_compatibility else "EVIDENCE_POLICY_NOT_CALIBRATED_PROBABILITY_CWSS_V2_PRIORITY",
         severity=sev_norm,
         reason_codes=tuple(reason_codes),
         evidence_refs=evidence_refs,
@@ -3293,9 +3352,13 @@ def validate_finding_schema_v2_dict(d: Dict[str, Any]) -> Tuple[bool, List[str]]
     if d["sanitizer_status"] not in shared.VALID_SANITIZER_STATUSES:
         errors.append(f"INVALID_SANITIZER_STATUS:{d['sanitizer_status']}")
 
-    score = float(d["confidence_score"])
-    if not (0.0 <= score <= 1.0):
-        errors.append(f"CONFIDENCE_SCORE_OUT_OF_RANGE:{score}")
+    raw_score = d["confidence_score"]
+    evidence_policy = d.get('fusion_score_breakdown', {}).get('policy') == 'NTK_EVIDENCE_TRIAGE_V1'
+    if raw_score is None:
+        if not evidence_policy or d.get('final_heuristic_score') is not None:
+            errors.append('NULL_SCORE_REQUIRES_EVIDENCE_POLICY')
+    elif not (0.0 <= float(raw_score) <= 1.0):
+        errors.append(f"CONFIDENCE_SCORE_OUT_OF_RANGE:{raw_score}")
     if d["is_calibrated_probability"] is not False:
         errors.append("IS_CALIBRATED_PROBABILITY_MUST_BE_FALSE")
     if "NOT_CALIBRATED_PROBABILITY" not in str(d["score_kind"]):
@@ -3372,8 +3435,8 @@ def get_finding_schema_v2_json_schema() -> Dict[str, Any]:
             "decision": {"type": "string", "enum": list(shared.VALID_TRIAGE_DECISIONS)},
             "review_status": {"type": "string", "enum": list(shared.VALID_REVIEW_STATUSES)},
             "review_metadata": {"type": "object"},
-            "confidence_score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "final_heuristic_score": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "confidence_score": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
+            "final_heuristic_score": {"type": ["number", "null"], "minimum": 0.0, "maximum": 1.0},
             "score_kind": {"type": "string", "const": SCORE_KIND_DEFAULT},
             "is_calibrated_probability": {"type": "boolean", "const": False},
             "kept_by_pipeline": {"type": "boolean"},

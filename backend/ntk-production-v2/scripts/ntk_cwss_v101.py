@@ -9,7 +9,7 @@ Pure Python 3.9+, no network or external dependencies.
 """
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 from typing import Any, Dict, Mapping, Optional
 
 CWSS_VERSION = "1.0.1"
@@ -98,6 +98,14 @@ def _normalized_code(factor: str, code: str) -> str:
 
 
 def score_codes(codes: Mapping[str, str], *, fill_unknown: bool = True) -> Dict[str, Any]:
+    """Discrete MITRE calculation with a fixed, reproducible Decimal context."""
+    with localcontext() as arithmetic:
+        arithmetic.prec = 50
+        arithmetic.rounding = ROUND_HALF_UP
+        return _score_codes_decimal(codes, fill_unknown=fill_unknown)
+
+
+def _score_codes_decimal(codes: Mapping[str, str], *, fill_unknown: bool = True) -> Dict[str, Any]:
     """Compute CWSS 1.0.1 exactly from factor value codes.
 
     The official tables are the sole source of numeric metric weights.
@@ -115,12 +123,12 @@ def score_codes(codes: Mapping[str, str], *, fill_unknown: bool = True) -> Dict[
     for factor, value in codes.items():
         mapped[factor] = _normalized_code(factor, value)
     weights = {factor: float(WEIGHTS[factor][mapped[factor]]) for factor in FACTOR_ORDER}
-    w = weights
-    f_ti = 0.0 if w["TI"] == 0 else 1.0
-    f_bi = 0.0 if w["BI"] == 0 else 1.0
-    base = (10*w["TI"] + 5*(w["AP"] + w["AL"]) + 5*w["FC"]) * f_ti * w["IC"] * 4.0
-    attack = (20*(w["RP"] + w["RL"] + w["AV"]) + 20*w["SC"] + 15*w["IN"] + 5*w["AS"]) / 100.0
-    environment = ((10*w["BI"] + 3*w["DI"] + 4*w["EX"] + 3*w["P"]) * f_bi * w["EC"]) / 20.0
+    w = {factor: Decimal(str(weight)) for factor, weight in weights.items()}
+    f_ti = Decimal("0") if w["TI"] == 0 else Decimal("1")
+    f_bi = Decimal("0") if w["BI"] == 0 else Decimal("1")
+    base = (10*w["TI"] + 5*(w["AP"] + w["AL"]) + 5*w["FC"]) * f_ti * w["IC"] * Decimal("4")
+    attack = (20*(w["RP"] + w["RL"] + w["AV"]) + 20*w["SC"] + 15*w["IN"] + 5*w["AS"]) / Decimal("100")
+    environment = ((10*w["BI"] + 3*w["DI"] + 4*w["EX"] + 3*w["P"]) * f_bi * w["EC"]) / Decimal("20")
     unrounded = base * attack * environment
     if not (0 <= base <= 100 and 0 <= attack <= 1 and 0 <= environment <= 1 and 0 <= unrounded <= 100):
         raise AssertionError("CWSS metric score outside expected range")
@@ -130,10 +138,16 @@ def score_codes(codes: Mapping[str, str], *, fill_unknown: bool = True) -> Dict[
         "cwss_version": CWSS_VERSION,
         "specification_url": STANDARD_URL,
         "cwss_score": _cwss_decimal_score(unrounded),
-        "cwss_score_unrounded": round(unrounded, 8),
-        "base_finding_subscore": round(base, 8),
-        "attack_surface_subscore": round(attack, 8),
-        "environment_subscore": round(environment, 8),
+        "cwss_score_exact": str(unrounded),
+        "subscores_exact": {"base": str(base), "attack_surface": str(attack), "environment": str(environment)},
+        "calculation_arithmetic": "DECIMAL",
+        "decimal_precision": 50,
+        "rounding_policy": "NTK_HALF_UP_1_DECIMAL",
+        "supported_profile": "CWSS_1_0_1_DISCRETE_TARGETED",
+        "cwss_score_unrounded": float(round(unrounded, 8)),
+        "base_finding_subscore": float(round(base, 8)),
+        "attack_surface_subscore": float(round(attack, 8)),
+        "environment_subscore": float(round(environment, 8)),
         "vector": vector,
         "factor_codes": mapped,
         "factor_weights": weights,

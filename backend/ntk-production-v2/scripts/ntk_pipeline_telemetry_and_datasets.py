@@ -177,11 +177,11 @@ PIPELINE_STAGE_SPECS: Tuple[StageSpec, ...] = (
         stage_id="STAGE_08_SAST_SCORING",
         key="SAST_SCORING",
         name="Chấm điểm SAST",
-        name_en="Bounded Safety Floor Heuristic SAST Scoring",
-        actual_backend_function="shared.evaluate_bounded_safety_floor()",
+        name_en="Semantic Evidence Checks for CWSS V2",
+        actual_backend_function="shared.verify_ast_release_evidence()",
         actual_event_measured=(
-            "Computing base_scanner_score (0.70), llm_role_delta (+0.15 sink / -0.35 none), raw_adjusted_score, "
-            "0.55 Bounded Safety Floor clamping, and effective_post_release_score across all candidates."
+            "Checking semantic release and sink-slot coverage without numeric triage thresholds. "
+            "CWSS V2 priority is published after per-finding source verification."
         ),
         aggregation_semantics="SEQUENTIAL_BATCH_PASS_ACROSS_ALL_CANDIDATES",
     ),
@@ -473,6 +473,15 @@ class PipelineStageTracker:
                 self._pipeline_start_ns = time.perf_counter_ns()
                 self.started_at_utc = _utc_now_iso()
             self.job_state = "RUNNING"
+
+    def describe_stage_engine(self, stage_number: int, name: str, engine_id: str, function: str) -> None:
+        """Name the engine actually executed; historical restored traces stay intact."""
+        with self._lock:
+            stage=self._stages[int(stage_number)]
+            stage['name']=name
+            stage['name_en']=name
+            stage['engine_id']=engine_id
+            stage['actual_backend_function']=function
 
     def start_stage(
         self,
@@ -2840,6 +2849,8 @@ class NtkScanResultIndex:
             "summary": summary_block,
             "links": links,
         }
+        if isinstance(rec.get('full_scan_aggregates'),dict):
+            summary_payload['full_scan_aggregates']=rec['full_scan_aggregates']
         if isinstance(rec.get("restoration_metadata"), dict):
             summary_payload["restoration_metadata"] = dict(rec["restoration_metadata"])
         elif isinstance((eff_trace or {}).get("restoration_metadata"), dict):
@@ -2909,8 +2920,11 @@ class NtkScanResultIndex:
             em_str = str(f.get("enclosing_method", ""))
             rule_str = str(f.get("scanner_rule_id", ""))
             matched_code = str(f.get("matched_code", ""))
-            final_sc = float(f.get("final_heuristic_score", f.get("confidence_score", 0.0)))
-            conf_sc = float(f.get("confidence_score", final_sc))
+            # V1 index columns are NOT NULL. Zero is only a storage placeholder
+            # for the retired sort key; DTOs retain null, never a fabricated score.
+            legacy_absent = f.get('final_heuristic_score') is None and f.get('confidence_score') is None
+            final_sc = float(f.get("final_heuristic_score") or f.get("confidence_score") or 0.0)
+            conf_sc = float(f.get("confidence_score") or final_sc)
             kept_flag = bool(f.get("kept_by_pipeline", dec_str != "SUPPRESS"))
             trace_st = str(f.get("source_sink_trace_status", ""))
             san_st = str(f.get("sanitizer_status", ""))
@@ -2955,8 +2969,8 @@ class NtkScanResultIndex:
                 "enclosing_method": em_str,
                 "scanner_rule_id": rule_str,
                 "matched_code": matched_code,
-                "final_heuristic_score": final_sc,
-                "confidence_score": conf_sc,
+                "final_heuristic_score": None if legacy_absent else final_sc,
+                "confidence_score": None if legacy_absent else conf_sc,
                 "score_kind": f.get(
                     "score_kind", "HEURISTIC_EVIDENCE_FUSION_SCORE_NOT_CALIBRATED_PROBABILITY"
                 ),
@@ -2967,10 +2981,10 @@ class NtkScanResultIndex:
                 "sanitizer_status": san_st,
                 "target_callee_identity": tci,
                 "predicted_api_role": pred_role,
-                "base_scanner_score": base_sc_val,
-                "llm_role_delta": llm_delta_val,
-                "raw_adjusted_score": raw_adj_val,
-                "effective_post_release_score": eff_post_val,
+                "base_scanner_score": None if legacy_absent else base_sc_val,
+                "llm_role_delta": None if legacy_absent else llm_delta_val,
+                "raw_adjusted_score": None if legacy_absent else raw_adj_val,
+                "effective_post_release_score": None if legacy_absent else eff_post_val,
                 "safety_floor_clamped": floor_clamped_val,
                 "reason_codes": list(f.get("reason_codes") or []),
                 "review_status": f.get("review_status", "NOT_REVIEWED"),
