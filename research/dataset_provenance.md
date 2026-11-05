@@ -26,3 +26,9 @@ Raw private training examples, licensed corpora, model weights, full scanned thi
 ## Historical warning
 
 The older public repository recorded **Dataset V3 family leakage and in-context prompt contamination**. The historical audit is relevant evidence of methodology repair, but do not describe those old V3 defects as automatically persisting in VNext3.1. Conversely, do not assert VNext3.1 is leak-free without verifying its split manifest.
+
+## Đối chiếu dataset trên laptop ngày 05/11/2026
+
+Bốn file JSONL đã được kiểm tra lại bằng SHA-256 và số dòng. Kết quả khớp manifest: Track A 275, Track B 781, Development 166, Quarantine 137. Track A nằm trong Track B; tổng số bản ghi duy nhất là 1.084. API trả manifest hợp lệ và xuất CSV, JSONL, XLSX thành công.
+
+Mã kiểm tra không cần mở dữ liệu: `python3 scripts/verify-private-artifacts.py --dataset-dir /duong/dan/tren/wsl`. Việc này chỉ xác nhận tính nguyên vẹn theo checksum đã công bố, không thay thế đánh giá độc lập chất lượng nhãn và split. Dataset riêng không đưa lên GitHub.

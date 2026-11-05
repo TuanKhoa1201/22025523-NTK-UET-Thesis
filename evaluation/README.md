@@ -1,14 +1,8 @@
-# Evaluation: reproducible evidence, not marketing metrics
+# Kiểm thử và đánh giá hệ thống đồ án
 
-- [Evaluation protocol](evaluation_protocol.md)
-- [Evidence register and validation status](evidence_register.md)
-- [Current scoring method](../research/scoring_v1_2.md)
+- `bao-cao-kiem-thu-da-xac-minh.md` - kết quả vận hành và dataset có biên bản xác minh ngày 05/11/2026.
+- `huong-dan-tai-lap-thuc-nghiem.md` - quy trình tái lập, cách ghi lại phiên bản và checksum.
+- `evaluation_protocol.md` - giao thức đánh giá độc lập khi có corpus và nhãn tham chiếu.
+- `evidence_register.md` - danh mục bằng chứng và giới hạn còn lại.
 
-## Four separate evaluations
-
-1. **API-role classifier:** precision/recall/F1 per role, macro F1, base-vs-LoRA on locked samples.
-2. **SAST finding detection:** per-CWE and per-project findings TP/FP/FN with externally justified labels.
-3. **Fusion/scoring/triage:** false-positive suppression safety, ranking and `REVIEW` decision quality; do not treat a heuristic score as a probability.
-4. **End-to-end website:** successful job submission, real progress trace, complete index/pagination and reports.
-
-Never describe a health check, successful frontend build, or historical model result as an independent end-to-end benchmark.
+Lưu ý: kiểm thử build thành công không đồng nghĩa xác nhận precision/recall. Kết quả triage là quyết định xử lý cảnh báo, không phải nhãn đúng/sai đã được chuyên gia xác minh. Dataset và model weights không nằm trong GitHub.

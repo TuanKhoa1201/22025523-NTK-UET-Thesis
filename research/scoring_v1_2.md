@@ -1,40 +1,37 @@
-# Production heuristic SAST evidence fusion V1.2
+# Nghiên cứu chấm điểm và phân loại cảnh báo
 
-> **Method classification:** a deterministic heuristic ranking/triage method, **not** CVSS, not a calibrated P(vulnerability), and not an independently validated score of exploitable severity.
+## Cơ chế hiện tại
 
-## What the current source actually implements
+Cần phân biệt hai nhiệm vụ:
 
-`backend/ntk-production-v2/scripts/ntk_iris_shared.py`, function `evaluate_bounded_safety_floor`, computes:
+1. **Xác minh và phân loại cảnh báo**: OpenGrep phát hiện ứng viên; phân tích Java AST, IRIS khi được cấu hình và Qwen LoRA cung cấp bằng chứng để đưa ra `REPORT`, `REVIEW` hoặc `SUPPRESS`. Không dùng điểm CWSS làm kết luận cảnh báo thật hoặc giả.
+2. **Sắp xếp mức ưu tiên theo CWSS**: MITRE Common Weakness Scoring System 1.0.1 đánh giá điểm yếu bằng 16 metric của Base Finding, Attack Surface và Environmental. Đây là một phép đánh giá điểm yếu có giả định, không phải mô hình thống kê được hiệu chỉnh từ nhãn TP/FP.
+
+## Công thức CWSS
 
 ```text
-s = float(base_scanner_score)        # base score is supplied by caller
-if valid LLM role == sink: s = min(1, s + 0.15)
-if valid LLM role == none: s = max(0, s - 0.35)
-# source, taint-propagator, absent or invalid predictions: no role delta
-if static severity in {HIGH, CRITICAL, ERROR} and no verified AST release:
-    s = max(s, 0.55)                 # safety floor
-if AST release is verified:
-    effective_post_release_score = 0
-else:
-    effective_post_release_score = round(s, 4)
+CWSS = Base Finding x Attack Surface x Environmental
 ```
 
-The function itself does not clamp the initial base score; a base input within [0, 1] is assumed by the surrounding pipeline. The code also records `safety_floor_applied`, `explicit_ast_release_verified`, `llm_role_delta` and a retention threshold of 0.50. The actual `base_scanner_score` mapping is elsewhere in the pipeline; document and test it before claiming this text is a complete score specification.
+Base Finding được biểu diễn trên thang 0 đến 100. Attack Surface và Environmental là các hệ số trong khoảng 0 đến 1. Cách chuyển các giá trị metric sang trọng số và quy tắc làm tròn nằm tại `backend/ntk-production-v2/scripts/ntk_cwss_v101.py`. Các module bổ sung xử lý bằng chứng, suy luận và kịch bản tại `scripts/ntk_cwss_automatic.py`, `scripts/ntk_cwss_complete.py`, `scripts/ntk_cwss_workflow.py`.
 
-## How a final alert is triaged
+Nguồn đặc tả: <https://cwe.mitre.org/cwss/cwss_v1.0.1.html>.
 
-`backend/ntk-production-v2/scripts/ntk_alert_verification.py`, function `verify_and_triage_finding`, uses more than the scalar score:
+## Giới hạn khoa học
 
-1. **SUPPRESS / LIKELY_FALSE_POSITIVE:** requires an explicit, structurally verified safe AST release, the Javac AST parser engine, and approved safe trace statuses. Merely labeling an API `none` does not permit automatic suppression.
-2. **REPORT / LIKELY_TRUE_POSITIVE:** requires verified AST taint reaches the sink, an approved risky trace status, and a valid LLM `sink` role.
-3. **REVIEW / NEEDS_REVIEW:** used for ambiguous evidence, conflicts, abstention/timeouts, or missing trust conditions; the finding remains available for a human.
+Các giá trị về quyền truy cập, tác động kinh doanh, bảo vệ, Internet và môi trường triển khai thường không xác minh được chỉ từ mã Java. Do đó cần giữ `UNKNOWN` hoặc đánh dấu rõ giả định; không âm thầm chọn giá trị có vẻ hợp lý rồi khẳng định là đo thực tế.
 
-The review state is distinct from ground truth: the code keeps `review_status=NOT_REVIEWED` unless an explicit manual review record confirms true or false positive.
+Kết quả chạy trên kịch bản tham chiếu chỉ cho phép xếp ưu tiên theo tình huống đã giả định. Không nên coi điểm tuyệt đối của hai dự án khác môi trường là trực tiếp so sánh được nếu chưa kiểm soát yếu tố khác biệt.
 
-## Scientific questions before thesis defense
+## Những phép đo còn cần có
 
-- Why +0.15, -0.35, 0.55 and 0.50? These are **engineering choices**, not scientifically calibrated constants by virtue of appearing in source code.
-- Check monotonicity, boundaries, score stability, sensitivity to each parameter, high-severity false-negative protection and ranking quality on independent labelled findings.
-- Compare OpenGrep-only, OpenGrep+AST, OpenGrep+LLM, and the full fusion where possible.
-- Report precision/recall, missed positives, suppression mistakes and Precision@K with confidence intervals if the sample supports them.
-- Do not substitute older V2.1/V2.2 scoring documents or old Qwen 1.5B benchmark for this V1.2 method.
+- So sánh các điểm cùng nhãn TP/FP được kiểm tra độc lập.
+- Phân tích độ nhạy với từng nhóm metric và các trường UNKNOWN.
+- So sánh mức ưu tiên giữa các cấu hình áp dụng chung một tập cảnh báo.
+- Ghi nguồn từng giá trị metric, có hay không chứng cứ từ mã nguồn, có hay không giả định người dùng.
+
+## Ghi chú lịch sử
+
+Tài liệu cũ về điểm heuristic V1.2 là cơ sở nghiên cứu trước khi bổ sung đánh giá CWSS. Phần triage vẫn dựa trên bằng chứng và chính sách an toàn; không đồng nhất công thức heuristic cũ với công thức MITRE CWSS.
+
+Không sử dụng điểm CWSS để nói một cảnh báo có xác suất đúng là x%.
