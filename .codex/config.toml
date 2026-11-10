@@ -1,0 +1,5 @@
+# NTK V2 project-scoped defaults; do not hard-code an unavailable model ID.
+# Select the GPT-6 Astra model visible in your Codex UI manually.
+model_reasoning_effort = "medium"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"

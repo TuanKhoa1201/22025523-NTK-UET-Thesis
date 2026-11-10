@@ -1,0 +1,17 @@
+# Local outputs, private artifacts, caches and model weights
+.env
+.env.local
+.venv/
+__pycache__/
+.pytest_cache/
+logs/
+out/
+out-*/
+results/
+cache/
+*.gguf
+*.safetensors
+*.sqlite
+*.sqlite3
+*.db
+*.log
