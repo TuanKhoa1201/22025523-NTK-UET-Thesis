@@ -1,0 +1,101 @@
+{
+  "timestamp_utc": "2026-11-10T19:55:32Z",
+  "requested_model": "qwen3:14b",
+  "model_metadata": {
+    "name": "qwen3:14b",
+    "model": "qwen3:14b",
+    "modified_at": "2026-04-10T22:52:47.2987566+07:00",
+    "size": 9276198565,
+    "digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+    "details": {
+      "parent_model": "",
+      "format": "gguf",
+      "family": "qwen3",
+      "families": [
+        "qwen3"
+      ],
+      "parameter_size": "14.8B",
+      "quantization_level": "Q4_K_M",
+      "context_length": 40960,
+      "embedding_length": 5120,
+      "runner": "ggml"
+    },
+    "capabilities": [
+      "completion",
+      "tools",
+      "thinking"
+    ]
+  },
+  "request_options": {
+    "num_ctx": 4096,
+    "temperature": 0.0,
+    "seed": 42
+  },
+  "think": false,
+  "wall_clock_ms": 42904.59,
+  "ollama_timing_ns": {
+    "total_duration": 42903581300,
+    "load_duration": 29989116000,
+    "prompt_eval_count": 216,
+    "prompt_eval_duration": 8740858000,
+    "eval_count": 113,
+    "eval_duration": 4168189999
+  },
+  "raw_response_content": "{\n  \"verdict\": \"TRUE_POSITIVE\",\n  \"cwe\": \"CWE-89\",\n  \"source_line\": 25,\n  \"sink_line\": 28,\n  \"has_sanitizer\": false,\n  \"requires_human_confirmation\": false,\n  \"rationale\": \"The code directly concatenates user input into an SQL query string, which can lead to SQL injection vulnerabilities. The user input is taken from the HTTP request parameter and used without any sanitization or parameterization.\"\n}",
+  "parsed_json_response": {
+    "verdict": "TRUE_POSITIVE",
+    "cwe": "CWE-89",
+    "source_line": 25,
+    "sink_line": 28,
+    "has_sanitizer": false,
+    "requires_human_confirmation": false,
+    "rationale": "The code directly concatenates user input into an SQL query string, which can lead to SQL injection vulnerabilities. The user input is taken from the HTTP request parameter and used without any sanitization or parameterization."
+  },
+  "ollama_api_ps": {
+    "models": [
+      {
+        "name": "qwen3:14b",
+        "model": "qwen3:14b",
+        "size": 9656839699,
+        "digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "qwen3",
+          "families": [
+            "qwen3"
+          ],
+          "parameter_size": "14.8B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-11-11T03:00:32.0620197+07:00",
+        "size_vram": 9656839699,
+        "context_length": 4096,
+        "runner": "llamacpp"
+      }
+    ]
+  },
+  "ollama_cli_ps": "NAME         ID              SIZE      PROCESSOR    CONTEXT    RUNNER      UNTIL              \nqwen3:14b    bdbd181c33f2    9.7 GB    100% GPU     4096       llamacpp    4 minutes from now",
+  "gpu_before": {
+    "gpu_name": "NVIDIA GeForce RTX 4060 Ti",
+    "driver_version": "591.86",
+    "memory_total_mib": 16380.0,
+    "memory_used_mib": 509.0,
+    "memory_free_mib": 15599.0,
+    "utilization_gpu_pct": 0.0,
+    "temperature_c": 42.0,
+    "power_draw_w": 6.16,
+    "compute_apps_raw": "900, [Insufficient Permissions], [N/A]\n8480, C:\\Windows\\System32\\ShellHost.exe, [N/A]\n8560, C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\CrossDeviceResume.exe, [N/A]\n8416, C:\\Windows\\explorer.exe, [N/A]\n9936, C:\\Windows\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\StartMenuExperienceHost.exe, [N/A]\n9928, C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\SearchHost.exe, [N/A]\n10576, C:\\Windows\\SystemApps\\ShellExperienceHost_cw5n1h2txyewy\\ShellExperienceHost.exe, [N/A]\n11892, C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\156.0.4314.58\\msedgewebview2.exe, [N/A]\n5848, [Insufficient Permissions], [N/A]\n13232, C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\TextInputHost.exe, [N/A]\n10004, C:\\Program Files\\WindowsApps\\MicrosoftWindows.Client.WebExperience_526.21100.40.0_x64__cw5n1h2txyewy\\WidgetBoard.exe, [N/A]\n13608, C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.24.12741.0_x64__8wekyb3d8bbwe\\WindowsTerminal.exe, [N/A]\n15076, C:\\Program Files\\nodejs\\node.exe, [N/A]\n13488, C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe, [N/A]"
+  },
+  "gpu_after_with_model_loaded": {
+    "gpu_name": "NVIDIA GeForce RTX 4060 Ti",
+    "driver_version": "591.86",
+    "memory_total_mib": 16380.0,
+    "memory_used_mib": 9884.0,
+    "memory_free_mib": 6224.0,
+    "utilization_gpu_pct": 12.0,
+    "temperature_c": 52.0,
+    "power_draw_w": 116.09,
+    "compute_apps_raw": "900, [Insufficient Permissions], [N/A]\n8480, C:\\Windows\\System32\\ShellHost.exe, [N/A]\n8560, C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\CrossDeviceResume.exe, [N/A]\n8416, C:\\Windows\\explorer.exe, [N/A]\n9936, C:\\Windows\\SystemApps\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\StartMenuExperienceHost.exe, [N/A]\n9928, C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\SearchHost.exe, [N/A]\n10576, C:\\Windows\\SystemApps\\ShellExperienceHost_cw5n1h2txyewy\\ShellExperienceHost.exe, [N/A]\n11892, C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\156.0.4314.58\\msedgewebview2.exe, [N/A]\n5848, [Insufficient Permissions], [N/A]\n13232, C:\\Windows\\SystemApps\\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\\TextInputHost.exe, [N/A]\n10004, C:\\Program Files\\WindowsApps\\MicrosoftWindows.Client.WebExperience_526.21100.40.0_x64__cw5n1h2txyewy\\WidgetBoard.exe, [N/A]\n13608, C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.24.12741.0_x64__8wekyb3d8bbwe\\WindowsTerminal.exe, [N/A]\n15076, C:\\Program Files\\nodejs\\node.exe, [N/A]\n13488, C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe, [N/A]\n4504, F:\\ACTIVE-WORKSPACES\\Tools\\Ollama\\v0.40.7\\bin\\lib\\ollama\\llama-server.exe, [N/A]"
+  }
+}
