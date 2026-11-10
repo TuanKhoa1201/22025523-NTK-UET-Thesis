@@ -1,0 +1,59 @@
+{
+  "_fixture_notice": "TEST_FIXTURE_ONLY — SYNTHETIC DATA FOR CLI AND UNIT TESTING. NOT REAL OPENGREP SCAN OUTPUT.",
+  "results": [
+    {
+      "alert_id": "FIXTURE-01-CWE22-TP",
+      "path": "src/main/java/demo/DownloadServlet.java",
+      "start": {"line": 28},
+      "end": {"line": 31},
+      "check_id": "java.lang.security.audit.path-traversal",
+      "extra": {"metadata": {"cwe": ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory"]}},
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-02-CWE22-FP",
+      "path": "src/main/java/demo/DownloadServlet.java",
+      "start": {"line": 60},
+      "end": {"line": 66},
+      "check_id": "java.lang.security.audit.path-traversal",
+      "extra": {"metadata": {"cwe": "CWE-22"}},
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-03-CWE89-TP-DROPPED",
+      "path": "src/main/java/demo/AccountRepository.java",
+      "start": {"line": 40},
+      "end": {"line": 44},
+      "check_id": "java.sql.security.audit.sqli",
+      "extra": {"metadata": {"cwe": "CWE-89"}},
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-04-CWE89-FP",
+      "path": "src/main/java/demo/AccountRepository.java",
+      "start": {"line": 75},
+      "end": {"line": 80},
+      "check_id": "java.sql.security.audit.sqli",
+      "extra": {"metadata": {"cwe": "CWE-89"}},
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-05-CWE78-AMB",
+      "path": "src/main/java/demo/PingService.java",
+      "start": {"line": 18},
+      "end": {"line": 22},
+      "check_id": "java.lang.security.audit.command-injection",
+      "extra": {"metadata": {"cwe": "CWE-78"}},
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-06-CWE79-FP",
+      "path": "src/main/java/demo/ProfileController.java",
+      "start": {"line": 50},
+      "end": {"line": 53},
+      "check_id": "java.servlet.security.audit.xss",
+      "extra": {"metadata": {"cwe": "CWE-79"}},
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}

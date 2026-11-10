@@ -1,0 +1,54 @@
+{
+  "_fixture_notice": "TEST_FIXTURE_ONLY — SYNTHETIC GROUND TRUTH LABELS FOR TESTING.",
+  "dataset_id": "synthetic-fixture-pilot-v1",
+  "labels": [
+    {
+      "alert_id": "FIXTURE-01-CWE22-TP",
+      "file_path": "src/main/java/demo/DownloadServlet.java",
+      "cwe": "CWE-22",
+      "ground_truth": "TRUE_POSITIVE",
+      "annotator_rationale": "TEST FIXTURE: Request parameter 'file' flows directly to FileInputStream without path normalization.",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-02-CWE22-FP",
+      "file_path": "src/main/java/demo/DownloadServlet.java",
+      "cwe": "CWE-22",
+      "ground_truth": "FALSE_POSITIVE",
+      "annotator_rationale": "TEST FIXTURE: Path is canonicalized with normalize() and verified via startsWith(SAFE_BASE_DIR).",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-03-CWE89-TP-DROPPED",
+      "file_path": "src/main/java/demo/AccountRepository.java",
+      "cwe": "CWE-89",
+      "ground_truth": "TRUE_POSITIVE",
+      "annotator_rationale": "TEST FIXTURE: String concatenation in SQL query with unvalidated sortColumn parameter.",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-04-CWE89-FP",
+      "file_path": "src/main/java/demo/AccountRepository.java",
+      "cwe": "CWE-89",
+      "ground_truth": "FALSE_POSITIVE",
+      "annotator_rationale": "TEST FIXTURE: Uses PreparedStatement with '?' bind parameter at line 77.",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-05-CWE78-AMB",
+      "file_path": "src/main/java/demo/PingService.java",
+      "cwe": "CWE-78",
+      "ground_truth": "AMBIGUOUS",
+      "annotator_rationale": "TEST FIXTURE: Sanitizer is in external binary package not present in repository.",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "alert_id": "FIXTURE-06-CWE79-FP",
+      "file_path": "src/main/java/demo/ProfileController.java",
+      "cwe": "CWE-79",
+      "ground_truth": "FALSE_POSITIVE",
+      "annotator_rationale": "TEST FIXTURE: Output encoded with Encode.forHtml() before writing to response.",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ]
+}
