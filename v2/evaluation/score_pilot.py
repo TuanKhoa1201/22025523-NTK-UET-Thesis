@@ -285,9 +285,15 @@ class IntegrityAnomalies:
         }
 
 
-def _extract_opengrep_alerts(raw_data: Any) -> list[dict[str, Any]]:
+def _extract_opengrep_alerts(
+    raw_data: Any,
+    scan_sha256: str | None = None,
+) -> list[dict[str, Any]]:
     """Extract normalized alert records from OpenGrep JSON or normalized alert list."""
+    effective_scan_sha = scan_sha256
     if isinstance(raw_data, dict):
+        if not effective_scan_sha and codex_adapter.is_valid_sha256(raw_data.get("scan_sha256")):
+            effective_scan_sha = str(raw_data["scan_sha256"]).strip().lower()
         if "alerts" in raw_data and isinstance(raw_data["alerts"], list):
             items = raw_data["alerts"]
         elif "results" in raw_data and isinstance(raw_data["results"], list):
@@ -299,11 +305,14 @@ def _extract_opengrep_alerts(raw_data: Any) -> list[dict[str, Any]]:
     else:
         raise ValueError("OpenGrep input must be a JSON object or list.")
 
+    if effective_scan_sha and not codex_adapter.is_valid_sha256(effective_scan_sha):
+        effective_scan_sha = None
+
     normalized: list[dict[str, Any]] = []
     for idx, item in enumerate(items):
         if not isinstance(item, dict):
             continue
-        alert_id = item.get("alert_id") or item.get("id")
+        explicit_id = item.get("alert_id") or item.get("id")
         file_path = codex_adapter.normalize_path(item.get("file_path") or item.get("path") or "")
         start_line = item.get("start_line")
         end_line = item.get("end_line")
@@ -333,11 +342,19 @@ def _extract_opengrep_alerts(raw_data: Any) -> list[dict[str, Any]]:
                 has_trace = True
         cwe = normalize_cwe(raw_cwe)
 
-        if not alert_id:
-            alert_id = f"{file_path}:{start_line}:{end_line}:{cwe}:{rule_id}:{idx}"
+        legacy_alert_id = f"{file_path}:{start_line}:{end_line}:{cwe}:{rule_id}:{idx}"
+        contract_alert_id = (
+            codex_adapter.compute_contract_alert_id(effective_scan_sha, idx)
+            if effective_scan_sha
+            else None
+        )
+        alert_id = str(explicit_id or contract_alert_id or legacy_alert_id)
 
         normalized.append({
-            "alert_id": str(alert_id),
+            "alert_id": alert_id,
+            "contract_alert_id": contract_alert_id,
+            "legacy_alert_id": legacy_alert_id,
+            "scan_sha256": effective_scan_sha or item.get("scan_sha256"),
             "finding_index": idx,
             "file_path": file_path,
             "start_line": int(start_line) if isinstance(start_line, int) else None,
@@ -483,7 +500,16 @@ def _load_source_file_lines_and_sha(
     except ValueError:
         return None, {}, f"Alert file_path '{rel_file_path}' escapes source_root"
     if not candidate.is_file():
-        return None, {}, f"Source file not found under source_root: '{rel_file_path}'"
+        # If source_root is already the leaf directory (e.g. v2/evaluation/smoke_evidence)
+        # and rel_file_path is v2/evaluation/smoke_evidence/SmokeVulnSample.java, check basename
+        fallback = (root_resolved / Path(rel_file_path).name).resolve()
+        if (
+            fallback.is_file()
+            and codex_adapter.paths_match(rel_file_path, fallback.as_posix())
+        ):
+            candidate = fallback
+        else:
+            return None, {}, f"Source file not found under source_root: '{rel_file_path}'"
     text = candidate.read_text(encoding="utf-8")
     sha = compute_sha256_text(text)
     line_map = {idx + 1: line for idx, line in enumerate(text.splitlines())}
@@ -521,7 +547,7 @@ def _validate_evidence_grounding(
     alert_path = codex_adapter.normalize_path(alert.get("file_path") or "")
     if cited_paths and alert_path:
         for c_path in cited_paths:
-            if codex_adapter.normalize_path(c_path) != alert_path:
+            if not codex_adapter.paths_match(c_path, alert_path):
                 return (
                     False,
                     f"Citation path '{c_path}' does not match alert file '{alert_path}'",
@@ -587,8 +613,9 @@ def evaluate_pilot(
     source_root_path = Path(source_root) if source_root else None
 
     # 1. Deduplicate and index OpenGrep alerts
-    raw_alerts = _extract_opengrep_alerts(opengrep_data)
+    raw_alerts = _extract_opengrep_alerts(opengrep_data, scan_sha256=expected_scan_sha256)
     alerts_by_id: dict[str, dict[str, Any]] = {}
+    alias_to_canonical_id: dict[str, str] = {}
     unique_alerts_ordered: list[dict[str, Any]] = []
     for alert in raw_alerts:
         aid = alert["alert_id"]
@@ -596,6 +623,11 @@ def evaluate_pilot(
             anomalies.duplicate_alert_ids.append(aid)
             continue
         alerts_by_id[aid] = alert
+        alias_to_canonical_id[aid] = aid
+        if alert.get("contract_alert_id"):
+            alias_to_canonical_id[str(alert["contract_alert_id"])] = aid
+        if alert.get("legacy_alert_id"):
+            alias_to_canonical_id[str(alert["legacy_alert_id"])] = aid
         unique_alerts_ordered.append(alert)
 
     # 2. Deduplicate and index Ground-Truth Labels (rejecting LLM auto-generated labels)
@@ -608,13 +640,14 @@ def evaluate_pilot(
                 "reason": "Label entry is not a dict",
             })
             continue
-        aid = str(label.get("alert_id") or label.get("id") or "").strip()
-        if not aid:
+        raw_aid = str(label.get("alert_id") or label.get("id") or "").strip()
+        if not raw_aid:
             anomalies.invalid_ground_truth_labels.append({
                 "index": idx,
                 "reason": "Missing alert_id in label",
             })
             continue
+        aid = alias_to_canonical_id.get(raw_aid, raw_aid)
 
         # Detect forbidden auto-generated labels from Qwen/Codex outputs
         annotator = str(
@@ -738,7 +771,7 @@ def evaluate_pilot(
             elif (
                 label.get("file_path")
                 and alert.get("file_path")
-                and codex_adapter.normalize_path(label["file_path"]) != alert["file_path"]
+                and not codex_adapter.paths_match(label["file_path"], alert["file_path"])
             ):
                 anomalies.location_mismatches.append({
                     "alert_id": aid,
@@ -982,12 +1015,40 @@ def evaluate_pilot(
                 else:
                     b.needs_review_on_unlabeled += 1
 
+        effective_source_sha = (
+            (label.get("source_sha256") if label else None)
+            or alert.get("source_sha256")
+            or (triage.get("source_sha256") if triage else None)
+            or disk_sha
+        )
         per_alert_decisions.append({
             "alert_id": aid,
+            "contract_alert_id": alert.get("contract_alert_id"),
+            "finding_index": alert.get("finding_index"),
+            "scan_sha256": expected_scan_sha256 or alert.get("scan_sha256") or (triage.get("scan_sha256") if triage else None),
+            "source_sha256": effective_source_sha,
             "cwe": alert_cwe,
+            "rule_id": alert.get("rule_id"),
             "file_path": alert["file_path"],
             "start_line": alert["start_line"],
+            "end_line": alert.get("end_line"),
             "ground_truth": gt_status,
+            "label_type": (
+                (label.get("label_type") or label.get("ground_truth_type"))
+                if label
+                else None
+            ),
+            "arm_a_baseline": "KEEP",
+            "raw_model_status": triage.get("raw_model_status") if triage else None,
+            "raw_codex_status": triage.get("raw_codex_status") if triage else None,
+            "citation_check": triage.get("citation_check") if triage else None,
+            "cited_lines": triage.get("cited_lines") if triage else None,
+            "model_id": triage.get("model_id") if triage else None,
+            "human_review_state": (
+                (triage.get("human_review_state") or "OPEN")
+                if triage
+                else "OPEN"
+            ),
             "effective_verdict": (
                 "REVIEW"
                 if gt_status in ("AMBIGUOUS", "UNLABELED")

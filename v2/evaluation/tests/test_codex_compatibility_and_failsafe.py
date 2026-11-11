@@ -516,6 +516,171 @@ class TestCodexCompatibilityAndFailSafes(unittest.TestCase):
         self.assertTrue(decision["requires_human_confirmation"])
         self.assertTrue(decision["retained_for_human_review"])
 
+    def test_10_contract_1_1_alert_id_and_root_relative_path_join(self) -> None:
+        """10. Contract 1.1 alert_id = SHA256(scan_sha256:finding_index) joins 1-to-1 with root-relative snapshots."""
+        scan_sha = "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4"
+        expected_id_0 = codex_adapter.compute_contract_alert_id(scan_sha, 0)
+        self.assertEqual(
+            expected_id_0,
+            "5c3fa49a9a739ca38e3711e51b676c5c9894a523a8ef1e5f276a3b7d033672b0",
+        )
+
+        opengrep_scan = {
+            "results": [
+                {
+                    "check_id": "v2.baseline.rules.ntk.java.cwe22",
+                    "path": "v2/evaluation/smoke_evidence/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "extra": {"metadata": {"cwe": ["CWE-22"]}},
+                }
+            ]
+        }
+        labels = [
+            {
+                "alert_id": expected_id_0,
+                "file_path": "v2/evaluation/smoke_evidence/FileService.java",
+                "cwe": "CWE-22",
+                "ground_truth": "FALSE_POSITIVE",
+                "label_type": "SYNTHETIC_GROUND_TRUTH",
+                "annotated_by": "human-reviewer",
+                "source_sha256": self.sha_cwe22,
+            }
+        ]
+        # Codex record uses Contract 1.1 id and root-relative path "FileService.java" in snapshots & citations
+        codex_records = [
+            {
+                "id": expected_id_0,
+                "state": "OPEN",
+                "evidence": {
+                    "id": expected_id_0,
+                    "scan_sha256": scan_sha,
+                    "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+                    "cwe": ["CWE-22"],
+                    "path": "v2/evaluation/smoke_evidence/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "snapshots": {
+                        "FileService.java": {
+                            "sha256": self.sha_cwe22,
+                            "size": len(self.java_code_cwe22),
+                        }
+                    },
+                    "snippets": [
+                        {
+                            "role": "finding",
+                            "path": "FileService.java",
+                            "sha256": self.sha_cwe22,
+                            "lines": [
+                                {"line": idx + 1, "text": txt}
+                                for idx, txt in enumerate(self.java_code_cwe22.splitlines())
+                            ],
+                        }
+                    ],
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "citation_check": "MATCHED",
+                    "model": "qwen3.5:9b-q4_K_M",
+                    "elapsed_seconds": 4.25,
+                    "citations": [{"path": "FileService.java", "start_line": 7, "end_line": 8}],
+                    "explanation": "Path is normalized at line 7 and verified with startsWith(BASE) at line 8.",
+                },
+            }
+        ]
+
+        report = score_pilot.evaluate_pilot(
+            opengrep_scan,
+            labels,
+            codex_records,
+            expected_scan_sha256=scan_sha,
+        )
+        overall = report["summary"]["overall"]
+        self.assertEqual(overall["counts"]["proposed_fp_on_true_fp"], 1)
+        self.assertEqual(overall["latency_ms"]["mean_ms"], 4250.0)
+        dec = report["per_alert_decisions"][0]
+        self.assertEqual(dec["alert_id"], expected_id_0)
+        self.assertEqual(dec["model_id"], "qwen3.5:9b-q4_K_M")
+        self.assertEqual(dec["human_review_state"], "OPEN")
+
+    def test_11_paired_pilot_table_rejects_qwen3_8b_masquerade_and_builds_rows(self) -> None:
+        """11. build_paired_pilot_table chặn dùng Qwen3:8b giả làm Qwen3.5-9B và xuất đúng bảng A/B."""
+        import build_paired_pilot_table
+
+        scan_sha = "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4"
+        aid_0 = codex_adapter.compute_contract_alert_id(scan_sha, 0)
+        opengrep_scan = {
+            "results": [
+                {
+                    "check_id": "v2.baseline.rules.ntk.java.cwe89",
+                    "path": "v2/evaluation/smoke_evidence/UserDao.java",
+                    "start": {"line": 5, "col": 9},
+                    "end": {"line": 7, "col": 38},
+                    "extra": {"metadata": {"cwe": ["CWE-89"]}},
+                }
+            ]
+        }
+        labels = {
+            "scan_sha256": scan_sha,
+            "labels": [
+                {
+                    "alert_id": aid_0,
+                    "file_path": "v2/evaluation/smoke_evidence/UserDao.java",
+                    "cwe": "CWE-89",
+                    "ground_truth": "TRUE_POSITIVE",
+                    "label_type": "SYNTHETIC_GROUND_TRUTH",
+                    "annotated_by": "human-reviewer",
+                    "source_sha256": self.sha_cwe89,
+                }
+            ],
+        }
+        qwen3_8b_record = [
+            {
+                "id": aid_0,
+                "state": "OPEN",
+                "evidence": {
+                    "scan_sha256": scan_sha,
+                    "path": "v2/evaluation/smoke_evidence/UserDao.java",
+                    "start": {"line": 5, "col": 9},
+                    "end": {"line": 7, "col": 38},
+                    "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+                    "cwe": ["CWE-89"],
+                    "snapshots": {"UserDao.java": {"sha256": self.sha_cwe89}},
+                },
+                "assessment": {
+                    "status": "SUPPORTED",
+                    "citation_check": "MATCHED",
+                    "model": "qwen3:8b",
+                    "elapsed_seconds": 6.719,
+                    "citations": [{"path": "UserDao.java", "start_line": 5, "end_line": 7}],
+                    "explanation": "Direct SQL string concatenation.",
+                },
+            }
+        ]
+
+        # Passing qwen3:8b into qwen35_triage_data MUST raise ValueError
+        with self.assertRaises(ValueError):
+            build_paired_pilot_table.build_paired_rows_and_summary(
+                opengrep_data=opengrep_scan,
+                labels_data=labels,
+                scan_sha256=scan_sha,
+                qwen35_triage_data=qwen3_8b_record,
+            )
+
+        # Passing qwen35_triage_data=None and qwen3_8b_reference_data=qwen3_8b_record succeeds cleanly
+        rows, summary = build_paired_pilot_table.build_paired_rows_and_summary(
+            opengrep_data=opengrep_scan,
+            labels_data=labels,
+            scan_sha256=scan_sha,
+            qwen35_triage_data=None,
+            qwen3_8b_reference_data=qwen3_8b_record,
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["qwen35_arm_b_decision"], "PENDING_QWEN3_5_9B_RUN")
+        self.assertEqual(rows[0]["ref_qwen3_8b_arm_b_decision"], "KEEP_TP")
+        self.assertEqual(summary["arm_b_qwen35_9b"]["status"], "PENDING_QWEN3_5_9B_RUN")
+        self.assertEqual(summary["reference_qwen3_8b"]["tp_erroneously_proposed_for_removal"], "0/1 (0.0%)")
+
 
 if __name__ == "__main__":
     unittest.main()
