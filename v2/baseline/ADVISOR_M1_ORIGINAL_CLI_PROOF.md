@@ -8,7 +8,8 @@ direct scanner call. The original `proof.json` still says `SERVER_RUNTIME_PENDIN
 this report does not alter that field or claim server acceptance or full web/RAG operation.
 
 - Branch: `v2/advisor-m1-proof-20261111`.
-- NTK base HEAD: `940363f93aecaec5d2872a688addf974b31cccf7`; new delivery SHA: see section 7.
+- NTK integration base: `940363f93aecaec5d2872a688addf974b31cccf7`.
+- Delivered implementation: [`7bd442d0ccca08cb089dd01762237cb62fe88698`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/7bd442d0ccca08cb089dd01762237cb62fe88698), `feat(m1): complete laptop upstream CLI proof`; committed and pushed by the owner.
 - Upstream: [hardw00t/simple_semgrepAI 0.2.0, MIT](https://github.com/hardw00t/simple_semgrepAI/tree/2c79a58a16d11e9dea3723e30d2a7faffba7bdc9).
 - Exact upstream commit: `2c79a58a16d11e9dea3723e30d2a7faffba7bdc9`.
 - Exact tree: `c0ab3e20152ce5c3e6b80e1525288ad59c9aee93`, 96 files;
@@ -128,9 +129,11 @@ The LIVE NTK overlay (relative to the advisor-patched full source) has this
  6 files changed, 199 insertions(+), 17 deletions(-)
 ```
 
-The four previously tracked NTK baseline files currently report via
-`git diff --stat -- v2/baseline`: 136 insertions, 38 deletions. This excludes new
-untracked delivery files listed in section 7; the staged stat must include them.
+The earlier prompt 11.2 working diff reported 136 insertions and 38 deletions in
+four tracked files, excluding nine then-new files. That was a pre-commit working
+stat, not the final commit stat. All 13 delivery files are now tracked in
+`7bd442d`: 1,770 insertions and 40 deletions. Inspect
+`git show --stat 7bd442d -- v2/baseline` for the committed delta.
 No whitespace changes were made to upstream snapshots or `opengrep.patch`.
 
 ## 4. Real findings and trace examples
@@ -239,7 +242,7 @@ separate review. The runner intentionally retains its aggregate pending field.
 
 ## 6. Closeout changes, tests and historical blockers
 
-No CLI rescan was performed in prompt 11.2. Small additional checks:
+No CLI rescan was performed in prompts 11.2 or 11.3. Code checks added in 11.2:
 
 - `finding_identity.py`: compare JSON/SARIF rule IDs and primary file/start/end
   coordinates as a multiset, including duplicate multiplicity; allow URI encoding
@@ -255,7 +258,8 @@ No CLI rescan was performed in prompt 11.2. Small additional checks:
   changed raw output, wrong finding identity and trace/provenance. These are UNIT
   fixtures/mocks, distinct from the recorded LIVE laptop OpenGrep run.
 
-Commands from workspace root (logs under ignored `v2/baseline/evidence/`):
+Recorded commands from prompt 11.2 (logs under ignored `v2/baseline/evidence/`);
+unit tests and compile were not repeated for the documentation-only prompt 11.3:
 
 | Command | Exit / result |
 | --- | --- |
@@ -273,39 +277,60 @@ Historical, RESOLVED on laptop by the user: sandbox GitHub HTTPS clone failure,
 missing Typer and dependency download failure. These older logs remain historical
 and are no longer current laptop runtime blockers. The optional .ps1 launcher was
 blocked by execution policy; direct Python execution succeeded without changing policy.
+During prompt 11.2, sandbox staging also returned exit 128 because it could not
+create `integration/.git/worktrees/codex/index.lock` (historical log:
+`evidence/closeout-git-add.txt`). The owner subsequently committed and pushed from
+external Windows PowerShell. That earlier failure is not the current delivery status.
 Qwen, full web/RAG, real-project generalization and independent labeled evaluation
 are outside this proof. No claim of FULL UPSTREAM APPLICATION PASS is made.
 
 ## 7. Git delivery
 
-**Not committed or pushed.** Final staging attempt on the required branch returned
-exit **128**: permission denied creating
-`integration/.git/worktrees/codex/index.lock`. Log:
-`v2/baseline/evidence/closeout-git-add.txt`. No ACL, ownership, lock deletion,
-reset, escalation or security setting changes were attempted. Changes remain local.
-HEAD is still `940363f93aecaec5d2872a688addf974b31cccf7`, not a new delivery commit.
-The owner must commit/push outside sandbox; the commands below target only the proof branch.
+**Implementation committed and pushed:**
+`7bd442d0ccca08cb089dd01762237cb62fe88698`, message
+`feat(m1): complete laptop upstream CLI proof`, branch
+`v2/advisor-m1-proof-20261111`. At the start of prompt 11.3, local HEAD and the
+local remote-tracking ref both resolved to that full SHA and the working tree was
+clean. No fetch, reset or branch change was needed. The user's external
+PowerShell confirmation establishes the successful push; no new network check
+was necessary.
 
-Pending files, all under `v2/baseline/`:
+The 13 implementation/documentation files in that delivery are tracked, not
+pending/untracked files. `940363f` identifies the integration base only.
+Private evidence, the advisor ZIP, venv and source checkout are not part of the delivery.
 
-- Modified: README.md, prepare_upstream_local.py,
-  upstream_local_support/scan_recording.py, verify_handoff.py.
-- New: ADVISOR_M1_ORIGINAL_CLI_PROOF.md, pinned_upstream_tree.json,
-  prove_original_cli.py, run_original_cli_proof.ps1, audit_original_cli.py,
-  finding_identity.py, tests/test_original_cli_proof.py,
-  tests/test_original_cli_audit.py, tests/test_finding_identity.py.
+Prompt 11.3 adds documentation only: this status correction,
+[the report-1 CLI appendix](ADVISOR_REPORT1_CLI_APPENDIX.md) and
+[the acceptance checklist](ADVISOR_REPORT1_ACCEPTANCE_CHECKLIST.md).
+The appendix supplies reproducible commands; the checklist records pending
+JavisOS deliverables without substituting laptop evidence for server acceptance.
 
-If metadata remains blocked, owner can review and commit in external PowerShell:
+**Documentation delta 11.3:** only these three Markdown files remain local.
+Staging those explicit paths from this sandbox returned exit 128 (permission
+denied creating the worktree `index.lock`). This does not undo the successful
+implementation commit/push `7bd442d`. No new documentation commit or push was
+made; no ACL/ownership change, lock deletion or reset was attempted.
+The owner can commit this small delta in external Windows PowerShell:
 
 ```powershell
 $repoPath = (Get-Location).Path.Replace('\', '/')
 if ((git -c "safe.directory=$repoPath" branch --show-current) -ne 'v2/advisor-m1-proof-20261111') { throw 'Wrong branch' }
-git -c "safe.directory=$repoPath" diff --check
-git -c "safe.directory=$repoPath" add -- v2/baseline
-if ($LASTEXITCODE -ne 0) { throw 'Staging failed; do not commit' }
-git -c "safe.directory=$repoPath" diff --cached --stat
-# Review staged paths: no private ZIP, checkout, venv, runtime output or secrets.
-git -c "safe.directory=$repoPath" commit -m "Prove original OpenGrep CLI and audit laptop runtime evidence"
+git -c "safe.directory=$repoPath" add -- v2/baseline/ADVISOR_M1_ORIGINAL_CLI_PROOF.md v2/baseline/ADVISOR_REPORT1_CLI_APPENDIX.md v2/baseline/ADVISOR_REPORT1_ACCEPTANCE_CHECKLIST.md
+if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
+git -c "safe.directory=$repoPath" diff --cached --check
+if ($LASTEXITCODE -ne 0) { throw 'Diff check failed' }
+git -c "safe.directory=$repoPath" diff --cached --stat # review only the three Markdown files
+git -c "safe.directory=$repoPath" commit -m "docs(m1): finalize report-1 CLI appendix and acceptance checklist"
 if ($LASTEXITCODE -ne 0) { throw 'Commit failed; do not push' }
-git -c "safe.directory=$repoPath" push -u origin v2/advisor-m1-proof-20261111
+git -c "safe.directory=$repoPath" push origin v2/advisor-m1-proof-20261111
+```
+
+Read-only Git checks from the workspace (per-command trust exception only):
+
+```powershell
+$repoPath = (Get-Location).Path.Replace('\', '/')
+git -c "safe.directory=$repoPath" branch --show-current
+git -c "safe.directory=$repoPath" rev-parse HEAD
+git -c "safe.directory=$repoPath" status --short --branch
+git -c "safe.directory=$repoPath" show --stat 7bd442d -- v2/baseline
 ```
