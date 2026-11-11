@@ -1,0 +1,5214 @@
+{
+  "generated_at": "2026-11-11T12:38:00+07:00",
+  "scope_notice": "SMOKE TEST & INTEGRATION VERIFICATION ONLY (SYNTHETIC JAVA SAMPLES). NOT A PRECISION/RECALL BENCHMARK.",
+  "environment": {
+    "os": "Windows 11 Pro 10.0.26200 + WSL2 Ubuntu-IRIS",
+    "python_windows": "3.12.10",
+    "opengrep_version": "1.25.0",
+    "opengrep_wsl_binary_sha256": "9ac4aebb47ba3f7b0d8fc641ac8749cb6c2f253f616131a67d9631e00d4bea33",
+    "ollama_version": "0.40.7",
+    "ollama_endpoint": "http://127.0.0.1:11434",
+    "gpu": "NVIDIA GeForce RTX 4060 Ti (16380 MiB VRAM, CUDA 13.1, Driver 591.86)",
+    "smoke_model_executed": {
+      "name": "qwen3:8b",
+      "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+      "quantization": "Q4_K_M",
+      "options": {
+        "temperature": 0,
+        "num_ctx": 4096,
+        "num_predict": 1200,
+        "think": false
+      }
+    },
+    "target_model_qwen3_5_9b_status": {
+      "name": "qwen3.5:9b-q4_K_M",
+      "status": "PENDING (DOWNLOADING IN BACKGROUND PID 4364)",
+      "progress_observed": "mmproj f836f08f9211 100% (921 MB/921 MB); model 02d45dc1cf45 43% (2.4 GB/5.6 GB)"
+    }
+  },
+  "input_hashes_sha256": {
+    "v2/evaluation/smoke_evidence/SmokeVulnSample.java": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+    "v2/evaluation/smoke_evidence/v2_java_taint_rules.yaml": "087f313ccbff779dcc9029380fed024bc0b8ff85a22a4c436cd69c18855decd2",
+    "v2/baseline/rules/java.yml": "f34e7b51880cc5baf4ff3cda47a16232c8d405b8fd5e65aaed1aa3745367d5aa",
+    "v2/demo/smoke_v2_taint_raw.opengrep.json": "d5f3b0ce59601fc38039e249d03308b1182a5f5c41c0382bf5875110e1c9b37f",
+    "v2/demo/smoke_v2_taint_raw.opengrep.sarif": "ec53baa4a2e04aad7942848af554254bb20e8ff6345ae2b959456712b9a41097",
+    "v2/demo/smoke_m1_rules_raw.opengrep.json": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4"
+  },
+  "triage_runs_qwen3_8b": {
+    "run1_smoke_v2_taint_rules": [
+      {
+        "id": "29abafb3d1e7b949fa07c6f0ddb91bfdd7daff1cccbeb67d3f33836f127409df",
+        "state": "OPEN",
+        "evidence": {
+          "id": "29abafb3d1e7b949fa07c6f0ddb91bfdd7daff1cccbeb67d3f33836f127409df",
+          "scan_sha256": "d5f3b0ce59601fc38039e249d03308b1182a5f5c41c0382bf5875110e1c9b37f",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\evaluation\\smoke_evidence",
+          "rule_id": "v2.evaluation.smoke_evidence.ntk.v2.java.cwe89.httpservlet-jdbc-sqli-taint",
+          "cwe": [
+            "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+          ],
+          "severity": "ERROR",
+          "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+          "start": {
+            "line": 28,
+            "col": 16,
+            "offset": 1131
+          },
+          "end": {
+            "line": 28,
+            "col": 40,
+            "offset": 1155
+          },
+          "raw_finding": {
+            "check_id": "v2.evaluation.smoke_evidence.ntk.v2.java.cwe89.httpservlet-jdbc-sqli-taint",
+            "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+            "start": {
+              "line": 28,
+              "col": 16,
+              "offset": 1131
+            },
+            "end": {
+              "line": 28,
+              "col": 40,
+              "offset": 1155
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 25,
+                    "col": 28,
+                    "offset": 943
+                  },
+                  "end": {
+                    "line": 25,
+                    "col": 35,
+                    "offset": 950
+                  },
+                  "abstract_content": "request"
+                },
+                "$STMT": {
+                  "start": {
+                    "line": 28,
+                    "col": 16,
+                    "offset": 1131
+                  },
+                  "end": {
+                    "line": 28,
+                    "col": 20,
+                    "offset": 1135
+                  },
+                  "abstract_content": "stmt",
+                  "propagated_value": {
+                    "svalue_start": {
+                      "line": 27,
+                      "col": 26,
+                      "offset": 1092
+                    },
+                    "svalue_end": {
+                      "line": 27,
+                      "col": 48,
+                      "offset": 1114
+                    },
+                    "svalue_abstract_content": "conn.createStatement()"
+                  }
+                },
+                "$SQL": {
+                  "start": {
+                    "line": 28,
+                    "col": 34,
+                    "offset": 1149
+                  },
+                  "end": {
+                    "line": 28,
+                    "col": 39,
+                    "offset": 1154
+                  },
+                  "abstract_content": "query",
+                  "propagated_value": {
+                    "svalue_start": {
+                      "line": 26,
+                      "col": 24,
+                      "offset": 1000
+                    },
+                    "svalue_end": {
+                      "line": 26,
+                      "col": 89,
+                      "offset": 1065
+                    },
+                    "svalue_abstract_content": "\"SELECT id, role FROM users WHERE username = '\"+userInput+\"'\""
+                  }
+                }
+              },
+              "message": "[CWE-89] Untrusted HTTP parameter flows into JDBC SQL execution sink without parameterization.",
+              "metadata": {
+                "cwe": [
+                  "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+                ],
+                "owasp": [
+                  "A03:2021 - Injection"
+                ],
+                "category": "security",
+                "confidence": "HIGH",
+                "provenance": "Derived from p/java (p-java-pinned-20260929) & OWASP Java SQLi taint patterns"
+              },
+              "severity": "ERROR",
+              "fingerprint": "826f5559cce2f10b877015792f0eb73f00588409f22be47a45ec6a5ead41296cf72d9418ff7eed69723ffa1e80342b8629b39abaa2f6b53376461ac39f0ba26b_0",
+              "lines": "        return stmt.executeQuery(query);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 25,
+                        "col": 28,
+                        "offset": 943
+                      },
+                      "end": {
+                        "line": 25,
+                        "col": 60,
+                        "offset": 975
+                      }
+                    },
+                    "request.getParameter(\"username\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 25,
+                        "col": 16,
+                        "offset": 931
+                      },
+                      "end": {
+                        "line": 25,
+                        "col": 25,
+                        "offset": 940
+                      }
+                    },
+                    "content": "userInput"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 26,
+                        "col": 16,
+                        "offset": 992
+                      },
+                      "end": {
+                        "line": 26,
+                        "col": 21,
+                        "offset": 997
+                      }
+                    },
+                    "content": "query"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 28,
+                        "col": 16,
+                        "offset": 1131
+                      },
+                      "end": {
+                        "line": 28,
+                        "col": 40,
+                        "offset": 1155
+                      }
+                    },
+                    "stmt.executeQuery(query)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 25,
+                    "col": 28,
+                    "offset": 943
+                  },
+                  "end": {
+                    "line": 25,
+                    "col": 60,
+                    "offset": 975
+                  }
+                },
+                "request.getParameter(\"username\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 25,
+                    "col": 16,
+                    "offset": 931
+                  },
+                  "end": {
+                    "line": 25,
+                    "col": 25,
+                    "offset": 940
+                  }
+                },
+                "content": "userInput"
+              },
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 26,
+                    "col": 16,
+                    "offset": 992
+                  },
+                  "end": {
+                    "line": 26,
+                    "col": 21,
+                    "offset": 997
+                  }
+                },
+                "content": "query"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 28,
+                    "col": 16,
+                    "offset": 1131
+                  },
+                  "end": {
+                    "line": 28,
+                    "col": 40,
+                    "offset": 1155
+                  }
+                },
+                "stmt.executeQuery(query)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "SmokeVulnSample.java": {
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "size": 2131
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 28,
+                "col": 16,
+                "offset": 1131
+              },
+              "end": {
+                "line": 28,
+                "col": 40,
+                "offset": 1155
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "stmt.executeQuery(query)",
+              "lines": [
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                },
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 25,
+                "col": 28,
+                "offset": 943
+              },
+              "end": {
+                "line": 25,
+                "col": 60,
+                "offset": 975
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "request.getParameter(\"username\")",
+              "lines": [
+                {
+                  "line": 22,
+                  "text": "public class SmokeVulnSample {"
+                },
+                {
+                  "line": 23,
+                  "text": ""
+                },
+                {
+                  "line": 24,
+                  "text": "    public ResultSet unsafeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                },
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 25,
+                "col": 16,
+                "offset": 931
+              },
+              "end": {
+                "line": 25,
+                "col": 25,
+                "offset": 940
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "userInput",
+              "lines": [
+                {
+                  "line": 22,
+                  "text": "public class SmokeVulnSample {"
+                },
+                {
+                  "line": 23,
+                  "text": ""
+                },
+                {
+                  "line": 24,
+                  "text": "    public ResultSet unsafeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                },
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 26,
+                "col": 16,
+                "offset": 992
+              },
+              "end": {
+                "line": 26,
+                "col": 21,
+                "offset": 997
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "query",
+              "lines": [
+                {
+                  "line": 23,
+                  "text": ""
+                },
+                {
+                  "line": 24,
+                  "text": "    public ResultSet unsafeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                },
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                },
+                {
+                  "line": 29,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 28,
+                "col": 16,
+                "offset": 1131
+              },
+              "end": {
+                "line": 28,
+                "col": 40,
+                "offset": 1155
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "stmt.executeQuery(query)",
+              "lines": [
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                },
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:31:32.895486+00:00"
+        },
+        "assessment": {
+          "status": "SUPPORTED",
+          "explanation": "The code is vulnerable to SQL injection (CWE-89) because user input is directly concatenated into an SQL query string without proper sanitization or parameterization. The `userInput` variable is sourced from an HTTP request parameter, which is untrusted data, and is directly used in the SQL query, allowing an attacker to inject malicious SQL code.",
+          "fix_suggestion": "Use parameterized queries (prepared statements) to prevent SQL injection. For example, use `PreparedStatement` instead of `Statement` and pass user input as parameters.",
+          "citations": [
+            {
+              "path": "SmokeVulnSample.java",
+              "start_line": 25,
+              "end_line": 28,
+              "quote": "        String userInput = request.getParameter(\"username\");\n        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";\n        Statement stmt = conn.createStatement();\n        return stmt.executeQuery(query);",
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9"
+            }
+          ],
+          "citation_check": "MATCHED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:31:45.593679+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:31:45.5915587Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The code is vulnerable to SQL injection (CWE-89) because user input is directly concatenated into an SQL query string without proper sanitization or parameterization. The `userInput` variable is sourced from an HTTP request parameter, which is untrusted data, and is directly used in the SQL query, allowing an attacker to inject malicious SQL code.\",\n  \"fix_suggestion\": \"Use parameterized queries (prepared statements) to prevent SQL injection. For example, use `PreparedStatement` instead of `Statement` and pass user input as parameters.\",\n  \"citations\": [\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 25,\n      \"end_line\": 28,\n      \"quote\": \"        String userInput = request.getParameter(\\\"username\\\");\\n        String query = \\\"SELECT id, role FROM users WHERE username = '\\\" + userInput + \\\"'\\\";\\n        Statement stmt = conn.createStatement();\\n        return stmt.executeQuery(query);\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 12688371700,
+            "load_duration": 5876209500,
+            "prompt_eval_count": 1967,
+            "prompt_eval_cached_count": 0,
+            "prompt_eval_duration": 677784000,
+            "eval_count": 295,
+            "eval_duration": 6123886000
+          },
+          "elapsed_seconds": 12.702999999979511
+        }
+      },
+      {
+        "id": "0a6e70b54a5fe25d428ae50f550134dd3bc36e01122ca9eed3c74e37f7a261c4",
+        "state": "OPEN",
+        "evidence": {
+          "id": "0a6e70b54a5fe25d428ae50f550134dd3bc36e01122ca9eed3c74e37f7a261c4",
+          "scan_sha256": "d5f3b0ce59601fc38039e249d03308b1182a5f5c41c0382bf5875110e1c9b37f",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\evaluation\\smoke_evidence",
+          "rule_id": "v2.evaluation.smoke_evidence.ntk.v2.java.cwe22.httpservlet-path-traversal-taint",
+          "cwe": [
+            "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+          ],
+          "severity": "ERROR",
+          "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+          "start": {
+            "line": 34,
+            "col": 16,
+            "offset": 1406
+          },
+          "end": {
+            "line": 34,
+            "col": 47,
+            "offset": 1437
+          },
+          "raw_finding": {
+            "check_id": "v2.evaluation.smoke_evidence.ntk.v2.java.cwe22.httpservlet-path-traversal-taint",
+            "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+            "start": {
+              "line": 34,
+              "col": 16,
+              "offset": 1406
+            },
+            "end": {
+              "line": 34,
+              "col": 47,
+              "offset": 1437
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 32,
+                    "col": 32,
+                    "offset": 1286
+                  },
+                  "end": {
+                    "line": 32,
+                    "col": 39,
+                    "offset": 1293
+                  },
+                  "abstract_content": "request"
+                }
+              },
+              "message": "[CWE-22] Untrusted HTTP parameter flows into File/FileInputStream sink without path sanitization.",
+              "metadata": {
+                "cwe": [
+                  "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+                ],
+                "owasp": [
+                  "A01:2021 - Broken Access Control"
+                ],
+                "category": "security",
+                "confidence": "HIGH",
+                "provenance": "Derived fromsemgrep.dev/r/java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal (r_id: 9160, rv_id: 1263064)"
+              },
+              "severity": "ERROR",
+              "fingerprint": "2ea5e6f36aecad7cfec3e90343b924166da066bbfd8e8f0bf6da9928a39331950bf1cb646da563cbc2fc9a8d074eaa53d95a600afbd3b526e907685ef5dc6711_0",
+              "lines": "        return new FileInputStream(targetFile);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 32,
+                        "col": 32,
+                        "offset": 1286
+                      },
+                      "end": {
+                        "line": 32,
+                        "col": 62,
+                        "offset": 1316
+                      }
+                    },
+                    "request.getParameter(\"report\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 32,
+                        "col": 16,
+                        "offset": 1270
+                      },
+                      "end": {
+                        "line": 32,
+                        "col": 29,
+                        "offset": 1283
+                      }
+                    },
+                    "content": "rawReportName"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 33,
+                        "col": 14,
+                        "offset": 1331
+                      },
+                      "end": {
+                        "line": 33,
+                        "col": 24,
+                        "offset": 1341
+                      }
+                    },
+                    "content": "targetFile"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 34,
+                        "col": 16,
+                        "offset": 1406
+                      },
+                      "end": {
+                        "line": 34,
+                        "col": 47,
+                        "offset": 1437
+                      }
+                    },
+                    "new FileInputStream(targetFile)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 32,
+                    "col": 32,
+                    "offset": 1286
+                  },
+                  "end": {
+                    "line": 32,
+                    "col": 62,
+                    "offset": 1316
+                  }
+                },
+                "request.getParameter(\"report\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 32,
+                    "col": 16,
+                    "offset": 1270
+                  },
+                  "end": {
+                    "line": 32,
+                    "col": 29,
+                    "offset": 1283
+                  }
+                },
+                "content": "rawReportName"
+              },
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 33,
+                    "col": 14,
+                    "offset": 1331
+                  },
+                  "end": {
+                    "line": 33,
+                    "col": 24,
+                    "offset": 1341
+                  }
+                },
+                "content": "targetFile"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 34,
+                    "col": 16,
+                    "offset": 1406
+                  },
+                  "end": {
+                    "line": 34,
+                    "col": 47,
+                    "offset": 1437
+                  }
+                },
+                "new FileInputStream(targetFile)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "SmokeVulnSample.java": {
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "size": 2131
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 34,
+                "col": 16,
+                "offset": 1406
+              },
+              "end": {
+                "line": 34,
+                "col": 47,
+                "offset": 1437
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "new FileInputStream(targetFile)",
+              "lines": [
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                },
+                {
+                  "line": 36,
+                  "text": ""
+                },
+                {
+                  "line": 37,
+                  "text": "    public ResultSet safeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 32,
+                "col": 32,
+                "offset": 1286
+              },
+              "end": {
+                "line": 32,
+                "col": 62,
+                "offset": 1316
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "request.getParameter(\"report\")",
+              "lines": [
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 32,
+                "col": 16,
+                "offset": 1270
+              },
+              "end": {
+                "line": 32,
+                "col": 29,
+                "offset": 1283
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "rawReportName",
+              "lines": [
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 33,
+                "col": 14,
+                "offset": 1331
+              },
+              "end": {
+                "line": 33,
+                "col": 24,
+                "offset": 1341
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "targetFile",
+              "lines": [
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                },
+                {
+                  "line": 36,
+                  "text": ""
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 34,
+                "col": 16,
+                "offset": 1406
+              },
+              "end": {
+                "line": 34,
+                "col": 47,
+                "offset": 1437
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "new FileInputStream(targetFile)",
+              "lines": [
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                },
+                {
+                  "line": 36,
+                  "text": ""
+                },
+                {
+                  "line": 37,
+                  "text": "    public ResultSet safeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:31:32.896991+00:00"
+        },
+        "assessment": {
+          "status": "UNDETERMINED",
+          "explanation": "citation text disagrees with source line(s)",
+          "citations": [],
+          "fix_suggestion": "",
+          "citation_check": "NOT_VERIFIED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:31:56.414823+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:31:56.4143199Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The code allows an attacker to manipulate the file path by appending directory traversal characters (e.g., '../') to the 'report' parameter. This can lead to unauthorized access to files outside the intended directory, which is a classic example of CWE-22 (Path Traversal).\",\n  \"fix_suggestion\": \"Sanitize and validate the input to ensure it does not contain any path traversal characters. Use a whitelist of allowed filenames or use a secure file access mechanism that prevents directory traversal.\",\n  \"citations\": [\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 32,\n      \"end_line\": 32,\n      \"quote\": \"String rawReportName = request.getParameter(\\\"report\\\");\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    },\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 33,\n      \"end_line\": 33,\n      \"quote\": \"File targetFile = new File(\\\"/var/app/reports/\\\" + rawReportName);\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    },\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 34,\n      \"end_line\": 34,\n      \"quote\": \"return new FileInputStream(targetFile);\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 10804742600,
+            "load_duration": 3367200,
+            "prompt_eval_count": 1960,
+            "prompt_eval_cached_count": 370,
+            "prompt_eval_duration": 495985000,
+            "eval_count": 490,
+            "eval_duration": 10200653000
+          },
+          "elapsed_seconds": 10.813000000023749
+        }
+      }
+    ],
+    "run2_smoke_m1_baseline_rules": [
+      {
+        "id": "5c3fa49a9a739ca38e3711e51b676c5c9894a523a8ef1e5f276a3b7d033672b0",
+        "state": "OPEN",
+        "evidence": {
+          "id": "5c3fa49a9a739ca38e3711e51b676c5c9894a523a8ef1e5f276a3b7d033672b0",
+          "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\evaluation\\smoke_evidence",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+          "cwe": [
+            "CWE-89"
+          ],
+          "severity": "WARNING",
+          "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+          "start": {
+            "line": 28,
+            "col": 16,
+            "offset": 1131
+          },
+          "end": {
+            "line": 28,
+            "col": 40,
+            "offset": 1155
+          },
+          "raw_finding": {
+            "check_id": "v2.baseline.rules.ntk.java.cwe89",
+            "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+            "start": {
+              "line": 28,
+              "col": 16,
+              "offset": 1131
+            },
+            "end": {
+              "line": 28,
+              "col": 40,
+              "offset": 1155
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 25,
+                    "col": 28,
+                    "offset": 943
+                  },
+                  "end": {
+                    "line": 25,
+                    "col": 35,
+                    "offset": 950
+                  },
+                  "abstract_content": "request"
+                },
+                "$STMT": {
+                  "start": {
+                    "line": 28,
+                    "col": 16,
+                    "offset": 1131
+                  },
+                  "end": {
+                    "line": 28,
+                    "col": 20,
+                    "offset": 1135
+                  },
+                  "abstract_content": "stmt",
+                  "propagated_value": {
+                    "svalue_start": {
+                      "line": 27,
+                      "col": 26,
+                      "offset": 1092
+                    },
+                    "svalue_end": {
+                      "line": 27,
+                      "col": 48,
+                      "offset": 1114
+                    },
+                    "svalue_abstract_content": "conn.createStatement()"
+                  }
+                },
+                "$SQL": {
+                  "start": {
+                    "line": 28,
+                    "col": 34,
+                    "offset": 1149
+                  },
+                  "end": {
+                    "line": 28,
+                    "col": 39,
+                    "offset": 1154
+                  },
+                  "abstract_content": "query",
+                  "propagated_value": {
+                    "svalue_start": {
+                      "line": 26,
+                      "col": 24,
+                      "offset": 1000
+                    },
+                    "svalue_end": {
+                      "line": 26,
+                      "col": 89,
+                      "offset": 1065
+                    },
+                    "svalue_abstract_content": "\"SELECT id, role FROM users WHERE username = '\"+userInput+\"'\""
+                  }
+                }
+              },
+              "message": "Request parameter flows to a SQL statement; review required.",
+              "metadata": {
+                "cwe": [
+                  "CWE-89"
+                ],
+                "category": "security"
+              },
+              "severity": "WARNING",
+              "fingerprint": "7b66c6209b1fe6ec2bbb914b5aee295d50161f0efd965f03ea96e1702fa96451ddeb4e6f1fd1b36bc72f4cb6dd6f9980dfe1d49766be305ad938e01e66ab4d95_0",
+              "lines": "        return stmt.executeQuery(query);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 25,
+                        "col": 28,
+                        "offset": 943
+                      },
+                      "end": {
+                        "line": 25,
+                        "col": 60,
+                        "offset": 975
+                      }
+                    },
+                    "request.getParameter(\"username\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 25,
+                        "col": 16,
+                        "offset": 931
+                      },
+                      "end": {
+                        "line": 25,
+                        "col": 25,
+                        "offset": 940
+                      }
+                    },
+                    "content": "userInput"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 26,
+                        "col": 16,
+                        "offset": 992
+                      },
+                      "end": {
+                        "line": 26,
+                        "col": 21,
+                        "offset": 997
+                      }
+                    },
+                    "content": "query"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 28,
+                        "col": 16,
+                        "offset": 1131
+                      },
+                      "end": {
+                        "line": 28,
+                        "col": 40,
+                        "offset": 1155
+                      }
+                    },
+                    "stmt.executeQuery(query)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 25,
+                    "col": 28,
+                    "offset": 943
+                  },
+                  "end": {
+                    "line": 25,
+                    "col": 60,
+                    "offset": 975
+                  }
+                },
+                "request.getParameter(\"username\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 25,
+                    "col": 16,
+                    "offset": 931
+                  },
+                  "end": {
+                    "line": 25,
+                    "col": 25,
+                    "offset": 940
+                  }
+                },
+                "content": "userInput"
+              },
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 26,
+                    "col": 16,
+                    "offset": 992
+                  },
+                  "end": {
+                    "line": 26,
+                    "col": 21,
+                    "offset": 997
+                  }
+                },
+                "content": "query"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 28,
+                    "col": 16,
+                    "offset": 1131
+                  },
+                  "end": {
+                    "line": 28,
+                    "col": 40,
+                    "offset": 1155
+                  }
+                },
+                "stmt.executeQuery(query)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "SmokeVulnSample.java": {
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "size": 2131
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 28,
+                "col": 16,
+                "offset": 1131
+              },
+              "end": {
+                "line": 28,
+                "col": 40,
+                "offset": 1155
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "stmt.executeQuery(query)",
+              "lines": [
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                },
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 25,
+                "col": 28,
+                "offset": 943
+              },
+              "end": {
+                "line": 25,
+                "col": 60,
+                "offset": 975
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "request.getParameter(\"username\")",
+              "lines": [
+                {
+                  "line": 22,
+                  "text": "public class SmokeVulnSample {"
+                },
+                {
+                  "line": 23,
+                  "text": ""
+                },
+                {
+                  "line": 24,
+                  "text": "    public ResultSet unsafeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                },
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 25,
+                "col": 16,
+                "offset": 931
+              },
+              "end": {
+                "line": 25,
+                "col": 25,
+                "offset": 940
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "userInput",
+              "lines": [
+                {
+                  "line": 22,
+                  "text": "public class SmokeVulnSample {"
+                },
+                {
+                  "line": 23,
+                  "text": ""
+                },
+                {
+                  "line": 24,
+                  "text": "    public ResultSet unsafeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                },
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 26,
+                "col": 16,
+                "offset": 992
+              },
+              "end": {
+                "line": 26,
+                "col": 21,
+                "offset": 997
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "query",
+              "lines": [
+                {
+                  "line": 23,
+                  "text": ""
+                },
+                {
+                  "line": 24,
+                  "text": "    public ResultSet unsafeSqlLookup(HttpServletRequest request, Connection conn) throws SQLException {"
+                },
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                },
+                {
+                  "line": 29,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 28,
+                "col": 16,
+                "offset": 1131
+              },
+              "end": {
+                "line": 28,
+                "col": 40,
+                "offset": 1155
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "stmt.executeQuery(query)",
+              "lines": [
+                {
+                  "line": 25,
+                  "text": "        String userInput = request.getParameter(\"username\");"
+                },
+                {
+                  "line": 26,
+                  "text": "        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";"
+                },
+                {
+                  "line": 27,
+                  "text": "        Statement stmt = conn.createStatement();"
+                },
+                {
+                  "line": 28,
+                  "text": "        return stmt.executeQuery(query);"
+                },
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:31:56.575591+00:00"
+        },
+        "assessment": {
+          "status": "SUPPORTED",
+          "explanation": "The warning indicates a potential SQL injection vulnerability (CWE-89) due to the use of user input directly in a SQL query without proper sanitization or parameterization. The `userInput` variable is obtained from `request.getParameter(\"username\")`, which is untrusted data, and is concatenated into the SQL query string, creating a path for injection attacks.",
+          "fix_suggestion": "Use prepared statements with parameterized queries to prevent SQL injection. Replace the vulnerable code with `PreparedStatement` and bind the user input to a parameter.",
+          "citations": [
+            {
+              "path": "SmokeVulnSample.java",
+              "start_line": 25,
+              "end_line": 28,
+              "quote": "        String userInput = request.getParameter(\"username\");\n        String query = \"SELECT id, role FROM users WHERE username = '\" + userInput + \"'\";\n        Statement stmt = conn.createStatement();\n        return stmt.executeQuery(query);",
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9"
+            }
+          ],
+          "citation_check": "MATCHED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:32:03.300111+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:32:03.298404Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The warning indicates a potential SQL injection vulnerability (CWE-89) due to the use of user input directly in a SQL query without proper sanitization or parameterization. The `userInput` variable is obtained from `request.getParameter(\\\"username\\\")`, which is untrusted data, and is concatenated into the SQL query string, creating a path for injection attacks.\",\n  \"fix_suggestion\": \"Use prepared statements with parameterized queries to prevent SQL injection. Replace the vulnerable code with `PreparedStatement` and bind the user input to a parameter.\",\n  \"citations\": [\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 25,\n      \"end_line\": 28,\n      \"quote\": \"        String userInput = request.getParameter(\\\"username\\\");\\n        String query = \\\"SELECT id, role FROM users WHERE username = '\\\" + userInput + \\\"'\\\";\\n        Statement stmt = conn.createStatement();\\n        return stmt.executeQuery(query);\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 6713798700,
+            "load_duration": 3770000,
+            "prompt_eval_count": 1936,
+            "prompt_eval_cached_count": 357,
+            "prompt_eval_duration": 489696000,
+            "eval_count": 294,
+            "eval_duration": 6096432000
+          },
+          "elapsed_seconds": 6.719000000040978
+        }
+      },
+      {
+        "id": "76501a37112c42a9d4e46cf1fadeb1794aa417284ce0ce4d415a6986f5a773e9",
+        "state": "OPEN",
+        "evidence": {
+          "id": "76501a37112c42a9d4e46cf1fadeb1794aa417284ce0ce4d415a6986f5a773e9",
+          "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\evaluation\\smoke_evidence",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+          "cwe": [
+            "CWE-22"
+          ],
+          "severity": "WARNING",
+          "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+          "start": {
+            "line": 33,
+            "col": 27,
+            "offset": 1344
+          },
+          "end": {
+            "line": 33,
+            "col": 72,
+            "offset": 1389
+          },
+          "raw_finding": {
+            "check_id": "v2.baseline.rules.ntk.java.cwe22",
+            "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+            "start": {
+              "line": 33,
+              "col": 27,
+              "offset": 1344
+            },
+            "end": {
+              "line": 33,
+              "col": 72,
+              "offset": 1389
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 32,
+                    "col": 32,
+                    "offset": 1286
+                  },
+                  "end": {
+                    "line": 32,
+                    "col": 39,
+                    "offset": 1293
+                  },
+                  "abstract_content": "request"
+                },
+                "$PATH": {
+                  "start": {
+                    "line": 33,
+                    "col": 36,
+                    "offset": 1353
+                  },
+                  "end": {
+                    "line": 33,
+                    "col": 71,
+                    "offset": 1388
+                  },
+                  "abstract_content": "\"/var/app/reports/\"+rawReportName"
+                }
+              },
+              "message": "Request parameter flows to a filesystem path; review required.",
+              "metadata": {
+                "cwe": [
+                  "CWE-22"
+                ],
+                "category": "security"
+              },
+              "severity": "WARNING",
+              "fingerprint": "3d8ebad66dc25d8bb69fe6c002e1f1b3a4d7a5b34c73d8c379d975c285527e69362d1699a8265474c7c638d3044237f13e5612a5b69daa2aec3b59e77b17e47f_0",
+              "lines": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 32,
+                        "col": 32,
+                        "offset": 1286
+                      },
+                      "end": {
+                        "line": 32,
+                        "col": 62,
+                        "offset": 1316
+                      }
+                    },
+                    "request.getParameter(\"report\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 32,
+                        "col": 16,
+                        "offset": 1270
+                      },
+                      "end": {
+                        "line": 32,
+                        "col": 29,
+                        "offset": 1283
+                      }
+                    },
+                    "content": "rawReportName"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 33,
+                        "col": 27,
+                        "offset": 1344
+                      },
+                      "end": {
+                        "line": 33,
+                        "col": 72,
+                        "offset": 1389
+                      }
+                    },
+                    "new File(\"/var/app/reports/\" + rawReportName)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 32,
+                    "col": 32,
+                    "offset": 1286
+                  },
+                  "end": {
+                    "line": 32,
+                    "col": 62,
+                    "offset": 1316
+                  }
+                },
+                "request.getParameter(\"report\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 32,
+                    "col": 16,
+                    "offset": 1270
+                  },
+                  "end": {
+                    "line": 32,
+                    "col": 29,
+                    "offset": 1283
+                  }
+                },
+                "content": "rawReportName"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 33,
+                    "col": 27,
+                    "offset": 1344
+                  },
+                  "end": {
+                    "line": 33,
+                    "col": 72,
+                    "offset": 1389
+                  }
+                },
+                "new File(\"/var/app/reports/\" + rawReportName)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "SmokeVulnSample.java": {
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "size": 2131
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 33,
+                "col": 27,
+                "offset": 1344
+              },
+              "end": {
+                "line": 33,
+                "col": 72,
+                "offset": 1389
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "new File(\"/var/app/reports/\" + rawReportName)",
+              "lines": [
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                },
+                {
+                  "line": 36,
+                  "text": ""
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 32,
+                "col": 32,
+                "offset": 1286
+              },
+              "end": {
+                "line": 32,
+                "col": 62,
+                "offset": 1316
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "request.getParameter(\"report\")",
+              "lines": [
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 32,
+                "col": 16,
+                "offset": 1270
+              },
+              "end": {
+                "line": 32,
+                "col": 29,
+                "offset": 1283
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "rawReportName",
+              "lines": [
+                {
+                  "line": 29,
+                  "text": "    }"
+                },
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 33,
+                "col": 27,
+                "offset": 1344
+              },
+              "end": {
+                "line": 33,
+                "col": 72,
+                "offset": 1389
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "new File(\"/var/app/reports/\" + rawReportName)",
+              "lines": [
+                {
+                  "line": 30,
+                  "text": ""
+                },
+                {
+                  "line": 31,
+                  "text": "    public FileInputStream unsafeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 32,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 33,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + rawReportName);"
+                },
+                {
+                  "line": 34,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 35,
+                  "text": "    }"
+                },
+                {
+                  "line": 36,
+                  "text": ""
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:31:56.577181+00:00"
+        },
+        "assessment": {
+          "status": "UNDETERMINED",
+          "explanation": "citation text disagrees with source line(s)",
+          "citations": [],
+          "fix_suggestion": "",
+          "citation_check": "NOT_VERIFIED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:32:11.527116+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:32:11.5266078Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The warning indicates that user input is being directly concatenated into a file path, which can lead to directory traversal vulnerabilities (CWE-22). The `rawReportName` variable is obtained from HTTP request parameters, which are untrusted data sources.\",\n  \"fix_suggestion\": \"Sanitize and validate the input to ensure it does not contain malicious characters such as '../' or other path traversal sequences. Alternatively, use a whitelist of allowed filenames or use a secure file handling library that prevents directory traversal.\",\n  \"citations\": [\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 32,\n      \"end_line\": 32,\n      \"quote\": \"String rawReportName = request.getParameter(\\\"report\\\");\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    },\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 33,\n      \"end_line\": 33,\n      \"quote\": \"File targetFile = new File(\\\"/var/app/reports/\\\" + rawReportName);\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 8213693300,
+            "load_duration": 1912200,
+            "prompt_eval_count": 1632,
+            "prompt_eval_cached_count": 365,
+            "prompt_eval_duration": 384606000,
+            "eval_count": 376,
+            "eval_duration": 7726835000
+          },
+          "elapsed_seconds": 8.21899999998277
+        }
+      },
+      {
+        "id": "3252602faf5bdb45ef2a393cdf9d72350514515468d9b170d1083410e7716249",
+        "state": "OPEN",
+        "evidence": {
+          "id": "3252602faf5bdb45ef2a393cdf9d72350514515468d9b170d1083410e7716249",
+          "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\evaluation\\smoke_evidence",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+          "cwe": [
+            "CWE-22"
+          ],
+          "severity": "WARNING",
+          "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+          "start": {
+            "line": 47,
+            "col": 27,
+            "offset": 2032
+          },
+          "end": {
+            "line": 47,
+            "col": 68,
+            "offset": 2073
+          },
+          "raw_finding": {
+            "check_id": "v2.baseline.rules.ntk.java.cwe22",
+            "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+            "start": {
+              "line": 47,
+              "col": 27,
+              "offset": 2032
+            },
+            "end": {
+              "line": 47,
+              "col": 68,
+              "offset": 2073
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 45,
+                    "col": 32,
+                    "offset": 1909
+                  },
+                  "end": {
+                    "line": 45,
+                    "col": 39,
+                    "offset": 1916
+                  },
+                  "abstract_content": "request"
+                },
+                "$PATH": {
+                  "start": {
+                    "line": 47,
+                    "col": 36,
+                    "offset": 2041
+                  },
+                  "end": {
+                    "line": 47,
+                    "col": 67,
+                    "offset": 2072
+                  },
+                  "abstract_content": "\"/var/app/reports/\"+cleanName"
+                }
+              },
+              "message": "Request parameter flows to a filesystem path; review required.",
+              "metadata": {
+                "cwe": [
+                  "CWE-22"
+                ],
+                "category": "security"
+              },
+              "severity": "WARNING",
+              "fingerprint": "6a93195e804da3717fcf2f6661daad377e9df5da9227d595241650f97793cfcce72c8cc500c0ab47813e6b48609dc3749d852e0b0036c171e5122beffdbfc0d2_0",
+              "lines": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 45,
+                        "col": 32,
+                        "offset": 1909
+                      },
+                      "end": {
+                        "line": 45,
+                        "col": 62,
+                        "offset": 1939
+                      }
+                    },
+                    "request.getParameter(\"report\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 45,
+                        "col": 16,
+                        "offset": 1893
+                      },
+                      "end": {
+                        "line": 45,
+                        "col": 29,
+                        "offset": 1906
+                      }
+                    },
+                    "content": "rawReportName"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 46,
+                        "col": 16,
+                        "offset": 1956
+                      },
+                      "end": {
+                        "line": 46,
+                        "col": 25,
+                        "offset": 1965
+                      }
+                    },
+                    "content": "cleanName"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                      "start": {
+                        "line": 47,
+                        "col": 27,
+                        "offset": 2032
+                      },
+                      "end": {
+                        "line": 47,
+                        "col": 68,
+                        "offset": 2073
+                      }
+                    },
+                    "new File(\"/var/app/reports/\" + cleanName)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 45,
+                    "col": 32,
+                    "offset": 1909
+                  },
+                  "end": {
+                    "line": 45,
+                    "col": 62,
+                    "offset": 1939
+                  }
+                },
+                "request.getParameter(\"report\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 45,
+                    "col": 16,
+                    "offset": 1893
+                  },
+                  "end": {
+                    "line": 45,
+                    "col": 29,
+                    "offset": 1906
+                  }
+                },
+                "content": "rawReportName"
+              },
+              {
+                "location": {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 46,
+                    "col": 16,
+                    "offset": 1956
+                  },
+                  "end": {
+                    "line": 46,
+                    "col": 25,
+                    "offset": 1965
+                  }
+                },
+                "content": "cleanName"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                  "start": {
+                    "line": 47,
+                    "col": 27,
+                    "offset": 2032
+                  },
+                  "end": {
+                    "line": 47,
+                    "col": 68,
+                    "offset": 2073
+                  }
+                },
+                "new File(\"/var/app/reports/\" + cleanName)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "SmokeVulnSample.java": {
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "size": 2131
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 47,
+                "col": 27,
+                "offset": 2032
+              },
+              "end": {
+                "line": 47,
+                "col": 68,
+                "offset": 2073
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "new File(\"/var/app/reports/\" + cleanName)",
+              "lines": [
+                {
+                  "line": 44,
+                  "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 45,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 46,
+                  "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+                },
+                {
+                  "line": 47,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+                },
+                {
+                  "line": 48,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 49,
+                  "text": "    }"
+                },
+                {
+                  "line": 50,
+                  "text": "}"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 45,
+                "col": 32,
+                "offset": 1909
+              },
+              "end": {
+                "line": 45,
+                "col": 62,
+                "offset": 1939
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "request.getParameter(\"report\")",
+              "lines": [
+                {
+                  "line": 42,
+                  "text": "    }"
+                },
+                {
+                  "line": 43,
+                  "text": ""
+                },
+                {
+                  "line": 44,
+                  "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 45,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 46,
+                  "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+                },
+                {
+                  "line": 47,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+                },
+                {
+                  "line": 48,
+                  "text": "        return new FileInputStream(targetFile);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 45,
+                "col": 16,
+                "offset": 1893
+              },
+              "end": {
+                "line": 45,
+                "col": 29,
+                "offset": 1906
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "rawReportName",
+              "lines": [
+                {
+                  "line": 42,
+                  "text": "    }"
+                },
+                {
+                  "line": 43,
+                  "text": ""
+                },
+                {
+                  "line": 44,
+                  "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 45,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 46,
+                  "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+                },
+                {
+                  "line": 47,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+                },
+                {
+                  "line": 48,
+                  "text": "        return new FileInputStream(targetFile);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 46,
+                "col": 16,
+                "offset": 1956
+              },
+              "end": {
+                "line": 46,
+                "col": 25,
+                "offset": 1965
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "cleanName",
+              "lines": [
+                {
+                  "line": 43,
+                  "text": ""
+                },
+                {
+                  "line": 44,
+                  "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 45,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 46,
+                  "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+                },
+                {
+                  "line": 47,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+                },
+                {
+                  "line": 48,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 49,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "SmokeVulnSample.java",
+              "start": {
+                "line": 47,
+                "col": 27,
+                "offset": 2032
+              },
+              "end": {
+                "line": 47,
+                "col": 68,
+                "offset": 2073
+              },
+              "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+              "matched": "new File(\"/var/app/reports/\" + cleanName)",
+              "lines": [
+                {
+                  "line": 44,
+                  "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+                },
+                {
+                  "line": 45,
+                  "text": "        String rawReportName = request.getParameter(\"report\");"
+                },
+                {
+                  "line": 46,
+                  "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+                },
+                {
+                  "line": 47,
+                  "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+                },
+                {
+                  "line": 48,
+                  "text": "        return new FileInputStream(targetFile);"
+                },
+                {
+                  "line": 49,
+                  "text": "    }"
+                },
+                {
+                  "line": 50,
+                  "text": "}"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:31:56.578184+00:00"
+        },
+        "assessment": {
+          "status": "UNDETERMINED",
+          "explanation": "citation text disagrees with source line(s)",
+          "citations": [],
+          "fix_suggestion": "",
+          "citation_check": "NOT_VERIFIED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:32:21.168256+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:32:21.16636Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The warning indicates a potential CWE-22 (Improper Limitation of a Pathname Component in a File System API) vulnerability. The `cleanName` variable is derived from user input (`rawReportName`), which is sanitized using `FilenameUtils.getName()`. However, the concatenation of `cleanName` with a fixed path (`/var/app/reports/`) could still allow directory traversal if the `cleanName` contains special characters or if the sanitization is not robust enough. This could lead to unauthorized file access or modification.\",\n  \"fix_suggestion\": \"Use a secure method to sanitize and validate the input to ensure it does not contain path traversal characters (e.g., `../`). Consider using a whitelist of allowed filenames or a dedicated library for secure file path handling.\",\n  \"citations\": [\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 45,\n      \"end_line\": 45,\n      \"quote\": \"String rawReportName = request.getParameter(\\\"report\\\");\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    },\n    {\n      \"path\": \"SmokeVulnSample.java\",\n      \"start_line\": 47,\n      \"end_line\": 47,\n      \"quote\": \"File targetFile = new File(\\\"/var/app/reports/\\\" + cleanName);\",\n      \"sha256\": \"090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 9613823900,
+            "load_duration": 1768700,
+            "prompt_eval_count": 1968,
+            "prompt_eval_cached_count": 392,
+            "prompt_eval_duration": 487527000,
+            "eval_count": 434,
+            "eval_duration": 9028440000
+          },
+          "elapsed_seconds": 9.64100000000326
+        }
+      }
+    ],
+    "run3_m1_fixtures": [
+      {
+        "id": "a8968f72cbb8855d30df846766c527ab9b07cddeb8928601334803cbef1908b1",
+        "state": "OPEN",
+        "evidence": {
+          "id": "a8968f72cbb8855d30df846766c527ab9b07cddeb8928601334803cbef1908b1",
+          "scan_sha256": "67a326aa58a51d8f2102dfb5619174d4a2d55ef20b3cc22492f4062fb103d7c3",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\baseline\\fixtures\\java",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+          "cwe": [
+            "CWE-22"
+          ],
+          "severity": "WARNING",
+          "path": "v2/baseline/fixtures/java/Vulnerable.java",
+          "start": {
+            "line": 7,
+            "col": 9,
+            "offset": 270
+          },
+          "end": {
+            "line": 7,
+            "col": 28,
+            "offset": 289
+          },
+          "raw_finding": {
+            "check_id": "v2.baseline.rules.ntk.java.cwe22",
+            "path": "v2/baseline/fixtures/java/Vulnerable.java",
+            "start": {
+              "line": 7,
+              "col": 9,
+              "offset": 270
+            },
+            "end": {
+              "line": 7,
+              "col": 28,
+              "offset": 289
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 27,
+                    "offset": 204
+                  },
+                  "abstract_content": "req"
+                },
+                "$PATH": {
+                  "start": {
+                    "line": 7,
+                    "col": 18,
+                    "offset": 279
+                  },
+                  "end": {
+                    "line": 7,
+                    "col": 27,
+                    "offset": 288
+                  },
+                  "abstract_content": "forwarded",
+                  "propagated_value": {
+                    "svalue_start": {
+                      "line": 5,
+                      "col": 24,
+                      "offset": 201
+                    },
+                    "svalue_end": {
+                      "line": 5,
+                      "col": 49,
+                      "offset": 226
+                    },
+                    "svalue_abstract_content": "req.getParameter(\"input\")"
+                  }
+                }
+              },
+              "message": "Request parameter flows to a filesystem path; review required.",
+              "metadata": {
+                "cwe": [
+                  "CWE-22"
+                ],
+                "category": "security"
+              },
+              "severity": "WARNING",
+              "fingerprint": "862e2903373e76bc56cb21f791924365467d2cc0052daadf0b5cf7da5f36aef57bbd3a2b8132b10f8072783f139fd9edecb93d23e1c5fe96534be09d2d4b5854_0",
+              "lines": "        new File(forwarded);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 24,
+                        "offset": 201
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 49,
+                        "offset": 226
+                      }
+                    },
+                    "req.getParameter(\"input\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 16,
+                        "offset": 193
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 21,
+                        "offset": 198
+                      }
+                    },
+                    "content": "input"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 6,
+                        "col": 16,
+                        "offset": 243
+                      },
+                      "end": {
+                        "line": 6,
+                        "col": 25,
+                        "offset": 252
+                      }
+                    },
+                    "content": "forwarded"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 7,
+                        "col": 9,
+                        "offset": 270
+                      },
+                      "end": {
+                        "line": 7,
+                        "col": 28,
+                        "offset": 289
+                      }
+                    },
+                    "new File(forwarded)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 49,
+                    "offset": 226
+                  }
+                },
+                "req.getParameter(\"input\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 16,
+                    "offset": 193
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 21,
+                    "offset": 198
+                  }
+                },
+                "content": "input"
+              },
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 6,
+                    "col": 16,
+                    "offset": 243
+                  },
+                  "end": {
+                    "line": 6,
+                    "col": 25,
+                    "offset": 252
+                  }
+                },
+                "content": "forwarded"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 7,
+                    "col": 9,
+                    "offset": 270
+                  },
+                  "end": {
+                    "line": 7,
+                    "col": 28,
+                    "offset": 289
+                  }
+                },
+                "new File(forwarded)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "Vulnerable.java": {
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "size": 471
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 7,
+                "col": 9,
+                "offset": 270
+              },
+              "end": {
+                "line": 7,
+                "col": 28,
+                "offset": 289
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "new File(forwarded)",
+              "lines": [
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 24,
+                "offset": 201
+              },
+              "end": {
+                "line": 5,
+                "col": 49,
+                "offset": 226
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "req.getParameter(\"input\")",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 16,
+                "offset": 193
+              },
+              "end": {
+                "line": 5,
+                "col": 21,
+                "offset": 198
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "input",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 6,
+                "col": 16,
+                "offset": 243
+              },
+              "end": {
+                "line": 6,
+                "col": 25,
+                "offset": 252
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "forwarded",
+              "lines": [
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 7,
+                "col": 9,
+                "offset": 270
+              },
+              "end": {
+                "line": 7,
+                "col": 28,
+                "offset": 289
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "new File(forwarded)",
+              "lines": [
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:32:21.322827+00:00"
+        },
+        "assessment": {
+          "status": "UNDETERMINED",
+          "explanation": "citation text disagrees with source line(s)",
+          "citations": [],
+          "fix_suggestion": "",
+          "citation_check": "NOT_VERIFIED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:32:32.778276+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:32:32.7772498Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The code is vulnerable to CWE-22 (Improper Limitation of a Pathname\", \"fix_suggestion\": \"Sanitize and validate user input before using it in file operations or system commands. Use whitelisting instead of blacklisting, and avoid directly using user input in system calls or file paths.\",\n  \"citations\": [\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 5,\n      \"end_line\": 5,\n      \"quote\": \"String input = req.getParameter(\\\"input\\\");\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    },\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 7,\n      \"end_line\": 7,\n      \"quote\": \"new File(forwarded);\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    },\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 8,\n      \"end_line\": 8,\n      \"quote\": \"Runtime.getRuntime().exec(forwarded);\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    },\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 10,\n      \"end_line\": 10,\n      \"quote\": \"stmt.executeQuery(\\\"SELECT * FROM users WHERE name='\\\" + forwarded + \\\"'\\\");\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 11418451600,
+            "load_duration": 2890400,
+            "prompt_eval_count": 1840,
+            "prompt_eval_cached_count": 392,
+            "prompt_eval_duration": 444814000,
+            "eval_count": 522,
+            "eval_duration": 10827620000
+          },
+          "elapsed_seconds": 11.438000000023749
+        }
+      },
+      {
+        "id": "037de90108c5c47c3053904dafffe47ec3daca003747754b95f25320b2c28467",
+        "state": "OPEN",
+        "evidence": {
+          "id": "037de90108c5c47c3053904dafffe47ec3daca003747754b95f25320b2c28467",
+          "scan_sha256": "67a326aa58a51d8f2102dfb5619174d4a2d55ef20b3cc22492f4062fb103d7c3",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\baseline\\fixtures\\java",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe78",
+          "cwe": [
+            "CWE-78"
+          ],
+          "severity": "WARNING",
+          "path": "v2/baseline/fixtures/java/Vulnerable.java",
+          "start": {
+            "line": 8,
+            "col": 9,
+            "offset": 299
+          },
+          "end": {
+            "line": 8,
+            "col": 45,
+            "offset": 335
+          },
+          "raw_finding": {
+            "check_id": "v2.baseline.rules.ntk.java.cwe78",
+            "path": "v2/baseline/fixtures/java/Vulnerable.java",
+            "start": {
+              "line": 8,
+              "col": 9,
+              "offset": 299
+            },
+            "end": {
+              "line": 8,
+              "col": 45,
+              "offset": 335
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 27,
+                    "offset": 204
+                  },
+                  "abstract_content": "req"
+                },
+                "$CMD": {
+                  "start": {
+                    "line": 8,
+                    "col": 35,
+                    "offset": 325
+                  },
+                  "end": {
+                    "line": 8,
+                    "col": 44,
+                    "offset": 334
+                  },
+                  "abstract_content": "forwarded",
+                  "propagated_value": {
+                    "svalue_start": {
+                      "line": 5,
+                      "col": 24,
+                      "offset": 201
+                    },
+                    "svalue_end": {
+                      "line": 5,
+                      "col": 49,
+                      "offset": 226
+                    },
+                    "svalue_abstract_content": "req.getParameter(\"input\")"
+                  }
+                }
+              },
+              "message": "Request parameter flows to a command execution; review required.",
+              "metadata": {
+                "cwe": [
+                  "CWE-78"
+                ],
+                "category": "security"
+              },
+              "severity": "WARNING",
+              "fingerprint": "4916b4d9332a749bc775a6f3cfaeabe0b4625fa08ae922b03fac4c18005ec7911534c67bd0c6425a520137d9a28f55d462cbfa18a298dde6a501efe68711a5a9_0",
+              "lines": "        Runtime.getRuntime().exec(forwarded);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 24,
+                        "offset": 201
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 49,
+                        "offset": 226
+                      }
+                    },
+                    "req.getParameter(\"input\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 16,
+                        "offset": 193
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 21,
+                        "offset": 198
+                      }
+                    },
+                    "content": "input"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 6,
+                        "col": 16,
+                        "offset": 243
+                      },
+                      "end": {
+                        "line": 6,
+                        "col": 25,
+                        "offset": 252
+                      }
+                    },
+                    "content": "forwarded"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 8,
+                        "col": 9,
+                        "offset": 299
+                      },
+                      "end": {
+                        "line": 8,
+                        "col": 45,
+                        "offset": 335
+                      }
+                    },
+                    "Runtime.getRuntime().exec(forwarded)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 49,
+                    "offset": 226
+                  }
+                },
+                "req.getParameter(\"input\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 16,
+                    "offset": 193
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 21,
+                    "offset": 198
+                  }
+                },
+                "content": "input"
+              },
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 6,
+                    "col": 16,
+                    "offset": 243
+                  },
+                  "end": {
+                    "line": 6,
+                    "col": 25,
+                    "offset": 252
+                  }
+                },
+                "content": "forwarded"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 8,
+                    "col": 9,
+                    "offset": 299
+                  },
+                  "end": {
+                    "line": 8,
+                    "col": 45,
+                    "offset": 335
+                  }
+                },
+                "Runtime.getRuntime().exec(forwarded)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "Vulnerable.java": {
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "size": 471
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 8,
+                "col": 9,
+                "offset": 299
+              },
+              "end": {
+                "line": 8,
+                "col": 45,
+                "offset": 335
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "Runtime.getRuntime().exec(forwarded)",
+              "lines": [
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                },
+                {
+                  "line": 11,
+                  "text": "    }"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 24,
+                "offset": 201
+              },
+              "end": {
+                "line": 5,
+                "col": 49,
+                "offset": 226
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "req.getParameter(\"input\")",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 16,
+                "offset": 193
+              },
+              "end": {
+                "line": 5,
+                "col": 21,
+                "offset": 198
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "input",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 6,
+                "col": 16,
+                "offset": 243
+              },
+              "end": {
+                "line": 6,
+                "col": 25,
+                "offset": 252
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "forwarded",
+              "lines": [
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 8,
+                "col": 9,
+                "offset": 299
+              },
+              "end": {
+                "line": 8,
+                "col": 45,
+                "offset": 335
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "Runtime.getRuntime().exec(forwarded)",
+              "lines": [
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                },
+                {
+                  "line": 11,
+                  "text": "    }"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:32:21.325841+00:00"
+        },
+        "assessment": {
+          "status": "UNDETERMINED",
+          "explanation": "citation text disagrees with source line(s)",
+          "citations": [],
+          "fix_suggestion": "",
+          "citation_check": "NOT_VERIFIED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:32:39.876328+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:32:39.8758246Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The warning is supported by the presence of untrusted data from `req.getParameter(\\\"input\\\")` being directly used in multiple potentially dangerous operations, including `Runtime.getRuntime().exec(forwarded)` and SQL query concatenation. This could lead to command injection (CWE-78) and SQL injection (CWE-89) vulnerabilities.\",\n  \"fix_suggestion\": \"Sanitize and validate all user inputs before using them in critical operations. Use parameterized queries for SQL and avoid directly passing user input to system commands. Consider using libraries like Java's `java.util.Scanner` for input validation and `PreparedStatement` for SQL queries.\",\n  \"citations\": [\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 5,\n      \"end_line\": 11,\n      \"quote\": \"        String input = req.getParameter(\\\"input\\\");\\n        String forwarded = input;\\n        new File(forwarded);\\n        Runtime.getRuntime().exec(forwarded);\\n        resp.getWriter().println(forwarded);\\n        stmt.executeQuery(\\\"SELECT * FROM users WHERE name='\\\" + forwarded + \\\"'\\\");\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 7096283900,
+            "load_duration": 2158400,
+            "prompt_eval_count": 1820,
+            "prompt_eval_cached_count": 365,
+            "prompt_eval_duration": 445650000,
+            "eval_count": 317,
+            "eval_duration": 6538273000
+          },
+          "elapsed_seconds": 7.10899999999674
+        }
+      },
+      {
+        "id": "9832bfeeccc41e39c9a2f749264b2221779502027aed1dda7e3bb6c1cbcc401c",
+        "state": "OPEN",
+        "evidence": {
+          "id": "9832bfeeccc41e39c9a2f749264b2221779502027aed1dda7e3bb6c1cbcc401c",
+          "scan_sha256": "67a326aa58a51d8f2102dfb5619174d4a2d55ef20b3cc22492f4062fb103d7c3",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\baseline\\fixtures\\java",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe79",
+          "cwe": [
+            "CWE-79"
+          ],
+          "severity": "WARNING",
+          "path": "v2/baseline/fixtures/java/Vulnerable.java",
+          "start": {
+            "line": 9,
+            "col": 9,
+            "offset": 345
+          },
+          "end": {
+            "line": 9,
+            "col": 44,
+            "offset": 380
+          },
+          "raw_finding": {
+            "check_id": "v2.baseline.rules.ntk.java.cwe79",
+            "path": "v2/baseline/fixtures/java/Vulnerable.java",
+            "start": {
+              "line": 9,
+              "col": 9,
+              "offset": 345
+            },
+            "end": {
+              "line": 9,
+              "col": 44,
+              "offset": 380
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 27,
+                    "offset": 204
+                  },
+                  "abstract_content": "req"
+                },
+                "$RESP": {
+                  "start": {
+                    "line": 9,
+                    "col": 9,
+                    "offset": 345
+                  },
+                  "end": {
+                    "line": 9,
+                    "col": 13,
+                    "offset": 349
+                  },
+                  "abstract_content": "resp"
+                },
+                "$HTML": {
+                  "start": {
+                    "line": 9,
+                    "col": 34,
+                    "offset": 370
+                  },
+                  "end": {
+                    "line": 9,
+                    "col": 43,
+                    "offset": 379
+                  },
+                  "abstract_content": "forwarded",
+                  "propagated_value": {
+                    "svalue_start": {
+                      "line": 5,
+                      "col": 24,
+                      "offset": 201
+                    },
+                    "svalue_end": {
+                      "line": 5,
+                      "col": 49,
+                      "offset": 226
+                    },
+                    "svalue_abstract_content": "req.getParameter(\"input\")"
+                  }
+                }
+              },
+              "message": "Request parameter flows to a response writer; review required.",
+              "metadata": {
+                "cwe": [
+                  "CWE-79"
+                ],
+                "category": "security"
+              },
+              "severity": "WARNING",
+              "fingerprint": "dfcc08ed5d7860413505ee543f4ebb29464805e015734bd67468976f2f4554edc520439fcf386d1b62bb7892ac25a5902b331a3eacf324c1281e3b7962404a2c_0",
+              "lines": "        resp.getWriter().println(forwarded);",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 24,
+                        "offset": 201
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 49,
+                        "offset": 226
+                      }
+                    },
+                    "req.getParameter(\"input\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 16,
+                        "offset": 193
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 21,
+                        "offset": 198
+                      }
+                    },
+                    "content": "input"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 6,
+                        "col": 16,
+                        "offset": 243
+                      },
+                      "end": {
+                        "line": 6,
+                        "col": 25,
+                        "offset": 252
+                      }
+                    },
+                    "content": "forwarded"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 9,
+                        "col": 9,
+                        "offset": 345
+                      },
+                      "end": {
+                        "line": 9,
+                        "col": 44,
+                        "offset": 380
+                      }
+                    },
+                    "resp.getWriter().println(forwarded)"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 49,
+                    "offset": 226
+                  }
+                },
+                "req.getParameter(\"input\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 16,
+                    "offset": 193
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 21,
+                    "offset": 198
+                  }
+                },
+                "content": "input"
+              },
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 6,
+                    "col": 16,
+                    "offset": 243
+                  },
+                  "end": {
+                    "line": 6,
+                    "col": 25,
+                    "offset": 252
+                  }
+                },
+                "content": "forwarded"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 9,
+                    "col": 9,
+                    "offset": 345
+                  },
+                  "end": {
+                    "line": 9,
+                    "col": 44,
+                    "offset": 380
+                  }
+                },
+                "resp.getWriter().println(forwarded)"
+              ]
+            ]
+          },
+          "snapshots": {
+            "Vulnerable.java": {
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "size": 471
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 9,
+                "col": 9,
+                "offset": 345
+              },
+              "end": {
+                "line": 9,
+                "col": 44,
+                "offset": 380
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "resp.getWriter().println(forwarded)",
+              "lines": [
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                },
+                {
+                  "line": 11,
+                  "text": "    }"
+                },
+                {
+                  "line": 12,
+                  "text": "}"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 24,
+                "offset": 201
+              },
+              "end": {
+                "line": 5,
+                "col": 49,
+                "offset": 226
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "req.getParameter(\"input\")",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 16,
+                "offset": 193
+              },
+              "end": {
+                "line": 5,
+                "col": 21,
+                "offset": 198
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "input",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 6,
+                "col": 16,
+                "offset": 243
+              },
+              "end": {
+                "line": 6,
+                "col": 25,
+                "offset": 252
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "forwarded",
+              "lines": [
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 9,
+                "col": 9,
+                "offset": 345
+              },
+              "end": {
+                "line": 9,
+                "col": 44,
+                "offset": 380
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "resp.getWriter().println(forwarded)",
+              "lines": [
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                },
+                {
+                  "line": 11,
+                  "text": "    }"
+                },
+                {
+                  "line": 12,
+                  "text": "}"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:32:21.328787+00:00"
+        },
+        "assessment": {
+          "status": "SUPPORTED",
+          "explanation": "The warning is supported by the presence of untrusted data from `req.getParameter(\"input\")` being directly used in multiple contexts, including file operations, command execution, and SQL queries. This is a clear case of CWE-22 (Improper Limitation of a Pathname), as the input is used to construct file paths and command strings, which can lead to directory traversal or command injection. Additionally, the SQL query concatenates the input directly into the query string, which is a classic case of CWE-89 (SQL Injection).",
+          "fix_suggestion": "Sanitize and validate all user inputs. Use parameterized queries for SQL operations, avoid directly using user input in file paths or command execution, and ensure that any output is properly encoded to prevent injection attacks.",
+          "citations": [
+            {
+              "path": "Vulnerable.java",
+              "start_line": 5,
+              "end_line": 5,
+              "quote": "        String input = req.getParameter(\"input\");",
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc"
+            },
+            {
+              "path": "Vulnerable.java",
+              "start_line": 9,
+              "end_line": 9,
+              "quote": "        resp.getWriter().println(forwarded);",
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc"
+            },
+            {
+              "path": "Vulnerable.java",
+              "start_line": 10,
+              "end_line": 10,
+              "quote": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");",
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc"
+            }
+          ],
+          "citation_check": "MATCHED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:32:51.121997+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:32:51.1204411Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The warning is supported by the presence of untrusted data from `req.getParameter(\\\"input\\\")` being directly used in multiple contexts, including file operations, command execution, and SQL queries. This is a clear case of CWE-22 (Improper Limitation of a Pathname), as the input is used to construct file paths and command strings, which can lead to directory traversal or command injection. Additionally, the SQL query concatenates the input directly into the query string, which is a classic case of CWE-89 (SQL Injection).\",\n  \"fix_suggestion\": \"Sanitize and validate all user inputs. Use parameterized queries for SQL operations, avoid directly using user input in file paths or command execution, and ensure that any output is properly encoded to prevent injection attacks.\",\n  \"citations\": [\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 5,\n      \"end_line\": 5,\n      \"quote\": \"        String input = req.getParameter(\\\"input\\\");\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    },\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 9,\n      \"end_line\": 9,\n      \"quote\": \"        resp.getWriter().println(forwarded);\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    },\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 10,\n      \"end_line\": 10,\n      \"quote\": \"        stmt.executeQuery(\\\"SELECT * FROM users WHERE name='\\\" + forwarded + \\\"'\\\");\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 11227994400,
+            "load_duration": 2290300,
+            "prompt_eval_count": 1802,
+            "prompt_eval_cached_count": 366,
+            "prompt_eval_duration": 444458000,
+            "eval_count": 516,
+            "eval_duration": 10683993000
+          },
+          "elapsed_seconds": 11.23499999998603
+        }
+      },
+      {
+        "id": "c66f337bca643afd34c68fb8184aa65673cdd90ba19f5686411463dbeb24d863",
+        "state": "OPEN",
+        "evidence": {
+          "id": "c66f337bca643afd34c68fb8184aa65673cdd90ba19f5686411463dbeb24d863",
+          "scan_sha256": "67a326aa58a51d8f2102dfb5619174d4a2d55ef20b3cc22492f4062fb103d7c3",
+          "root": "C:\\Users\\Admin\\ntk-thesis-v2\\integration-pilot\\v2\\baseline\\fixtures\\java",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+          "cwe": [
+            "CWE-89"
+          ],
+          "severity": "WARNING",
+          "path": "v2/baseline/fixtures/java/Vulnerable.java",
+          "start": {
+            "line": 10,
+            "col": 9,
+            "offset": 390
+          },
+          "end": {
+            "line": 10,
+            "col": 80,
+            "offset": 461
+          },
+          "raw_finding": {
+            "check_id": "v2.baseline.rules.ntk.java.cwe89",
+            "path": "v2/baseline/fixtures/java/Vulnerable.java",
+            "start": {
+              "line": 10,
+              "col": 9,
+              "offset": 390
+            },
+            "end": {
+              "line": 10,
+              "col": 80,
+              "offset": 461
+            },
+            "extra": {
+              "metavars": {
+                "$REQ": {
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 27,
+                    "offset": 204
+                  },
+                  "abstract_content": "req"
+                },
+                "$STMT": {
+                  "start": {
+                    "line": 10,
+                    "col": 9,
+                    "offset": 390
+                  },
+                  "end": {
+                    "line": 10,
+                    "col": 13,
+                    "offset": 394
+                  },
+                  "abstract_content": "stmt"
+                },
+                "$SQL": {
+                  "start": {
+                    "line": 10,
+                    "col": 27,
+                    "offset": 408
+                  },
+                  "end": {
+                    "line": 10,
+                    "col": 79,
+                    "offset": 460
+                  },
+                  "abstract_content": "\"SELECT * FROM users WHERE name='\"+forwarded+\"'\""
+                }
+              },
+              "message": "Request parameter flows to a SQL statement; review required.",
+              "metadata": {
+                "cwe": [
+                  "CWE-89"
+                ],
+                "category": "security"
+              },
+              "severity": "WARNING",
+              "fingerprint": "3e51edba38a02ed45fdbfc0c8c786dd0584f61240d124c408bd44c08a3fb6b6c563c92e0e1ca0ae84724459759788f785622405f590a20cc3e837d4aeafc8223_0",
+              "lines": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");",
+              "is_ignored": false,
+              "validation_state": "NO_VALIDATOR",
+              "dataflow_trace": {
+                "taint_source": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 24,
+                        "offset": 201
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 49,
+                        "offset": 226
+                      }
+                    },
+                    "req.getParameter(\"input\")"
+                  ]
+                ],
+                "intermediate_vars": [
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 5,
+                        "col": 16,
+                        "offset": 193
+                      },
+                      "end": {
+                        "line": 5,
+                        "col": 21,
+                        "offset": 198
+                      }
+                    },
+                    "content": "input"
+                  },
+                  {
+                    "location": {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 6,
+                        "col": 16,
+                        "offset": 243
+                      },
+                      "end": {
+                        "line": 6,
+                        "col": 25,
+                        "offset": 252
+                      }
+                    },
+                    "content": "forwarded"
+                  }
+                ],
+                "taint_sink": [
+                  "CliLoc",
+                  [
+                    {
+                      "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                      "start": {
+                        "line": 10,
+                        "col": 9,
+                        "offset": 390
+                      },
+                      "end": {
+                        "line": 10,
+                        "col": 80,
+                        "offset": 461
+                      }
+                    },
+                    "stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\")"
+                  ]
+                ]
+              },
+              "engine_kind": "OSS"
+            }
+          },
+          "raw_trace": {
+            "taint_source": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 24,
+                    "offset": 201
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 49,
+                    "offset": 226
+                  }
+                },
+                "req.getParameter(\"input\")"
+              ]
+            ],
+            "intermediate_vars": [
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 5,
+                    "col": 16,
+                    "offset": 193
+                  },
+                  "end": {
+                    "line": 5,
+                    "col": 21,
+                    "offset": 198
+                  }
+                },
+                "content": "input"
+              },
+              {
+                "location": {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 6,
+                    "col": 16,
+                    "offset": 243
+                  },
+                  "end": {
+                    "line": 6,
+                    "col": 25,
+                    "offset": 252
+                  }
+                },
+                "content": "forwarded"
+              }
+            ],
+            "taint_sink": [
+              "CliLoc",
+              [
+                {
+                  "path": "v2/baseline/fixtures/java/Vulnerable.java",
+                  "start": {
+                    "line": 10,
+                    "col": 9,
+                    "offset": 390
+                  },
+                  "end": {
+                    "line": 10,
+                    "col": 80,
+                    "offset": 461
+                  }
+                },
+                "stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\")"
+              ]
+            ]
+          },
+          "snapshots": {
+            "Vulnerable.java": {
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "size": 471
+            }
+          },
+          "snippets": [
+            {
+              "role": "finding",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 10,
+                "col": 9,
+                "offset": 390
+              },
+              "end": {
+                "line": 10,
+                "col": 80,
+                "offset": 461
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\")",
+              "lines": [
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                },
+                {
+                  "line": 11,
+                  "text": "    }"
+                },
+                {
+                  "line": 12,
+                  "text": "}"
+                }
+              ]
+            },
+            {
+              "role": "source",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 24,
+                "offset": 201
+              },
+              "end": {
+                "line": 5,
+                "col": 49,
+                "offset": 226
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "req.getParameter(\"input\")",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 5,
+                "col": 16,
+                "offset": 193
+              },
+              "end": {
+                "line": 5,
+                "col": 21,
+                "offset": 198
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "input",
+              "lines": [
+                {
+                  "line": 2,
+                  "text": "import java.io.File;"
+                },
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "intermediate",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 6,
+                "col": 16,
+                "offset": 243
+              },
+              "end": {
+                "line": 6,
+                "col": 25,
+                "offset": 252
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "forwarded",
+              "lines": [
+                {
+                  "line": 3,
+                  "text": "class Vulnerable {"
+                },
+                {
+                  "line": 4,
+                  "text": "    void run(Request req, Response resp, Statement stmt) throws Exception {"
+                },
+                {
+                  "line": 5,
+                  "text": "        String input = req.getParameter(\"input\");"
+                },
+                {
+                  "line": 6,
+                  "text": "        String forwarded = input;"
+                },
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                }
+              ]
+            },
+            {
+              "role": "sink",
+              "path": "Vulnerable.java",
+              "start": {
+                "line": 10,
+                "col": 9,
+                "offset": 390
+              },
+              "end": {
+                "line": 10,
+                "col": 80,
+                "offset": 461
+              },
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc",
+              "matched": "stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\")",
+              "lines": [
+                {
+                  "line": 7,
+                  "text": "        new File(forwarded);"
+                },
+                {
+                  "line": 8,
+                  "text": "        Runtime.getRuntime().exec(forwarded);"
+                },
+                {
+                  "line": 9,
+                  "text": "        resp.getWriter().println(forwarded);"
+                },
+                {
+                  "line": 10,
+                  "text": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");"
+                },
+                {
+                  "line": 11,
+                  "text": "    }"
+                },
+                {
+                  "line": 12,
+                  "text": "}"
+                }
+              ]
+            }
+          ],
+          "issues": [],
+          "collected_at": "2026-11-11T05:32:21.332449+00:00"
+        },
+        "assessment": {
+          "status": "SUPPORTED",
+          "explanation": "The code is vulnerable to SQL injection (CWE-89) because the user input is directly concatenated into a SQL query without proper sanitization or parameterization. The `forwarded` variable is derived from untrusted input, which is then used in a SQL query, allowing an attacker to inject malicious SQL code.",
+          "fix_suggestion": "Use parameterized queries or prepared statements to prevent SQL injection. For example, use `stmt.executeQuery(",
+          "citations": [
+            {
+              "path": "Vulnerable.java",
+              "start_line": 5,
+              "end_line": 5,
+              "quote": "        String input = req.getParameter(\"input\");",
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc"
+            },
+            {
+              "path": "Vulnerable.java",
+              "start_line": 10,
+              "end_line": 10,
+              "quote": "        stmt.executeQuery(\"SELECT * FROM users WHERE name='\" + forwarded + \"'\");",
+              "sha256": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc"
+            }
+          ],
+          "citation_check": "MATCHED",
+          "security_conclusion_verified": false,
+          "requires_human_review": true,
+          "analyzed_at": "2026-11-11T05:32:58.811378+00:00",
+          "transport": "ollama-http",
+          "model": "qwen3:8b",
+          "endpoint": "http://127.0.0.1:11434",
+          "raw_response": {
+            "model": "qwen3:8b",
+            "created_at": "2026-11-11T05:32:58.809808Z",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"status\": \"SUPPORTED\",\n  \"explanation\": \"The code is vulnerable to SQL injection (CWE-89) because the user input is directly concatenated into a SQL query without proper sanitization or parameterization. The `forwarded` variable is derived from untrusted input, which is then used in a SQL query, allowing an attacker to inject malicious SQL code.\",\n  \"fix_suggestion\": \"Use parameterized queries or prepared statements to prevent SQL injection. For example, use `stmt.executeQuery(\", \"citations\": [\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 5,\n      \"end_line\": 5,\n      \"quote\": \"        String input = req.getParameter(\\\"input\\\");\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    },\n    {\n      \"path\": \"Vulnerable.java\",\n      \"start_line\": 10,\n      \"end_line\": 10,\n      \"quote\": \"        stmt.executeQuery(\\\"SELECT * FROM users WHERE name='\\\" + forwarded + \\\"'\\\");\",\n      \"sha256\": \"765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc\"\n    }\n  ]\n}"
+            },
+            "done": true,
+            "done_reason": "stop",
+            "total_duration": 7665377000,
+            "load_duration": 2212400,
+            "prompt_eval_count": 1794,
+            "prompt_eval_cached_count": 365,
+            "prompt_eval_duration": 443171000,
+            "eval_count": 342,
+            "eval_duration": 7111135000
+          },
+          "elapsed_seconds": 7.703000000037719
+        }
+      }
+    ]
+  },
+  "demo_synthetic_human_review_and_sha256_tamper_guard": {
+    "notice": "DEMO/SYNTHETIC ONLY - NOT A REAL HUMAN REVIEW DECISION",
+    "case_5a_unchanged_source_confirm_false": {
+      "id": "3252602faf5bdb45ef2a393cdf9d72350514515468d9b170d1083410e7716249",
+      "state": "CONFIRMED_FALSE",
+      "evidence": {
+        "collected_at": "2026-11-11T05:36:25.922021+00:00",
+        "cwe": [
+          "CWE-22"
+        ],
+        "end": {
+          "col": 68,
+          "line": 47,
+          "offset": 2073
+        },
+        "id": "3252602faf5bdb45ef2a393cdf9d72350514515468d9b170d1083410e7716249",
+        "issues": [],
+        "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+        "raw_finding": {
+          "check_id": "v2.baseline.rules.ntk.java.cwe22",
+          "end": {
+            "col": 68,
+            "line": 47,
+            "offset": 2073
+          },
+          "extra": {
+            "dataflow_trace": {
+              "intermediate_vars": [
+                {
+                  "content": "rawReportName",
+                  "location": {
+                    "end": {
+                      "col": 29,
+                      "line": 45,
+                      "offset": 1906
+                    },
+                    "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                    "start": {
+                      "col": 16,
+                      "line": 45,
+                      "offset": 1893
+                    }
+                  }
+                },
+                {
+                  "content": "cleanName",
+                  "location": {
+                    "end": {
+                      "col": 25,
+                      "line": 46,
+                      "offset": 1965
+                    },
+                    "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                    "start": {
+                      "col": 16,
+                      "line": 46,
+                      "offset": 1956
+                    }
+                  }
+                }
+              ],
+              "taint_sink": [
+                "CliLoc",
+                [
+                  {
+                    "end": {
+                      "col": 68,
+                      "line": 47,
+                      "offset": 2073
+                    },
+                    "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                    "start": {
+                      "col": 27,
+                      "line": 47,
+                      "offset": 2032
+                    }
+                  },
+                  "new File(\"/var/app/reports/\" + cleanName)"
+                ]
+              ],
+              "taint_source": [
+                "CliLoc",
+                [
+                  {
+                    "end": {
+                      "col": 62,
+                      "line": 45,
+                      "offset": 1939
+                    },
+                    "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                    "start": {
+                      "col": 32,
+                      "line": 45,
+                      "offset": 1909
+                    }
+                  },
+                  "request.getParameter(\"report\")"
+                ]
+              ]
+            },
+            "engine_kind": "OSS",
+            "fingerprint": "6a93195e804da3717fcf2f6661daad377e9df5da9227d595241650f97793cfcce72c8cc500c0ab47813e6b48609dc3749d852e0b0036c171e5122beffdbfc0d2_0",
+            "is_ignored": false,
+            "lines": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);",
+            "message": "Request parameter flows to a filesystem path; review required.",
+            "metadata": {
+              "category": "security",
+              "cwe": [
+                "CWE-22"
+              ]
+            },
+            "metavars": {
+              "$PATH": {
+                "abstract_content": "\"/var/app/reports/\"+cleanName",
+                "end": {
+                  "col": 67,
+                  "line": 47,
+                  "offset": 2072
+                },
+                "start": {
+                  "col": 36,
+                  "line": 47,
+                  "offset": 2041
+                }
+              },
+              "$REQ": {
+                "abstract_content": "request",
+                "end": {
+                  "col": 39,
+                  "line": 45,
+                  "offset": 1916
+                },
+                "start": {
+                  "col": 32,
+                  "line": 45,
+                  "offset": 1909
+                }
+              }
+            },
+            "severity": "WARNING",
+            "validation_state": "NO_VALIDATOR"
+          },
+          "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+          "start": {
+            "col": 27,
+            "line": 47,
+            "offset": 2032
+          }
+        },
+        "raw_trace": {
+          "intermediate_vars": [
+            {
+              "content": "rawReportName",
+              "location": {
+                "end": {
+                  "col": 29,
+                  "line": 45,
+                  "offset": 1906
+                },
+                "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                "start": {
+                  "col": 16,
+                  "line": 45,
+                  "offset": 1893
+                }
+              }
+            },
+            {
+              "content": "cleanName",
+              "location": {
+                "end": {
+                  "col": 25,
+                  "line": 46,
+                  "offset": 1965
+                },
+                "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                "start": {
+                  "col": 16,
+                  "line": 46,
+                  "offset": 1956
+                }
+              }
+            }
+          ],
+          "taint_sink": [
+            "CliLoc",
+            [
+              {
+                "end": {
+                  "col": 68,
+                  "line": 47,
+                  "offset": 2073
+                },
+                "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                "start": {
+                  "col": 27,
+                  "line": 47,
+                  "offset": 2032
+                }
+              },
+              "new File(\"/var/app/reports/\" + cleanName)"
+            ]
+          ],
+          "taint_source": [
+            "CliLoc",
+            [
+              {
+                "end": {
+                  "col": 62,
+                  "line": 45,
+                  "offset": 1939
+                },
+                "path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+                "start": {
+                  "col": 32,
+                  "line": 45,
+                  "offset": 1909
+                }
+              },
+              "request.getParameter(\"report\")"
+            ]
+          ]
+        },
+        "root": "C:\\Users\\Admin\\ntk-thesis-v2\\evidence\\p0_integration_pilot\\tamper_demo\\v2\\evaluation\\smoke_evidence",
+        "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+        "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+        "severity": "WARNING",
+        "snapshots": {
+          "SmokeVulnSample.java": {
+            "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+            "size": 2131
+          }
+        },
+        "snippets": [
+          {
+            "end": {
+              "col": 68,
+              "line": 47,
+              "offset": 2073
+            },
+            "lines": [
+              {
+                "line": 44,
+                "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+              },
+              {
+                "line": 45,
+                "text": "        String rawReportName = request.getParameter(\"report\");"
+              },
+              {
+                "line": 46,
+                "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+              },
+              {
+                "line": 47,
+                "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+              },
+              {
+                "line": 48,
+                "text": "        return new FileInputStream(targetFile);"
+              },
+              {
+                "line": 49,
+                "text": "    }"
+              },
+              {
+                "line": 50,
+                "text": "}"
+              }
+            ],
+            "matched": "new File(\"/var/app/reports/\" + cleanName)",
+            "path": "SmokeVulnSample.java",
+            "role": "finding",
+            "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+            "start": {
+              "col": 27,
+              "line": 47,
+              "offset": 2032
+            }
+          },
+          {
+            "end": {
+              "col": 62,
+              "line": 45,
+              "offset": 1939
+            },
+            "lines": [
+              {
+                "line": 42,
+                "text": "    }"
+              },
+              {
+                "line": 43,
+                "text": ""
+              },
+              {
+                "line": 44,
+                "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+              },
+              {
+                "line": 45,
+                "text": "        String rawReportName = request.getParameter(\"report\");"
+              },
+              {
+                "line": 46,
+                "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+              },
+              {
+                "line": 47,
+                "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+              },
+              {
+                "line": 48,
+                "text": "        return new FileInputStream(targetFile);"
+              }
+            ],
+            "matched": "request.getParameter(\"report\")",
+            "path": "SmokeVulnSample.java",
+            "role": "source",
+            "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+            "start": {
+              "col": 32,
+              "line": 45,
+              "offset": 1909
+            }
+          },
+          {
+            "end": {
+              "col": 29,
+              "line": 45,
+              "offset": 1906
+            },
+            "lines": [
+              {
+                "line": 42,
+                "text": "    }"
+              },
+              {
+                "line": 43,
+                "text": ""
+              },
+              {
+                "line": 44,
+                "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+              },
+              {
+                "line": 45,
+                "text": "        String rawReportName = request.getParameter(\"report\");"
+              },
+              {
+                "line": 46,
+                "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+              },
+              {
+                "line": 47,
+                "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+              },
+              {
+                "line": 48,
+                "text": "        return new FileInputStream(targetFile);"
+              }
+            ],
+            "matched": "rawReportName",
+            "path": "SmokeVulnSample.java",
+            "role": "intermediate",
+            "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+            "start": {
+              "col": 16,
+              "line": 45,
+              "offset": 1893
+            }
+          },
+          {
+            "end": {
+              "col": 25,
+              "line": 46,
+              "offset": 1965
+            },
+            "lines": [
+              {
+                "line": 43,
+                "text": ""
+              },
+              {
+                "line": 44,
+                "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+              },
+              {
+                "line": 45,
+                "text": "        String rawReportName = request.getParameter(\"report\");"
+              },
+              {
+                "line": 46,
+                "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+              },
+              {
+                "line": 47,
+                "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+              },
+              {
+                "line": 48,
+                "text": "        return new FileInputStream(targetFile);"
+              },
+              {
+                "line": 49,
+                "text": "    }"
+              }
+            ],
+            "matched": "cleanName",
+            "path": "SmokeVulnSample.java",
+            "role": "intermediate",
+            "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+            "start": {
+              "col": 16,
+              "line": 46,
+              "offset": 1956
+            }
+          },
+          {
+            "end": {
+              "col": 68,
+              "line": 47,
+              "offset": 2073
+            },
+            "lines": [
+              {
+                "line": 44,
+                "text": "    public FileInputStream safeFileRead(HttpServletRequest request) throws IOException {"
+              },
+              {
+                "line": 45,
+                "text": "        String rawReportName = request.getParameter(\"report\");"
+              },
+              {
+                "line": 46,
+                "text": "        String cleanName = FilenameUtils.getName(rawReportName);"
+              },
+              {
+                "line": 47,
+                "text": "        File targetFile = new File(\"/var/app/reports/\" + cleanName);"
+              },
+              {
+                "line": 48,
+                "text": "        return new FileInputStream(targetFile);"
+              },
+              {
+                "line": 49,
+                "text": "    }"
+              },
+              {
+                "line": 50,
+                "text": "}"
+              }
+            ],
+            "matched": "new File(\"/var/app/reports/\" + cleanName)",
+            "path": "SmokeVulnSample.java",
+            "role": "sink",
+            "sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+            "start": {
+              "col": 27,
+              "line": 47,
+              "offset": 2032
+            }
+          }
+        ],
+        "start": {
+          "col": 27,
+          "line": 47,
+          "offset": 2032
+        }
+      },
+      "assessment": {
+        "analyzed_at": "2026-11-11T05:36:25.924087+00:00",
+        "citation_check": "NOT_VERIFIED",
+        "citations": [],
+        "explanation": "inference explicitly disabled",
+        "fix_suggestion": "",
+        "requires_human_review": true,
+        "security_conclusion_verified": false,
+        "status": "UNDETERMINED",
+        "transport": "disabled"
+      }
+    },
+    "case_5b_modified_source_confirm_false_exit_code": 2,
+    "case_5b_modified_source_stderr": "UNDETERMINED / operation refused: source unavailable/changed; rescan required: source hash mismatch; rescan required: SmokeVulnSample.java",
+    "queue_after_decisions": {
+      "scans": [
+        {
+          "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+          "issues": []
+        }
+      ],
+      "warnings": [
+        {
+          "id": "5c3fa49a9a739ca38e3711e51b676c5c9894a523a8ef1e5f276a3b7d033672b0",
+          "state": "OPEN",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+          "cwe": [
+            "CWE-89"
+          ],
+          "model_status": "UNDETERMINED"
+        },
+        {
+          "id": "76501a37112c42a9d4e46cf1fadeb1794aa417284ce0ce4d415a6986f5a773e9",
+          "state": "OPEN",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+          "cwe": [
+            "CWE-22"
+          ],
+          "model_status": "UNDETERMINED"
+        },
+        {
+          "id": "3252602faf5bdb45ef2a393cdf9d72350514515468d9b170d1083410e7716249",
+          "state": "CONFIRMED_FALSE",
+          "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+          "cwe": [
+            "CWE-22"
+          ],
+          "model_status": "UNDETERMINED"
+        }
+      ]
+    }
+  },
+  "codex_to_antigravity_schema_check": {
+    "duplicate_alert_ids": [],
+    "duplicate_label_ids": [],
+    "duplicate_triage_ids": [],
+    "unlabeled_alert_ids": [
+      "v2/evaluation/smoke_evidence/SmokeVulnSample.java:28:28:CWE-89:v2.evaluation.smoke_evidence.ntk.v2.java.cwe89.httpservlet-jdbc-sqli-taint:0",
+      "v2/evaluation/smoke_evidence/SmokeVulnSample.java:34:34:CWE-22:v2.evaluation.smoke_evidence.ntk.v2.java.cwe22.httpservlet-path-traversal-taint:1"
+    ],
+    "missing_triage_alert_ids": [
+      "v2/evaluation/smoke_evidence/SmokeVulnSample.java:28:28:CWE-89:v2.evaluation.smoke_evidence.ntk.v2.java.cwe89.httpservlet-jdbc-sqli-taint:0",
+      "v2/evaluation/smoke_evidence/SmokeVulnSample.java:34:34:CWE-22:v2.evaluation.smoke_evidence.ntk.v2.java.cwe22.httpservlet-path-traversal-taint:1"
+    ],
+    "orphan_triage_ids": [],
+    "cwe_mismatches": [],
+    "location_mismatches": [],
+    "sha256_mismatches": [],
+    "malformed_triage_records": [
+      {
+        "index": 0,
+        "reason": "Triage record missing alert_id"
+      },
+      {
+        "index": 1,
+        "reason": "Triage record missing alert_id"
+      }
+    ],
+    "ungrounded_fp_overrides": [],
+    "human_approval_violations": [],
+    "invalid_ground_truth_labels": []
+  }
+}

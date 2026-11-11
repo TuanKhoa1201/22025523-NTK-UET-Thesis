@@ -1,0 +1,10 @@
+{
+  "raw_wsl_json_path": "C:\\Users\\Admin\\ntk-thesis-v2\\evidence\\p0_integration_pilot\\triage_run4_wsl_direct_repro\\engine\\opengrep.json",
+  "raw_wsl_json_sha256": "cad1eae73a35fed06dd07045759b14b69550003361a0f170ca1b4a8f16e1f56b",
+  "mapped_windows_json_path": "C:\\Users\\Admin\\ntk-thesis-v2\\evidence\\p0_integration_pilot\\opengrep_smoke_scan\\smoke_v2_taint_rules_wsl_mapped_windows.opengrep.json",
+  "mapped_windows_json_sha256": "7a2a012a5c8b4c5bf3518353ecf3e044d476c3ec0dba4f72cf5a111f11ee1f86",
+  "wsl_prefix": "/mnt/c/Users/Admin/ntk-thesis-v2/integration-pilot/",
+  "windows_prefix": "C:/Users/Admin/ntk-thesis-v2/integration-pilot/",
+  "source_file_sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+  "coordinates_changed": false
+}
