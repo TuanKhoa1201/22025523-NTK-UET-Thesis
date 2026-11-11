@@ -1,5 +1,19 @@
 # M1 execution report
 
+## P0 advisor handover update
+
+Starting HEAD for this continuation: `5a5250643cbe08b3edf86474d9c879fc3c2fb3cc`.
+Current baseline suite: 24/24 PASS (22 original + 2 patch checks).
+Git staging remains blocked by index.lock permissions; no new commit or push.
+The existing base SHA above does not contain this continuation's local changes.
+See `ADVISOR_M1_EVIDENCE.md` for the current concise report. Real OpenGrep 1.20.0
+rerun at `evidence/advisor-m1/`: 4 JSON/SARIF findings and 16 grounded trace locations.
+Patch generation and actual Git apply round trip pass; six upstream blobs remain exact.
+Only fork whitespace was normalized; upstream bytes were not changed. Raw `.patch`
+text retains deleted upstream whitespace, which Git diff --check can warn about even
+though applying the patch produces clean fork code with no Git apply warnings.
+Earlier sections below are historical results, not the current Git delivery status.
+
 ## Resumed execution — 2026-11-11
 
 **M0 workspace checks: PASS. M1 scanner replacement: PASS on real OpenGrep with

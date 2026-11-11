@@ -1,10 +1,11 @@
 """Loopback-only Ollama HTTP adapter and strict, source-grounded output checking."""
 import json
 import time
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, ProxyHandler, HTTPRedirectHandler, build_opener
-from .evidence import EvidenceError, strict_json, check_current, now
+from .evidence import EvidenceError, strict_json, check_current, now, digest
+from .runtime import execution
 
 
 STATUSES = ("SUPPORTED", "REFUTED", "UNDETERMINED")
@@ -28,7 +29,7 @@ def undecided(reason, **provenance):
     return {"status": "UNDETERMINED", "explanation": reason, "citations": [],
             "fix_suggestion": "", "citation_check": "NOT_VERIFIED",
             "security_conclusion_verified": False, "requires_human_review": True,
-            "analyzed_at": now(), **provenance}
+            "analyzed_at": now(), "runtime": execution("disabled"), **provenance}
 
 
 def validate_answer(content, record):
@@ -95,7 +96,8 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class OllamaClient:
-    def __init__(self, endpoint="http://127.0.0.1:11434", model="qwen3.5:9b-q4_K_M", timeout=60):
+    def __init__(self, endpoint="http://127.0.0.1:11434", model="qwen3.5:9b-q4_K_M", timeout=60,
+                 runtime_origin="unverified"):
         parsed = urlsplit(endpoint)
         if (parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "::1", "localhost")
                 or parsed.username or parsed.password or parsed.path not in ("", "/")
@@ -109,23 +111,43 @@ class OllamaClient:
         if timeout <= 0:
             raise EvidenceError("timeout must be positive")
         self.model, self.timeout = model, timeout
+        if runtime_origin not in ("unverified", "mock"):
+            raise EvidenceError("runtime origin must be unverified or mock; HTTP alone cannot attest a model")
+        self.runtime_origin = runtime_origin
+        self.runtime = execution(runtime_origin)
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
     def request(self, path, payload=None):
         data = None if payload is None else json.dumps(payload).encode("utf-8")
         req = Request(self.endpoint + path, data=data, headers={"Content-Type": "application/json"})
-        with self.opener.open(req, timeout=self.timeout) as response:
-            raw = response.read(1_000_001)
+        self.runtime["request_attempted"] = True
+        try:
+            with self.opener.open(req, timeout=self.timeout) as response:
+                self.runtime["http_response_received"] = True
+                self.runtime["http_status"] = response.status
+                raw = response.read(1_000_001)
+        except HTTPError as exc:
+            self.runtime["http_response_received"] = True
+            self.runtime["http_status"] = exc.code
+            try:
+                body = exc.read(1_000_001)
+                if len(body) <= 1_000_000:
+                    self.runtime["response_body_sha256"] = digest(body)
+            finally:
+                exc.close()
+            raise
         if len(raw) > 1_000_000:
             raise EvidenceError("Ollama response too large")
+        self.runtime["response_body_sha256"] = digest(raw)
         return strict_json(raw.decode("utf-8"))
 
     def tags(self):
         return self.request("/api/tags")
 
     def analyze(self, record):
+        self.runtime = execution(self.runtime_origin)
         provenance = {"transport": "ollama-http", "model": self.model, "endpoint": self.endpoint,
-                      "raw_response": None}
+                      "raw_response": None, "runtime": self.runtime}
         started = time.monotonic()
         try:
             if record["issues"]:
@@ -139,6 +161,15 @@ class OllamaClient:
                 "stream": False, "think": False,
                 "options": {"temperature": 0, "num_ctx": 4096, "num_predict": 1200}})
             provenance["raw_response"] = response
+            if isinstance(response, dict):
+                if response.get("mock_test_fixture") is True:
+                    self.runtime["origin"] = "mock"
+                self.runtime["response_complete"] = response.get("done") is True and response.get("done_reason") in (None, "stop")
+                self.runtime["model_identity_matched"] = response.get("model") == self.model
+                for raw_key, field in (("eval_count", "reported_eval_count"), ("eval_duration", "reported_eval_duration_ns")):
+                    value = response.get(raw_key)
+                    if type(value) is int and value >= 0:
+                        self.runtime[field] = value
             if (not isinstance(response, dict) or response.get("done") is not True
                     or response.get("done_reason") not in (None, "stop")):
                 raise EvidenceError("incomplete Ollama response")
@@ -146,6 +177,7 @@ class OllamaClient:
                 raise EvidenceError("Ollama returned an unexpected model identifier")
             content = response.get("message", {}).get("content") if isinstance(response.get("message"), dict) else None
             answer = validate_answer(content, record)
+            self.runtime["answer_validated"] = True
             return {**answer, **provenance, "elapsed_seconds": time.monotonic() - started}
         except (EvidenceError, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
             return undecided(str(exc), **provenance, elapsed_seconds=time.monotonic() - started)

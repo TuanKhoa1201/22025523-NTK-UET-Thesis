@@ -3,6 +3,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from .runtime import SCHEMA_VERSION
 
 
 class EvidenceError(ValueError):
@@ -120,10 +121,10 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=()):
     try:
         doc = strict_json(raw_bytes.decode("utf-8"))
     except (EvidenceError, UnicodeError) as exc:
-        return {"scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
+        return {"schema_version": SCHEMA_VERSION, "scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
                 "issues": issues + [str(exc)], "records": [], "raw_document": None}
     if not isinstance(doc, dict) or not isinstance(doc.get("results"), list):
-        return {"scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
+        return {"schema_version": SCHEMA_VERSION, "scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
                 "issues": issues + ["invalid OpenGrep results envelope"], "records": [], "raw_document": doc}
     if not isinstance(doc.get("errors", []), list) or doc.get("errors"):
         issues.append("OpenGrep reported errors or partial scan")
@@ -180,13 +181,14 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=()):
                 problems.append("invalid intermediate trace list")
             visit(trace.get("taint_sink"), "sink")
         identifier = digest((scan_hash + ":" + str(index)).encode())
-        records.append({"id": identifier, "scan_sha256": scan_hash, "root": str(tree.root),
+        records.append({"schema_version": SCHEMA_VERSION, "id": identifier, "alert_id": identifier,
+                        "finding_index": index, "scan_sha256": scan_hash, "root": str(tree.root),
                         "rule_id": item.get("check_id"), "cwe": cwe, "severity": extra.get("severity"),
                         "path": item.get("path"), "start": item.get("start"), "end": item.get("end"),
                         "raw_finding": original, "raw_trace": trace,
                         "snapshots": snapshots, "snippets": snippets, "issues": problems,
                         "collected_at": now()})
-    return {"scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
+    return {"schema_version": SCHEMA_VERSION, "scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
             "issues": issues, "records": records, "raw_document": doc}
 
 
