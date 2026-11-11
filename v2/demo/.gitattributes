@@ -1,0 +1,2 @@
+﻿# Preserve exact 5698-byte raw OpenGrep capture (SHA-256: 005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4)
+smoke_m1_rules_raw.opengrep.json -text

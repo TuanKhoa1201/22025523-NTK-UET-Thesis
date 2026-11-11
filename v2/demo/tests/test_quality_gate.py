@@ -772,3 +772,12 @@ class TestReproductionContractAndFailClosedScript:
         )
         with pytest.raises(RuntimeError, match="pilot window"):
             run_gate_mod.verify_strict_lock_rejection_output(bad_json, 1)
+
+    def test_smoke_raw_opengrep_json_gitattributes_and_exact_sha256(self):
+        gitattrs = REPO_ROOT / "v2" / "demo" / ".gitattributes"
+        assert gitattrs.is_file(), "Missing v2/demo/.gitattributes to protect smoke_m1_rules_raw.opengrep.json from text eol normalization"
+        attrs_text = gitattrs.read_text(encoding="utf-8")
+        assert "smoke_m1_rules_raw.opengrep.json -text" in attrs_text
+        raw_og = REPO_ROOT / "v2" / "demo" / "smoke_m1_rules_raw.opengrep.json"
+        assert triage_digest(raw_og.read_bytes()) == "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4"
+
