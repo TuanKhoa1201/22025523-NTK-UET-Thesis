@@ -140,12 +140,15 @@ def location_evidence(tree, loc, role, snapshots, expected=None):
                       for i in range(lower, upper + 1)]}
 
 
-def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=(), path_maps=()):
+def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=(), path_maps=(), scan_provenance=None):
     """Keep even malformed/partial findings; issues force UNDETERMINED downstream."""
     tree = SourceTree(root, path_base, path_maps)
     raw_bytes = raw_json if isinstance(raw_json, bytes) else raw_json.encode("utf-8")
     scan_hash = digest(raw_bytes)
     issues = list(scan_issues)
+    provenance = scan_provenance or {"origin": "collection_only", "source_capture_verified": False}
+    if provenance.get("source_capture_verified") is not True:
+        issues.append("scan-time source identity not verified; rescan or supply a valid capture")
     if engine_exit is None:
         issues.append("engine exit unavailable; scan completeness unverified")
     elif engine_exit != 0:
@@ -218,6 +221,7 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=(), pa
         records.append({"schema_version": SCHEMA_VERSION, "id": identifier, "alert_id": identifier,
                         "finding_index": index, "scan_sha256": scan_hash, "root": str(tree.root),
                         "path_mappings": tree.path_maps,
+                        "scan_provenance": {k: v for k, v in provenance.items() if k != "source_hashes"},
                         "rule_id": item.get("check_id"), "cwe": cwe, "severity": extra.get("severity"),
                         "path": item.get("path"), "start": item.get("start"), "end": item.get("end"),
                         "raw_finding": original, "raw_trace": trace,
@@ -230,6 +234,9 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=(), pa
 
 def check_current(record):
     """All trace files are part of the version, not just the sink file."""
+    provenance = record.get("scan_provenance")
+    if not isinstance(provenance, dict) or provenance.get("source_capture_verified") is not True:
+        raise EvidenceError("scan-time source identity unavailable; rescan required")
     if not record.get("snapshots"):
         raise EvidenceError("no source hashes; rescan required")
     tree = SourceTree(record["root"])

@@ -1,5 +1,12 @@
 # Local Java warning triage
 
+Current reliability repair: [ROOT_CAUSE_REPAIR_REPORT.md](../baseline/ROOT_CAUSE_REPAIR_REPORT.md).
+New scans capture source/rules and recorded engine exits in `engine/scan-manifest.json`.
+Reimports require `--scan-manifest` with its adjacent capture artifacts for verified
+scan-time identity. `--engine-exit 0` alone is a declaration, not runtime evidence.
+Legacy imports remain visible as REVIEW/UNDETERMINED (exit 2) and cannot authorize
+new false confirmations; old SQLite history is not rewritten.
+
 Integration: [SCHEMA_CONTRACT.md](SCHEMA_CONTRACT.md) specifies additive schema 1.1,
 exact raw-scan/index/ID joins, runtime provenance and the paired Antigravity exporter.
 `--runtime-origin mock` labels simulated HTTP services. Received HTTP, validated
@@ -34,11 +41,13 @@ Do not write output inside the scanned source directory.
 Import an existing raw OpenGrep JSON document instead:
 
 ```powershell
-python -m v2.triage run --source-root v2/baseline/fixtures/java --json v2/baseline/evidence/real-02/opengrep.json --engine-exit 0 --output-dir v2/triage/evidence/import-run --no-llm
+python -m v2.triage run --source-root v2/baseline/fixtures/java --json v2/triage/evidence/my-run/engine/opengrep.json --scan-manifest v2/triage/evidence/my-run/engine/scan-manifest.json --output-dir v2/triage/evidence/import-run --no-llm
 ```
 
-Pass the original engine exit code, not a guessed success. If omitted, completeness
-is unknown and assessments stay UNDETERMINED. Use `--path-base` when relative paths
+The manifest binds byte hashes of JSON/SARIF, rules, sources before/after and actual
+recorded process exit/argv artifacts. If `--engine-exit` is also provided, it must
+agree with recorded exits. Without a valid capture, source identity/completeness
+stay unverified even if the operator supplies zero. Use `--path-base` when relative paths
 in JSON are relative to the engine's working directory rather than `--source-root`.
 Resolved source files must still be Java files inside `--source-root`. No path
 stripping or fallback to arbitrary working-directory files is attempted.
@@ -54,6 +63,17 @@ CLI exit 0 means scan/evidence ingestion succeeded; it does not mean Qwen succee
 or that any warning is safe. Scan/evidence errors return 2; model failures are
 retained per warning as UNDETERMINED. Queue output includes scan-level errors even
 when there were no readable findings.
+
+Run the separate recorded-live protocol check after an actual model-enabled run:
+
+```powershell
+python -m v2.triage.live_check v2/triage/evidence/my-run
+```
+
+Exit 0 means enough nonmock HTTP/request/response/model-counter records match their
+finding identity; output is explicitly OLLAMA_REPORTED_UNATTESTED, never independent
+model attestation. It accepts any proposed status including UNDETERMINED. Exit 2
+means PENDING; triage's exit 0 cannot satisfy it. Keep server model digest/run logs.
 
 ## Ollama and validation
 
@@ -170,7 +190,7 @@ Repository fixtures are unchanged. See baseline `ADVISOR_ORIGINAL_TASK_STATUS.md
 For a raw WSL scan whose paths start with `/mnt/c/my-project`:
 
 ```powershell
-python -m v2.triage run --source-root 'C:\my-project' --json 'C:\results\opengrep.json' --engine-exit 0 --path-map '/mnt/c/my-project=C:\my-project' --output-dir v2/triage/evidence/wsl-import-new --no-llm
+python -m v2.triage run --source-root 'C:\my-project' --json 'C:\results\opengrep.json' --scan-manifest 'C:\results\scan-manifest.json' --path-map '/mnt/c/my-project=C:\my-project' --output-dir v2/triage/evidence/wsl-import-new --no-llm
 ```
 
 The mapping is explicit, repeatable and persisted as `path_mappings`; raw JSON,

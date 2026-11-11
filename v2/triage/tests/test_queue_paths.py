@@ -7,6 +7,7 @@ from test_triage import Fixture
 from v2.triage.cli import main
 from v2.triage.evidence import collect, digest, SourceTree, EvidenceError
 from v2.triage.ollama import validate_answer
+from capture_fixture import make_capture
 
 
 class QueueContractTests(Fixture):
@@ -55,7 +56,8 @@ class PathMappingTests(Fixture):
     def test_wsl_mapping_preserves_raw_hash_id_trace_and_checks_source(self):
         doc = self.wsl_document()
         raw = json.dumps(doc).encode()
-        bundle = collect(raw, self.root, engine_exit=0, path_maps=["/mnt/c/project=" + str(self.root)])
+        bundle = collect(raw, self.root, engine_exit=0, path_maps=["/mnt/c/project=" + str(self.root)],
+                         scan_provenance={"source_capture_verified": True, "origin": "UNIT_TEST_MOCK_CAPTURE"})
         record = bundle["records"][0]
         self.assertEqual(record["issues"], [])
         self.assertEqual(bundle["scan_sha256"], digest(raw))
@@ -71,9 +73,10 @@ class PathMappingTests(Fixture):
         input_file = Path(self.tmp.name) / "wsl.json"
         input_file.write_bytes(raw)
         output = Path(self.tmp.name) / "wsl-run"
+        manifest = make_capture(self.root, raw, Path(self.tmp.name) / "wsl-capture")
         with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             self.assertEqual(main(["run", "--source-root", str(self.root), "--json", str(input_file),
-                                   "--engine-exit", "0", "--path-map", "/mnt/c/project=" + str(self.root),
+                                   "--engine-exit", "0", "--scan-manifest", str(manifest), "--path-map", "/mnt/c/project=" + str(self.root),
                                    "--output-dir", str(output), "--no-llm"]), 0)
         self.assertEqual((output / "input.opengrep.json").read_bytes(), raw)
         evidence = json.loads((output / "evidence.json").read_bytes())

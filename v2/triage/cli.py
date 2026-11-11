@@ -8,6 +8,7 @@ from .evidence import collect, EvidenceError, SourceTree, digest
 from .ollama import OllamaClient, undecided
 from .store import ReviewStore
 from .runtime import SCHEMA_VERSION, summary
+from .scan_receipt import verify_receipt
 
 
 def show(value):
@@ -35,6 +36,7 @@ def run(args):
     before = None
     if args.json:
         raw = Path(args.json).read_bytes()
+        receipt_path = args.scan_manifest
     else:
         # Reuse M1 scanner; never import upstream cloud/RAG/web code.
         fork = Path(__file__).resolve().parents[1] / "baseline/fork"
@@ -48,7 +50,7 @@ def run(args):
             scanner.scan(root)
         except ScanError as exc:
             issues.append("scanner failed: " + str(exc))
-            exit_code = 2
+            exit_code = None  # wrapper failure is not the original JSON engine exit
         try:
             after = source_versions(root)
             if before != after:
@@ -59,8 +61,19 @@ def run(args):
         if not raw_path.exists():
             raw_path = output / "engine/json.stdout.txt"
         raw = raw_path.read_bytes() if raw_path.exists() else b""
+        receipt_path = output / "engine/scan-manifest.json"
+    receipt, receipt_issues = verify_receipt(receipt_path, raw, root, args.engine_exit if args.json else None)
+    issues.extend(receipt_issues)
+    if receipt["exit_capture_verified"]:
+        exit_code = receipt["recorded_engine_exit"]
     (output / "input.opengrep.json").write_bytes(raw)
-    bundle = collect(raw, root, args.path_base, exit_code, issues, path_maps=args.path_map)
+    bundle = collect(raw, root, args.path_base, exit_code, issues, path_maps=args.path_map, scan_provenance=receipt)
+    bundle["scan_provenance"] = receipt
+    for record in bundle["records"]:
+        if receipt["source_capture_verified"]:
+            for path, snapshot in record["snapshots"].items():
+                if receipt["source_hashes"].get(path) != snapshot["sha256"]:
+                    record["issues"].append("finding/trace source not bound to captured scan: " + path)
     if before is not None:
         bundle["pre_scan_hashes"] = before
     (output / "evidence.json").write_text(json.dumps(bundle, indent=2), encoding="utf-8")
@@ -93,6 +106,7 @@ def main(argv=None):
     pipeline.add_argument("--source-root", required=True)
     pipeline.add_argument("--output-dir", required=True, help="must not already exist")
     pipeline.add_argument("--json", help="import existing OpenGrep JSON instead of scanning")
+    pipeline.add_argument("--scan-manifest", type=Path, help="scan-time manifest with original source, rule and exit artifacts")
     pipeline.add_argument("--path-base", help="base for relative engine paths; resolved files must remain inside source-root")
     pipeline.add_argument("--path-map", action="append", default=[], metavar="PREFIX=LOCAL_DIR",
                           help="explicit WSL/POSIX prefix mapping into source-root; raw JSON is unchanged")

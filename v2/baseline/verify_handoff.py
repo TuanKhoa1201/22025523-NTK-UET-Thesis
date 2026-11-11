@@ -14,6 +14,7 @@ def verify(engine, triage):
     bundle = json.loads((triage / "evidence.json").read_bytes())
     scan_sha = hashlib.sha256(original).hexdigest()
     assert not raw.get("errors") and not bundle["issues"]
+    assert bundle.get("scan_provenance", {}).get("source_capture_verified") is True
     assert bundle["scan_sha256"] == scan_sha
     assert len(raw["results"]) == len(bundle["records"])
     assert sum(len(r["results"]) for r in sarif["runs"]) == len(raw["results"])

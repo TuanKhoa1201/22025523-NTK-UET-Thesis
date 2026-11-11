@@ -1,5 +1,13 @@
 # M1: simple_semgrepAI → local OpenGrep
 
+Latest original-task verification: [ROOT_CAUSE_REPAIR_REPORT.md](ROOT_CAUSE_REPAIR_REPORT.md).
+`prepare_upstream_local.py` requires a clean full pinned checkout and the private
+advisor ZIP, and prepares the inherited Typer scan path with a guarded --scan-only
+overlay, minimal scanner config and real subprocess recording. It never activates
+RAG/cloud. This is distinct from the extracted scanner-only fork below; full CLI
+runtime remains PENDING here. The NTK patch now includes the new scan_manifest.py
+module (four resulting fork files), not only the original three-file extraction.
+
 Current original-task status (including private advisor-patch comparison and the
 blocked full-upstream CLI attempt): [ADVISOR_ORIGINAL_TASK_STATUS.md](ADVISOR_ORIGINAL_TASK_STATUS.md).
 `advisor_probe.py` accepts private `--advisor-dir` and optional `--upstream` clean

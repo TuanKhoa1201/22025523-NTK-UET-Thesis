@@ -5,6 +5,8 @@ SCHEMA_VERSION = "1.1"
 def execution(origin="unverified"):
     return {"origin": origin, "request_attempted": False, "http_response_received": False,
             "http_status": None, "response_body_sha256": None,
+            "response_json_sha256": None,
+            "request_payload_sha256": None, "finding_id": None,
             "response_complete": False, "model_identity_matched": False,
             "reported_eval_count": None, "reported_eval_duration_ns": None,
             "answer_validated": False, "model_runtime_verified": False}

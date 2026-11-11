@@ -26,7 +26,7 @@ def verify():
             result = subprocess.run(command, cwd=target, capture_output=True, text=True)
             commands.append({"command": command, "exit": result.returncode, "stdout": result.stdout, "stderr": result.stderr})
             assert result.returncode == 0, result.stderr
-        for name in ("scanner.py", "config.py", "cli.py"):
+        for name in ("scanner.py", "config.py", "cli.py", "scan_manifest.py"):
             actual = (target / "semgrepai" / name).read_bytes()
             expected = (BASE / "fork/semgrepai" / name).read_bytes().replace(b"\r\n", b"\n")
             assert actual == expected, "applied patch differs from fork: " + name
@@ -37,4 +37,4 @@ def verify():
 if __name__ == "__main__":
     result = verify()
     (BASE / "evidence/patch-verification.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
-    print("PASS: 6 upstream blobs; deterministic patch; git apply --check/apply matches 3 fork files")
+    print("PASS: 6 upstream blobs; deterministic patch; git apply --check/apply matches 4 fork files")

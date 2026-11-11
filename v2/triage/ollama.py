@@ -95,6 +95,12 @@ class NoRedirect(HTTPRedirectHandler):
         raise EvidenceError("Ollama redirects are forbidden")
 
 
+def request_payload(record, model):
+    return {"model": model, "messages": prompt(record), "format": SCHEMA,
+            "stream": False, "think": False,
+            "options": {"temperature": 0, "num_ctx": 4096, "num_predict": 1200}}
+
+
 class OllamaClient:
     def __init__(self, endpoint="http://127.0.0.1:11434", model="qwen3.5:9b-q4_K_M", timeout=60,
                  runtime_origin="unverified"):
@@ -119,6 +125,8 @@ class OllamaClient:
 
     def request(self, path, payload=None):
         data = None if payload is None else json.dumps(payload).encode("utf-8")
+        if data is not None:
+            self.runtime["request_payload_sha256"] = digest(data)
         req = Request(self.endpoint + path, data=data, headers={"Content-Type": "application/json"})
         self.runtime["request_attempted"] = True
         try:
@@ -139,13 +147,16 @@ class OllamaClient:
         if len(raw) > 1_000_000:
             raise EvidenceError("Ollama response too large")
         self.runtime["response_body_sha256"] = digest(raw)
-        return strict_json(raw.decode("utf-8"))
+        parsed = strict_json(raw.decode("utf-8"))
+        self.runtime["response_json_sha256"] = digest(json.dumps(parsed, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+        return parsed
 
     def tags(self):
         return self.request("/api/tags")
 
     def analyze(self, record):
         self.runtime = execution(self.runtime_origin)
+        self.runtime["finding_id"] = record["id"]
         provenance = {"transport": "ollama-http", "model": self.model, "endpoint": self.endpoint,
                       "raw_response": None, "runtime": self.runtime}
         started = time.monotonic()
@@ -156,10 +167,7 @@ class OllamaClient:
             messages = prompt(record)
             if len(json.dumps(messages).encode("utf-8")) > 32_000:
                 raise EvidenceError("prompt exceeds bounded evidence size; use UNDETERMINED")
-            response = self.request("/api/chat", {
-                "model": self.model, "messages": messages, "format": SCHEMA,
-                "stream": False, "think": False,
-                "options": {"temperature": 0, "num_ctx": 4096, "num_predict": 1200}})
+            response = self.request("/api/chat", request_payload(record, self.model))
             provenance["raw_response"] = response
             if isinstance(response, dict):
                 if response.get("mock_test_fixture") is True:

@@ -1,5 +1,15 @@
 # M1 execution report
 
+## Root-cause continuation (base 0c2ffa1)
+
+Current report: `ROOT_CAUSE_REPAIR_REPORT.md`. Six original upstream blobs remain
+exact; generated NTK patch now reconstructs four files including scan_manifest.py.
+Direct advisor-patched original scanner ran real OpenGrep (4 JSON/SARIF findings)
+with recording/local-config overlay; source was an offline snapshot, NOT full clone
+or Typer CLI. Full checkout/CLI remains PENDING (clone HTTPS blocked, typer absent
+in isolated venv). No RAG/cloud activated. Source/exit captures now gate reimport.
+Local changes are uncommitted due to index.lock permissions; prior entries are historical.
+
 ## Original-task continuation (base 682a818)
 
 Current authoritative handover: `ADVISOR_ORIGINAL_TASK_STATUS.md`. The advisor

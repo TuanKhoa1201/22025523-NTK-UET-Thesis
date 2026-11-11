@@ -50,7 +50,8 @@ def adapt(rows, raw_json):
                   "end_line": (record.get("end") or {}).get("line"), "source_sha256": sha,
                   "scan_sha256": record["scan_sha256"], "finding_index": index}
         alerts.append(common)
-        valid = not record["issues"] and assessment.get("citation_check") == "MATCHED"
+        valid = (not record["issues"] and assessment.get("citation_check") == "MATCHED"
+                 and record.get("scan_provenance", {}).get("source_capture_verified") is True)
         verdict = {"SUPPORTED": "KEEP_TP", "REFUTED": "PROPOSED_FP"}.get(assessment.get("status"), "REVIEW") if valid else "REVIEW"
         cited = sorted({line for c in assessment.get("citations", []) if c["path"] == path
                         for line in range(c["start_line"], c["end_line"] + 1)})

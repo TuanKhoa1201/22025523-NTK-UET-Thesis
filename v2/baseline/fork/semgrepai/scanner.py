@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, List
 from .config import OpenGrepConfig
+from .scan_manifest import ScanCapture
 
 
 class ScanError(RuntimeError):
@@ -18,6 +19,7 @@ class SemgrepScanner:
         self.config = config or OpenGrepConfig()
         self.output_dir = Path(output_dir).resolve()
         self.target_root = None
+        self.capture = None
 
     def _run(self, label, command):
         env = os.environ.copy()
@@ -29,18 +31,23 @@ class SemgrepScanner:
         (self.output_dir / (label + ".command.json")).write_text(
             json.dumps(command, indent=2), encoding="utf-8")
         try:
-            result = subprocess.run(command, capture_output=True, text=True,
-                                    encoding="utf-8", errors="replace",
+            result = subprocess.run(command, capture_output=True,
                                     timeout=self.config.timeout + 30, env=env)
         except (OSError, subprocess.TimeoutExpired) as exc:
             (self.output_dir / (label + ".failure.txt")).write_text(str(exc), encoding="utf-8")
             raise ScanError(str(exc)) from exc
         for name, value in (("stdout", result.stdout), ("stderr", result.stderr)):
-            (self.output_dir / (label + "." + name + ".txt")).write_text(value, encoding="utf-8")
+            data = value if isinstance(value, bytes) else value.encode("utf-8")
+            (self.output_dir / (label + "." + name + ".txt")).write_bytes(data)
         (self.output_dir / (label + ".exit.txt")).write_text(str(result.returncode), encoding="utf-8")
+        if self.capture is not None:
+            self.capture.runs[label] = {"argv": command, "exit_code": result.returncode}
         if result.returncode != 0:
             raise ScanError(f"{label} exited {result.returncode}; see captured stderr")
-        return result.stdout
+        try:
+            return result.stdout.decode("utf-8") if isinstance(result.stdout, bytes) else result.stdout
+        except UnicodeError as exc:
+            raise ScanError("engine output is not UTF-8; raw bytes retained") from exc
 
     def verify_semgrep_installation(self):
         return self._run("version", [self.config.executable, "--version"]).strip()
@@ -56,11 +63,23 @@ class SemgrepScanner:
         config = self.config
         if rules_path is not None:
             config = OpenGrepConfig(config.executable, Path(rules_path), config.timeout, config.jobs)
+        self.capture = ScanCapture(target_path, config.rules, self.output_dir)
+        try:
+            results = self._scan_outputs(target_path, config)
+        except Exception:
+            self.capture.finish(False)
+            raise
+        manifest = self.capture.finish(True)
+        if not manifest["success"]:
+            raise ScanError("scan inputs changed; rescan required")
+        return results
+
+    def _scan_outputs(self, target_path, config):
         version = self.verify_semgrep_installation()
         results = {}
         for fmt in ("json", "sarif"):
             raw = self._run(fmt, config.command(target_path, fmt))
-            (self.output_dir / ("opengrep." + fmt)).write_text(raw, encoding="utf-8")
+            (self.output_dir / ("opengrep." + fmt)).write_bytes(raw.encode("utf-8"))
             try:
                 results[fmt] = json.loads(raw)
             except (ValueError, TypeError) as exc:
