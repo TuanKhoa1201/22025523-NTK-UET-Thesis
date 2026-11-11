@@ -1,0 +1,50 @@
+# NTK M1 demonstration rules, authored locally. Not a comprehensive Java ruleset.
+rules:
+  - id: ntk.java.cwe22
+    languages: [java]
+    message: Request parameter flows to a filesystem path; review required.
+    severity: WARNING
+    metadata:
+      cwe: [CWE-22]
+      category: security
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.getParameter(...)
+    pattern-sinks:
+      - pattern: new File($PATH)
+  - id: ntk.java.cwe78
+    languages: [java]
+    message: Request parameter flows to a command execution; review required.
+    severity: WARNING
+    metadata:
+      cwe: [CWE-78]
+      category: security
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.getParameter(...)
+    pattern-sinks:
+      - pattern: Runtime.getRuntime().exec($CMD)
+  - id: ntk.java.cwe79
+    languages: [java]
+    message: Request parameter flows to a response writer; review required.
+    severity: WARNING
+    metadata:
+      cwe: [CWE-79]
+      category: security
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.getParameter(...)
+    pattern-sinks:
+      - pattern: $RESP.getWriter().println($HTML)
+  - id: ntk.java.cwe89
+    languages: [java]
+    message: Request parameter flows to a SQL statement; review required.
+    severity: WARNING
+    metadata:
+      cwe: [CWE-89]
+      category: security
+    mode: taint
+    pattern-sources:
+      - pattern: $REQ.getParameter(...)
+    pattern-sinks:
+      - pattern: $STMT.executeQuery($SQL)
