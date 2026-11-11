@@ -488,11 +488,24 @@ def convert_single_codex_record(
         for item in raw_citations:
             if isinstance(item, dict):
                 lno = item.get("line") if item.get("line") is not None else item.get("line_number")
+                start_l = (
+                    item.get("start_line")
+                    if isinstance(item.get("start_line"), int) and not isinstance(item.get("start_line"), bool)
+                    else (lno if isinstance(lno, int) and not isinstance(lno, bool) else None)
+                )
+                end_l = (
+                    item.get("end_line")
+                    if isinstance(item.get("end_line"), int) and not isinstance(item.get("end_line"), bool)
+                    else start_l
+                )
                 q_txt = item.get("quote")
                 c_sha = item.get("sha256") or item.get("source_sha256")
-                if isinstance(lno, int) and not isinstance(lno, bool) and (q_txt is not None or c_sha is not None):
+                if isinstance(start_l, int) and start_l > 0 and (q_txt is not None or c_sha is not None):
+                    stop_l = end_l if isinstance(end_l, int) and end_l >= start_l else start_l
                     citation_quotes.append({
-                        "line": lno,
+                        "line": start_l,
+                        "start_line": start_l,
+                        "end_line": stop_l,
                         "quote": str(q_txt) if q_txt is not None else None,
                         "sha256": str(c_sha).strip().lower() if c_sha is not None else None,
                     })

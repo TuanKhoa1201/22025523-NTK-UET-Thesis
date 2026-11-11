@@ -636,21 +636,42 @@ def _validate_evidence_grounding(
             if not isinstance(cq, dict):
                 continue
             c_line = cq.get("line")
+            c_start = (
+                cq.get("start_line")
+                if isinstance(cq.get("start_line"), int) and not isinstance(cq.get("start_line"), bool)
+                else (c_line if isinstance(c_line, int) and not isinstance(c_line, bool) else None)
+            )
+            c_end = (
+                cq.get("end_line")
+                if isinstance(cq.get("end_line"), int) and not isinstance(cq.get("end_line"), bool)
+                else c_start
+            )
             c_quote = cq.get("quote")
             c_sha = cq.get("sha256")
             if c_sha and expected_sha and str(c_sha).strip().lower() != str(expected_sha).strip().lower():
                 return (
                     False,
-                    f"Citation sha256 '{c_sha}' at line {c_line} does not match expected source_sha256 '{expected_sha}'",
+                    f"Citation sha256 '{c_sha}' at line {c_start} does not match expected source_sha256 '{expected_sha}'",
                 )
-            if c_quote is not None and isinstance(c_line, int) and verified_line_map and c_line in verified_line_map:
-                actual_line_str = verified_line_map[c_line].strip()
-                quote_str = str(c_quote).strip()
-                if not quote_str or (quote_str != actual_line_str and quote_str not in actual_line_str):
-                    return (
-                        False,
-                        f"Citation quote at line {c_line} ('{quote_str}') does not match verified source line ('{actual_line_str}')",
-                    )
+            if c_quote is not None and isinstance(c_start, int) and isinstance(c_end, int) and verified_line_map:
+                if c_start == c_end and c_start in verified_line_map:
+                    actual_line_str = verified_line_map[c_start].strip()
+                    quote_str = str(c_quote).strip()
+                    if not quote_str or (quote_str != actual_line_str and quote_str not in actual_line_str):
+                        return (
+                            False,
+                            f"Citation quote at line {c_start} ('{quote_str}') does not match verified source line ('{actual_line_str}')",
+                        )
+                elif c_end > c_start and all(lno in verified_line_map for lno in range(c_start, c_end + 1)):
+                    span_lines = [verified_line_map[lno] for lno in range(c_start, c_end + 1)]
+                    actual_block = "\n".join(span_lines)
+                    actual_norm = "\n".join(line.strip() for line in span_lines).strip()
+                    quote_norm = "\n".join(line.strip() for line in str(c_quote).splitlines()).strip()
+                    if not quote_norm or (quote_norm != actual_norm and quote_norm not in actual_block):
+                        return (
+                            False,
+                            f"Citation quote at lines {c_start}-{c_end} ('{quote_norm}') does not match verified source lines ('{actual_norm}')",
+                        )
 
     return True, None
 

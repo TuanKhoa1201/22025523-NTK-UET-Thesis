@@ -445,6 +445,66 @@ class VerifyEvidenceAuditRegressionTests(unittest.TestCase):
             any("state 'CONFIRMED_FALSE' with 0 human review events" in i for i in res_bad["issues"])
         )
 
+    def test_16_codex_adapter_and_score_pilot_verify_start_end_line_quote_and_sha(self) -> None:
+        """16. Regression test: codex_adapter + score_pilot must verify quote and sha256 when citation uses start_line/end_line."""
+        import codex_adapter
+        import score_pilot
+
+        records = self._load_assessments()
+        # Convert record #2 (FP in ground truth) to REFUTED with valid start_line/end_line citation
+        records[2]["assessment"]["status"] = "REFUTED"
+        norm_ok = codex_adapter.convert_single_codex_record(records[2], record_index=2)
+        self.assertTrue(
+            len(norm_ok["citation_quotes"]) >= 1,
+            "codex_adapter must extract citation_quotes from start_line/end_line dicts",
+        )
+
+        # Now tamper with quote in start_line/end_line citation on REFUTED record
+        tampered_quote_records = copy.deepcopy(records)
+        tampered_quote_records[2]["assessment"]["status"] = "REFUTED"
+        tampered_quote_records[2]["assessment"]["citations"][0]["quote"] = "String fabricatedSanitizer = sanitize(x);"
+        self._write_assessments(tampered_quote_records)
+
+        eval_bad_quote = score_pilot.evaluate_pilot(
+            opengrep_data=json.loads(self.scan_copy.read_text(encoding="utf-8")),
+            labels_data=json.loads(self.labels_copy.read_text(encoding="utf-8")),
+            triage_data=tampered_quote_records,
+            source_root=vea.DEFAULT_SOURCE_ROOT,
+            expected_model_prefix="qwen3.5",
+        )
+        self.assertEqual(
+            eval_bad_quote["summary"]["overall"]["counts"]["proposed_fp_on_true_fp"],
+            0,
+            "Tampered quote on start_line/end_line citation must block PROPOSED_FP in score_pilot",
+        )
+        self.assertTrue(
+            len(eval_bad_quote["anomalies"]["ungrounded_fp_overrides"]) >= 1,
+            "Expected ungrounded_fp_overrides anomaly when start_line/end_line quote is tampered",
+        )
+
+        # Also tamper with sha256 in start_line/end_line citation on REFUTED record
+        tampered_sha_records = copy.deepcopy(records)
+        tampered_sha_records[2]["assessment"]["status"] = "REFUTED"
+        tampered_sha_records[2]["assessment"]["citations"][0]["sha256"] = "f" * 64
+        self._write_assessments(tampered_sha_records)
+
+        eval_bad_sha = score_pilot.evaluate_pilot(
+            opengrep_data=json.loads(self.scan_copy.read_text(encoding="utf-8")),
+            labels_data=json.loads(self.labels_copy.read_text(encoding="utf-8")),
+            triage_data=tampered_sha_records,
+            source_root=vea.DEFAULT_SOURCE_ROOT,
+            expected_model_prefix="qwen3.5",
+        )
+        self.assertEqual(
+            eval_bad_sha["summary"]["overall"]["counts"]["proposed_fp_on_true_fp"],
+            0,
+            "Tampered sha256 on start_line/end_line citation must block PROPOSED_FP in score_pilot",
+        )
+        self.assertTrue(
+            len(eval_bad_sha["anomalies"]["ungrounded_fp_overrides"]) >= 1,
+            "Expected ungrounded_fp_overrides anomaly when start_line/end_line sha256 is tampered",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
