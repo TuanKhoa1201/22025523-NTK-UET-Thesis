@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-11-12T04:18:00+07:00",
+  "test_suites": [
+    "v2/triage/tests/test_triage.py::AnswerTests",
+    "v2/triage/tests/test_stage2_stage3_cwe22_cwe89.py::Stage2JavaContextAndCliCallTests",
+    "v2/triage/tests/test_stage2_stage3_cwe22_cwe89.py::Stage3HeuristicsAndPromptTests"
+  ],
+  "regression_cases": [
+    {
+      "case_id": "CITE-01",
+      "description": "Exact single-line citation match (path, start_line == end_line, exact quote with indentation, matching SHA-256)",
+      "expected": "ACCEPTED (citation_check == MATCHED)",
+      "observed": "ACCEPTED (citation_check == MATCHED)",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-02",
+      "description": "Citation with wrong line number (start_line does not match quoted line)",
+      "expected": "REJECTED -> UNDETERMINED (citation text disagrees with source line(s))",
+      "observed": "REJECTED -> UNDETERMINED",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-03",
+      "description": "Citation with fabricated or modified quote text (missing semicolon or altered variable)",
+      "expected": "REJECTED -> UNDETERMINED (citation text disagrees with source line(s))",
+      "observed": "REJECTED -> UNDETERMINED",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-04",
+      "description": "Citation with wrong path or path outside source-root (../Outside.java)",
+      "expected": "REJECTED -> UNDETERMINED (citation path/hash not in evidence)",
+      "observed": "REJECTED -> UNDETERMINED",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-05",
+      "description": "Citation with mismatched SHA-256 digest",
+      "expected": "REJECTED -> UNDETERMINED (citation path/hash not in evidence)",
+      "observed": "REJECTED -> UNDETERMINED",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-06",
+      "description": "Citation referencing a line number not supplied in record['snippets']",
+      "expected": "REJECTED -> UNDETERMINED (citation line not supplied in evidence)",
+      "observed": "REJECTED -> UNDETERMINED",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-07",
+      "description": "Conclusive status (SUPPORTED or REFUTED) with empty citations=[]",
+      "expected": "REJECTED -> UNDETERMINED (conclusive status requires citations)",
+      "observed": "REJECTED -> UNDETERMINED",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-08",
+      "description": "UNDETERMINED status with empty citations=[]",
+      "expected": "ACCEPTED (citation_check == NONE)",
+      "observed": "ACCEPTED (citation_check == NONE)",
+      "status": "PASS"
+    },
+    {
+      "case_id": "CITE-09",
+      "description": "Valid citation on a same-file helper method (Test.doSomething) included via Stage 2 java_context expansion",
+      "expected": "ACCEPTED (citation_check == MATCHED)",
+      "observed": "ACCEPTED (citation_check == MATCHED)",
+      "status": "PASS"
+    }
+  ],
+  "development_set_empirical_summary": {
+    "dataset": "dev_set_16",
+    "total_alerts": 16,
+    "v1_0_baseline_matched": "6/16 (37.5%)",
+    "v2_0_stage2_matched": "15/16 (93.75%)",
+    "v2_1_frozen_matched": "16/16 (100.0%)"
+  }
+}
