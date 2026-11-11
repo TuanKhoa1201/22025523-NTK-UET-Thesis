@@ -1,0 +1,749 @@
+# Pinned CWE-22 and CWE-89 Java Rules Subset for NTK Thesis Post-Report Evaluation
+# Source: /home/tuankhoa/migration/phase8a_opengrep_baseline_cache_decision_v1_20260929/current_pinned_ruleset_evidence/p-java.raw.yaml
+# Upstream p-java.raw.yaml SHA-256: 5e652fa9ac09c9fac36bbadc3562a0c8eed1a47438a9d1f545e021ae3c5648b1
+rules:
+- id: java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal
+  metadata:
+    cwe:
+    - 'CWE-22: Improper Limitation of a Pathname to a Restricted Directory (''Path
+      Traversal'')'
+    owasp:
+    - A05:2017 - Broken Access Control
+    - A01:2021 - Broken Access Control
+    - A01:2025 - Broken Access Control
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#PATH_TRAVERSAL_IN
+    references:
+    - https://www.owasp.org/index.php/Path_Traversal
+    category: security
+    technology:
+    - java
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - Path Traversal
+    source: https://semgrep.dev/r/java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal
+    shortlink: https://sg.run/oxXN
+    semgrep.dev:
+      rule:
+        r_id: 9160
+        rv_id: 1263064
+        rule_id: NbUk7X
+        version_id: zyTb2rq
+        url: https://semgrep.dev/playground/r/zyTb2rq/java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal
+        origin: community
+  message: Detected a potential path traversal. A malicious actor could control the
+    location of this file, to include going backwards in the directory with '../'.
+    To address this, ensure that user-controlled variables in file paths are sanitized.
+    You may also consider using a utility method such as org.apache.commons.io.FilenameUtils.getName(...)
+    to only retrieve the file name from the path.
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern: '(HttpServletRequest $REQ)
+
+          '
+      - patterns:
+        - pattern-inside: "(javax.servlet.http.Cookie[] $COOKIES) = (HttpServletRequest\
+            \ $REQ).getCookies(...);\n...\nfor (javax.servlet.http.Cookie $COOKIE:\
+            \ $COOKIES) {\n  ...\n}\n"
+        - pattern: '$COOKIE.getValue(...)
+
+            '
+      - patterns:
+        - pattern-inside: '$TYPE[] $VALS = (HttpServletRequest $REQ).$GETFUNC(...);
+
+            ...
+
+            '
+        - pattern: '$PARAM = $VALS[$INDEX];
+
+            '
+  pattern-sanitizers:
+  - pattern: org.apache.commons.io.FilenameUtils.getName(...)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: '(java.io.File $FILE) = ...
+
+          '
+      - pattern: '(java.io.FileOutputStream $FOS) = ...
+
+          '
+      - pattern: 'new java.io.FileInputStream(...)
+
+          '
+  severity: ERROR
+  languages:
+  - java
+- id: java.lang.security.audit.formatted-sql-string.formatted-sql-string
+  metadata:
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#SQL_INJECTION
+    asvs:
+      section: 'V5: Validation, Sanitization and Encoding Verification Requirements'
+      control_id: 5.3.5 Injection
+      control_url: https://github.com/OWASP/ASVS/blob/master/4.0/en/0x13-V5-Validation-Sanitization-Encoding.md#v53-output-encoding-and-injection-prevention-requirements
+      version: '4'
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+    - https://docs.oracle.com/javase/tutorial/jdbc/basics/prepared.html#create_ps
+    - https://software-security.sans.org/developer-how-to/fix-sql-injection-in-java-using-prepared-callable-statement
+    category: security
+    technology:
+    - java
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - SQL Injection
+    source: https://semgrep.dev/r/java.lang.security.audit.formatted-sql-string.formatted-sql-string
+    shortlink: https://sg.run/OPXp
+    semgrep.dev:
+      rule:
+        r_id: 9175
+        rv_id: 1409389
+        rule_id: QrUzxR
+        version_id: ExTeyBP
+        url: https://semgrep.dev/playground/r/ExTeyBP/java.lang.security.audit.formatted-sql-string.formatted-sql-string
+        origin: community
+  options:
+    taint_assume_safe_numbers: true
+    taint_assume_safe_booleans: true
+  message: Detected a formatted string in a SQL statement. This could lead to SQL
+    injection if variables in the SQL statement are not properly sanitized. Use a
+    prepared statements (java.sql.PreparedStatement) instead. You can obtain a PreparedStatement
+    using 'connection.prepareStatement'.
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern: '(HttpServletRequest $REQ)
+
+          '
+      - patterns:
+        - pattern-inside: "$ANNOT $FUNC (..., $INPUT, ...) {\n  ...\n}\n"
+        - pattern: (String $INPUT)
+        - focus-metavariable: $INPUT
+    label: INPUT
+  - patterns:
+    - pattern-either:
+      - pattern: $X + $INPUT
+      - pattern: $X += $INPUT
+      - pattern: String.format(..., $INPUT, ...)
+      - pattern: String.join(..., $INPUT, ...)
+      - pattern: (String $STR).concat($INPUT)
+      - pattern: $INPUT.concat(...)
+      - patterns:
+        - pattern-either:
+          - pattern: $STRB.append($INPUT)
+          - pattern: new $STRB(..., $INPUT, ...)
+        - metavariable-type:
+            metavariable: $STRB
+            type: StringBuilder
+    label: CONCAT
+    requires: INPUT
+  pattern-propagators:
+  - pattern: (StringBuffer $S).append($X)
+    from: $X
+    to: $S
+  - pattern: (StringBuilder $S).append($X)
+    from: $X
+    to: $S
+  pattern-sinks:
+  - patterns:
+    - pattern-not: $S.$SQLFUNC(<... "=~/.*TABLE *$/" ...>)
+    - pattern-not: $S.$SQLFUNC(<... "=~/.*TABLE %s$/" ...>)
+    - pattern-either:
+      - pattern: (Statement $S).$SQLFUNC(...)
+      - pattern: (PreparedStatement $P).$SQLFUNC(...)
+      - pattern: (Connection $C).createStatement(...).$SQLFUNC(...)
+      - pattern: (Connection $C).prepareStatement(...).$SQLFUNC(...)
+      - pattern: (EntityManager $EM).$SQLFUNC(...)
+    - metavariable-regex:
+        metavariable: $SQLFUNC
+        regex: execute|executeQuery|createQuery|query|addBatch|nativeSQL|create|prepare
+    requires: CONCAT
+  pattern-sanitizers:
+  - patterns:
+    - pattern: (CriteriaBuilder $CB).$ANY(...)
+  severity: ERROR
+  languages:
+  - java
+- id: java.lang.security.audit.sqli.tainted-sql-from-http-request.tainted-sql-from-http-request
+  message: Detected input from a HTTPServletRequest going into a SQL sink or statement.
+    This could lead to SQL injection if variables in the SQL statement are not properly
+    sanitized. Use parameterized SQL queries or properly sanitize user input instead.
+  severity: WARNING
+  metadata:
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: HIGH
+    category: security
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    cwe2021-top25: true
+    cwe2022-top25: true
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
+    - https://owasp.org/www-community/attacks/SQL_Injection
+    subcategory:
+    - vuln
+    technology:
+    - sql
+    - java
+    - servlets
+    - spring
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - SQL Injection
+    source: https://semgrep.dev/r/java.lang.security.audit.sqli.tainted-sql-from-http-request.tainted-sql-from-http-request
+    shortlink: https://sg.run/Lg56
+    semgrep.dev:
+      rule:
+        r_id: 18239
+        rv_id: 1409390
+        rule_id: oqUBJG
+        version_id: 7ZTKJNj
+        url: https://semgrep.dev/playground/r/7ZTKJNj/java.lang.security.audit.sqli.tainted-sql-from-http-request.tainted-sql-from-http-request
+        origin: community
+  languages:
+  - java
+  mode: taint
+  options:
+    taint_assume_safe_numbers: true
+    taint_assume_safe_booleans: true
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern: '(HttpServletRequest $REQ).$REQFUNC(...)
+
+          '
+      - pattern: "(ServletRequest $REQ).$REQFUNC(...) \n"
+    - metavariable-regex:
+        metavariable: $REQFUNC
+        regex: (getInputStream|getParameter|getParameterMap|getParameterValues|getReader|getCookies|getHeader|getHeaderNames|getHeaders|getPart|getParts|getQueryString)
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: "(java.sql.CallableStatement $STMT) = ...; \n"
+      - pattern: '(java.sql.Statement $STMT) = ...;
+
+          ...
+
+          $OUTPUT = $STMT.$FUNC(...);
+
+          '
+      - pattern: '(java.sql.PreparedStatement $STMT) = ...;
+
+          '
+      - pattern: '$VAR = $CONN.prepareStatement(...)
+
+          '
+      - pattern: '$PATH.queryForObject(...);
+
+          '
+      - pattern: '(java.util.Map<String, Object> $STMT) = $PATH.queryForMap(...);
+
+          '
+      - pattern: '(org.springframework.jdbc.support.rowset.SqlRowSet $STMT) = ...;
+
+          '
+      - pattern: '(org.springframework.jdbc.core.JdbcTemplate $TEMPL).batchUpdate(...)
+
+          '
+      - patterns:
+        - pattern-inside: '(String $SQL) = "$SQLSTR" + ...;
+
+            ...
+
+            '
+        - pattern: $PATH.$SQLCMD(..., $SQL, ...);
+        - metavariable-regex:
+            metavariable: $SQLSTR
+            regex: (?i)(^SELECT.* | ^INSERT.* | ^UPDATE.*)
+        - metavariable-regex:
+            metavariable: $SQLCMD
+            regex: (execute|query|executeUpdate|batchUpdate)
+- id: java.jax-rs.security.jax-rs-path-traversal.jax-rs-path-traversal
+  metadata:
+    owasp:
+    - A05:2017 - Broken Access Control
+    - A01:2021 - Broken Access Control
+    - A01:2025 - Broken Access Control
+    cwe:
+    - 'CWE-22: Improper Limitation of a Pathname to a Restricted Directory (''Path
+      Traversal'')'
+    source-rule-url: https://find-sec-bugs.github.io/bugs.htm#PATH_TRAVERSAL_IN
+    references:
+    - https://www.owasp.org/index.php/Path_Traversal
+    category: security
+    technology:
+    - jax-rs
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: LOW
+    confidence: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - Path Traversal
+    source: https://semgrep.dev/r/java.jax-rs.security.jax-rs-path-traversal.jax-rs-path-traversal
+    shortlink: https://sg.run/DoWj
+    semgrep.dev:
+      rule:
+        r_id: 9152
+        rv_id: 1262984
+        rule_id: 2ZUb9l
+        version_id: 7ZTE3KW
+        url: https://semgrep.dev/playground/r/7ZTE3KW/java.jax-rs.security.jax-rs-path-traversal.jax-rs-path-traversal
+        origin: community
+  message: Detected a potential path traversal. A malicious actor could control the
+    location of this file, to include going backwards in the directory with '../'.
+    To address this, ensure that user-controlled variables in file paths are sanitized.
+    You may also consider using a utility method such as org.apache.commons.io.FilenameUtils.getName(...)
+    to only retrieve the file name from the path.
+  severity: WARNING
+  languages:
+  - java
+  pattern-either:
+  - pattern: "$RETURNTYPE $FUNC (..., @PathParam(...) $TYPE $VAR, ...) {\n  ...\n\
+      \  new File(..., $VAR, ...);\n  ...\n}\n"
+  - pattern: "$RETURNTYPE $FUNC (..., @javax.ws.rs.PathParam(...) $TYPE $VAR, ...)\
+      \ {\n  ...\n  new File(..., $VAR, ...);\n  ...\n}"
+- id: java.aws-lambda.security.tainted-sqli.tainted-sqli
+  message: Detected SQL statement that is tainted by `$EVENT` object. This could lead
+    to SQL injection if variables in the SQL statement are not properly sanitized.
+    Use parameterized SQL queries or properly sanitize user input instead.
+  languages:
+  - java
+  severity: WARNING
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $EVENT
+    - pattern-either:
+      - pattern: "$HANDLERTYPE $HANDLER($TYPE $EVENT, com.amazonaws.services.lambda.runtime.Context\
+          \ $CONTEXT) {\n  ...\n}\n"
+      - pattern: "$HANDLERTYPE $HANDLER(InputStream $EVENT, OutputStream $OUT, com.amazonaws.services.lambda.runtime.Context\
+          \ $CONTEXT) {\n  ...\n}\n"
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: "(java.sql.CallableStatement $STMT) = ...; \n"
+      - pattern: '(java.sql.Statement $STMT) = ...;
+
+          '
+      - pattern: '(java.sql.PreparedStatement $STMT) = ...;
+
+          '
+      - pattern: '$VAR = $CONN.prepareStatement(...)
+
+          '
+      - pattern: '$PATH.queryForObject(...);
+
+          '
+      - pattern: '(java.util.Map<String, Object> $STMT) = $PATH.queryForMap(...);
+
+          '
+      - pattern: '(org.springframework.jdbc.support.rowset.SqlRowSet $STMT) = ...;
+
+          '
+      - patterns:
+        - pattern-inside: '(String $SQL) = "$SQLSTR" + ...;
+
+            ...
+
+            '
+        - pattern: $PATH.$SQLCMD(..., $SQL, ...);
+        - metavariable-regex:
+            metavariable: $SQLSTR
+            regex: (?i)(^SELECT.* | ^INSERT.* | ^UPDATE.*)
+        - metavariable-regex:
+            metavariable: $SQLCMD
+            regex: (execute|query|executeUpdate|batchUpdate)
+  options:
+    interfile: true
+  metadata:
+    category: security
+    technology:
+    - sql
+    - java
+    - aws-lambda
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: HIGH
+    confidence: MEDIUM
+    interfile: true
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - SQL Injection
+    source: https://semgrep.dev/r/java.aws-lambda.security.tainted-sqli.tainted-sqli
+    shortlink: https://sg.run/7942
+    semgrep.dev:
+      rule:
+        r_id: 18238
+        rv_id: 1262978
+        rule_id: 6JUDWk
+        version_id: e1Tyj4g
+        url: https://semgrep.dev/playground/r/e1Tyj4g/java.aws-lambda.security.tainted-sqli.tainted-sqli
+        origin: community
+- id: java.spring.security.audit.spring-sqli.spring-sqli
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern: $ARG
+    - pattern-inside: 'public $T $M (..., String $ARG,...){...}
+
+        '
+  pattern-sanitizers:
+  - not_conflicting: true
+    pattern-either:
+    - patterns:
+      - focus-metavariable: $A
+      - pattern-inside: 'new $TYPE(...,$A,...);
+
+          '
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - patterns:
+        - focus-metavariable: $A
+        - pattern: 'new PreparedStatementCreatorFactory($A,...);
+
+            '
+      - patterns:
+        - focus-metavariable: $A
+        - pattern: '(JdbcTemplate $T).$M($A,...)
+
+            '
+      - patterns:
+        - pattern: (String $A)
+        - pattern-inside: '(JdbcTemplate $T).batchUpdate(...)
+
+            '
+      - patterns:
+        - focus-metavariable: $A
+        - pattern: 'NamedParameterBatchUpdateUtils.$M($A,...)
+
+            '
+      - patterns:
+        - focus-metavariable: $A
+        - pattern: 'BatchUpdateUtils.$M($A,...)
+
+            '
+  message: Detected a string argument from a public method contract in a raw SQL statement.
+    This could lead to SQL injection if variables in the SQL statement are not properly
+    sanitized. Use a prepared statements (java.sql.PreparedStatement) instead. You
+    can obtain a PreparedStatement using 'connection.prepareStatement'.
+  languages:
+  - java
+  severity: WARNING
+  options:
+    taint_assume_safe_numbers: true
+    taint_assume_safe_booleans: true
+  metadata:
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    category: security
+    technology:
+    - spring
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: MEDIUM
+    confidence: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - SQL Injection
+    source: https://semgrep.dev/r/java.spring.security.audit.spring-sqli.spring-sqli
+    shortlink: https://sg.run/1Z3x
+    semgrep.dev:
+      rule:
+        r_id: 9222
+        rv_id: 1263082
+        rule_id: eqU8N2
+        version_id: ZRTKAWW
+        url: https://semgrep.dev/playground/r/ZRTKAWW/java.spring.security.audit.spring-sqli.spring-sqli
+        origin: community
+- id: java.spring.security.injection.tainted-sql-string.tainted-sql-string
+  languages:
+  - java
+  severity: ERROR
+  message: User data flows into this manually-constructed SQL string. User data can
+    be safely inserted into SQL strings using prepared statements or an object-relational
+    mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL
+    injection, which could let an attacker steal or manipulate data from the database.
+    Instead, use prepared statements (`connection.PreparedStatement`) or a safe library.
+  metadata:
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://docs.oracle.com/javase/7/docs/api/java/sql/PreparedStatement.html
+    category: security
+    technology:
+    - spring
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: HIGH
+    impact: MEDIUM
+    confidence: MEDIUM
+    interfile: true
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - SQL Injection
+    source: https://semgrep.dev/r/java.spring.security.injection.tainted-sql-string.tainted-sql-string
+    shortlink: https://sg.run/9rzz
+    semgrep.dev:
+      rule:
+        r_id: 14767
+        rv_id: 1409396
+        rule_id: 10UdRR
+        version_id: 44TbKvr
+        url: https://semgrep.dev/playground/r/44TbKvr/java.spring.security.injection.tainted-sql-string.tainted-sql-string
+        origin: community
+  options:
+    taint_assume_safe_numbers: true
+    taint_assume_safe_booleans: true
+    interfile: true
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: "$METHODNAME(..., @$REQ(...) $TYPE $SOURCE,...) {\n  ...\n\
+          }\n"
+      - pattern-inside: "$METHODNAME(..., @$REQ $TYPE $SOURCE,...) {\n  ...\n}\n"
+    - metavariable-regex:
+        metavariable: $REQ
+        regex: (RequestBody|PathVariable|RequestParam|RequestHeader|CookieValue)
+    - metavariable-regex:
+        metavariable: $TYPE
+        regex: ^(?!(Integer|Long|Float|Double|Char|Boolean|int|long|float|double|char|boolean))
+    - focus-metavariable: $SOURCE
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: '"$SQLSTR" + ...
+
+          '
+      - pattern: '"$SQLSTR".concat(...)
+
+          '
+      - patterns:
+        - pattern-inside: 'StringBuilder $SB = new StringBuilder("$SQLSTR");
+
+            ...
+
+            '
+        - pattern: $SB.append(...)
+      - patterns:
+        - pattern-inside: '$VAR = "$SQLSTR";
+
+            ...
+
+            '
+        - pattern: $VAR += ...
+      - pattern: String.format("$SQLSTR", ...)
+      - patterns:
+        - pattern-inside: 'String $VAR = "$SQLSTR";
+
+            ...
+
+            '
+        - pattern: String.format($VAR, ...)
+    - pattern-not-inside: System.out.println(...)
+    - pattern-not-inside: $LOG.info(...)
+    - pattern-not-inside: $LOG.warn(...)
+    - pattern-not-inside: $LOG.warning(...)
+    - pattern-not-inside: $LOG.debug(...)
+    - pattern-not-inside: $LOG.debugging(...)
+    - pattern-not-inside: $LOG.error(...)
+    - pattern-not-inside: new Exception(...)
+    - pattern-not-inside: throw ...;
+    - metavariable-regex:
+        metavariable: $SQLSTR
+        regex: (?i)(select|delete|insert|create|update|alter|drop)\b
+- id: java.aws-lambda.security.tainted-sql-string.tainted-sql-string
+  languages:
+  - java
+  severity: ERROR
+  message: Detected user input used to manually construct a SQL string. This is usually
+    bad practice because manual construction could accidentally result in a SQL injection.
+    An attacker could use a SQL injection to steal or modify contents of the database.
+    Instead, use a parameterized query which is available by default in most database
+    engines. Alternatively, consider using an object-relational mapper (ORM) such
+    as Sequelize which will protect your queries.
+  options:
+    interfile: true
+  metadata:
+    references:
+    - https://owasp.org/www-community/attacks/SQL_Injection
+    category: security
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    technology:
+    - aws-lambda
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: HIGH
+    confidence: MEDIUM
+    interfile: true
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - SQL Injection
+    source: https://semgrep.dev/r/java.aws-lambda.security.tainted-sql-string.tainted-sql-string
+    shortlink: https://sg.run/EBYN
+    semgrep.dev:
+      rule:
+        r_id: 18237
+        rv_id: 1262977
+        rule_id: YGUl4z
+        version_id: O9TpxQN
+        url: https://semgrep.dev/playground/r/O9TpxQN/java.aws-lambda.security.tainted-sql-string.tainted-sql-string
+        origin: community
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - focus-metavariable: $EVENT
+    - pattern-either:
+      - pattern: "$HANDLERTYPE $HANDLER($TYPE $EVENT, com.amazonaws.services.lambda.runtime.Context\
+          \ $CONTEXT) {\n  ...\n}\n"
+      - pattern: "$HANDLERTYPE $HANDLER(InputStream $EVENT, OutputStream $OUT, com.amazonaws.services.lambda.runtime.Context\
+          \ $CONTEXT) {\n  ...\n}\n"
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: '"$SQLSTR" + ...
+
+          '
+      - pattern: '"$SQLSTR".concat(...)
+
+          '
+      - patterns:
+        - pattern-inside: 'StringBuilder $SB = new StringBuilder("$SQLSTR");
+
+            ...
+
+            '
+        - pattern: $SB.append(...)
+      - patterns:
+        - pattern-inside: '$VAR = "$SQLSTR";
+
+            ...
+
+            '
+        - pattern: $VAR += ...
+      - pattern: String.format("$SQLSTR", ...)
+    - metavariable-regex:
+        metavariable: $SQLSTR
+        regex: (?i)(select|delete|insert|create|update|alter|drop)\b
+    - pattern-not-inside: 'System.out.$PRINTLN(...)
+
+        '
+- id: java.jboss.security.session_sqli.find-sql-string-concatenation
+  message: In $METHOD, $X is used to construct a SQL query via string concatenation.
+  languages:
+  - java
+  severity: ERROR
+  pattern-either:
+  - pattern: "$RETURN $METHOD(...,String $X,...){\n  ...\n  Session $SESSION = ...;\n\
+      \  ...\n  String $QUERY = ... + $X + ...;\n  ...\n  PreparedStatement $PS =\
+      \ $SESSION.connection().prepareStatement($QUERY);\n  ...\n  ResultSet $RESULT\
+      \ = $PS.executeQuery();\n  ...\n}\n"
+  - pattern: "$RETURN $METHOD(...,String $X,...){\n  ...\n  String $QUERY = ... +\
+      \ $X + ...;\n  ...\n  Session $SESSION = ...;\n  ...\n  PreparedStatement $PS\
+      \ = $SESSION.connection().prepareStatement($QUERY);\n  ...\n  ResultSet $RESULT\
+      \ = $PS.executeQuery();\n  ...\n}\n"
+  metadata:
+    category: security
+    technology:
+    - jboss
+    confidence: MEDIUM
+    cwe:
+    - 'CWE-89: Improper Neutralization of Special Elements used in an SQL Command
+      (''SQL Injection'')'
+    owasp:
+    - A01:2017 - Injection
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://owasp.org/Top10/A03_2021-Injection
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: HIGH
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - SQL Injection
+    source: https://semgrep.dev/r/java.jboss.security.session_sqli.find-sql-string-concatenation
+    shortlink: https://sg.run/W8kA
+    semgrep.dev:
+      rule:
+        r_id: 9153
+        rv_id: 1262986
+        rule_id: X5U8rQ
+        version_id: 8KT5r3v
+        url: https://semgrep.dev/playground/r/8KT5r3v/java.jboss.security.session_sqli.find-sql-string-concatenation
+        origin: community

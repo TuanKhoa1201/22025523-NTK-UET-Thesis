@@ -1,0 +1,12 @@
+{
+  "schema_version": "ntk-v2-m4-strict-lock-1.1",
+  "lock_mode": "STRICT_LOCK",
+  "m4_acceptance_ready": true,
+  "opengrep_file": "heldout_alerts.json",
+  "opengrep_sha256": "ba9967f3ae1dcbe940e8e7dea7df36ff873232fe5787f42c3fd2c84e066b1826",
+  "labels_file": "labels_heldout.json",
+  "labels_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3",
+  "config_file": null,
+  "config_sha256": null,
+  "combined_lock_sha256": "4fb556371eb9eb520aec6df96e4a151685df261025b2893eb7bae51c435bca09"
+}

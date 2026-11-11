@@ -1,0 +1,115 @@
+{
+  "schema_version": "ntk.v2.post_report_dataset_provenance.v1",
+  "created_at_utc": "2026-11-12T03:40:00Z",
+  "upstream_benchmark": {
+    "name": "OWASP BenchmarkJava v1.2",
+    "wsl_path": "/home/tuankhoa/migration/ntk_ft211_sources/BenchmarkJava",
+    "git_commit": "8b67a88d73b2594570fc21150705283de884620b",
+    "expectedresults_csv": "expectedresults-1.2.csv",
+    "expectedresults_csv_sha256": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1",
+    "total_benchmark_cases": 2740,
+    "pathtraver_cwe22_cases": {
+      "total": 268,
+      "true_positive": 133,
+      "false_positive": 135
+    },
+    "sqli_cwe89_cases": {
+      "total": 504,
+      "true_positive": 272,
+      "false_positive": 232
+    }
+  },
+  "pinned_ruleset": {
+    "repo_path": "v2/evaluation/post_report/rules/p_java_cwe22_cwe89.yml",
+    "sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+    "upstream_pinned_source": "/home/tuankhoa/migration/phase8a_opengrep_baseline_cache_decision_v1_20260929/current_pinned_ruleset_evidence/p-java.raw.yaml",
+    "upstream_pinned_sha256": "5e652fa9ac09c9fac36bbadc3562a0c8eed1a47438a9d1f545e021ae3c5648b1",
+    "rule_count": 9,
+    "active_benchmark_rules": [
+      "java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal",
+      "java.lang.security.audit.sqli.tainted-sql-from-http-request.tainted-sql-from-http-request"
+    ]
+  },
+  "scanner": {
+    "engine": "OpenGrep OSS 1.25.0",
+    "windows_binary": "C:\\Users\\Admin\\ntk-thesis-v2\\tools\\opengrep\\v1.25.0\\opengrep.exe",
+    "wsl_binary": "/usr/local/bin/opengrep",
+    "flags": [
+      "--dataflow-traces",
+      "--taint-intrafile",
+      "--no-git-ignore",
+      "--disable-version-check"
+    ]
+  },
+  "splits": {
+    "development_set": {
+      "name": "dev_set_16",
+      "total_alerts": 16,
+      "cwe22_tp": 4,
+      "cwe22_fp": 4,
+      "cwe89_tp": 4,
+      "cwe89_fp": 4,
+      "source_root": "C:\\Users\\Admin\\ntk-thesis-v2\\evidence\\post_report_cwe22_cwe89_20261112\\sources\\dev_set_16",
+      "scan_dir": "C:\\Users\\Admin\\ntk-thesis-v2\\evidence\\post_report_cwe22_cwe89_20261112\\runs\\stage1_dev_set_16_scan",
+      "opengrep_json_sha256": "ecc1fa4634bfc86266c43dd6790422546367293d1810712fddc7c0d15a6c015f",
+      "scan_manifest_sha256": "67d708880cb7a93f972586a137c159fff478783788c0bcb1a30d6cb866e8f298",
+      "labels_csv": "v2/evaluation/post_report/labels_development.csv",
+      "labels_json": "v2/evaluation/post_report/labels_development.json"
+    },
+    "heldout_set": {
+      "name": "heldout_set_40",
+      "total_alerts": 40,
+      "cwe22_tp": 10,
+      "cwe22_fp": 10,
+      "cwe89_tp": 10,
+      "cwe89_fp": 10,
+      "source_root": "C:\\Users\\Admin\\ntk-thesis-v2\\evidence\\post_report_cwe22_cwe89_20261112\\sources\\heldout_set_40",
+      "scan_dir": "C:\\Users\\Admin\\ntk-thesis-v2\\evidence\\post_report_cwe22_cwe89_20261112\\runs\\stage1_heldout_set_40_scan",
+      "opengrep_json_sha256": "67c3b04903e75f4bd7294cb17452d0dcb2b6d56244330cec485c4422efabfa8b",
+      "scan_manifest_sha256": "3f5488d9a8de308b33111b5b5b88fd2bf6342ff3a18d8b9458b6936725b64fab",
+      "labels_csv": "v2/evaluation/post_report/labels_heldout.csv",
+      "labels_json": "v2/evaluation/post_report/labels_heldout.json",
+      "strict_lock_manifest": "v2/evaluation/post_report/heldout_strict_lock_manifest.json"
+    }
+  },
+  "disjointness_verified": true,
+  "total_labeled_alerts": 56,
+  "strict_lock_validation": {
+    "lock_mode": "STRICT_LOCK",
+    "valid_lock_candidate": true,
+    "m4_acceptance_ready": true,
+    "total_unique_alerts": 40,
+    "total_unique_labels": 40,
+    "priority_cwe_alerts": 40,
+    "secondary_cwe_alerts": 0,
+    "priority_cwe_share": 1.0,
+    "errors": [],
+    "warnings": [],
+    "lock_manifest": {
+      "schema_version": "ntk-v2-m4-strict-lock-1.1",
+      "lock_mode": "STRICT_LOCK",
+      "m4_acceptance_ready": true,
+      "opengrep_file": "heldout_alerts.json",
+      "opengrep_sha256": "ba9967f3ae1dcbe940e8e7dea7df36ff873232fe5787f42c3fd2c84e066b1826",
+      "labels_file": "labels_heldout.json",
+      "labels_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3",
+      "config_file": null,
+      "config_sha256": null,
+      "combined_lock_sha256": "4fb556371eb9eb520aec6df96e4a151685df261025b2893eb7bae51c435bca09"
+    }
+  },
+  "dev_validation": {
+    "lock_mode": "SMOKE",
+    "valid_lock_candidate": true,
+    "m4_acceptance_ready": false,
+    "total_unique_alerts": 16,
+    "total_unique_labels": 16,
+    "priority_cwe_alerts": 16,
+    "secondary_cwe_alerts": 0,
+    "priority_cwe_share": 1.0,
+    "errors": [],
+    "warnings": [
+      "Total unique alerts (16) outside required pilot window [30, 60]"
+    ]
+  }
+}
