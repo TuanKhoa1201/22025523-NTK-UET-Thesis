@@ -1,5 +1,16 @@
 # NTK Thesis V2 — M2/M3 local core report
 
+## Root-cause repair continuation (base 0c2ffa1)
+
+See `baseline/ROOT_CAUSE_REPAIR_REPORT.md` for current acceptance and commands.
+Scan-time source/rule/process capture is now mandatory for verified import/new false
+confirmation. Operator exit declarations remain separate from original recorded
+exits. Legacy raw imports remain REVIEW. Real new scan/handoff and queue/hash demos
+pass; the separate live protocol checker returns PENDING for this laptop's unavailable
+Ollama even when triage exits 0. Full upstream CLI remains PENDING; direct original
+scanner ran successfully with the local isolation/recording overlay (not full clone/CLI).
+Older import recipes below predate this stricter source-identity requirement.
+
 ## Original-task continuation (base 682a818)
 
 Queue behavior now matches the supplied five-page advisor PDF: default view excludes

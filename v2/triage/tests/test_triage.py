@@ -18,6 +18,7 @@ from v2.triage.evidence import collect, EvidenceError, SourceTree, check_current
 from v2.triage.ollama import OllamaClient, validate_answer, undecided
 from v2.triage.store import ReviewStore
 from v2.triage.cli import main
+from capture_fixture import fixture_provenance, make_capture
 
 BASE = Path(__file__).resolve().parents[1]
 
@@ -61,6 +62,7 @@ class Fixture(unittest.TestCase):
 
     def collect(self, doc=None, **kwargs):
         kwargs.setdefault("engine_exit", 0)
+        kwargs.setdefault("scan_provenance", {"origin": "UNIT_TEST_MOCK_CAPTURE", "source_capture_verified": True})
         return collect(json.dumps(self.doc if doc is None else doc), self.root, **kwargs)
 
     def answer(self, status="SUPPORTED"):
@@ -384,9 +386,10 @@ class CLIIntegrationTests(Fixture):
         input_path = Path(self.tmp.name) / "input.json"
         input_path.write_text(json.dumps(self.doc))
         output = Path(self.tmp.name) / "run"
+        manifest = make_capture(self.root, input_path.read_bytes(), Path(self.tmp.name) / "mock-capture")
         with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             self.assertEqual(main(["run", "--source-root", str(self.root), "--json", str(input_path),
-                                   "--output-dir", str(output), "--engine-exit", "0", "--no-llm"]), 0)
+                                   "--output-dir", str(output), "--scan-manifest", str(manifest), "--engine-exit", "0", "--no-llm"]), 0)
             lines = (output / "assessments.jsonl").read_text().splitlines()
             item = json.loads(lines[0])
             self.assertEqual(item["assessment"]["status"], "UNDETERMINED")
@@ -480,9 +483,10 @@ class HTTPIntegrationTests(Fixture):
             input_path = Path(self.tmp.name) / "mock-input.json"
             input_path.write_text(json.dumps(self.doc))
             output = Path(self.tmp.name) / "mock-http-run"
+            manifest = make_capture(self.root, input_path.read_bytes(), Path(self.tmp.name) / "http-mock-capture")
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(main(["run", "--source-root", str(self.root), "--json", str(input_path),
-                                       "--engine-exit", "0", "--output-dir", str(output),
+                                       "--engine-exit", "0", "--scan-manifest", str(manifest), "--output-dir", str(output),
                                        "--endpoint", client.endpoint]), 0)
             exported = json.loads((output / "assessments.jsonl").read_text().splitlines()[0])
             self.assertEqual(exported["assessment"]["status"], "REFUTED")

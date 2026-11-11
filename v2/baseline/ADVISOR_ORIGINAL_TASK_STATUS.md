@@ -1,5 +1,11 @@
 # Nhiệm vụ gốc — tình trạng có bằng chứng
 
+**Đối chiếu mới nhất tại nền 0c2ffa1:** xem `ROOT_CAUSE_REPAIR_REPORT.md`. Không dùng
+quy trình cài full dependency hoặc legacy scan mặc định bên dưới để thử lại: đường
+mới dùng môi trường cô lập tối thiểu, overlay `--scan-only`, không khởi tạo RAG/cloud
+và ghi capture manifest. Full upstream CLI vẫn PENDING; scanner upstream trực tiếp
+đã chạy thật nhưng không phải bằng chứng full app. Nội dung cũ dưới đây là lịch sử.
+
 Nhánh `v2/codex-core`, nền `682a81815020e32852d969bdb27d6648fd568429`.
 **Chưa chứng minh bản fork đầy đủ simple_semgrepAI chạy thành công.** Scanner/CLI
 NTK quét thật và chuyển nguyên vẹn sang triage đã PASS; không đồng nhất hai kết quả.
@@ -111,43 +117,14 @@ Target ngoài root, traversal, prefix không khớp không được đoán hoặ
 WSL-path PASS trên fixture mô phỏng; **real WSL → Windows handoff còn chờ JavisOS**.
 Không thêm CliCall/context mới hoặc làm yếu citation checks để vượt lỗi đường dẫn.
 
-## Lệnh JavisOS cần chạy trên máy chủ
+## Superseded server procedure
 
-Ví dụ Bash; đặt `NTK` là repo/worktree của Javis và `ADVISOR` là nguồn riêng đã chuyển
-an toàn lên máy chủ. Lệnh này là hướng dẫn chưa chạy tại laptop:
-
-```bash
-NTK=/path/to/ntk-worktree
-ADVISOR=/private/advisor-sources
-WORK=/private/ntk-original-experiment
-mkdir -p "$WORK"
-git clone https://github.com/hardw00t/simple_semgrepAI.git "$WORK/upstream"
-git -C "$WORK/upstream" checkout --detach 2c79a58a16d11e9dea3723e30d2a7faffba7bdc9
-git -C "$WORK/upstream" status --short
-cd "$NTK"
-python v2/baseline/advisor_probe.py --advisor-dir "$ADVISOR" --upstream "$WORK/upstream" --output-dir v2/baseline/evidence/server-original --cli-timeout 600
-# Probe copies the clean checkout and privately applies the ZIP patch; inspect patch logs first.
-python -m venv "$WORK/venv"
-"$WORK/venv/bin/python" -m pip install -e "$NTK/v2/baseline/evidence/server-original/source"
-cd "$NTK/v2/baseline/evidence/server-original/source"
-export SEMGREP_LOG_FILE="$PWD/engine.log"
-export SEMGREP_SETTINGS_FILE="$PWD/engine-settings.yml"
-# Inspect semgrepai.yml: provider=ollama, loopback URL, exact installed Qwen tag.
-# Use no [semgrep] extra. Clear PYTHONPATH inherited from any scanner-only run.
-unset PYTHONPATH
-"$WORK/venv/bin/python" -m semgrepai --help
-"$WORK/venv/bin/python" -m semgrepai scan "$NTK/v2/baseline/fixtures/java" --rules-path "$NTK/v2/baseline/rules/java.yml" --config-path "$PWD/semgrepai.yml" --output-dir "$PWD/cli-report"
-# Original scanner writes raw reports/semgrep.json and reports/semgrep.sarif in cwd.
-cd "$NTK"
-"$WORK/venv/bin/python" -m v2.triage run --source-root "$NTK/v2/baseline/fixtures/java" --json "$NTK/v2/baseline/evidence/server-original/source/reports/semgrep.json" --engine-exit 0 --output-dir v2/triage/evidence/server-original-import --no-llm
-```
-
-Giữ exit code thật của CLI/engine: nếu khác 0, thay `--engine-exit 0` bằng mã lỗi và
-không coi output một phần là scan đầy đủ. Việc tải Qwen/hạ tầng do Javis phụ trách;
-ghi version OpenGrep/Ollama/model tag+digest, log JSON và thời gian thật. Cờ patch thầy
-đã chạy được trên laptop 1.20; Javis vẫn cần kiểm chứng CLI app đầy đủ trên 1.25 của server.
-Original CLI vẫn khởi tạo RAG/validator/reporter; cài dependency thành công hoặc có raw
-JSON chưa đủ chứng minh toàn app hoàn tất. Lưu riêng kết quả help, scan và triage.
+Do not install the full dependency graph or run the unguarded legacy scan path:
+it can initialize RAG/validator. Use the minimal isolated environment and
+`--scan-only` procedure in [ROOT_CAUSE_REPAIR_REPORT.md](ROOT_CAUSE_REPAIR_REPORT.md).
+`prepare_upstream_local.py` requires a clean full pinned checkout, logs the private
+patch check/apply, and prepares a no-RAG/no-cloud overlay. Full application acceptance
+remains PENDING. New imports require scan-time manifests, not only declared exit 0.
 
 ## Kiểm thử và Git delivery
 

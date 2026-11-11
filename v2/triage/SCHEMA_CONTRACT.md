@@ -1,5 +1,36 @@
 # NTK triage data contract 1.1
 
+## Scan-capture reliability extension (additive, current producer)
+
+Data IDs/layout remain compatible; trust policy is stricter. New scans create
+`scan-manifest.json` schema `ntk-scan-capture-1` before/after real subprocesses.
+It binds source inventory and rule hashes, original command/exit/stdout/stderr
+artifacts and raw JSON/SARIF. Captured stdout mode requires raw-byte equality;
+instrumented upstream file-output mode binds the original --output argv and copied
+raw file bytes instead. The two modes are explicit, never inferred from triage exit.
+
+Bundle/record `scan_provenance` distinguishes `declared_only` / `collection_only`
+from `recorded_capture_unsigned`; fields include declared_engine_exit,
+recorded_engine_exit, exit_capture_verified, source_capture_verified, manifest_sha256,
+manifest_path and independently_attested=false. Original exits can be valid while
+source identity fails; a wrapper error is not fabricated as engine exit 2. Source
+keys are canonical relative paths and all current source hashes/inventory must match.
+Record metadata excludes the full source_hashes table to avoid duplicating a corpus.
+
+Historical raw JSON without a contemporaneous valid manifest is still retained but
+must REVIEW; do not generate a new manifest after the fact to bless an old scan.
+New confirm-false and model analysis require scan-time provenance as well as current
+hash equality. Legacy records/history are not deleted or rewritten. Mapping never
+rewrites raw JSON, source SHA, scan SHA or IDs. Old export proposals without captured
+source identity now map to REVIEW.
+
+Runtime adds finding_id, request_payload_sha256 and canonical response_json_sha256
+to the observed HTTP metadata. `live_check` independently verifies their join,
+nonmock origin, matching returned model and positive reported eval counters. Any
+status, including UNDETERMINED, can demonstrate protocol execution; a SUPPORTED
+prediction is not required or treated as ground truth. Result remains UNATTESTED;
+unsigned files and HTTP alone cannot prove physical model execution.
+
 Contract owner: `v2/codex-core`. Scope: additive fields only; existing IDs, nested
 assessment layout, three model states and SQLite human states are unchanged.
 Missing `schema_version` denotes legacy 1.0. New bundles/records/JSONL rows carry

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+from prepare_upstream_local import apply_local_overlay
 
 BASE = Path(__file__).resolve().parent
 PIN = "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9"
@@ -70,8 +71,11 @@ def run(advisor_dir, output, upstream=None, cli_timeout=45):
             "refusal": "Never run the original cloud-capable CLI when the local-provider patch failed",
             "commands": commands}, indent=2), encoding="utf-8")
         raise RuntimeError("advisor patch failed; original CLI execution refused")
+    overlay_sha = apply_local_overlay(tree, output)
     env = os.environ.copy()
     env["PYTHONPATH"] = str(tree)
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     env["SEMGREP_LOG_FILE"] = str(output / "opengrep.log")
     env["SEMGREP_SETTINGS_FILE"] = str(output / "settings.yml")
     for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"):
@@ -79,7 +83,8 @@ def run(advisor_dir, output, upstream=None, cli_timeout=45):
     help_exit, _ = execute("original-cli-help", [sys.executable, "-m", "semgrepai", "--help"], tree, env, cli_timeout)
     scan_exit, _ = execute("original-cli-scan", [sys.executable, "-m", "semgrepai", "scan",
                           str(BASE / "fixtures/java"), "--rules-path", str(BASE / "rules/java.yml"),
-                          "--config-path", str(tree / "semgrepai.yml"), "--output-dir", str(output / "cli-report")], tree, env, cli_timeout)
+                          "--config-path", str(tree / "semgrepai.yml"), "--output-dir", str(output / "cli-report"),
+                          "--scan-only"], tree, env, cli_timeout)
     # Separate binary compatibility probe, not a successful original-CLI scan.
     engine = []
     for fmt in ("json", "sarif"):
@@ -89,6 +94,7 @@ def run(advisor_dir, output, upstream=None, cli_timeout=45):
         engine.append(execute("teacher-flags-" + fmt, argv, tree, env)[0])
     result = {"source_kind": kind, "upstream_pin": PIN, "advisor_zip_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
               "advisor_patch_sha256": hashlib.sha256(patch).hexdigest(), "patch_check_exit": check,
+              "ntk_local_overlay_sha256": overlay_sha, "entrypoint_scope": "upstream Typer CLI --scan-only; no RAG/LLM",
               "patch_apply_exit": applied, "original_cli_help_exit": help_exit, "original_cli_scan_exit": scan_exit,
               "separate_teacher_flag_probe_exits": engine, "commands": commands}
     (output / "probe.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
