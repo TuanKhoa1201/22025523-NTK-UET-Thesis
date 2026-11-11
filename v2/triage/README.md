@@ -1,5 +1,19 @@
 # Local Java warning triage
 
+Integration: [SCHEMA_CONTRACT.md](SCHEMA_CONTRACT.md) specifies additive schema 1.1,
+exact raw-scan/index/ID joins, runtime provenance and the paired Antigravity exporter.
+`--runtime-origin mock` labels simulated HTTP services. Received HTTP, validated
+answers and independently verified model execution are separate per-warning fields.
+
+Reproduce the real-engine stale-source refusal without editing repository fixtures:
+
+```powershell
+python -m v2.triage.demo_freshness --output-dir v2/triage/evidence/freshness-run
+```
+
+The review actor in that demo is explicitly scripted/synthetic, never a real person's
+approval; it records confirm-true and proves that stale confirm-false is refused.
+
 Python standard library only. Run from the workspace root with Python 3.10+.
 This module reuses the M1 OpenGrep scanner; it does not initialize upstream web,
 RAG, cloud validators or false-positive learning. Priorities are CWE-22 and CWE-89;

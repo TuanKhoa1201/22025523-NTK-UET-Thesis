@@ -1,5 +1,9 @@
 Generated evidence stays local and is ignored by Git. Only synthetic Java inputs were scanned.
 
+Current advisor handover: `advisor-m1/` is a fresh real OpenGrep 1.20.0 scan;
+`patch-verification.json` records actual warning-free git apply/check;
+`p0-m1-tests.txt` records the 24-test suite.
+
 - `real-01/`: failed real engine attempt; unsupported `--metrics` option, exit 2.
 - `real-02/`: successful real OpenGrep 1.20.0 JSON/SARIF runs.
 - `unit-tests.txt`: unit tests, including mocked subprocesses (not runtime proof).

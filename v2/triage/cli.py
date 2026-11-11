@@ -7,6 +7,7 @@ from pathlib import Path
 from .evidence import collect, EvidenceError, SourceTree, digest
 from .ollama import OllamaClient, undecided
 from .store import ReviewStore
+from .runtime import SCHEMA_VERSION, summary
 
 
 def show(value):
@@ -27,7 +28,7 @@ def run(args):
     root = Path(args.source_root).resolve(strict=True)
     output = Path(args.output_dir)
     # Validate network configuration before creating artifacts or scanning.
-    client = None if args.no_llm else OllamaClient(args.endpoint, args.model, args.timeout)
+    client = None if args.no_llm else OllamaClient(args.endpoint, args.model, args.timeout, args.runtime_origin)
     output.mkdir(parents=True, exist_ok=False)
     issues = []
     exit_code = args.engine_exit
@@ -72,11 +73,16 @@ def run(args):
         store.close()
     with (output / "assessments.jsonl").open("x", encoding="utf-8") as stream:
         for record, assessment in zip(bundle["records"], assessments):
-            stream.write(json.dumps({"id": record["id"], "state": "OPEN", "evidence": record,
+            stream.write(json.dumps({"schema_version": SCHEMA_VERSION, "id": record["id"], "alert_id": record["id"],
+                                     "scan_sha256": record["scan_sha256"], "finding_index": record["finding_index"],
+                                     "state": "OPEN", "evidence": record,
                                      "assessment": assessment}, ensure_ascii=False) + "\n")
+    runtime_counts = summary(assessments)
     show({"scan_sha256": bundle["scan_sha256"], "warnings": len(bundle["records"]),
           "scan_issues": bundle["issues"], "states": [a["status"] for a in assessments],
-          "db": str(output / "review.sqlite"), "qwen_runtime_verified": False})
+          "db": str(output / "review.sqlite"), "schema_version": SCHEMA_VERSION,
+          "runtime_summary": runtime_counts,
+          "qwen_runtime_verified": bool(assessments) and runtime_counts["verified_model_runtime_count"] == len(assessments)})
     return 2 if bundle["issues"] or any(r["issues"] for r in bundle["records"]) else 0
 
 
@@ -95,6 +101,8 @@ def main(argv=None):
     pipeline.add_argument("--endpoint", default="http://127.0.0.1:11434")
     pipeline.add_argument("--model", default="qwen3.5:9b-q4_K_M")
     pipeline.add_argument("--timeout", type=float, default=60)
+    pipeline.add_argument("--runtime-origin", choices=("unverified", "mock"), default="unverified",
+                          help="label simulated services; an HTTP reply alone cannot attest real inference")
     for command in ("queue", "show", "history", "decide"):
         p = sub.add_parser(command)
         p.add_argument("--db", required=True)

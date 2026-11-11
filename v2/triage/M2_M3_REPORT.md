@@ -1,5 +1,38 @@
 # NTK Thesis V2 — M2/M3 local core report
 
+## P0 integration handover update
+
+Continuation base: `5a5250643cbe08b3edf86474d9c879fc3c2fb3cc`, `v2/codex-core`, clean at start.
+Current checks: baseline 24/24 PASS (22 original + 2 patch checks); triage 51 run,
+50 PASS / 1 SKIP (Windows symlink privilege); compileall PASS. Logs are
+`v2/baseline/evidence/p0-m1-tests.txt` and `v2/triage/evidence/p0-triage-tests.txt`.
+Delivery status: **not committed/pushed**. Authorized workspace-only `git add --
+v2/baseline v2/triage` failed with exit 128: cannot create
+`integration/.git/worktrees/codex/index.lock` (Permission denied). No escalation,
+ACL/ownership/security change or remote write attempted. HEAD remains the continuation
+base `5a5250643cbe08b3edf86474d9c879fc3c2fb3cc`, not a commit of this new work.
+
+New files this round: baseline `.gitattributes`, `ADVISOR_M1_EVIDENCE.md`,
+`verify_patch.py`, `tests/test_patch.py`; triage `SCHEMA_CONTRACT.md`, `runtime.py`,
+`export_pilot.py`, `demo_freshness.py`, `tests/test_contract.py`.
+Modified: baseline scanner (whitespace only), generator/generated patch, README/report;
+triage evidence/ollama/CLI, existing tests, README/report. No file outside these two
+allowed directories was modified. Generated logs and the inspected scorer copy are
+ignored. Code whitespace check passes with generated patch excluded; full diff check
+reports preserved deleted-upstream whitespace inside the patch. No patch text was
+manually altered to suppress that warning; actual Git apply is warning-free.
+Added `SCHEMA_CONTRACT.md` (schema 1.1), an exact raw-byte/index-ID pilot exporter,
+per-warning HTTP/runtime provenance and `demo_freshness.py`. Existing IDs/nested
+formats/human states remain unchanged. Real OpenGrep freshness demo passed:
+scripted confirm-true on unmodified synthetic copy; editing that copy causes
+confirm-false refusal; history and original fixtures unchanged. No new real Qwen
+execution is claimed. Mock HTTP never becomes verified model runtime.
+
+Pinned Antigravity scorer at `103e5f0411bcf962cf4b31ee8c07f181ec2dd444` was read,
+not changed. Its smoke check on four exported real-engine alerts + disabled-inference
+REVIEW records found no join anomalies; all four intentionally UNLABELED. See contract
+for exact mapping and runtime limitations. Earlier sections below are historical.
+
 Date: 2026-11-11, Asia/Saigon. Branch: `v2/codex-core`.
 
 **Verified local implementation: PASS with limitations. M2 real Qwen acceptance:

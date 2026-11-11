@@ -416,6 +416,27 @@ class CLIIntegrationTests(Fixture):
 
 
 class HTTPIntegrationTests(Fixture):
+    def test_http_error_is_received_but_not_inference(self):
+        class ErrorHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                self.send_error(503, "MOCK model unavailable")
+        server = ThreadingHTTPServer(("127.0.0.1", 0), ErrorHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            result = OllamaClient(f"http://127.0.0.1:{server.server_port}", runtime_origin="mock").analyze(self.record)
+            self.assertEqual(result["status"], "UNDETERMINED")
+            self.assertTrue(result["runtime"]["http_response_received"])
+            self.assertEqual(result["runtime"]["http_status"], 503)
+            self.assertFalse(result["runtime"]["model_runtime_verified"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_real_http_transport_with_explicit_mock_server(self):
         answer = self.answer("REFUTED")
         requests = []
@@ -425,6 +446,7 @@ class HTTPIntegrationTests(Fixture):
             def do_POST(self):
                 requests.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
                 body = json.dumps({"done": True, "model": "qwen3.5:9b-q4_K_M", "mock_test_fixture": True,
+                                   "eval_count": 17, "eval_duration": 123456,
                                    "message": {"content": json.dumps(answer)}}).encode()
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(body)))
@@ -443,6 +465,15 @@ class HTTPIntegrationTests(Fixture):
             self.assertEqual(requests[0]["model"], "qwen3.5:9b-q4_K_M")
             # The HTTP call is real; this is explicitly not model-runtime evidence.
             self.assertTrue(result["raw_response"]["mock_test_fixture"])
+            self.assertTrue(result["runtime"]["http_response_received"])
+            self.assertEqual(result["runtime"]["http_status"], 200)
+            self.assertTrue(result["runtime"]["response_body_sha256"])
+            self.assertEqual(result["runtime"]["origin"], "mock")
+            from v2.triage.runtime import summary
+            counts = summary([result])
+            self.assertEqual(counts["http_responses_received"], 1)
+            self.assertEqual(counts["ollama_reported_inference"], 0)
+            self.assertEqual(counts["verified_model_runtime_count"], 0)
             store = self.store({**result, "transport": "mock-http"})
             self.assertEqual(store.queue()[0]["state"], "OPEN")
             input_path = Path(self.tmp.name) / "mock-input.json"

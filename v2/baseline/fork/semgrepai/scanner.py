@@ -99,19 +99,19 @@ class SemgrepScanner:
         code = result.get('lines', '')
         if code and code != "requires login":
             return code.strip()
-            
+
         # Then try extra.lines
         if 'extra' in result:
             code = result['extra'].get('lines', '')
             if code and code != "requires login":
                 return code.strip()
-        
+
         # If we got here, try to read from file
         try:
             raw_path = result.get('path', '')
             if not raw_path:
                 return "No file path available"
-                
+
             # Handle relative paths
             path = Path(raw_path)
             if not path.is_absolute():
@@ -125,35 +125,35 @@ class SemgrepScanner:
                     cwd_path = Path.cwd() / clean_path
                     if cwd_path.exists():
                         path = cwd_path
-                    
+
             path = path.resolve()
             if self.target_root is not None and not path.is_relative_to(self.target_root):
                 return "Source path outside scan target; REVIEW required"
             if not path.exists():
                 return f"File not found: {raw_path}"
-                
+
             # Read the file and extract relevant lines
             with open(path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-                
+
             # Get line numbers
             start_line = result.get('start', {}).get('line', 0)
             end_line = result.get('end', {}).get('line', start_line)
-            
+
             # Validate line numbers
             if start_line < 1 or start_line > len(lines):
                 return f"Invalid start line: {start_line}"
             if end_line < start_line or end_line > len(lines):
                 end_line = start_line
-                
+
             # Get context lines
             context_lines = 10
             start_idx = max(0, start_line - 1 - context_lines)
             end_idx = min(len(lines), end_line + context_lines)
-            
+
             # Extract the lines
             code_lines = lines[start_idx:end_idx]
-            
+
             # Add line numbers and highlight the vulnerable lines
             numbered_lines = []
             for i, line in enumerate(code_lines, start=start_idx + 1):
@@ -162,9 +162,9 @@ class SemgrepScanner:
                     numbered_lines.append(f">>> {prefix}{line.rstrip()}")
                 else:
                     numbered_lines.append(f"    {prefix}{line.rstrip()}")
-            
+
             return '\n'.join(numbered_lines)
-            
+
         except Exception as e:
             return f"Error extracting code: {str(e)}"
 
@@ -172,14 +172,14 @@ class SemgrepScanner:
         """Process and normalize Semgrep results."""
         self.validate_json(results['json'])
         findings = []
-        
+
         for result in results['json'].get('results', []):
             # Extract metadata
             metadata = result.get('extra', {}).get('metadata', {})
-            
+
             # Extract code with context
             code = self._extract_code(result)
-            
+
             finding = {
                 'rule_id': result.get('check_id'),
                 'severity': result.get('extra', {}).get('severity', 'UNKNOWN'),
@@ -235,4 +235,3 @@ class SemgrepScanner:
                     'severity': pattern.get('severity')
                 })
         return security_patterns
-

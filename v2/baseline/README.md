@@ -1,5 +1,9 @@
 # M1: simple_semgrepAI → local OpenGrep
 
+Advisor handover: [ADVISOR_M1_EVIDENCE.md](ADVISOR_M1_EVIDENCE.md), including
+copyable real-engine and source-change demos. Verify patch reproduction/application
+with `python v2/baseline/verify_patch.py`; this checks actual Git apply and exact upstream blobs.
+
 This is a bounded scanner-only fork of [hardw00t/simple_semgrepAI](https://github.com/hardw00t/simple_semgrepAI/tree/2c79a58a16d11e9dea3723e30d2a7faffba7bdc9),
 version 0.2.0, commit `2c79a58a16d11e9dea3723e30d2a7faffba7bdc9`, MIT.
 The exact targeted snapshot is in `upstream/`, with Git blob hashes in
