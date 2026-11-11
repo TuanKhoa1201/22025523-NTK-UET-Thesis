@@ -60,7 +60,7 @@ def run(args):
             raw_path = output / "engine/json.stdout.txt"
         raw = raw_path.read_bytes() if raw_path.exists() else b""
     (output / "input.opengrep.json").write_bytes(raw)
-    bundle = collect(raw, root, args.path_base, exit_code, issues)
+    bundle = collect(raw, root, args.path_base, exit_code, issues, path_maps=args.path_map)
     if before is not None:
         bundle["pre_scan_hashes"] = before
     (output / "evidence.json").write_text(json.dumps(bundle, indent=2), encoding="utf-8")
@@ -94,6 +94,8 @@ def main(argv=None):
     pipeline.add_argument("--output-dir", required=True, help="must not already exist")
     pipeline.add_argument("--json", help="import existing OpenGrep JSON instead of scanning")
     pipeline.add_argument("--path-base", help="base for relative engine paths; resolved files must remain inside source-root")
+    pipeline.add_argument("--path-map", action="append", default=[], metavar="PREFIX=LOCAL_DIR",
+                          help="explicit WSL/POSIX prefix mapping into source-root; raw JSON is unchanged")
     pipeline.add_argument("--engine-exit", type=int, help="original engine exit code when importing JSON; unknown forces UNDETERMINED")
     pipeline.add_argument("--rules")
     pipeline.add_argument("--executable", default="opengrep")
@@ -106,6 +108,8 @@ def main(argv=None):
     for command in ("queue", "show", "history", "decide"):
         p = sub.add_parser(command)
         p.add_argument("--db", required=True)
+        if command == "queue":
+            p.add_argument("--all", action="store_true", dest="include_all", help="include human-confirmed false warnings")
         if command != "queue":
             p.add_argument("id")
         if command == "decide":
@@ -124,7 +128,7 @@ def main(argv=None):
                 show({"scans": [{"scan_sha256": b["scan_sha256"], "issues": b["issues"]} for b in store.scans()],
                       "warnings": [{"id": x["id"], "state": x["state"], "rule_id": x["evidence"]["rule_id"],
                                     "cwe": x["evidence"]["cwe"], "model_status": x["assessment"]["status"]}
-                                   for x in store.queue()]})
+                                   for x in store.queue(include_all=args.include_all)]})
             elif args.command == "show":
                 show(store.get(args.id))
             elif args.command == "history":

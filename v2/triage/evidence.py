@@ -1,8 +1,9 @@
 """Collect source-grounded evidence without trusting paths or code in engine JSON."""
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from .runtime import SCHEMA_VERSION
 
 
@@ -34,16 +35,47 @@ def strict_json(text):
 
 
 class SourceTree:
-    def __init__(self, root, path_base=None):
+    def __init__(self, root, path_base=None, path_maps=()):
         self.root = Path(root).resolve(strict=True)
         if not self.root.is_dir():
             raise EvidenceError("source root must be a directory")
         self.path_base = Path(path_base).resolve() if path_base else self.root
+        self.path_maps = []
+        for entry in path_maps:
+            if isinstance(entry, str) and "=" in entry:
+                prefix, destination = entry.split("=", 1)
+            elif isinstance(entry, dict) and set(entry) == {"from", "to"}:
+                prefix, destination = entry["from"], entry["to"]
+            else:
+                raise EvidenceError("path map must be PREFIX=LOCAL_DIR or {from,to}")
+            if (not isinstance(prefix, str) or not prefix.startswith("/") or "\\" in prefix
+                    or ".." in PurePosixPath(prefix).parts or str(PurePosixPath(prefix)) == "/"):
+                raise EvidenceError("path map needs an explicit non-root absolute POSIX prefix")
+            prefix = str(PurePosixPath(prefix))
+            target = Path(destination).resolve(strict=True)
+            if not target.is_dir() or not target.is_relative_to(self.root):
+                raise EvidenceError("mapped directory must stay inside configured source-root")
+            if any(m["from"] == prefix for m in self.path_maps):
+                raise EvidenceError("duplicate path-map prefix")
+            self.path_maps.append({"from": prefix, "to": str(target)})
+        self.path_maps.sort(key=lambda m: len(m["from"]), reverse=True)
 
     def resolve(self, raw):
         if not isinstance(raw, str) or not raw or "\x00" in raw:
             raise EvidenceError("invalid source path")
-        path = Path(raw)
+        path = None
+        for mapping in self.path_maps:
+            prefix = mapping["from"]
+            if raw == prefix or raw.startswith(prefix + "/"):
+                suffix = raw[len(prefix):].lstrip("/")
+                if ".." in PurePosixPath(suffix).parts or "\\" in suffix or ":" in suffix:
+                    raise EvidenceError("invalid mapped path suffix")
+                path = Path(mapping["to"]).joinpath(*PurePosixPath(suffix).parts)
+                break
+        if path is None:
+            if os.name == "nt" and raw.startswith("/"):
+                raise EvidenceError("POSIX/WSL source path requires an explicit --path-map")
+            path = Path(raw)
         if not path.is_absolute():
             path = self.path_base / path
         path = path.resolve(strict=True)
@@ -102,15 +134,15 @@ def location_evidence(tree, loc, role, snapshots, expected=None):
     lower, upper = max(1, sl - 3), min(len(lines), el + 3)
     if upper - lower > 150:
         raise EvidenceError("source span exceeds evidence limit")
-    return {"role": role, "path": relative, "start": start, "end": end,
+    return {"role": role, "path": relative, "raw_path": loc.get("path"), "start": start, "end": end,
             "sha256": sha, "matched": matched,
             "lines": [{"line": i, "text": lines[i-1].rstrip("\r\n")}
                       for i in range(lower, upper + 1)]}
 
 
-def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=()):
+def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=(), path_maps=()):
     """Keep even malformed/partial findings; issues force UNDETERMINED downstream."""
-    tree = SourceTree(root, path_base)
+    tree = SourceTree(root, path_base, path_maps)
     raw_bytes = raw_json if isinstance(raw_json, bytes) else raw_json.encode("utf-8")
     scan_hash = digest(raw_bytes)
     issues = list(scan_issues)
@@ -122,9 +154,11 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=()):
         doc = strict_json(raw_bytes.decode("utf-8"))
     except (EvidenceError, UnicodeError) as exc:
         return {"schema_version": SCHEMA_VERSION, "scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
+                "path_mappings": tree.path_maps,
                 "issues": issues + [str(exc)], "records": [], "raw_document": None}
     if not isinstance(doc, dict) or not isinstance(doc.get("results"), list):
         return {"schema_version": SCHEMA_VERSION, "scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
+                "path_mappings": tree.path_maps,
                 "issues": issues + ["invalid OpenGrep results envelope"], "records": [], "raw_document": doc}
     if not isinstance(doc.get("errors", []), list) or doc.get("errors"):
         issues.append("OpenGrep reported errors or partial scan")
@@ -183,12 +217,14 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=()):
         identifier = digest((scan_hash + ":" + str(index)).encode())
         records.append({"schema_version": SCHEMA_VERSION, "id": identifier, "alert_id": identifier,
                         "finding_index": index, "scan_sha256": scan_hash, "root": str(tree.root),
+                        "path_mappings": tree.path_maps,
                         "rule_id": item.get("check_id"), "cwe": cwe, "severity": extra.get("severity"),
                         "path": item.get("path"), "start": item.get("start"), "end": item.get("end"),
                         "raw_finding": original, "raw_trace": trace,
                         "snapshots": snapshots, "snippets": snippets, "issues": problems,
                         "collected_at": now()})
     return {"schema_version": SCHEMA_VERSION, "scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
+            "path_mappings": tree.path_maps,
             "issues": issues, "records": records, "raw_document": doc}
 
 

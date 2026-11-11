@@ -43,9 +43,12 @@ class ReviewStore:
     def scans(self):
         return [json.loads(row[0]) for row in self.db.execute("SELECT bundle FROM scans ORDER BY rowid")]
 
-    def queue(self):
-        # Intentionally includes CONFIRMED_FALSE: hiding is never driven by model output.
-        return [self.get(row[0]) for row in self.db.execute("SELECT id FROM warnings ORDER BY rowid")]
+    def queue(self, include_all=False):
+        # Only an explicit human false confirmation hides a row; no row is deleted.
+        query = "SELECT id FROM warnings"
+        if not include_all:
+            query += " WHERE state != 'CONFIRMED_FALSE'"
+        return [self.get(row[0]) for row in self.db.execute(query + " ORDER BY rowid")]
 
     def get(self, identifier):
         row = self.db.execute("SELECT * FROM warnings WHERE id=?", (identifier,)).fetchone()

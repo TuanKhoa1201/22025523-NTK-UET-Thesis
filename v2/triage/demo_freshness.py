@@ -31,7 +31,7 @@ def run(output):
             record = item["evidence"]
             check_current(record)
             # Explicitly a scripted review API exercise, never an actual user's decision.
-            store.decide(item["id"], "confirm-true", "SCRIPTED-SYNTHETIC-DEMO",
+            store.decide(item["id"], "confirm-true", "SCRIPTED-DEMO",
                          "Synthetic vulnerable positive control; scripted review API exercise, not independent human labeling")
             before = store.history(item["id"])
             version_before = digest((source / "Vulnerable.java").read_bytes())
@@ -39,7 +39,7 @@ def run(output):
                 stream.write(b"\n// Synthetic edit for stale-evidence demonstration.\n")
             version_after = digest((source / "Vulnerable.java").read_bytes())
             try:
-                store.decide(item["id"], "confirm-false", "SCRIPTED-SYNTHETIC-DEMO", "This request must be refused: stale evidence")
+                store.decide(item["id"], "confirm-false", "SCRIPTED-DEMO", "This request must be refused: stale evidence")
             except EvidenceError as exc:
                 refusal = str(exc)
             else:
