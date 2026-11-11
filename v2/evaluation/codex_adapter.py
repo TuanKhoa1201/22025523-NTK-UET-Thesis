@@ -39,6 +39,28 @@ def is_valid_sha256(value: Any) -> bool:
     return isinstance(value, str) and bool(HEX_SHA256_RE.match(value.strip()))
 
 
+def compute_contract_alert_id(scan_sha256: str, finding_index: int) -> str:
+    """Compute Contract 1.1 deterministic alert_id = SHA256(UTF8(scan_sha256 + ':' + decimal(finding_index)))."""
+    clean_sha = str(scan_sha256).strip().lower()
+    if not is_valid_sha256(clean_sha):
+        raise ValueError(f"Invalid scan_sha256 for Contract 1.1 alert_id: {scan_sha256!r}")
+    if not isinstance(finding_index, int) or isinstance(finding_index, bool) or finding_index < 0:
+        raise ValueError(f"Invalid finding_index for Contract 1.1 alert_id: {finding_index!r}")
+    payload = f"{clean_sha}:{finding_index}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def compute_scan_sha256_variants(raw_bytes: bytes) -> dict[str, str]:
+    """Compute raw, LF-normalized, and CRLF-normalized SHA-256 digests for cross-OS Git checkouts."""
+    lf_bytes = raw_bytes.replace(b"\r\n", b"\n")
+    crlf_bytes = lf_bytes.replace(b"\n", b"\r\n")
+    return {
+        "raw": hashlib.sha256(raw_bytes).hexdigest(),
+        "lf": hashlib.sha256(lf_bytes).hexdigest(),
+        "crlf": hashlib.sha256(crlf_bytes).hexdigest(),
+    }
+
+
 def normalize_path(raw_path: Any) -> str:
     """Normalize a file path to forward slashes without leading './'."""
     if not isinstance(raw_path, str):
@@ -47,6 +69,19 @@ def normalize_path(raw_path: Any) -> str:
     while cleaned.startswith("./"):
         cleaned = cleaned[2:]
     return cleaned
+
+
+def paths_match(path_a: Any, path_b: Any) -> bool:
+    """Return True if two normalized paths are identical or one is a clean root-relative suffix of the other."""
+    norm_a = normalize_path(path_a)
+    norm_b = normalize_path(path_b)
+    if not norm_a or not norm_b:
+        return False
+    if norm_a == norm_b:
+        return True
+    if ".." in norm_a.split("/") or ".." in norm_b.split("/"):
+        return False
+    return norm_a.endswith("/" + norm_b) or norm_b.endswith("/" + norm_a)
 
 
 def normalize_cwe_value(raw_cwe: Any) -> str:
@@ -193,7 +228,7 @@ def extract_snapshot_and_lines(
 
     for snap in snapshot_list:
         snap_path = normalize_path(snap.get("path") or snap.get("file_path") or norm_target)
-        if norm_target and snap_path and snap_path != norm_target:
+        if norm_target and snap_path and not paths_match(snap_path, norm_target):
             continue
         snap_sha = snap.get("sha256") or snap.get("source_sha256")
         content = snap.get("content") if snap.get("content") is not None else snap.get("text")
@@ -218,7 +253,7 @@ def extract_snapshot_and_lines(
 
     for snip in snippet_list:
         snip_path = normalize_path(snip.get("path") or snip.get("file_path") or norm_target)
-        if norm_target and snip_path and snip_path != norm_target:
+        if norm_target and snip_path and not paths_match(snip_path, norm_target):
             continue
         snip_sha = snip.get("sha256") or snip.get("source_sha256")
         if is_valid_sha256(snip_sha) and not found_sha:
@@ -232,7 +267,7 @@ def extract_snapshot_and_lines(
 
     # Check whether trace / dataflow evidence is present
     has_trace = False
-    if evidence.get("trace") or evidence.get("dataflow_trace"):
+    if evidence.get("trace") or evidence.get("raw_trace") or evidence.get("dataflow_trace"):
         has_trace = True
     elif isinstance(evidence.get("raw_finding"), dict):
         rf_extra = evidence["raw_finding"].get("extra")
@@ -312,10 +347,14 @@ def parse_codex_citations(
 
 
 def is_codex_assessment_record(record: dict[str, Any]) -> bool:
-    """Return True if a dict looks like a Codex `assessments.jsonl` record."""
+    """Return True if a dict looks like a Codex `assessments.jsonl` or `export_pilot.py` record."""
     if not isinstance(record, dict):
         return False
     if isinstance(record.get("assessment"), dict) or isinstance(record.get("evidence"), dict):
+        return True
+    if record.get("schema_version") == "ntk.v2.triage_pilot_record.v1":
+        return True
+    if str(record.get("codex_status") or "").strip().upper() in CODEX_STATUS_MAP:
         return True
     if str(record.get("status") or "").strip().upper() in CODEX_STATUS_MAP:
         return True
@@ -324,16 +363,40 @@ def is_codex_assessment_record(record: dict[str, Any]) -> bool:
     return False
 
 
+def _extract_raw_model_status_from_response(assessment: dict[str, Any]) -> str | None:
+    """Extract inner raw model status from `assessment.raw_response.message.content` if present."""
+    raw_resp = assessment.get("raw_response")
+    if not isinstance(raw_resp, dict):
+        return None
+    msg = raw_resp.get("message")
+    content = msg.get("content") if isinstance(msg, dict) else raw_resp.get("response")
+    if not isinstance(content, str) or not content.strip():
+        return None
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, dict) and parsed.get("status"):
+            return str(parsed["status"]).strip().upper()
+    except json.JSONDecodeError:
+        pass
+    return None
+
+
 def convert_single_codex_record(
     record: dict[str, Any],
     record_index: int = 0,
 ) -> dict[str, Any]:
     """Normalize a single Codex record (nested or flat) into an intermediate assessment dict."""
-    codex_id = str(record.get("id") or record.get("finding_id") or f"codex-{record_index}").strip()
+    codex_id = str(
+        record.get("id")
+        or record.get("finding_id")
+        or record.get("alert_id")
+        or f"codex-{record_index}"
+    ).strip()
     explicit_alert_id = str(record.get("alert_id") or "").strip() or None
 
     evidence = record.get("evidence") if isinstance(record.get("evidence"), dict) else {}
     assessment = record.get("assessment") if isinstance(record.get("assessment"), dict) else {}
+    runtime_block = record.get("runtime") if isinstance(record.get("runtime"), dict) else {}
 
     raw_finding = (
         evidence.get("raw_finding")
@@ -345,13 +408,20 @@ def convert_single_codex_record(
     merged_finding_view: dict[str, Any] = {
         **raw_finding,
         **{k: v for k, v in evidence.items() if k not in ("raw_finding", "snapshots", "snippets") and v is not None},
-        **{k: v for k, v in record.items() if k in ("file_path", "path", "start_line", "end_line", "rule_id", "check_id") and v is not None},
+        **{
+            k: v
+            for k, v in record.items()
+            if k in ("file_path", "path", "start_line", "end_line", "start_col", "end_col", "rule_id", "check_id")
+            and v is not None
+        },
     }
     sig = canonical_finding_signature(merged_finding_view)
     file_path, start_line, end_line, start_col, end_col, rule_id, evidence_cwe = sig
 
     evidence_cwes = normalize_cwe_list(
-        evidence.get("cwe") if evidence.get("cwe") is not None else raw_finding.get("cwe")
+        evidence.get("cwe")
+        if evidence.get("cwe") is not None
+        else (raw_finding.get("cwe") if raw_finding.get("cwe") is not None else record.get("cwe"))
     )
     if evidence_cwes == ["UNKNOWN_CWE"] and evidence_cwe != "UNKNOWN_CWE":
         evidence_cwes = [evidence_cwe]
@@ -364,16 +434,30 @@ def convert_single_codex_record(
         else evidence_cwes[0]
     )
 
-    # Status conversion
+    # Status conversion (post-citation-check Codex status + inner raw model status)
     raw_status = str(
         assessment.get("status")
+        or record.get("codex_status")
         or assessment.get("verdict")
         or record.get("status")
+        or record.get("pilot_verdict")
         or record.get("verdict")
         or ""
     ).strip().upper()
 
-    has_error = bool(assessment.get("error") or record.get("error"))
+    raw_model_status = (
+        str(record.get("raw_model_status")).strip().upper()
+        if record.get("raw_model_status")
+        else (_extract_raw_model_status_from_response(assessment) or raw_status)
+    )
+
+    citation_check = str(
+        assessment.get("citation_check")
+        or record.get("citation_check")
+        or ""
+    ).strip().upper() or None
+
+    has_error = bool(assessment.get("error") or record.get("error") or runtime_block.get("error"))
     if has_error:
         mapped_verdict = "REVIEW"
     elif raw_status in CODEX_STATUS_MAP:
@@ -386,9 +470,13 @@ def convert_single_codex_record(
         assessment.get("citations")
         if assessment.get("citations") is not None
         else (
-            record.get("cited_lines")
-            if record.get("cited_lines") is not None
-            else record.get("evidence_lines")
+            record.get("citations")
+            if record.get("citations") is not None and not record.get("cited_lines")
+            else (
+                record.get("cited_lines")
+                if record.get("cited_lines") is not None
+                else record.get("evidence_lines")
+            )
         )
     )
     cited_lines, cited_paths, citation_parse_errors = parse_codex_citations(
@@ -412,13 +500,42 @@ def convert_single_codex_record(
         else snap_sha
     )
 
-    # Extract latency if available
+    # Extract latency in ms (supporting latency_ms, duration_ms, or elapsed_seconds * 1000)
     latency_ms = (
         assessment.get("latency_ms")
         or assessment.get("duration_ms")
         or record.get("latency_ms")
         or record.get("duration_ms")
+        or runtime_block.get("latency_ms")
     )
+    if latency_ms is None:
+        elapsed_sec = (
+            assessment.get("elapsed_seconds")
+            if assessment.get("elapsed_seconds") is not None
+            else (
+                runtime_block.get("elapsed_seconds")
+                if runtime_block.get("elapsed_seconds") is not None
+                else record.get("elapsed_seconds")
+            )
+        )
+        if isinstance(elapsed_sec, (int, float)) and not isinstance(elapsed_sec, bool):
+            latency_ms = round(float(elapsed_sec) * 1000.0, 3)
+
+    # Extract model_id and human review state
+    model_id = str(
+        assessment.get("model")
+        or runtime_block.get("model")
+        or record.get("model")
+        or (assessment.get("raw_response") or {}).get("model")
+        or ""
+    ).strip() or None
+
+    human_review_state = str(
+        record.get("human_review_state")
+        or record.get("state")
+        or assessment.get("state")
+        or "OPEN"
+    ).strip().upper()
 
     # Extract auto_dismissed / human confirmation flags from either level
     auto_dismissed = bool(
@@ -454,6 +571,10 @@ def convert_single_codex_record(
         "cwe": assessment_cwe,
         "evidence_cwes": evidence_cwes,
         "raw_codex_status": raw_status,
+        "raw_model_status": raw_model_status,
+        "citation_check": citation_check,
+        "model_id": model_id,
+        "human_review_state": human_review_state,
         "verdict": mapped_verdict,
         "cited_lines": cited_lines,
         "cited_paths": cited_paths,
@@ -479,15 +600,23 @@ def match_and_convert_codex_records(
 
     Never guesses:
     - If `scan_sha256` conflicts, rejects mapping.
-    - Matches by verified `alert_id`, verified `finding_index` + signature, or unique
-      canonical signature `(file_path, start_line, end_line, start_col, end_col, rule_id, cwe)`.
+    - Matches by verified `alert_id`, Contract 1.1 `SHA256(scan_sha256:finding_index)`,
+      verified `finding_index` + signature, or unique canonical signature
+      `(file_path, start_line, end_line, start_col, end_col, rule_id, cwe)`.
     - If multiple identical OpenGrep alerts share the exact signature and cannot be
       disambiguated by `finding_index`, marks them as ambiguous and routes to REVIEW.
     """
     converted_list: list[dict[str, Any]] = []
     mapping_errors: list[dict[str, Any]] = []
 
-    alerts_by_id: dict[str, dict[str, Any]] = {a["alert_id"]: a for a in opengrep_alerts}
+    alerts_by_id: dict[str, dict[str, Any]] = {}
+    for a in opengrep_alerts:
+        alerts_by_id[a["alert_id"]] = a
+        if a.get("contract_alert_id"):
+            alerts_by_id[str(a["contract_alert_id"])] = a
+        if a.get("legacy_alert_id"):
+            alerts_by_id[str(a["legacy_alert_id"])] = a
+
     alerts_by_index: dict[int, dict[str, Any]] = {
         idx: a for idx, a in enumerate(opengrep_alerts)
     }
@@ -526,35 +655,58 @@ def match_and_convert_codex_records(
             })
             continue
 
+        active_scan_sha = (
+            str(expected_scan_sha256).strip().lower()
+            if is_valid_sha256(expected_scan_sha256)
+            else (
+                str(norm.get("scan_sha256")).strip().lower()
+                if is_valid_sha256(norm.get("scan_sha256"))
+                else None
+            )
+        )
+        if active_scan_sha:
+            for find_idx, alert_obj in alerts_by_index.items():
+                cid = compute_contract_alert_id(active_scan_sha, find_idx)
+                alerts_by_id.setdefault(cid, alert_obj)
+
         matched_aid: str | None = None
         sig = norm["canonical_signature"]
         loc_rule = (sig[0], sig[1], sig[2], sig[5])
 
-        # 2. Try explicit alert_id if it exists in alerts_by_id and does not conflict on location
-        if norm["alert_id"] and norm["alert_id"] in alerts_by_id:
-            candidate_alert = alerts_by_id[norm["alert_id"]]
-            if (
-                norm["file_path"]
-                and candidate_alert["file_path"]
-                and norm["file_path"] != candidate_alert["file_path"]
-            ):
-                mapping_errors.append({
-                    "codex_id": norm["codex_id"],
-                    "alert_id": norm["alert_id"],
-                    "reason": (
-                        f"Explicit alert_id {norm['alert_id']} location conflict: "
-                        f"{norm['file_path']} vs {candidate_alert['file_path']}"
-                    ),
-                })
-                continue
-            matched_aid = norm["alert_id"]
+        # 2. Try explicit alert_id or Contract 1.1 codex_id if it exists in alerts_by_id and does not conflict on location
+        for candidate_id_key in (norm["alert_id"], norm["codex_id"]):
+            if candidate_id_key and candidate_id_key in alerts_by_id:
+                candidate_alert = alerts_by_id[candidate_id_key]
+                if (
+                    norm["file_path"]
+                    and candidate_alert["file_path"]
+                    and not paths_match(norm["file_path"], candidate_alert["file_path"])
+                ):
+                    mapping_errors.append({
+                        "codex_id": norm["codex_id"],
+                        "alert_id": candidate_id_key,
+                        "reason": (
+                            f"Explicit alert_id {candidate_id_key} location conflict: "
+                            f"{norm['file_path']} vs {candidate_alert['file_path']}"
+                        ),
+                    })
+                    matched_aid = "__CONFLICT__"
+                    break
+                matched_aid = candidate_alert["alert_id"]
+                break
+
+        if matched_aid == "__CONFLICT__":
+            continue
 
         # 3. Try explicit finding_index if provided and signature matches
         if matched_aid is None and isinstance(norm["finding_index"], int):
             idx_alert = alerts_by_index.get(norm["finding_index"])
             if idx_alert is not None:
                 idx_sig = canonical_finding_signature(idx_alert)
-                if (idx_sig[0], idx_sig[1], idx_sig[2], idx_sig[5]) == loc_rule:
+                if (
+                    paths_match(idx_sig[0], loc_rule[0])
+                    and (idx_sig[1], idx_sig[2], idx_sig[5]) == (loc_rule[1], loc_rule[2], loc_rule[3])
+                ):
                     matched_aid = idx_alert["alert_id"]
                 else:
                     mapping_errors.append({
@@ -591,10 +743,6 @@ def match_and_convert_codex_records(
                         "reason": "Ambiguous location+rule match across multiple alerts",
                     })
                     continue
-
-        # 5. Last check: did Codex use `id` equal to an OpenGrep `alert_id` when no raw_finding was embedded?
-        if matched_aid is None and norm["codex_id"] in alerts_by_id and not norm["file_path"]:
-            matched_aid = norm["codex_id"]
 
         if matched_aid is None:
             mapping_errors.append({

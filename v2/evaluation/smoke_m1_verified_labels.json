@@ -1,0 +1,56 @@
+{
+  "schema_version": "ntk.v2.verified_ground_truth.v1",
+  "dataset_kind": "SYNTHETIC_SMOKE_PILOT",
+  "m4_acceptance_ready": false,
+  "scan_file": "v2/demo/smoke_m1_rules_raw.opengrep.json",
+  "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+  "source_file": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+  "source_sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+  "labels": [
+    {
+      "alert_id": "5c3fa49a9a739ca38e3711e51b676c5c9894a523a8ef1e5f276a3b7d033672b0",
+      "finding_index": 0,
+      "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+      "source_sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+      "file_path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+      "start_line": 28,
+      "end_line": 28,
+      "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+      "cwe": "CWE-89",
+      "ground_truth": "TRUE_POSITIVE",
+      "label_type": "SYNTHETIC_GROUND_TRUTH",
+      "annotated_by": "independent-code-verification-antigravity",
+      "annotator_rationale": "In unsafeSqlLookup (lines 24-29), untrusted HTTP parameter request.getParameter(\"username\") at line 25 is concatenated directly into the SQL string at line 26 and executed via Statement.executeQuery(query) at line 28 without parameterization or escaping."
+    },
+    {
+      "alert_id": "76501a37112c42a9d4e46cf1fadeb1794aa417284ce0ce4d415a6986f5a773e9",
+      "finding_index": 1,
+      "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+      "source_sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+      "file_path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+      "start_line": 33,
+      "end_line": 33,
+      "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+      "cwe": "CWE-22",
+      "ground_truth": "TRUE_POSITIVE",
+      "label_type": "SYNTHETIC_GROUND_TRUTH",
+      "annotated_by": "independent-code-verification-antigravity",
+      "annotator_rationale": "In unsafeFileRead (lines 31-35), untrusted HTTP parameter request.getParameter(\"report\") at line 32 is concatenated directly into new File(\"/var/app/reports/\" + rawReportName) at line 33 and opened via FileInputStream at line 34 without path normalization or prefix containment checks."
+    },
+    {
+      "alert_id": "3252602faf5bdb45ef2a393cdf9d72350514515468d9b170d1083410e7716249",
+      "finding_index": 2,
+      "scan_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+      "source_sha256": "090c9349e4837588c47ae0d920cb841611252c7905b0654fda931648c421a9f9",
+      "file_path": "v2/evaluation/smoke_evidence/SmokeVulnSample.java",
+      "start_line": 47,
+      "end_line": 47,
+      "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+      "cwe": "CWE-22",
+      "ground_truth": "FALSE_POSITIVE",
+      "label_type": "SYNTHETIC_GROUND_TRUTH",
+      "annotated_by": "independent-code-verification-antigravity",
+      "annotator_rationale": "In safeFileRead (lines 44-49), rawReportName from request.getParameter(\"report\") (line 45) is sanitized via Apache Commons IO FilenameUtils.getName(rawReportName) at line 46 before concatenation into new File(\"/var/app/reports/\" + cleanName) at line 47. FilenameUtils.getName strips all directory prefixes and '/' or '\\\\' separators, preventing CWE-22 directory traversal outside /var/app/reports/ (degenerate inputs '', '.', '..' resolve to directories and fail with FileNotFoundException on FileInputStream)."
+    }
+  ]
+}
