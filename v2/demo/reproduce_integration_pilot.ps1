@@ -1,81 +1,230 @@
 <#
 .SYNOPSIS
-    Reproducible end-to-end verification script for NTK Thesis V2 Integration Pilot (Progress Report #1).
+    Fail-closed reproducible verification script for NTK Thesis V2 Integration Pilot.
 .DESCRIPTION
-    Executes from the integration workspace root into a fresh timestamped output directory ($EvidenceRoot):
-    1. Upstream patch verification (verify_patch.py) and all 105 unit tests across M1 (24), M2/M3 (59), and Evaluation (22).
-    2. Real OpenGrep 1.25.0 JSON and SARIF scan on v2/evaluation/smoke_evidence/SmokeVulnSample.java.
-    3. End-to-end human review queue & SHA-256 freshness tamper demos (demo_queue.py, demo_freshness.py, verify_handoff.py).
-    4. Paired Pilot Table (.csv / .json) and score_pilot.py evaluation from verified Qwen3.5:9b-q4_K_M evidence (or optional live Ollama run when -RunLiveLlm is set).
+    Supports two strictly separated execution modes into a brand-new timestamped directory ($EvidenceRoot):
+    - REPLAY (default): Uses locked raw scan + verified Qwen3.5:9b-q4_K_M assessments without new LLM inference.
+      Refuses to pair any raw scan with assessments or labels if scan_sha256 does not match.
+    - LIVE (-Mode LIVE or -RunLiveLlm): Runs fresh OpenGrep scan (JSON + SARIF), executes live Ollama triage,
+      verifies live model runtime metadata on every warning, projects labels to the live scan_sha256, and scores.
+    Every external command (python, pytest, wsl.exe/opengrep) is checked for exit code; any non-zero exit code
+    immediately aborts before the COMPLETE banner can be printed.
 #>
 param(
+    [ValidateSet("REPLAY", "LIVE")]
+    [string]$Mode = "REPLAY",
     [string]$Model = "qwen3.5:9b-q4_K_M",
-    [string]$EvidenceRoot = "C:\Users\Admin\ntk-thesis-v2\evidence\repro_run_$(Get-Date -Format 'yyyyMMdd_HHmmss')",
+    [string]$Endpoint = "http://127.0.0.1:11434",
+    [string]$EvidenceRoot = "",
+    [string]$ReplayOpenGrepJson = "v2/demo/smoke_m1_rules_raw.opengrep.json",
+    [string]$ReplayTriageJsonl = "v2/demo/triage_qwen35_9b_smoke_m1_assessments.jsonl",
+    [string]$LabelsJson = "v2/evaluation/smoke_m1_verified_labels.json",
+    [string]$InjectFailureStep = "",
+    [switch]$SkipHeavyDemos = $false,
     [switch]$RunLiveLlm = $false
 )
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-Set-Location $RepoRoot
-New-Item -ItemType Directory -Force -Path $EvidenceRoot | Out-Null
-$env:PATH = "C:\Users\Admin\ntk-thesis-v2\tools\opengrep\v1.25.0;$env:PATH"
+Set-StrictMode -Version Latest
 
-Write-Host "=== [1/4] Verifying Upstream Patch and Running All 105 Unit Tests (M1, M2/M3, Evaluation) ==="
-python v2/baseline/verify_patch.py
-python -m pytest v2/baseline/tests v2/triage/tests v2/evaluation/tests -v
-
-Write-Host "=== [2/4] Running Real OpenGrep 1.25.0 Scan (JSON + SARIF) into Fresh Evidence Directory ==="
-$WslEvDir = "/mnt/c" + ($EvidenceRoot.Substring(2) -replace '\\', '/')
-wsl.exe -d Ubuntu-IRIS -- /usr/local/bin/opengrep scan `
-    --config v2/baseline/rules/java.yml `
-    --json --dataflow-traces --no-git-ignore --disable-version-check --jobs 1 --timeout 60 `
-    --output "$WslEvDir/smoke_m1_raw.opengrep.json" `
-    v2/evaluation/smoke_evidence/SmokeVulnSample.java
-wsl.exe -d Ubuntu-IRIS -- /usr/local/bin/opengrep scan `
-    --config v2/baseline/rules/java.yml `
-    --sarif --dataflow-traces --no-git-ignore --disable-version-check --jobs 1 --timeout 60 `
-    --output "$WslEvDir/smoke_m1_raw.opengrep.sarif" `
-    v2/evaluation/smoke_evidence/SmokeVulnSample.java
-
-Write-Host "=== [3/4] Running End-to-End Review Queue & SHA-256 Freshness Tamper Verification ==="
-python -m v2.triage.demo_queue --output-dir (Join-Path $EvidenceRoot "queue_demo")
-python -m v2.triage.demo_freshness --output-dir (Join-Path $EvidenceRoot "freshness_demo")
-python v2/baseline/verify_handoff.py `
-    --engine (Join-Path $EvidenceRoot "freshness_demo\run\engine") `
-    --triage (Join-Path $EvidenceRoot "freshness_demo\run")
-
-Write-Host "=== [4/4] Building Paired Pilot Table (.csv/.json) and Scoring Qwen3.5-9B Evidence ==="
-$TriageJsonl = Join-Path $RepoRoot "v2\demo\triage_qwen35_9b_smoke_m1_assessments.jsonl"
 if ($RunLiveLlm) {
-    $LiveOut = Join-Path $EvidenceRoot "triage_live_qwen35"
-    python -m v2.triage run `
-        --source-root $RepoRoot `
-        --path-base $RepoRoot `
-        --json "v2/demo/smoke_m1_rules_raw.opengrep.json" `
-        --engine-exit 0 `
-        --output-dir $LiveOut `
-        --model $Model `
-        --timeout 180
-    $TriageJsonl = Join-Path $LiveOut "assessments.jsonl"
+    $Mode = "LIVE"
+}
+$Mode = $Mode.ToUpperInvariant()
+
+$ValidSteps = @(
+    "verify_repository",
+    "verify_patch",
+    "pytest_core",
+    "pytest_quality_gate",
+    "demo_queue",
+    "demo_freshness",
+    "verify_handoff",
+    "opengrep_json_scan",
+    "opengrep_sarif_scan",
+    "live_triage_run",
+    "verify_scan_hash_contract",
+    "build_paired_pilot_table",
+    "score_pilot"
+)
+
+if (-not [string]::IsNullOrWhiteSpace($InjectFailureStep) -and ($ValidSteps -notcontains $InjectFailureStep)) {
+    [Console]::Error.WriteLine("[FAIL-CLOSED] Unknown InjectFailureStep '$InjectFailureStep'. Valid steps: $($ValidSteps -join ', ')")
+    exit 64
 }
 
-python v2/evaluation/build_paired_pilot_table.py `
-    --opengrep "v2/demo/smoke_m1_rules_raw.opengrep.json" `
-    --labels "v2/evaluation/smoke_m1_verified_labels.json" `
-    --qwen35-triage $TriageJsonl `
-    --qwen3-8b-reference "v2/demo/triage_qwen3_8b_summary.json" `
-    --source-root $RepoRoot `
-    --output-csv (Join-Path $EvidenceRoot "ADVISOR_PAIRED_PILOT_20261111.csv") `
-    --output-json (Join-Path $EvidenceRoot "paired_pilot_summary.json")
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+Set-Location $RepoRoot
 
-$env:PYTHONPATH = "v2/evaluation"
-python -m v2.evaluation.score_pilot `
-    --opengrep "v2/demo/smoke_m1_rules_raw.opengrep.json" `
-    --labels "v2/evaluation/smoke_m1_verified_labels.json" `
-    --triage $TriageJsonl `
-    --source-root $RepoRoot `
-    --output-json (Join-Path $EvidenceRoot "score_pilot_verified.json") `
-    --output-md (Join-Path $EvidenceRoot "score_pilot_verified.md")
-Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
+    $Stamp = (Get-Date).ToString("yyyyMMdd_HHmmss_fff")
+    $DefaultBase = if ($env:OS -eq "Windows_NT") { "C:\Users\Admin\ntk-thesis-v2\evidence" } else { [System.IO.Path]::GetTempPath() }
+    $EvidenceRoot = Join-Path $DefaultBase "repro_$($Mode.ToLowerInvariant())_$Stamp"
+}
 
-Write-Host "=== COMPLETE: All verification artifacts written to $EvidenceRoot ==="
+$NormalizedEvidenceRoot = [System.IO.Path]::GetFullPath($EvidenceRoot)
+$NormalizedRepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
+if ($NormalizedEvidenceRoot.StartsWith($NormalizedRepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    [Console]::Error.WriteLine("[FAIL-CLOSED] EvidenceRoot '$NormalizedEvidenceRoot' cannot be inside Git repository '$NormalizedRepoRoot'.")
+    exit 2
+}
+if (Test-Path -LiteralPath $NormalizedEvidenceRoot) {
+    [Console]::Error.WriteLine("[FAIL-CLOSED] EvidenceRoot '$NormalizedEvidenceRoot' already exists. Refusing to overwrite existing evidence.")
+    exit 2
+}
+
+New-Item -ItemType Directory -Path $NormalizedEvidenceRoot | Out-Null
+$EvidenceRoot = $NormalizedEvidenceRoot
+$LocalOpenGrepDir = "C:\Users\Admin\ntk-thesis-v2\tools\opengrep\v1.25.0"
+if (Test-Path -LiteralPath $LocalOpenGrepDir) {
+    $env:PATH = "$LocalOpenGrepDir;$env:PATH"
+}
+
+function Invoke-CheckedStep {
+    param(
+        [Parameter(Mandatory = $true)][string]$StepName,
+        [Parameter(Mandatory = $true)][scriptblock]$Action
+    )
+    $global:LASTEXITCODE = 0
+    if (-not [string]::IsNullOrWhiteSpace($InjectFailureStep) -and ($InjectFailureStep -ieq $StepName)) {
+        [Console]::Error.WriteLine("[FAULT-INJECTION] Triggering intentional failure at step '$StepName'.")
+        python -c "import sys; sys.stderr.write('Intentional fault injected at step $StepName\n'); sys.exit(99)"
+    } else {
+        & $Action
+    }
+    $exitCode = $LASTEXITCODE
+    if ($null -ne $exitCode -and $exitCode -ne 0) {
+        [Console]::Error.WriteLine("[FAIL-CLOSED] Step '$StepName' failed with exit code $exitCode. Aborting reproduction.")
+        exit $exitCode
+    }
+}
+
+try {
+    if (-not $SkipHeavyDemos) {
+        Write-Host "=== [1/4] [MODE=$Mode] Verifying Repository Policy, Upstream Patch, and V2 Unit Tests ==="
+        Invoke-CheckedStep "verify_repository" {
+            python scripts/verify-repository.py
+        }
+        Invoke-CheckedStep "verify_patch" {
+            python v2/baseline/verify_patch.py
+        }
+        Invoke-CheckedStep "pytest_core" {
+            python -m pytest v2/baseline/tests v2/triage/tests v2/evaluation/tests -q
+        }
+        if ($env:NTK_V2_IN_QUALITY_GATE_TEST -ne "1") {
+            Invoke-CheckedStep "pytest_quality_gate" {
+                python -m pytest v2/demo/tests -q
+            }
+        }
+
+        Write-Host "=== [2/4] [MODE=$Mode] Running End-to-End Review Queue & SHA-256 Freshness Tamper Verification ==="
+        Invoke-CheckedStep "demo_queue" {
+            python -m v2.triage.demo_queue --output-dir (Join-Path $EvidenceRoot "queue_demo")
+        }
+        Invoke-CheckedStep "demo_freshness" {
+            python -m v2.triage.demo_freshness --output-dir (Join-Path $EvidenceRoot "freshness_demo")
+        }
+        Invoke-CheckedStep "verify_handoff" {
+            python v2/baseline/verify_handoff.py `
+                --engine (Join-Path $EvidenceRoot "freshness_demo\run\engine") `
+                --triage (Join-Path $EvidenceRoot "freshness_demo\run")
+        }
+    }
+
+    if ($Mode -eq "REPLAY") {
+        Write-Host "=== [3/4] [MODE=REPLAY] Verifying Locked Scan-Hash & Provenance Contract (No Live Inference) ==="
+        $ScanJsonForEval = $ReplayOpenGrepJson
+        $TriageJsonlForEval = $ReplayTriageJsonl
+        $LabelsJsonForEval = $LabelsJson
+
+        Invoke-CheckedStep "verify_scan_hash_contract" {
+            python v2/demo/verify_repro_contract.py replay `
+                --opengrep $ScanJsonForEval `
+                --triage $TriageJsonlForEval `
+                --labels $LabelsJsonForEval `
+                --output-report (Join-Path $EvidenceRoot "contract_verification_receipt.json")
+        }
+    } else {
+        Write-Host "=== [3/4] [MODE=LIVE] Running Fresh OpenGrep Scan, Live Ollama Triage, and Runtime Verification ==="
+        $LiveScanDir = Join-Path $EvidenceRoot "live_scan"
+        New-Item -ItemType Directory -Path $LiveScanDir | Out-Null
+        $WslScanDir = "/mnt/c" + ($LiveScanDir.Substring(2) -replace '\\', '/')
+        $LiveOpenGrepJson = Join-Path $LiveScanDir "smoke_m1_raw.opengrep.json"
+        $LiveOpenGrepSarif = Join-Path $LiveScanDir "smoke_m1_raw.opengrep.sarif"
+
+        Invoke-CheckedStep "opengrep_json_scan" {
+            wsl.exe -d Ubuntu-IRIS -- /usr/local/bin/opengrep scan `
+                --config v2/baseline/rules/java.yml `
+                --json --dataflow-traces --no-git-ignore --disable-version-check --jobs 1 --timeout 60 `
+                --output "$WslScanDir/smoke_m1_raw.opengrep.json" `
+                v2/evaluation/smoke_evidence/SmokeVulnSample.java
+        }
+        Invoke-CheckedStep "opengrep_sarif_scan" {
+            wsl.exe -d Ubuntu-IRIS -- /usr/local/bin/opengrep scan `
+                --config v2/baseline/rules/java.yml `
+                --sarif --dataflow-traces --no-git-ignore --disable-version-check --jobs 1 --timeout 60 `
+                --output "$WslScanDir/smoke_m1_raw.opengrep.sarif" `
+                v2/evaluation/smoke_evidence/SmokeVulnSample.java
+        }
+
+        $LiveOut = Join-Path $EvidenceRoot "triage_live_qwen35"
+        Invoke-CheckedStep "live_triage_run" {
+            python -m v2.triage run `
+                --source-root $RepoRoot `
+                --path-base $RepoRoot `
+                --json $LiveOpenGrepJson `
+                --engine-exit 0 `
+                --output-dir $LiveOut `
+                --endpoint $Endpoint `
+                --model $Model `
+                --timeout 180
+        }
+
+        $ScanJsonForEval = $LiveOpenGrepJson
+        $TriageJsonlForEval = Join-Path $LiveOut "assessments.jsonl"
+        $LabelsJsonForEval = Join-Path $LiveScanDir "smoke_m1_live_labels.json"
+
+        Invoke-CheckedStep "verify_scan_hash_contract" {
+            python v2/demo/verify_repro_contract.py live `
+                --opengrep $ScanJsonForEval `
+                --triage $TriageJsonlForEval `
+                --template-labels $LabelsJson `
+                --expected-model $Model `
+                --output-labels $LabelsJsonForEval `
+                --output-report (Join-Path $EvidenceRoot "contract_verification_receipt.json")
+        }
+    }
+
+    Write-Host "=== [4/4] [MODE=$Mode] Building Paired Pilot Table (.csv/.json) and Scoring Verified Evidence ==="
+    Invoke-CheckedStep "build_paired_pilot_table" {
+        python v2/evaluation/build_paired_pilot_table.py `
+            --opengrep $ScanJsonForEval `
+            --labels $LabelsJsonForEval `
+            --qwen35-triage $TriageJsonlForEval `
+            --qwen3-8b-reference "v2/demo/triage_qwen3_8b_summary.json" `
+            --source-root $RepoRoot `
+            --output-csv (Join-Path $EvidenceRoot "ADVISOR_PAIRED_PILOT_20261111.csv") `
+            --output-json (Join-Path $EvidenceRoot "paired_pilot_summary.json")
+    }
+
+    $env:PYTHONPATH = "v2/evaluation"
+    try {
+        Invoke-CheckedStep "score_pilot" {
+            python -m v2.evaluation.score_pilot `
+                --opengrep $ScanJsonForEval `
+                --labels $LabelsJsonForEval `
+                --triage $TriageJsonlForEval `
+                --source-root $RepoRoot `
+                --output-json (Join-Path $EvidenceRoot "score_pilot_verified.json") `
+                --output-md (Join-Path $EvidenceRoot "score_pilot_verified.md")
+        }
+    } finally {
+        Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "=== COMPLETE: [MODE=$Mode] All verification artifacts written to $EvidenceRoot ==="
+    exit 0
+} catch {
+    [Console]::Error.WriteLine("[FAIL-CLOSED] Unhandled exception in reproduction script: $($_.Exception.Message)")
+    exit 1
+}
