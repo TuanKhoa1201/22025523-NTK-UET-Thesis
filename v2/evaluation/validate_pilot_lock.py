@@ -1,13 +1,18 @@
 """NTK Thesis V2 — M3/M4 Locked Evaluation & Source Grounding Validator.
 
-Provides two core verification capabilities using only the Python standard library:
-1. M4 Pilot Lock Verification: Validates that the OpenGrep scan output and independent
-   ground-truth labels meet pilot protocol constraints (e.g., 30-60 alerts, CWE-22/89
-   priority coverage, 1-to-1 ID/CWE/path alignment, non-empty annotator rationale) and
-   computes/verifies a cryptographic SHA-256 lock manifest to prevent test-set tuning.
-2. M3 Source & Line Grounding Verification: Verifies that `source_sha256` matches actual
-   Java source files on disk and that LLM `cited_lines` point to real, non-empty,
-   non-comment-only code lines within the target file.
+Supports two explicit lock validation modes:
+1. `STRICT_LOCK` (default, required for M4 acceptance):
+   - Enforces 30–60 unique alerts (`min_alerts=30`, `max_alerts=60`).
+   - Enforces >= 70% priority CWE-22 / CWE-89 share (`min_priority_share=0.70`).
+   - Requires independent human labels (`annotated_by`, `annotator_rationale`, rejects
+     LLM auto-generated labels and synthetic `_fixture_notice` files).
+   - Requires valid 64-char hex `source_sha256` on both alerts and labels (matching 1-to-1,
+     and matching disk files when `--source-root` is provided).
+   - Treats any size, priority share, orphan label, missing SHA-256, duplicate, or
+     ID/CWE/file mismatch as a blocking ERROR (refuses to lock).
+2. `SMOKE` (`--mode smoke`, for small fixture/tool testing only):
+   - Allows small test sets for tool verification, but explicitly sets
+     `m4_acceptance_ready = False` and stamps manifests as `SMOKE_FIXTURE_NOT_FOR_M4`.
 """
 
 from __future__ import annotations
@@ -18,7 +23,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+import codex_adapter
 import score_pilot
+
+VALID_LOCK_MODES: frozenset[str] = frozenset({"STRICT_LOCK", "SMOKE"})
 
 
 def compute_file_sha256(path: Path) -> str:
@@ -26,19 +34,43 @@ def compute_file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _has_fixture_marker(raw_data: Any) -> bool:
+    """Return True if raw JSON data carries a synthetic test fixture marker."""
+    if isinstance(raw_data, dict):
+        if "_fixture_notice" in raw_data or "fixture_notice" in raw_data:
+            return True
+        ds_id = str(raw_data.get("dataset_id") or "").lower()
+        if "fixture" in ds_id or "synthetic" in ds_id:
+            return True
+    return False
+
+
 def validate_pilot_dataset(
     opengrep_data: Any,
     labels_data: Any,
     min_alerts: int = 30,
     max_alerts: int = 60,
-    min_priority_share: float = 0.5,
+    min_priority_share: float = 0.70,
+    mode: str = "STRICT_LOCK",
+    source_root: Path | str | None = None,
 ) -> dict[str, Any]:
-    """Validate M4 locked pilot dataset readiness and alignment between alerts and labels."""
+    """Validate pilot dataset readiness and alignment between alerts and labels."""
+    norm_mode = mode.strip().upper()
+    if norm_mode not in VALID_LOCK_MODES:
+        raise ValueError(f"Unsupported lock mode '{mode}'; expected one of {sorted(VALID_LOCK_MODES)}")
+    is_strict = norm_mode == "STRICT_LOCK"
+    source_root_path = Path(source_root) if source_root else None
+
     alerts = score_pilot._extract_opengrep_alerts(opengrep_data)
     labels = score_pilot._extract_labels(labels_data)
 
     errors: list[str] = []
     warnings: list[str] = []
+
+    if is_strict and (_has_fixture_marker(opengrep_data) or _has_fixture_marker(labels_data)):
+        errors.append(
+            "Dataset contains synthetic TEST FIXTURE markers; cannot pass STRICT_LOCK M4 acceptance"
+        )
 
     alert_ids: dict[str, dict[str, Any]] = {}
     for alert in alerts:
@@ -48,18 +80,45 @@ def validate_pilot_dataset(
         else:
             alert_ids[aid] = alert
 
+        a_sha = alert.get("source_sha256")
+        if not codex_adapter.is_valid_sha256(a_sha):
+            msg = f"Alert {aid} is missing a valid 64-hex source_sha256"
+            if is_strict:
+                errors.append(msg)
+            else:
+                warnings.append(msg)
+
     label_ids: dict[str, dict[str, Any]] = {}
     for idx, label in enumerate(labels):
         if not isinstance(label, dict):
             errors.append(f"Label at index {idx} is not a JSON object")
             continue
-        aid = str(label.get("alert_id") or "").strip()
+        aid = str(label.get("alert_id") or label.get("id") or "").strip()
         if not aid:
             errors.append(f"Label at index {idx} is missing alert_id")
             continue
         if aid in label_ids:
             errors.append(f"Duplicate alert_id in labels input: {aid}")
             continue
+
+        # Check independent annotator & reject auto-generated LLM labels
+        annotator = str(
+            label.get("annotated_by")
+            or label.get("label_source")
+            or label.get("generated_by")
+            or ""
+        ).strip()
+        if isinstance(label.get("assessment"), dict) or any(
+            tok in annotator.lower() for tok in score_pilot.FORBIDDEN_AUTO_LABEL_SOURCES
+        ):
+            errors.append(
+                f"Label {aid} appears auto-generated by LLM/triage ('{annotator}'); "
+                "independent human ground-truth is required"
+            )
+            continue
+        if is_strict and not annotator:
+            errors.append(f"Label {aid} is missing independent 'annotated_by' attribution in STRICT_LOCK")
+
         label_ids[aid] = label
 
         gt = str(label.get("ground_truth") or "").strip().upper()
@@ -69,11 +128,18 @@ def validate_pilot_dataset(
         rationale = str(label.get("annotator_rationale") or label.get("rationale") or "").strip()
         if len(rationale) < 10:
             errors.append(f"Label {aid} is missing a substantive annotator_rationale (>=10 chars)")
+        elif is_strict and "test fixture" in rationale.lower():
+            errors.append(f"Label {aid} rationale contains 'TEST FIXTURE' marker in STRICT_LOCK")
 
-        if not str(label.get("source_sha256") or "").strip():
-            warnings.append(f"Label {aid} is missing source_sha256")
+        l_sha = label.get("source_sha256")
+        if not codex_adapter.is_valid_sha256(l_sha):
+            msg = f"Label {aid} is missing a valid 64-hex source_sha256"
+            if is_strict:
+                errors.append(msg)
+            else:
+                warnings.append(msg)
 
-    # Check 1-to-1 coverage and CWE/path match
+    # Check 1-to-1 coverage, CWE, path, and SHA-256 match
     for aid, alert in alert_ids.items():
         if aid not in label_ids:
             errors.append(f"OpenGrep alert {aid} is missing a ground-truth label")
@@ -84,21 +150,50 @@ def validate_pilot_dataset(
             errors.append(
                 f"CWE mismatch on {aid}: OpenGrep has {alert['cwe']} vs label {lbl_cwe}"
             )
-        lbl_path = str(lbl.get("file_path") or "").replace("\\", "/")
+        lbl_path = codex_adapter.normalize_path(lbl.get("file_path") or "")
         if lbl_path and alert["file_path"] and lbl_path != alert["file_path"]:
             errors.append(
                 f"File path mismatch on {aid}: OpenGrep has {alert['file_path']} vs label {lbl_path}"
             )
 
+        a_sha = str(alert.get("source_sha256") or "").strip().lower()
+        l_sha = str(lbl.get("source_sha256") or "").strip().lower()
+        if a_sha and l_sha and a_sha != l_sha:
+            errors.append(
+                f"source_sha256 mismatch on {aid}: alert has {a_sha} vs label {l_sha}"
+            )
+
+        if source_root_path is not None:
+            disk_sha, _, disk_err = score_pilot._load_source_file_lines_and_sha(
+                source_root_path, alert["file_path"]
+            )
+            if disk_err:
+                errors.append(f"Source file verification failed on {aid}: {disk_err}")
+            elif disk_sha:
+                expected_sha = l_sha or a_sha
+                if expected_sha and disk_sha.lower() != expected_sha.lower():
+                    errors.append(
+                        f"Disk file SHA-256 mismatch on {aid}: disk has {disk_sha} vs expected {expected_sha}"
+                    )
+
     for aid in label_ids:
         if aid not in alert_ids:
-            warnings.append(f"Orphan ground-truth label {aid} not present in OpenGrep alerts")
+            msg = f"Orphan ground-truth label {aid} not present in OpenGrep alerts"
+            if is_strict:
+                errors.append(msg)
+            else:
+                warnings.append(msg)
 
     total_unique = len(alert_ids)
     if total_unique < min_alerts or total_unique > max_alerts:
-        warnings.append(
-            f"Total unique alerts ({total_unique}) outside target pilot window [{min_alerts}, {max_alerts}]"
+        size_msg = (
+            f"Total unique alerts ({total_unique}) outside required pilot window "
+            f"[{min_alerts}, {max_alerts}]"
         )
+        if is_strict:
+            errors.append(size_msg)
+        else:
+            warnings.append(size_msg)
 
     priority_count = sum(
         1 for a in alert_ids.values() if a["cwe"] in score_pilot.PRIORITY_CWES
@@ -107,13 +202,23 @@ def validate_pilot_dataset(
         1 for a in alert_ids.values() if a["cwe"] in score_pilot.SECONDARY_CWES
     )
     priority_share = (priority_count / total_unique) if total_unique > 0 else 0.0
-    if total_unique > 0 and priority_share < min_priority_share:
-        warnings.append(
-            f"Priority CWE-22/CWE-89 share ({priority_share:.1%}) is below target {min_priority_share:.1%}"
+    if total_unique == 0 or priority_share < min_priority_share:
+        share_msg = (
+            f"Priority CWE-22/CWE-89 share ({priority_share:.1%}) is below required "
+            f"{min_priority_share:.1%}"
         )
+        if is_strict:
+            errors.append(share_msg)
+        else:
+            warnings.append(share_msg)
+
+    valid_lock = len(errors) == 0
+    m4_acceptance_ready = bool(is_strict and valid_lock)
 
     return {
-        "valid_lock_candidate": len(errors) == 0,
+        "lock_mode": norm_mode,
+        "valid_lock_candidate": valid_lock,
+        "m4_acceptance_ready": m4_acceptance_ready,
         "total_unique_alerts": total_unique,
         "total_unique_labels": len(label_ids),
         "priority_cwe_alerts": priority_count,
@@ -132,9 +237,19 @@ def verify_source_grounding(
     """Verify source_sha256 and cited_lines against real Java source files under source_root."""
     alerts = score_pilot._extract_opengrep_alerts(alerts_data)
     alerts_by_id = {a["alert_id"]: a for a in alerts}
-    triage_records, malformed = score_pilot.parse_triage_inputs(triage_data)
+    triage_records_raw, malformed = score_pilot.parse_triage_inputs(triage_data)
+    triage_records, mapping_errors = codex_adapter.match_and_convert_codex_records(
+        triage_records_raw, alerts
+    )
 
     violations: list[dict[str, Any]] = []
+    for m_err in mapping_errors:
+        violations.append({
+            "alert_id": m_err.get("alert_id") or m_err.get("codex_id"),
+            "type": "mapping_error",
+            "detail": m_err.get("reason"),
+        })
+
     verified_count = 0
 
     for rec in triage_records:
@@ -173,7 +288,15 @@ def verify_source_grounding(
         actual_bytes_sha = compute_file_sha256(file_path)
 
         expected_sha = rec.get("source_sha256") or alert.get("source_sha256")
-        if expected_sha and expected_sha not in (actual_text_sha, actual_bytes_sha):
+        if not expected_sha:
+            violations.append({
+                "alert_id": aid,
+                "type": "missing_source_sha256",
+                "detail": "Missing source_sha256 on both triage record and alert",
+            })
+            continue
+
+        if str(expected_sha).lower() not in (actual_text_sha.lower(), actual_bytes_sha.lower()):
             violations.append({
                 "alert_id": aid,
                 "type": "source_sha256_mismatch",
@@ -193,7 +316,7 @@ def verify_source_grounding(
 
         line_error = False
         for line_no in cited_lines:
-            if not isinstance(line_no, int) or line_no < 1 or line_no > len(lines):
+            if not isinstance(line_no, int) or isinstance(line_no, bool) or line_no < 1 or line_no > len(lines):
                 violations.append({
                     "alert_id": aid,
                     "type": "cited_line_out_of_bounds",
@@ -202,7 +325,7 @@ def verify_source_grounding(
                 line_error = True
                 break
             code_line = lines[line_no - 1].strip()
-            if not code_line or code_line.startswith("//") or code_line.startswith("/*") or code_line.startswith("*"):
+            if not score_pilot._is_meaningful_code_line(code_line):
                 violations.append({
                     "alert_id": aid,
                     "type": "cited_line_blank_or_comment",
@@ -227,17 +350,28 @@ def create_lock_manifest(
     opengrep_path: Path,
     labels_path: Path,
     config_path: Path | None = None,
+    mode: str = "STRICT_LOCK",
+    m4_acceptance_ready: bool = False,
 ) -> dict[str, Any]:
-    """Create a deterministic M4 lock manifest with SHA-256 digests of evaluation inputs."""
+    """Create a deterministic lock manifest with SHA-256 digests of evaluation inputs."""
+    norm_mode = mode.strip().upper()
     og_sha = compute_file_sha256(opengrep_path)
     lb_sha = compute_file_sha256(labels_path)
     cfg_sha = compute_file_sha256(config_path) if config_path and config_path.is_file() else None
 
-    combined = f"opengrep:{og_sha}|labels:{lb_sha}|config:{cfg_sha or 'none'}"
+    combined = f"mode:{norm_mode}|opengrep:{og_sha}|labels:{lb_sha}|config:{cfg_sha or 'none'}"
     lock_digest = score_pilot.compute_sha256_text(combined)
 
+    schema_ver = (
+        "ntk-v2-m4-strict-lock-1.1"
+        if (norm_mode == "STRICT_LOCK" and m4_acceptance_ready)
+        else "ntk-v2-smoke-fixture-lock-NOT-M4"
+    )
+
     return {
-        "schema_version": "ntk-v2-m4-lock-1.0",
+        "schema_version": schema_ver,
+        "lock_mode": norm_mode,
+        "m4_acceptance_ready": bool(norm_mode == "STRICT_LOCK" and m4_acceptance_ready),
         "opengrep_file": opengrep_path.name,
         "opengrep_sha256": og_sha,
         "labels_file": labels_path.name,
@@ -253,30 +387,57 @@ def verify_lock_manifest(
     opengrep_path: Path,
     labels_path: Path,
     config_path: Path | None = None,
+    require_m4_acceptance: bool = False,
 ) -> tuple[bool, list[str]]:
-    """Verify current files on disk match a previously recorded M4 lock manifest."""
-    current = create_lock_manifest(opengrep_path, labels_path, config_path)
+    """Verify current files on disk match a previously recorded lock manifest."""
+    mode = str(manifest.get("lock_mode") or "STRICT_LOCK")
+    m4_ready = bool(manifest.get("m4_acceptance_ready", False))
+    current = create_lock_manifest(
+        opengrep_path,
+        labels_path,
+        config_path,
+        mode=mode,
+        m4_acceptance_ready=m4_ready,
+    )
     mismatches: list[str] = []
     for key in ("opengrep_sha256", "labels_sha256", "config_sha256", "combined_lock_sha256"):
         if manifest.get(key) != current.get(key):
             mismatches.append(
                 f"Lock mismatch for {key}: expected {manifest.get(key)}, got {current.get(key)}"
             )
+    if require_m4_acceptance and not m4_ready:
+        mismatches.append(
+            "Manifest is a SMOKE/FIXTURE lock (m4_acceptance_ready=False) and cannot pass M4 STRICT_LOCK verification"
+        )
     return len(mismatches) == 0, mismatches
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Validate M4 locked pilot dataset and M3 source grounding."
+        description="Validate M4 locked pilot dataset (STRICT_LOCK or SMOKE) and M3 source grounding."
     )
     parser.add_argument("--opengrep", required=True, help="Path to OpenGrep JSON file.")
     parser.add_argument("--labels", required=True, help="Path to ground-truth labels JSON file.")
-    parser.add_argument("--min-alerts", type=int, default=30, help="Minimum pilot alerts.")
-    parser.add_argument("--max-alerts", type=int, default=60, help="Maximum pilot alerts.")
-    parser.add_argument("--write-lock", help="Optional path to write M4 lock manifest JSON.")
-    parser.add_argument("--verify-lock", help="Optional path to verify existing M4 lock manifest.")
+    parser.add_argument(
+        "--mode",
+        choices=["STRICT_LOCK", "SMOKE", "strict_lock", "smoke"],
+        default="STRICT_LOCK",
+        help="Validation mode: STRICT_LOCK (default for M4) or SMOKE (for small test fixtures).",
+    )
+    parser.add_argument("--min-alerts", type=int, default=30, help="Minimum pilot alerts (default 30).")
+    parser.add_argument("--max-alerts", type=int, default=60, help="Maximum pilot alerts (default 60).")
+    parser.add_argument(
+        "--min-priority-share",
+        type=float,
+        default=0.70,
+        help="Minimum CWE-22/CWE-89 share (default 0.70).",
+    )
+    parser.add_argument("--source-root", help="Optional path to Java source root for SHA-256 checks.")
+    parser.add_argument("--write-lock", help="Optional path to write lock manifest JSON.")
+    parser.add_argument("--verify-lock", help="Optional path to verify existing lock manifest.")
     args = parser.parse_args(argv)
 
+    norm_mode = args.mode.strip().upper()
     og_path = Path(args.opengrep)
     lb_path = Path(args.labels)
     og_data = json.loads(og_path.read_text(encoding="utf-8"))
@@ -287,19 +448,40 @@ def main(argv: list[str] | None = None) -> int:
         lb_data,
         min_alerts=args.min_alerts,
         max_alerts=args.max_alerts,
+        min_priority_share=args.min_priority_share,
+        mode=norm_mode,
+        source_root=args.source_root,
     )
 
     if args.write_lock:
-        manifest = create_lock_manifest(og_path, lb_path)
-        Path(args.write_lock).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        validation["lock_manifest"] = manifest
+        if not validation["valid_lock_candidate"]:
+            validation["errors"].append(
+                f"Refusing to write lock manifest in {norm_mode} mode because validation failed"
+            )
+        else:
+            manifest = create_lock_manifest(
+                og_path,
+                lb_path,
+                mode=norm_mode,
+                m4_acceptance_ready=validation["m4_acceptance_ready"],
+            )
+            Path(args.write_lock).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+            validation["lock_manifest"] = manifest
 
     if args.verify_lock:
         saved_manifest = json.loads(Path(args.verify_lock).read_text(encoding="utf-8"))
-        ok, lock_errors = verify_lock_manifest(saved_manifest, og_path, lb_path)
+        ok, lock_errors = verify_lock_manifest(
+            saved_manifest,
+            og_path,
+            lb_path,
+            require_m4_acceptance=(norm_mode == "STRICT_LOCK"),
+        )
         validation["lock_verified"] = ok
         validation["errors"].extend(lock_errors)
         validation["valid_lock_candidate"] = len(validation["errors"]) == 0
+        validation["m4_acceptance_ready"] = bool(
+            norm_mode == "STRICT_LOCK" and validation["valid_lock_candidate"]
+        )
 
     print(json.dumps(validation, indent=2))
     return 0 if validation["valid_lock_candidate"] else 1
