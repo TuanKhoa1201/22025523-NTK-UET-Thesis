@@ -1,8 +1,10 @@
-"""NTK Thesis V2 - M4/M5 Evaluation Scoring & Integrity Verification Script.
+"""NTK Thesis V2 - M4/M5 Evaluation Scoring & Fail-Safe Integrity Script.
 
 Compares Arm A (OpenGrep standalone) vs. Arm B (OpenGrep + local Qwen triage)
-on the exact same OpenGrep scan output and locked ground-truth alert labels.
+on the exact same OpenGrep scan output and locked independent ground-truth alert labels.
 
+Supports both normalized triage JSON/JSONL and Codex nested `assessment.jsonl` /
+`assessments.jsonl` (`SUPPORTED`, `REFUTED`, `UNDETERMINED`) via `codex_adapter.py`.
 Prioritizes CWE-22 and CWE-89 while supporting separate reporting for CWE-78 and CWE-79.
 Uses only the Python standard library.
 """
@@ -18,6 +20,8 @@ from pathlib import Path
 import statistics
 from typing import Any
 
+import codex_adapter
+
 PRIORITY_CWES: tuple[str, ...] = ("CWE-22", "CWE-89")
 SECONDARY_CWES: tuple[str, ...] = ("CWE-78", "CWE-79")
 ALL_SUPPORTED_CWES: tuple[str, ...] = PRIORITY_CWES + SECONDARY_CWES
@@ -28,42 +32,38 @@ VALID_GROUND_TRUTH: frozenset[str] = frozenset({
     "AMBIGUOUS",
 })
 
+FORBIDDEN_AUTO_LABEL_SOURCES: frozenset[str] = frozenset({
+    "qwen",
+    "ollama",
+    "llm",
+    "codex",
+    "auto",
+    "model",
+    "opengrep-triage",
+})
+
 # Normalized triage decisions:
-# - PROPOSED_FP: model proposes alert is a false positive (candidate to filter, requires human confirmation)
-# - KEEP_TP: model confirms/keeps alert as a likely true positive
-# - REVIEW: model returns REVIEW / UNDETERMINED or fail-safe override triggers
+# - PROPOSED_FP: model proposes alert is a false positive (REFUTED -> candidate only, requires human confirmation)
+# - KEEP_TP: model supports/keeps alert as a likely true positive (SUPPORTED -> KEEP_TP)
+# - REVIEW: model returns UNDETERMINED / REVIEW or fail-safe override triggers
 VALID_MODEL_VERDICTS: dict[str, str] = {
+    "REFUTED": "PROPOSED_FP",
     "FP": "PROPOSED_FP",
     "FALSE_POSITIVE": "PROPOSED_FP",
     "PROPOSED_FP": "PROPOSED_FP",
+    "SUPPORTED": "KEEP_TP",
     "TP": "KEEP_TP",
     "TRUE_POSITIVE": "KEEP_TP",
     "KEEP_TP": "KEEP_TP",
-    "REVIEW": "REVIEW",
     "UNDETERMINED": "REVIEW",
+    "REVIEW": "REVIEW",
     "NEEDS_REVIEW": "REVIEW",
 }
 
 
 def normalize_cwe(raw_cwe: Any) -> str:
-    """Normalize a CWE identifier such as 'CWE-89: SQL Injection' or 'cwe-22' to 'CWE-89'."""
-    if not isinstance(raw_cwe, str):
-        if isinstance(raw_cwe, list) and raw_cwe:
-            raw_cwe = raw_cwe[0]
-        else:
-            return "UNKNOWN_CWE"
-    token = raw_cwe.strip().upper()
-    if not token:
-        return "UNKNOWN_CWE"
-    if ":" in token:
-        token = token.split(":", 1)[0].strip()
-    if " " in token:
-        token = token.split(" ", 1)[0].strip()
-    if token.isdigit():
-        return f"CWE-{token}"
-    if token.startswith("CWE-") and token[4:].isdigit():
-        return f"CWE-{int(token[4:])}"
-    return token
+    """Normalize a CWE identifier such as 'CWE-89: SQL Injection' or ['CWE-22'] to 'CWE-89'."""
+    return codex_adapter.normalize_cwe_value(raw_cwe)
 
 
 def compute_sha256_text(content: str) -> str:
@@ -115,7 +115,10 @@ class LatencySummary:
         clean = [
             float(x)
             for x in samples_ms
-            if isinstance(x, (int, float)) and not math.isnan(float(x)) and float(x) >= 0.0
+            if isinstance(x, (int, float))
+            and not isinstance(x, bool)
+            and not math.isnan(float(x))
+            and float(x) >= 0.0
         ]
         if not clean:
             return cls()
@@ -159,6 +162,7 @@ class CweBucketMetrics:
     labeled_ambiguous: int = 0
     unlabeled_alerts: int = 0
     triage_covered_alerts: int = 0
+    grounding_verified_fp_proposals: int = 0
     proposed_fp_on_true_fp: int = 0
     erroneously_proposed_fp_on_tp: int = 0
     kept_tp_on_true_tp: int = 0
@@ -173,12 +177,12 @@ class CweBucketMetrics:
 
     @property
     def proposed_fp_removal_rate(self) -> RatioMetric:
-        """True FP alerts correctly proposed as FP by triage."""
+        """True FP alerts proposed as FP by triage (requires independent FP label)."""
         return RatioMetric(self.proposed_fp_on_true_fp, self.labeled_fp)
 
     @property
     def erroneous_tp_removal_rate(self) -> RatioMetric:
-        """True TP alerts wrongly proposed for removal as FP."""
+        """True TP alerts wrongly proposed for removal as FP (always shows num/den)."""
         return RatioMetric(self.erroneously_proposed_fp_on_tp, self.labeled_tp)
 
     @property
@@ -193,7 +197,7 @@ class CweBucketMetrics:
 
     @property
     def label_coverage_rate(self) -> RatioMetric:
-        """Fraction of alerts with a valid ground-truth label (TP, FP, or AMBIGUOUS)."""
+        """Fraction of alerts with a valid independent ground-truth label."""
         labeled_count = self.labeled_tp + self.labeled_fp + self.labeled_ambiguous
         return RatioMetric(labeled_count, self.total_alerts)
 
@@ -212,6 +216,7 @@ class CweBucketMetrics:
                 "labeled_ambiguous": self.labeled_ambiguous,
                 "unlabeled_alerts": self.unlabeled_alerts,
                 "triage_covered_alerts": self.triage_covered_alerts,
+                "grounding_verified_fp_proposals": self.grounding_verified_fp_proposals,
                 "proposed_fp_on_true_fp": self.proposed_fp_on_true_fp,
                 "erroneously_proposed_fp_on_tp": self.erroneously_proposed_fp_on_tp,
                 "kept_tp_on_true_tp": self.kept_tp_on_true_tp,
@@ -236,7 +241,7 @@ class CweBucketMetrics:
 
 @dataclass
 class IntegrityAnomalies:
-    """Tracks data, protocol, and security-review integrity violations."""
+    """Tracks data, protocol, and fail-safe security-review integrity violations."""
 
     duplicate_alert_ids: list[str] = field(default_factory=list)
     duplicate_label_ids: list[str] = field(default_factory=list)
@@ -244,13 +249,18 @@ class IntegrityAnomalies:
     unlabeled_alert_ids: list[str] = field(default_factory=list)
     missing_triage_alert_ids: list[str] = field(default_factory=list)
     orphan_triage_ids: list[str] = field(default_factory=list)
+    unmatched_or_ambiguous_triage_records: list[dict[str, Any]] = field(default_factory=list)
     cwe_mismatches: list[dict[str, Any]] = field(default_factory=list)
     location_mismatches: list[dict[str, Any]] = field(default_factory=list)
     sha256_mismatches: list[dict[str, Any]] = field(default_factory=list)
+    missing_trace_alerts: list[str] = field(default_factory=list)
+    missing_or_invalid_citations: list[dict[str, Any]] = field(default_factory=list)
+    unverified_source_alerts: list[dict[str, Any]] = field(default_factory=list)
     malformed_triage_records: list[dict[str, Any]] = field(default_factory=list)
     ungrounded_fp_overrides: list[dict[str, Any]] = field(default_factory=list)
     human_approval_violations: list[dict[str, Any]] = field(default_factory=list)
     invalid_ground_truth_labels: list[dict[str, Any]] = field(default_factory=list)
+    rejected_auto_generated_labels: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -260,13 +270,18 @@ class IntegrityAnomalies:
             "unlabeled_alert_ids": self.unlabeled_alert_ids,
             "missing_triage_alert_ids": self.missing_triage_alert_ids,
             "orphan_triage_ids": self.orphan_triage_ids,
+            "unmatched_or_ambiguous_triage_records": self.unmatched_or_ambiguous_triage_records,
             "cwe_mismatches": self.cwe_mismatches,
             "location_mismatches": self.location_mismatches,
             "sha256_mismatches": self.sha256_mismatches,
+            "missing_trace_alerts": self.missing_trace_alerts,
+            "missing_or_invalid_citations": self.missing_or_invalid_citations,
+            "unverified_source_alerts": self.unverified_source_alerts,
             "malformed_triage_records": self.malformed_triage_records,
             "ungrounded_fp_overrides": self.ungrounded_fp_overrides,
             "human_approval_violations": self.human_approval_violations,
             "invalid_ground_truth_labels": self.invalid_ground_truth_labels,
+            "rejected_auto_generated_labels": self.rejected_auto_generated_labels,
         }
 
 
@@ -288,24 +303,34 @@ def _extract_opengrep_alerts(raw_data: Any) -> list[dict[str, Any]]:
     for idx, item in enumerate(items):
         if not isinstance(item, dict):
             continue
-        # Support both raw OpenGrep/Semgrep result format and normalized alert format
         alert_id = item.get("alert_id") or item.get("id")
-        file_path = item.get("file_path") or item.get("path") or ""
+        file_path = codex_adapter.normalize_path(item.get("file_path") or item.get("path") or "")
         start_line = item.get("start_line")
         end_line = item.get("end_line")
-        if start_line is None and isinstance(item.get("start"), dict):
-            start_line = item["start"].get("line")
-        if end_line is None and isinstance(item.get("end"), dict):
-            end_line = item["end"].get("line")
+        start_col = item.get("start_col")
+        end_col = item.get("end_col")
+        if isinstance(item.get("start"), dict):
+            if start_line is None:
+                start_line = item["start"].get("line")
+            if start_col is None:
+                start_col = item["start"].get("col")
+        if isinstance(item.get("end"), dict):
+            if end_line is None:
+                end_line = item["end"].get("line")
+            if end_col is None:
+                end_col = item["end"].get("col")
         if end_line is None:
             end_line = start_line
 
-        rule_id = item.get("rule_id") or item.get("check_id") or "unknown_rule"
+        rule_id = str(item.get("rule_id") or item.get("check_id") or "unknown_rule").strip()
         raw_cwe = item.get("cwe")
-        if raw_cwe is None and isinstance(item.get("extra"), dict):
+        has_trace = bool(item.get("trace") or item.get("dataflow_trace"))
+        if isinstance(item.get("extra"), dict):
             metadata = item["extra"].get("metadata", {})
-            if isinstance(metadata, dict):
+            if raw_cwe is None and isinstance(metadata, dict):
                 raw_cwe = metadata.get("cwe")
+            if item["extra"].get("dataflow_trace"):
+                has_trace = True
         cwe = normalize_cwe(raw_cwe)
 
         if not alert_id:
@@ -313,33 +338,35 @@ def _extract_opengrep_alerts(raw_data: Any) -> list[dict[str, Any]]:
 
         normalized.append({
             "alert_id": str(alert_id),
-            "file_path": str(file_path).replace("\\", "/"),
+            "finding_index": idx,
+            "file_path": file_path,
             "start_line": int(start_line) if isinstance(start_line, int) else None,
             "end_line": int(end_line) if isinstance(end_line, int) else None,
-            "rule_id": str(rule_id),
+            "start_col": int(start_col) if isinstance(start_col, int) else None,
+            "end_col": int(end_col) if isinstance(end_col, int) else None,
+            "rule_id": rule_id,
             "cwe": cwe,
             "source_sha256": item.get("source_sha256"),
+            "has_trace": has_trace,
         })
     return normalized
 
 
 def _extract_labels(raw_labels: Any) -> list[dict[str, Any]]:
     """Extract ground-truth label list from JSON object or list."""
+    if raw_labels is None:
+        return []
     if isinstance(raw_labels, dict):
         if "labels" in raw_labels and isinstance(raw_labels["labels"], list):
             return raw_labels["labels"]
         raise ValueError("Labels dict must contain a 'labels' list.")
     if isinstance(raw_labels, list):
         return raw_labels
-    raise ValueError("Labels input must be a JSON object or list.")
+    raise ValueError("Labels input must be a JSON object, list, or None.")
 
 
 def parse_triage_inputs(raw_triage: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Parse triage records from a JSON object, list, or raw JSON/JSONL string.
-
-    Gracefully catches malformed JSON lines or non-dict records so they can be
-    recorded and routed to fail-safe REVIEW instead of crashing the pipeline.
-    """
+    """Parse triage records from a JSON object, list, or raw JSON/JSONL string."""
     valid_records: list[dict[str, Any]] = []
     malformed_records: list[dict[str, Any]] = []
 
@@ -351,7 +378,6 @@ def parse_triage_inputs(raw_triage: Any) -> tuple[list[dict[str, Any]], list[dic
             parsed = json.loads(text)
             return parse_triage_inputs(parsed)
         except json.JSONDecodeError:
-            # Parse line-by-line as JSONL where some lines may be malformed model outputs
             for line_no, line in enumerate(text.splitlines(), start=1):
                 stripped = line.strip()
                 if not stripped:
@@ -377,12 +403,14 @@ def parse_triage_inputs(raw_triage: Any) -> tuple[list[dict[str, Any]], list[dic
     if isinstance(raw_triage, dict):
         if "triage_results" in raw_triage and isinstance(raw_triage["triage_results"], list):
             items = raw_triage["triage_results"]
+        elif "assessments" in raw_triage and isinstance(raw_triage["assessments"], list):
+            items = raw_triage["assessments"]
         elif "results" in raw_triage and isinstance(raw_triage["results"], list):
             items = raw_triage["results"]
         else:
             malformed_records.append({
                 "index": 0,
-                "reason": "Triage dict missing 'triage_results' or 'results' list",
+                "reason": "Triage dict missing 'triage_results', 'assessments', or 'results' list",
             })
             return [], malformed_records
     elif isinstance(raw_triage, list):
@@ -426,7 +454,7 @@ def parse_triage_inputs(raw_triage: Any) -> tuple[list[dict[str, Any]], list[dic
                 except (json.JSONDecodeError, ValueError) as exc:
                     malformed_records.append({
                         "index": idx,
-                        "alert_id": entry.get("alert_id"),
+                        "alert_id": entry.get("alert_id") or entry.get("id"),
                         "reason": f"Malformed raw_llm_json: {exc}",
                         "raw": str(entry.get("raw_llm_json"))[:200],
                     })
@@ -441,25 +469,69 @@ def parse_triage_inputs(raw_triage: Any) -> tuple[list[dict[str, Any]], list[dic
     return valid_records, malformed_records
 
 
+def _load_source_file_lines_and_sha(
+    source_root: Path | None,
+    rel_file_path: str,
+) -> tuple[str | None, dict[int, str], str | None]:
+    """Load real Java source file from source_root and compute `(sha256, line_map, error)`."""
+    if source_root is None or not rel_file_path:
+        return None, {}, None
+    root_resolved = source_root.resolve()
+    candidate = (root_resolved / rel_file_path).resolve()
+    try:
+        candidate.relative_to(root_resolved)
+    except ValueError:
+        return None, {}, f"Alert file_path '{rel_file_path}' escapes source_root"
+    if not candidate.is_file():
+        return None, {}, f"Source file not found under source_root: '{rel_file_path}'"
+    text = candidate.read_text(encoding="utf-8")
+    sha = compute_sha256_text(text)
+    line_map = {idx + 1: line for idx, line in enumerate(text.splitlines())}
+    return sha, line_map, None
+
+
+def _is_meaningful_code_line(line_text: str) -> bool:
+    """Return True if a source line is non-empty and not a pure comment line."""
+    stripped = line_text.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
+        return False
+    return True
+
+
 def _validate_evidence_grounding(
     alert: dict[str, Any],
     triage_record: dict[str, Any],
+    verified_line_map: dict[int, str],
+    require_verified_lines: bool,
 ) -> tuple[bool, str | None]:
-    """Verify that a PROPOSED_FP verdict has grounded line citations and security rationale.
-
-    Per AGENTS.md Rule 4 and ntk-security-review.md:
-    - Every LLM evidence citation must be grounded in source lines/trace.
-    - A Proposed FP without valid cited lines or rationale must be overridden to REVIEW.
-    """
+    """Verify that a PROPOSED_FP (REFUTED) verdict has grounded citations in verified source."""
     rationale = triage_record.get("rationale") or triage_record.get("explanation") or ""
     if not isinstance(rationale, str) or len(rationale.strip()) < 10:
         return False, "Missing or insufficient security rationale for FP proposal"
 
+    if triage_record.get("citation_parse_errors"):
+        return (
+            False,
+            f"Invalid citation format: {'; '.join(triage_record['citation_parse_errors'])}",
+        )
+
+    cited_paths = triage_record.get("cited_paths") or []
+    alert_path = codex_adapter.normalize_path(alert.get("file_path") or "")
+    if cited_paths and alert_path:
+        for c_path in cited_paths:
+            if codex_adapter.normalize_path(c_path) != alert_path:
+                return (
+                    False,
+                    f"Citation path '{c_path}' does not match alert file '{alert_path}'",
+                )
+
     cited_lines = triage_record.get("cited_lines") or triage_record.get("evidence_lines")
     if not isinstance(cited_lines, list) or not cited_lines:
-        return False, "Missing cited_lines/evidence_lines for FP proposal"
+        return False, "Missing cited_lines/citations for FP proposal"
 
-    if not all(isinstance(line, int) and line > 0 for line in cited_lines):
+    if not all(isinstance(line, int) and not isinstance(line, bool) and line > 0 for line in cited_lines):
         return False, "cited_lines must contain positive integer line numbers"
 
     context_start = triage_record.get("context_start_line")
@@ -471,6 +543,25 @@ def _validate_evidence_grounding(
                     False,
                     f"Cited line {line} outside extracted context [{context_start}, {context_end}]",
                 )
+
+    # Check actual line existence in verified source snapshot or file
+    if verified_line_map:
+        for line in cited_lines:
+            if line not in verified_line_map:
+                return (
+                    False,
+                    f"Cited line {line} does not exist in verified source/snapshot lines",
+                )
+            if not _is_meaningful_code_line(verified_line_map[line]):
+                return (
+                    False,
+                    f"Cited line {line} is blank or comment-only in verified source/snapshot",
+                )
+    elif require_verified_lines:
+        return (
+            False,
+            "No verified Java source file or snapshot lines available to confirm cited_lines",
+        )
 
     return True, None
 
@@ -488,21 +579,26 @@ def evaluate_pilot(
     labels_data: Any,
     triage_data: Any,
     opengrep_scan_time_ms: float | None = None,
+    source_root: Path | str | None = None,
+    expected_scan_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Evaluate OpenGrep standalone vs. OpenGrep + Qwen triage on locked alerts and labels."""
     anomalies = IntegrityAnomalies()
+    source_root_path = Path(source_root) if source_root else None
 
     # 1. Deduplicate and index OpenGrep alerts
     raw_alerts = _extract_opengrep_alerts(opengrep_data)
     alerts_by_id: dict[str, dict[str, Any]] = {}
+    unique_alerts_ordered: list[dict[str, Any]] = []
     for alert in raw_alerts:
         aid = alert["alert_id"]
         if aid in alerts_by_id:
             anomalies.duplicate_alert_ids.append(aid)
             continue
         alerts_by_id[aid] = alert
+        unique_alerts_ordered.append(alert)
 
-    # 2. Deduplicate and index Ground-Truth Labels
+    # 2. Deduplicate and index Ground-Truth Labels (rejecting LLM auto-generated labels)
     raw_labels = _extract_labels(labels_data)
     labels_by_id: dict[str, dict[str, Any]] = {}
     for idx, label in enumerate(raw_labels):
@@ -512,13 +608,32 @@ def evaluate_pilot(
                 "reason": "Label entry is not a dict",
             })
             continue
-        aid = str(label.get("alert_id") or "").strip()
+        aid = str(label.get("alert_id") or label.get("id") or "").strip()
         if not aid:
             anomalies.invalid_ground_truth_labels.append({
                 "index": idx,
                 "reason": "Missing alert_id in label",
             })
             continue
+
+        # Detect forbidden auto-generated labels from Qwen/Codex outputs
+        annotator = str(
+            label.get("annotated_by")
+            or label.get("label_source")
+            or label.get("generated_by")
+            or ""
+        ).strip().lower()
+        has_codex_assessment = isinstance(label.get("assessment"), dict) or (
+            "ground_truth" not in label and ("verdict" in label or "status" in label)
+        )
+        if has_codex_assessment or any(tok in annotator for tok in FORBIDDEN_AUTO_LABEL_SOURCES):
+            anomalies.rejected_auto_generated_labels.append({
+                "alert_id": aid,
+                "annotated_by": annotator or "model_output",
+                "reason": "Ground-truth labels must be independent; auto-generated LLM verdicts are forbidden",
+            })
+            continue
+
         if aid in labels_by_id:
             anomalies.duplicate_label_ids.append(aid)
             continue
@@ -538,9 +653,16 @@ def evaluate_pilot(
             "cwe": normalize_cwe(label.get("cwe")),
         }
 
-    # 3. Parse and deduplicate Triage records
-    parsed_triage, malformed_triage = parse_triage_inputs(triage_data)
+    # 3. Parse, convert (Codex nested -> normalized), and deduplicate Triage records
+    parsed_triage_raw, malformed_triage = parse_triage_inputs(triage_data)
     anomalies.malformed_triage_records.extend(malformed_triage)
+
+    converted_triage, mapping_errors = codex_adapter.match_and_convert_codex_records(
+        parsed_triage_raw,
+        unique_alerts_ordered,
+        expected_scan_sha256=expected_scan_sha256,
+    )
+    anomalies.unmatched_or_ambiguous_triage_records.extend(mapping_errors)
 
     malformed_alert_ids: set[str] = {
         str(m["alert_id"])
@@ -549,12 +671,12 @@ def evaluate_pilot(
     }
 
     triage_by_id: dict[str, dict[str, Any]] = {}
-    for idx, rec in enumerate(parsed_triage):
+    for idx, rec in enumerate(converted_triage):
         aid = str(rec.get("alert_id") or "").strip()
         if not aid:
             anomalies.malformed_triage_records.append({
                 "index": idx,
-                "reason": "Triage record missing alert_id",
+                "reason": "Triage record missing alert_id after mapping",
             })
             continue
         if aid in triage_by_id:
@@ -603,7 +725,6 @@ def evaluate_pilot(
             anomalies.unlabeled_alert_ids.append(aid)
             gt_status = "UNLABELED"
         else:
-            # Verify CWE join between OpenGrep alert and Ground-Truth label
             if label["cwe"] != "UNKNOWN_CWE" and label["cwe"] != alert_cwe:
                 anomalies.cwe_mismatches.append({
                     "alert_id": aid,
@@ -617,12 +738,12 @@ def evaluate_pilot(
             elif (
                 label.get("file_path")
                 and alert.get("file_path")
-                and str(label["file_path"]).replace("\\", "/") != alert["file_path"]
+                and codex_adapter.normalize_path(label["file_path"]) != alert["file_path"]
             ):
                 anomalies.location_mismatches.append({
                     "alert_id": aid,
                     "alert_file_path": alert["file_path"],
-                    "label_file_path": str(label["file_path"]).replace("\\", "/"),
+                    "label_file_path": codex_adapter.normalize_path(label["file_path"]),
                 })
                 gt_status = "UNLABELED"
                 anomalies.unlabeled_alert_ids.append(aid)
@@ -639,7 +760,12 @@ def evaluate_pilot(
             else:
                 b.unlabeled_alerts += 1
 
-        # Match and validate Qwen triage output
+        # Load real Java file from source_root if provided
+        disk_sha, disk_lines, disk_err = _load_source_file_lines_and_sha(
+            source_root_path, alert.get("file_path") or ""
+        )
+
+        # Match and validate Qwen / Codex triage output
         triage = triage_by_id.get(aid)
         override_reasons: list[str] = []
         triage_covered = False
@@ -652,10 +778,20 @@ def evaluate_pilot(
             if aid not in malformed_alert_ids:
                 anomalies.missing_triage_alert_ids.append(aid)
             effective_verdict = "REVIEW"
-            override_reasons.append("missing_or_malformed_triage_output")
+            override_reasons.append("missing_or_unmatched_triage_output")
         else:
-            raw_verdict = str(triage.get("verdict") or "").strip().upper()
-            if raw_verdict not in VALID_MODEL_VERDICTS:
+            if not alert.get("has_trace") and not triage.get("has_trace"):
+                anomalies.missing_trace_alerts.append(aid)
+
+            raw_verdict = str(triage.get("verdict") or triage.get("status") or "").strip().upper()
+            if triage.get("has_error"):
+                anomalies.malformed_triage_records.append({
+                    "alert_id": aid,
+                    "reason": "Codex assessment reported runtime/model error",
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("triage_runtime_error")
+            elif raw_verdict not in VALID_MODEL_VERDICTS:
                 anomalies.malformed_triage_records.append({
                     "alert_id": aid,
                     "reason": f"Invalid model verdict '{raw_verdict}'",
@@ -684,21 +820,17 @@ def evaluate_pilot(
                     })
                     effective_verdict = "REVIEW"
                     override_reasons.append("triage_cwe_mismatch")
-
-            # Check SHA-256 consistency across alert, label, and triage
-            expected_sha = (
-                (label.get("source_sha256") if label else None)
-                or alert.get("source_sha256")
-            )
-            triage_sha = triage.get("source_sha256")
-            if expected_sha and triage_sha and str(expected_sha) != str(triage_sha):
-                anomalies.sha256_mismatches.append({
-                    "alert_id": aid,
-                    "expected_sha256": expected_sha,
-                    "triage_sha256": triage_sha,
-                })
-                effective_verdict = "REVIEW"
-                override_reasons.append("source_sha256_mismatch")
+            if isinstance(triage.get("evidence_cwes"), list):
+                ev_cwes = [normalize_cwe(c) for c in triage["evidence_cwes"] if c]
+                if ev_cwes and ev_cwes != ["UNKNOWN_CWE"] and alert_cwe not in ev_cwes:
+                    anomalies.cwe_mismatches.append({
+                        "alert_id": aid,
+                        "stage": "alert_vs_evidence_cwe",
+                        "alert_cwe": alert_cwe,
+                        "evidence_cwes": ev_cwes,
+                    })
+                    effective_verdict = "REVIEW"
+                    override_reasons.append("evidence_cwe_mismatch")
 
             # Check human approval bypass (never auto-dismiss without human confirmation)
             if bool(triage.get("auto_dismissed", False)):
@@ -718,10 +850,85 @@ def evaluate_pilot(
                 effective_verdict = "REVIEW"
                 override_reasons.append("missing_human_reviewer_id")
 
+            # Check SHA-256 integrity across alert, label, triage snapshot, and disk file
+            expected_sha = (
+                (label.get("source_sha256") if label else None)
+                or alert.get("source_sha256")
+                or disk_sha
+            )
+            triage_sha = triage.get("source_sha256")
+
+            if disk_err and effective_verdict == "PROPOSED_FP":
+                anomalies.unverified_source_alerts.append({
+                    "alert_id": aid,
+                    "reason": disk_err,
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append(f"unverified_source:{disk_err}")
+
+            if disk_sha and expected_sha and str(disk_sha).lower() != str(expected_sha).lower():
+                anomalies.sha256_mismatches.append({
+                    "alert_id": aid,
+                    "stage": "disk_vs_expected",
+                    "disk_sha256": disk_sha,
+                    "expected_sha256": expected_sha,
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("disk_source_sha256_mismatch")
+
+            if expected_sha and triage_sha and str(expected_sha).lower() != str(triage_sha).lower():
+                anomalies.sha256_mismatches.append({
+                    "alert_id": aid,
+                    "stage": "expected_vs_triage",
+                    "expected_sha256": expected_sha,
+                    "triage_sha256": triage_sha,
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("source_sha256_mismatch")
+            elif effective_verdict == "PROPOSED_FP":
+                # P0 Rule 1: SHA-256 is mandatory when accepting a REFUTED / PROPOSED_FP proposal
+                is_codex_record = "raw_codex_status" in triage
+                if is_codex_record or source_root_path is not None or expected_sha is not None:
+                    if not expected_sha or not triage_sha:
+                        anomalies.sha256_mismatches.append({
+                            "alert_id": aid,
+                            "stage": "missing_sha256_on_proposed_fp",
+                            "expected_sha256": expected_sha,
+                            "triage_sha256": triage_sha,
+                        })
+                        effective_verdict = "REVIEW"
+                        override_reasons.append("missing_mandatory_sha256_for_fp_proposal")
+
+            # Build verified source line map from disk file or SHA-verified snapshot/snippet
+            verified_line_map: dict[int, str] = {}
+            if disk_lines:
+                verified_line_map.update(disk_lines)
+            elif isinstance(triage.get("verified_source_lines"), dict):
+                verified_line_map.update(triage["verified_source_lines"])
+            elif triage.get("source_lines") is not None:
+                verified_line_map.update(
+                    codex_adapter._extract_lines_from_text_or_list(triage["source_lines"])
+                )
+
+            require_verified_lines = (
+                "raw_codex_status" in triage
+                or source_root_path is not None
+                or bool(verified_line_map)
+            )
+
             # Check evidence grounding if model proposes FP dismissal
             if effective_verdict == "PROPOSED_FP":
-                grounded, ungrounded_reason = _validate_evidence_grounding(alert, triage)
+                grounded, ungrounded_reason = _validate_evidence_grounding(
+                    alert,
+                    triage,
+                    verified_line_map=verified_line_map,
+                    require_verified_lines=require_verified_lines,
+                )
                 if not grounded:
+                    anomalies.missing_or_invalid_citations.append({
+                        "alert_id": aid,
+                        "reason": ungrounded_reason,
+                    })
                     anomalies.ungrounded_fp_overrides.append({
                         "alert_id": aid,
                         "reason": ungrounded_reason,
@@ -739,6 +946,7 @@ def evaluate_pilot(
                 b.fail_safe_review_overrides += 1
 
             if effective_verdict == "PROPOSED_FP":
+                b.grounding_verified_fp_proposals += 1
                 if gt_status == "FALSE_POSITIVE":
                     b.proposed_fp_on_true_fp += 1
                 elif gt_status == "TRUE_POSITIVE":
@@ -785,19 +993,21 @@ def evaluate_pilot(
                 if gt_status in ("AMBIGUOUS", "UNLABELED")
                 else effective_verdict
             ),
+            "proposal_only": True,
+            "requires_human_confirmation": True,
+            "retained_for_human_review": True,
             "triage_covered": triage_covered,
             "override_reasons": override_reasons,
             "latency_ms": latency_val,
         })
 
-    # Arm A (OpenGrep standalone) vs Arm B (OpenGrep + Qwen triage) comparison summary
     arm_a_analyst_workload = overall_bucket.total_alerts
     arm_b_proposed_fp_candidates = (
         overall_bucket.proposed_fp_on_true_fp + overall_bucket.erroneously_proposed_fp_on_tp
     )
 
     return {
-        "schema_version": "ntk-v2-m4-m5-eval-1.0",
+        "schema_version": "ntk-v2-m4-m5-eval-1.1",
         "arms": {
             "arm_a_opengrep_standalone": {
                 "total_alerts_emitted": overall_bucket.total_alerts,
@@ -811,6 +1021,9 @@ def evaluate_pilot(
             },
             "arm_b_opengrep_plus_qwen": {
                 "total_alerts_evaluated": overall_bucket.total_alerts,
+                "auto_dismissed_alerts": 0,
+                "alerts_retained_pending_human_confirmation": overall_bucket.total_alerts,
+                "grounding_verified_fp_proposals": overall_bucket.grounding_verified_fp_proposals,
                 "proposed_fp_for_human_confirmation": arm_b_proposed_fp_candidates,
                 "true_fp_correctly_proposed_for_removal": (
                     overall_bucket.proposed_fp_removal_rate.to_dict()
@@ -821,6 +1034,11 @@ def evaluate_pilot(
                 "needs_further_review": overall_bucket.review_escalation_rate.to_dict(),
                 "triage_coverage": overall_bucket.triage_coverage_rate.to_dict(),
                 "triage_latency_ms": overall_bucket.latency.to_dict(),
+                "grounding_disclaimer": (
+                    "Formal citation and SHA-256 verification only gates whether a REFUTED "
+                    "output may be surfaced as a PROPOSED_FP candidate; it does NOT prove "
+                    "the security conclusion is correct without independent human labels."
+                ),
             },
         },
         "summary": {
@@ -885,17 +1103,20 @@ def render_markdown_report(report: dict[str, Any], is_fixture: bool = False) -> 
     anom = report["anomalies"]
     lines.extend([
         "",
-        "## Integrity & Security Review Checks",
+        "## Integrity & Fail-Safe Security Review Checks",
         "",
         f"- **Duplicate Alert IDs**: {len(anom['duplicate_alert_ids'])}",
         f"- **Duplicate Label IDs**: {len(anom['duplicate_label_ids'])}",
         f"- **Duplicate Triage IDs**: {len(anom['duplicate_triage_ids'])}",
         f"- **Unlabeled Alerts**: {len(anom['unlabeled_alert_ids'])}",
+        f"- **Unmatched / Ambiguous Triage Mappings**: {len(anom['unmatched_or_ambiguous_triage_records'])}",
         f"- **CWE Join Mismatches**: {len(anom['cwe_mismatches'])}",
-        f"- **Source SHA-256 Mismatches**: {len(anom['sha256_mismatches'])}",
+        f"- **Source SHA-256 Mismatches / Missing**: {len(anom['sha256_mismatches'])}",
+        f"- **Missing / Invalid Source Citations**: {len(anom['missing_or_invalid_citations'])}",
         f"- **Malformed Triage JSON Records**: {len(anom['malformed_triage_records'])}",
         f"- **Ungrounded FP Overridden to REVIEW**: {len(anom['ungrounded_fp_overrides'])}",
         f"- **Human Approval Violations**: {len(anom['human_approval_violations'])}",
+        f"- **Rejected Auto-Generated Labels**: {len(anom['rejected_auto_generated_labels'])}",
         "",
     ])
     return "\n".join(lines)
@@ -906,8 +1127,9 @@ def main(argv: list[str] | None = None) -> int:
         description="Score NTK Thesis V2 M4/M5 OpenGrep vs. OpenGrep+Qwen pilot evaluation."
     )
     parser.add_argument("--opengrep", required=True, help="Path to locked OpenGrep JSON file.")
-    parser.add_argument("--labels", required=True, help="Path to locked ground-truth labels JSON.")
-    parser.add_argument("--triage", required=True, help="Path to Qwen triage output JSON or JSONL.")
+    parser.add_argument("--labels", help="Optional path to locked ground-truth labels JSON.")
+    parser.add_argument("--triage", required=True, help="Path to Qwen/Codex triage JSON or JSONL.")
+    parser.add_argument("--source-root", help="Optional root directory of Java source files.")
     parser.add_argument("--scan-time-ms", type=float, default=None, help="OpenGrep scan time (ms).")
     parser.add_argument("--output-json", help="Optional path to write full evaluation JSON.")
     parser.add_argument("--output-md", help="Optional path to write Markdown report.")
@@ -919,7 +1141,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     opengrep_raw = json.loads(Path(args.opengrep).read_text(encoding="utf-8"))
-    labels_raw = json.loads(Path(args.labels).read_text(encoding="utf-8"))
+    labels_raw = (
+        json.loads(Path(args.labels).read_text(encoding="utf-8"))
+        if args.labels
+        else []
+    )
     triage_raw_text = Path(args.triage).read_text(encoding="utf-8")
 
     report = evaluate_pilot(
@@ -927,6 +1153,7 @@ def main(argv: list[str] | None = None) -> int:
         labels_data=labels_raw,
         triage_data=triage_raw_text,
         opengrep_scan_time_ms=args.scan_time_ms,
+        source_root=args.source_root,
     )
     if args.fixture:
         report["fixture_notice"] = (
