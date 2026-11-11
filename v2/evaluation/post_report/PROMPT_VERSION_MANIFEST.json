@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "frozen_at_utc": "2026-11-12T04:17:00+07:00",
+  "active_prompt_version": "v2.1-cwe22-cwe89-grounded",
+  "active_heuristic_version": "heuristic-cwe22-cwe89-v2.1",
+  "model": "qwen3.5:9b-q4_K_M",
+  "ollama_endpoint": "http://127.0.0.1:11434",
+  "options": {
+    "temperature": 0,
+    "num_ctx": 8192,
+    "num_predict": 1200,
+    "stream": false,
+    "think": false
+  },
+  "tuned_exclusively_on": {
+    "split": "development",
+    "alert_count": 16,
+    "scan_sha256": "ecc1fa4634bfc86266c43dd6790422546367293d1810712fddc7c0d15a6c015f",
+    "manifest_sha256": "67d708880cb7a93f972586a137c159fff478783788c0bcb1a30d6cb866e8f298"
+  },
+  "heldout_strict_lock_untouched": {
+    "split": "heldout",
+    "alert_count": 40,
+    "scan_sha256": "67c3b04903e75f4bd7294cb17452d0dcb2b6d56244330cec485c4422efabfa8b",
+    "combined_lock_sha256": "4fb556371eb9eb520aec6df96e4a151685df261025b2893eb7bae51c435bca09"
+  },
+  "prompt_versions": [
+    {
+      "version": "v1.0-baseline",
+      "description": "Original M2 baseline prompt with [sl-3, el+3] snippets, num_ctx=4096, no CliCall flattening, no Java method expansion, no heuristic signals.",
+      "dev16_tp_supported": "4/8",
+      "dev16_fp_refuted": "0/8",
+      "dev16_fp_erroneously_supported": "2/8",
+      "dev16_tp_erroneously_refuted": "0/8",
+      "dev16_undetermined": "10/16",
+      "dev16_citations_matched": "6/16"
+    },
+    {
+      "version": "v2.0-cwe22-cwe89-grounded",
+      "description": "Stage 2/3 upgrade with CliCall flattening, enclosing method + same-file callee expansion, num_ctx=8192, heuristic_signals v2.0, single-line citation rule, Vietnamese explanation/fix.",
+      "dev16_tp_supported": "7/8",
+      "dev16_fp_refuted": "8/8",
+      "dev16_fp_erroneously_supported": "0/8",
+      "dev16_tp_erroneously_refuted": "0/8",
+      "dev16_undetermined": "1/16",
+      "dev16_citations_matched": "15/16"
+    },
+    {
+      "version": "v2.1-cwe22-cwe89-grounded",
+      "description": "Frozen final prompt & heuristic v2.1: strips partial 'matched' expressions without semicolons from prompt snippets, includes both start and end lines of multi-line sinks in candidate_citations, and prioritizes intra_flow over direct_const_overwrite.",
+      "dev16_tp_supported": "8/8",
+      "dev16_fp_refuted": "8/8",
+      "dev16_fp_erroneously_supported": "0/8",
+      "dev16_tp_erroneously_refuted": "0/8",
+      "dev16_undetermined": "0/16",
+      "dev16_citations_matched": "16/16"
+    }
+  ]
+}

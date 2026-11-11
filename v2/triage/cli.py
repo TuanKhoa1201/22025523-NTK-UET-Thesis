@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from .evidence import collect, EvidenceError, SourceTree, digest
 from .ollama import OllamaClient, undecided
+from .heuristics import heuristic_analyze
 from .store import ReviewStore
 from .runtime import SCHEMA_VERSION, summary
 from .scan_receipt import verify_receipt
@@ -28,8 +29,10 @@ def source_versions(root):
 def run(args):
     root = Path(args.source_root).resolve(strict=True)
     output = Path(args.output_dir)
+    mode = getattr(args, "mode", "evidence+llm") or "evidence+llm"
+    use_llm = (not args.no_llm) and (mode in ("evidence+llm", "llm"))
     # Validate network configuration before creating artifacts or scanning.
-    client = None if args.no_llm else OllamaClient(args.endpoint, args.model, args.timeout, args.runtime_origin)
+    client = OllamaClient(args.endpoint, args.model, args.timeout, args.runtime_origin) if use_llm else None
     output.mkdir(parents=True, exist_ok=False)
     issues = []
     exit_code = args.engine_exit
@@ -70,6 +73,8 @@ def run(args):
     bundle = collect(raw, root, args.path_base, exit_code, issues, path_maps=args.path_map, scan_provenance=receipt)
     bundle["scan_provenance"] = receipt
     for record in bundle["records"]:
+        if mode != "evidence+llm":
+            record["triage_mode"] = mode
         if receipt["source_capture_verified"]:
             for path, snapshot in record["snapshots"].items():
                 if receipt["source_hashes"].get(path) != snapshot["sha256"]:
@@ -77,8 +82,21 @@ def run(args):
     if before is not None:
         bundle["pre_scan_hashes"] = before
     (output / "evidence.json").write_text(json.dumps(bundle, indent=2), encoding="utf-8")
-    assessments = [client.analyze(record) if client else undecided("inference explicitly disabled", transport="disabled")
-                   for record in bundle["records"]]
+    if args.no_llm:
+        assessments = [undecided("inference explicitly disabled", transport="disabled") for _ in bundle["records"]]
+    elif mode == "heuristic":
+        assessments = [heuristic_analyze(record) for record in bundle["records"]]
+    else:
+        assessments = []
+        ckpt_path = Path(args.checkpoint) if getattr(args, "checkpoint", None) else None
+        if ckpt_path:
+            ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+        for record in bundle["records"]:
+            assessment = client.analyze(record)
+            assessments.append(assessment)
+            if ckpt_path:
+                with ckpt_path.open("a", encoding="utf-8") as ckpt_stream:
+                    ckpt_stream.write(json.dumps({"id": record["id"], "assessment": assessment}, ensure_ascii=False) + "\n")
     store = ReviewStore(output / "review.sqlite")
     try:
         store.add(bundle, assessments)
@@ -94,6 +112,7 @@ def run(args):
     show({"scan_sha256": bundle["scan_sha256"], "warnings": len(bundle["records"]),
           "scan_issues": bundle["issues"], "states": [a["status"] for a in assessments],
           "db": str(output / "review.sqlite"), "schema_version": SCHEMA_VERSION,
+          "mode": "disabled" if args.no_llm else mode,
           "runtime_summary": runtime_counts,
           "qwen_runtime_verified": bool(assessments) and runtime_counts["verified_model_runtime_count"] == len(assessments)})
     return 2 if bundle["issues"] or any(r["issues"] for r in bundle["records"]) else 0
@@ -114,6 +133,9 @@ def main(argv=None):
     pipeline.add_argument("--rules")
     pipeline.add_argument("--executable", default="opengrep")
     pipeline.add_argument("--no-llm", action="store_true")
+    pipeline.add_argument("--mode", choices=("evidence+llm", "heuristic", "llm"), default="evidence+llm",
+                          help="triage mode: evidence+llm (default Arm C), heuristic (Arm B), or llm (Ablation Arm D)")
+    pipeline.add_argument("--checkpoint", help="optional JSONL checkpoint file outside repository")
     pipeline.add_argument("--endpoint", default="http://127.0.0.1:11434")
     pipeline.add_argument("--model", default="qwen3.5:9b-q4_K_M")
     pipeline.add_argument("--timeout", type=float, default=60)
