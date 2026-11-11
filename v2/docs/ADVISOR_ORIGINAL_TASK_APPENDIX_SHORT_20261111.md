@@ -1,9 +1,9 @@
 # Phụ lục Ngắn Báo cáo Tiến độ Lần 1: Kết quả Thực hiện Nhiệm vụ Ban đầu (simple_semgrepAI -> OpenGrep + Local Qwen)
 
-> **Ghi chú tài liệu:** Đây là bản phụ lục rút gọn (độ dài mục tiêu 2-3 trang khi xuất ra định dạng văn bản/PDF tại `v2/docs/ADVISOR_ORIGINAL_TASK_APPENDIX_SHORT_20261111.pdf`). Bản phụ lục kỹ thuật đầy đủ kèm toàn bộ mã băm SHA-256 được lưu tại `v2/docs/ADVISOR_ORIGINAL_TASK_APPENDIX_20261111.md`, và bảng đối chứng A/B chính thức tại `v2/evaluation/ADVISOR_PAIRED_PILOT_20261111.md` (`.csv`).
+> **Ghi chú tài liệu:** Đây là bản phụ lục rút gọn (độ dài mục tiêu 2-3 trang khi xuất ra định dạng văn bản/PDF tại `v2/docs/ADVISOR_ORIGINAL_TASK_APPENDIX_SHORT_20261111.pdf`). Bản phụ lục kỹ thuật đầy đủ kèm toàn bộ mã băm SHA-256 được lưu tại `v2/docs/ADVISOR_ORIGINAL_TASK_APPENDIX_20261111.md`, bảng đối chứng A/B chính thức tại `v2/evaluation/ADVISOR_PAIRED_PILOT_20261111.md` (`.csv`), và báo cáo kiểm toán độc lập bằng chứng Báo cáo Tiến độ Lần 1 tại `v2/evaluation/ADVISOR_FIRST_REPORT_EVIDENCE_AUDIT.md`.
 
-- **Repository & Nhánh:** `https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/tree/v2/integration-pilot`
-- **Các nhánh thành phần đã hợp nhất (`git merge --no-ff` trên nền `f92d5f915c9dc9a34604efa29820e662fd7b616b`):** `v2/codex-core` (`c36bc120de2922413c53c26e42648b184ac3e5c7`), `v2/antigravity-review` (`f25ce45a812a94198f09db7b296a2caf52174ca3`), `v2/javis-benchmark` (`43e1d648402704b9bc42698e62175805d720f7ff`).
+- **Repository & Nhánh:** `https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/tree/v2/integration-pilot` (và nhánh kiểm toán `v2/advisor-evaluation-javis-20261111`)
+- **Các nhánh thành phần đã hợp nhất (`git merge --no-ff` trên nền `f92d5f915c9dc9a34604efa29820e662fd7b616b`):** `v2/codex-core` (`c36bc120de2922413c53c26e42648b184ac3e5c7`), `v2/antigravity-review` (`f25ce45a812a94198f09db7b296a2caf52174ca3`), `v2/javis-benchmark` (`43e1d648402704b9bc42698e62175805d720f7ff`), cùng nhánh chứng minh M1 CLI `v2/advisor-m1-proof-20261111` (`7bd442d0ccca08cb089dd01762237cb62fe88698`).
 
 ---
 
@@ -20,23 +20,26 @@
 **Phân định rõ phạm vi kế thừa và sửa đổi (`v2/baseline/opengrep.patch` vs. gói tham khảo `opengrep-triage.zip` của giảng viên):**
 1. **Scanner/CLI tinh gọn (`v2/baseline/fork/semgrepai/`) đã chạy thật (`PASS`):** Chuyển từ `semgrep scan --config=auto` sang `opengrep scan` cục bộ với `--json`/`--sarif`, `--dataflow-traces`, `--no-git-ignore`, `--disable-version-check`, `--jobs 1`; sinh biên lai quét `scan-manifest.json` (`ntk-scan-capture-1`, kiểm chứng qua `scan_receipt.py`); sửa lỗi mất vết dữ liệu của upstream bằng cách đọc đúng `result['extra']['dataflow_trace']` (`taint_source`, `intermediate_vars`, `taint_sink`) và giữ trạng thái mặc định `REVIEW`.
 2. **Toàn bộ ứng dụng `simple_semgrepAI` upstream đầy đủ chưa chạy thành công (`PENDING / NOT DONE`):** Các thành phần FastAPI web, ChromaDB (RAG) và LangChain cloud LLM của upstream bị lược bỏ do xung đột phụ thuộc và để bảo đảm mã nguồn chỉ xử lý cục bộ (`127.0.0.1`).
-3. **Đối chiếu với `opengrep-triage.zip` của thầy:** Đã kiểm thử cô lập ngoài Git worktree (`15/15 pytest PASS`, `git apply --check` cho patch 4 file của thầy đạt `PASS`). Bản vá của đồ án (`v2/baseline/opengrep.patch`, khớp khứ hồi `4` file fork `scanner.py`, `config.py`, `cli.py`, `scan_manifest.py` qua `verify_patch.py`) giữ nguyên cấu trúc ATD `CliLoc` để kiểm chứng dòng/cột/byte offset/SHA-256 thay vì làm phẳng (`flatten`) như bản tham khảo. Tệp `Bo_ma_OpenGrep_Java_Qwen.zip` nhắc trong PDF 5 trang không có trong thư mục nguồn (**NOT PROVIDED**).
+3. **Đối chiếu với `opengrep-triage.zip` của thầy & Nghiệm thu M1 Original CLI trên máy chủ (`SERVER CLI RUNTIME: PASS`):** Đã kiểm thử cô lập ngoài Git worktree (`15/15 pytest PASS`, `git apply --check` cho patch 4 file của thầy đạt `PASS`) và chạy nghiệm thu CLI gốc trên WSL2 `Ubuntu-IRIS` (`prove_original_cli.py` + `audit_original_cli.py`, `exit_code = 0`) trên bản clone đầy đủ của upstream `hardw00t/simple_semgrepAI` (`2c79a58a...`, tree `c0ab3e20...`) áp patch giảng viên (`opengrep_Per.patch` `17ac840a...`) + overlay NTK (`3fa9c0b7...`), gọi entrypoint `python -m semgrepai.__main__ scan` xuất `4` JSON findings (`ec4a7a39...`) và `4` SARIF findings (`e0ca70f6...`) khớp 1-1. Bản vá của đồ án (`v2/baseline/opengrep.patch`, khớp khứ hồi `4` file fork `scanner.py`, `config.py`, `cli.py`, `scan_manifest.py` qua `verify_patch.py`) giữ nguyên cấu trúc ATD `CliLoc` để kiểm chứng dòng/cột/byte offset/SHA-256 thay vì làm phẳng (`flatten`) như bản tham khảo. Tệp `Bo_ma_OpenGrep_Java_Qwen.zip` nhắc trong PDF 5 trang không có trong thư mục nguồn (**NOT PROVIDED**).
 
 ---
 
 ## 2. Lệnh Chạy Tối thiểu Đã Xác minh trên Máy chủ (`exit_code = 0`)
 
-Chạy từ PowerShell tại thư mục gốc `C:\Users\Admin\ntk-thesis-v2\integration-pilot` (sử dụng thư mục đầu ra mới ngoài Git để không ghi đè bằng chứng đã lưu):
+Chạy từ PowerShell tại thư mục gốc `C:\Users\Admin\ntk-thesis-v2\integration-pilot` hoặc `C:\Users\Admin\ntk-thesis-v2\advisor-evaluation-javis` (sử dụng thư mục đầu ra mới ngoài Git để không ghi đè bằng chứng đã lưu):
 
 ```powershell
-Set-Location "C:\Users\Admin\ntk-thesis-v2\integration-pilot"
+Set-Location "C:\Users\Admin\ntk-thesis-v2\advisor-evaluation-javis"
 $env:PATH = "C:\Users\Admin\ntk-thesis-v2\tools\opengrep\v1.25.0;$env:PATH"
 
-# 1. Kiểm chứng chính sách kho mã, patch upstream (4 fork files), toàn bộ 162 bài Unit Test và 11 cổng tích hợp -> exit_code = 0
+# 1. Kiểm chứng chính sách kho mã, patch upstream (4 fork files), toàn bộ 177 bài Unit Test, 11 cổng tích hợp và kiểm toán REPLAY/LIVE -> exit_code = 0
 python scripts/verify-repository.py
 python v2/baseline/verify_patch.py
 python -m pytest v2/baseline/tests v2/triage/tests v2/evaluation/tests v2/demo/tests -q
 python v2/scripts/run_v2_quality_gate.py
+python v2/evaluation/verify_evidence_audit.py --mode replay
+python v2/evaluation/verify_evidence_audit.py --mode live --live-dir "C:\Users\Admin\ntk-thesis-v2\evidence\repro_live_verified_20261111_c36_f25" --verify-review-lifecycle
+```
 
 # 2. Chạy tái lập chế độ REPLAY (dùng bằng chứng Qwen3.5-9B đã khóa, kiểm chứng scan_sha256 + demo queue/freshness) -> exit_code = 0
 $ReplayDir = "C:\Users\Admin\ntk-thesis-v2\evidence\repro_replay_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
@@ -79,9 +82,9 @@ Trên tệp `v2/evaluation/smoke_evidence/SmokeVulnSample.java` (`2 TP`, `1 FP`,
      - `queue --all` vẫn bảo toàn toàn bộ bản ghi trong SQLite (`1` và `3`); `show` trả về `state = "CONFIRMED_FALSE"`; `history` lưu đầy đủ `actor`, `timestamp`, `action`, `reason`, `source_version` và `evidence_sha256`.
      - `decide ... reopen --actor SCRIPTED-DEMO` (`exit_code = 0`) -> cảnh báo xuất hiện lại trong `queue` mặc định (`0 -> 1` và `2 -> 3`).
      - Sửa bản sao tệp Java sau lượt quét làm đổi SHA-256 -> thao tác `confirm-false` bị **từ chối với `exit_code = 2`** (`source hash mismatch; rescan required`), lịch sử `history` giữ nguyên không bị ghi đè.
-2. **Xử lý tương thích Windows/WSL2, Git & Cổng Chất lượng (`162/162 PASS`):**
+2. **Xử lý tương thích Windows/WSL2, Git & Cổng Chất lượng (`177/177 PASS`):**
    - Binary `opengrep_windows_x86.exe` bị Windows 11 Smart App Control chặn (`Error 4551`), đã giải quyết qua `/usr/local/bin/opengrep` trong WSL2 `Ubuntu-IRIS` kết hợp cầu nối `opengrep.cmd` và cờ `--path-map`.
-   - Các tệp snapshot upstream trong `v2/baseline/upstream/**` và `v2/baseline/opengrep.patch` được bảo toàn nguyên vẹn từng byte bằng thuộc tính **`-text`** trong `v2/baseline/.gitattributes`, giúp `verify_patch.py` và toàn bộ **`162/162` bài test (`27` M1 + `70` M2/M3 + `28` Evaluation + `37` Quality Gate)** đạt `PASS`.
+   - Các tệp snapshot upstream trong `v2/baseline/upstream/**` và `v2/baseline/opengrep.patch` được bảo toàn nguyên vẹn từng byte bằng thuộc tính **`-text`** trong `v2/baseline/.gitattributes`, giúp `verify_patch.py` và toàn bộ **`177/177` bài test (`27` M1 + `70` M2/M3 + `43` Evaluation & Evidence Audit + `37` Quality Gate)** đạt `PASS`.
    - Token GitHub trên máy chủ hiện thiếu scope `workflow`, nên file `.github/workflows/v2-quality-gate.yml` đang ở trạng thái **BLOCKED** khi push lên GitHub Cloud Actions; cổng kiểm định 11 bước được đặt tại `v2/workflows/v2-quality-gate.yml` + `v2/scripts/run_v2_quality_gate.py` và tự động chạy qua Git `pre-push` hook trên worktree tích hợp.
 3. **Các hạng mục chưa thực hiện (`NOT DONE`):**
    - Chưa chạy thành công toàn bộ ứng dụng web/RAG/cloud `simple_semgrepAI` upstream (chỉ kế thừa và chuẩn hóa phần scanner/CLI).

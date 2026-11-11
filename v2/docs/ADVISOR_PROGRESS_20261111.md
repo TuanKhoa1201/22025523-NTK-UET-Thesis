@@ -7,7 +7,9 @@
   - `origin/v2/codex-core`: **`c36bc120de2922413c53c26e42648b184ac3e5c7`** (`v2: bind scan receipts and harden upstream scan-only verification` - M1 baseline scanner/patch 4 file + `scan-manifest.json` chuẩn `ntk-scan-capture-1`, M2/M3 triage, `scan_receipt.py`, `live_check.py`, `export_pilot.py`, SQLite queue ẩn `CONFIRMED_FALSE`, `--path-map`, `demo_queue.py`, `verify_handoff.py`)
   - `origin/v2/antigravity-review`: **`f25ce45a812a94198f09db7b296a2caf52174ca3`** (`v2: harden independent evaluation and audit Qwen paired pilot` - M4/M5 evaluation, `score_pilot.py`, `codex_adapter.py`, `build_paired_pilot_table.py`, `validate_pilot_lock.py`, `INDEPENDENT_EVALUATION_AUDIT_20261111.md`, `smoke_m1_verified_labels.json`)
   - `origin/v2/javis-benchmark` / nền tích hợp: **`f92d5f915c9dc9a34604efa29820e662fd7b616b`** / `da26b87206fd0d7a5873e957dc1713cde03fe322` (`scripts/verify-repository.py`, `v2/scripts/run_v2_quality_gate.py`, `v2/demo/reproduce_integration_pilot.ps1`, `v2/demo/verify_repro_contract.py`, `v2/demo/tests/test_quality_gate.py`)
-- **Bộ tài liệu bàn giao trong nhánh `v2/integration-pilot`:**
+- **Bộ tài liệu bàn giao trong nhánh `v2/integration-pilot` và nhánh kiểm toán `v2/advisor-evaluation-javis-20261111`:**
+  - Báo cáo kiểm toán độc lập bằng chứng Báo cáo Tiến độ Lần 1 (JavisOS): `v2/evaluation/ADVISOR_FIRST_REPORT_EVIDENCE_AUDIT.md` kèm trình kiểm toán `v2/evaluation/verify_evidence_audit.py` và bộ test hồi quy `v2/evaluation/tests/test_verify_evidence_audit.py` (`15/15 PASS`)
+  - Bằng chứng nghiệm thu CLI gốc `simple_semgrepAI` (`origin/v2/advisor-m1-proof-20261111` commit `7bd442d0ccca08cb089dd01762237cb62fe88698` + chạy thực tế trên máy chủ WSL2 `Ubuntu-IRIS` đạt `SERVER CLI RUNTIME: PASS` tại `C:\Users\Admin\ntk-thesis-v2\evidence\m1_server_cli_proof\proof-server-20261111`)
   - Bảng đối chứng A/B chính thức: `v2/evaluation/ADVISOR_PAIRED_PILOT_20261111.md` và `v2/evaluation/ADVISOR_PAIRED_PILOT_20261111.csv` (bản sao đồng bộ tại `v2/docs/ADVISOR_PAIRED_PILOT_20261111.md` và `.csv`)
   - Báo cáo kiểm toán độc lập M4: `v2/evaluation/INDEPENDENT_EVALUATION_AUDIT_20261111.md`
   - Phụ lục nhiệm vụ gốc (bản ngắn 2-3 trang Markdown & PDF): `v2/docs/ADVISOR_ORIGINAL_TASK_APPENDIX_SHORT_20261111.md` và `v2/docs/ADVISOR_ORIGINAL_TASK_APPENDIX_SHORT_20261111.pdf`
@@ -15,11 +17,11 @@
   - Tin nhắn tóm tắt gửi giảng viên: `v2/docs/ADVISOR_MESSAGE_20261111.md`
   - Script tái lập tích hợp (tách bạch `-Mode REPLAY` và `-Mode LIVE`): `v2/demo/reproduce_integration_pilot.ps1`
 - **Phân định phạm vi và trạng thái xác minh (5 nguyên tắc minh bạch bắt buộc):**
-  1. **Patch upstream (`v2/baseline/verify_patch.py`):** **`PASS`** (`6 upstream blobs; deterministic patch; git apply --check/apply matches 4 fork files`).
+  1. **Patch upstream (`v2/baseline/verify_patch.py`) & Nghiệm thu M1 Original CLI trên máy chủ (`prove_original_cli.py` + `audit_original_cli.py`):** **`PASS`** (`6 upstream blobs; deterministic patch; git apply --check/apply matches 4 fork files`; trên WSL2 `Ubuntu-IRIS` chạy entrypoint gốc `python -m semgrepai.__main__ scan` trên repo upstream đầy đủ `2c79a58a...` + patch giảng viên `opengrep_Per.patch` `17ac840a...` + overlay NTK `3fa9c0b7...` đạt `exit_code = 0`, xuất `4` JSON findings `ec4a7a39...` và `4` SARIF findings `e0ca70f6...`).
   2. **Scanner/CLI upstream đã vá (`v2/baseline/fork/semgrepai/`):** **`PASS`** (chạy thật `OpenGrep 1.25.0` JSON + SARIF và sinh `scan-manifest.json` chuẩn `ntk-scan-capture-1`).
   3. **Toàn bộ ứng dụng `simple_semgrepAI` upstream đầy đủ (FastAPI web, ChromaDB RAG, LangChain cloud LLM):** **`PENDING / NOT DONE`** (chưa chạy thành công ngăn xếp web/RAG/cloud upstream do xung đột phụ thuộc và nằm ngoài kiến trúc cục bộ).
-  4. **Trạng thái xác thực runtime Ollama (`qwen3.5:9b-q4_K_M`):** **`OLLAMA_REPORTED_UNATTESTED` (`PENDING` đối với chứng thực phần cứng độc lập)** — Đã xác minh `3/3` phản hồi HTTP 200 từ `http://127.0.0.1:11434/api/chat`, `3/3` JSON hợp lệ, `3/3 citation_check = MATCHED`, `reported_eval_count > 0`, `model_identity_matched = true`; cờ `independently_verified_model_runtime = false` (`qwen_runtime_verified = false`) được giữ nguyên theo thiết kế vì phản hồi HTTP cục bộ không tự chứng thực phần cứng độc lập.
-  5. **Phân biệt `REPLAY PASS` vs. `LIVE PASS` và phạm vi `SYNTHETIC SMOKE PILOT, n = 3`:** Đã kiểm chứng thành công cả chế độ `REPLAY` (trên dữ liệu lịch sử đã khóa `scan_sha256: 005863f2...`) và chế độ `LIVE` mới có gắn `scan-manifest.json` (`scan_sha256: 4d628a21...`, `manifest_sha256: 77da8733...` tại `evidence/repro_live_verified_20261111_c36_f25`). **Chưa có kết quả benchmark độc lập trên dự án Java thực tế hoặc OWASP Benchmark (`NOT DONE`).**
+  4. **Trạng thái xác thực runtime Ollama (`qwen3.5:9b-q4_K_M`):** **`OLLAMA_REPORTED_UNATTESTED` (`PENDING` đối với chứng thực phần cứng độc lập)** - Đã xác minh `3/3` phản hồi HTTP 200 từ `http://127.0.0.1:11434/api/chat`, `3/3` JSON hợp lệ, `3/3 citation_check = MATCHED`, `reported_eval_count > 0`, `model_identity_matched = true`; cờ `independently_verified_model_runtime = false` (`qwen_runtime_verified = false`) được giữ nguyên theo thiết kế vì phản hồi HTTP cục bộ không tự chứng thực phần cứng độc lập.
+  5. **Phân biệt `REPLAY PASS` vs. `LIVE PASS` và phạm vi `SYNTHETIC SMOKE PILOT, n = 3`:** Đã kiểm chứng thành công cả chế độ `REPLAY` (`exit_code = 0`, trên dữ liệu lịch sử đã khóa `scan_sha256: 005863f2...`) và chế độ `LIVE` mới có gắn `scan-manifest.json` (`exit_code = 0`, `scan_sha256: 4d628a21...`, `manifest_sha256: 77da8733...` tại `evidence/repro_live_verified_20261111_c36_f25`) thông qua `v2/evaluation/verify_evidence_audit.py`. **Chưa có kết quả benchmark độc lập trên dự án Java thực tế hoặc OWASP Benchmark (`NOT DONE`).**
 
 ---
 
@@ -40,7 +42,7 @@
 
 ---
 
-## B. Môi trường Thực thi & Kết quả Kiểm thử Tự động Sau Hợp nhất (`162/162 PASS`)
+## B. Môi trường Thực thi & Kết quả Kiểm thử Tự động Sau Hợp nhất & Kiểm toán JavisOS (`177/177 PASS`)
 
 | Thành phần / Bộ kiểm thử | Thông số / Lệnh kiểm chứng thực tế | Kết quả (`PASS` / `FAIL` / `SKIP`) |
 |---|---|---|
@@ -48,12 +50,14 @@
 | **GPU & Ollama Runtime** | `NVIDIA GeForce RTX 4060 Ti 16 GB` + `Ollama v0.40.7` (`127.0.0.1:11434`, `100% GPU`) | **PASS** |
 | **OpenGrep Engine** | `OpenGrep 1.25.0` tại WSL2 `/usr/local/bin/opengrep` + cầu nối Windows `opengrep.cmd` | **PASS** |
 | **Model Qwen chạy thật** | **`qwen3.5:9b-q4_K_M`** (`manifest SHA-256: 7dd7bb31...`) và **`qwen3:8b`** (`digest: 500a1f06...`) | **`OLLAMA_REPORTED_UNATTESTED` (`3/3` HTTP 200)** |
-| **Repository Policy Gate** | `python scripts/verify-repository.py` | **`PASS` (`19` tệp bắt buộc, `99` module Python, `16` JSON, `3` JSONL)** |
-| **M1 Scanner & Receipt Tests** | `python -m pytest v2/baseline/tests -v` | **`27 passed` (`14 subtests`), `0 failed`, `0 skipped` (`0.34s`)** |
-| **M2/M3 Triage & Manifest Tests** | `python -m pytest v2/triage/tests -v` | **`70 passed` (`12 subtests`), `0 failed`, `0 skipped` (`4.00s`)** |
-| **M4/M5 Evaluation & Audit Tests** | `python -m pytest v2/evaluation/tests -v` | **`28 passed`, `0 failed`, `0 skipped` (`0.07s`)** |
-| **Quality Gate & Fail-Closed Tests** | `python -m pytest v2/demo/tests -v` | **`37 passed`, `0 failed`, `0 skipped` (`7.35s`)** |
-| **Tổng cộng Unit Tests V2** | `python -m pytest v2/baseline/tests v2/triage/tests v2/evaluation/tests v2/demo/tests -q` | **`162 passed` (`26 subtests`), `0 failed`, `0 skipped` (`exit_code = 0`)** |
+| **M1 Original CLI Server Runtime Proof** | `prove_original_cli.py` + `audit_original_cli.py` trong WSL2 `Ubuntu-IRIS` (`typer 0.27.3`, `rich 15.0.0`, `PyYAML 6.0.3`, `opengrep 1.25.0`) | **`PASS` (`exit_code = 0`, `4` JSON + `4` SARIF findings, `4 -> 4` handoff)** |
+| **Independent Evidence Audit (`REPLAY` & `LIVE`)** | `python v2/evaluation/verify_evidence_audit.py --mode replay` & `--mode live --verify-review-lifecycle` | **`PASS` (`exit_code = 0` cả `REPLAY` và `LIVE`; `exit_code = 2` khi vắng `LIVE`)** |
+| **Repository Policy Gate** | `python scripts/verify-repository.py` | **`PASS` (`19` tệp bắt buộc, `100+` module Python, `16` JSON, `3` JSONL)** |
+| **M1 Scanner & Receipt Tests** | `python -m pytest v2/baseline/tests -v` | **`27 passed` (`14 subtests`), `0 failed`, `0 skipped`** |
+| **M2/M3 Triage & Manifest Tests** | `python -m pytest v2/triage/tests -v` | **`70 passed` (`12 subtests`), `0 failed`, `0 skipped`** |
+| **M4/M5 Evaluation & Evidence Audit Tests** | `python -m pytest v2/evaluation/tests -v` (gồm `15` test mới trong `test_verify_evidence_audit.py`) | **`43 passed`, `0 failed`, `0 skipped`** |
+| **Quality Gate & Fail-Closed Tests** | `python -m pytest v2/demo/tests -v` | **`37 passed`, `0 failed`, `0 skipped`** |
+| **Tổng cộng Unit Tests V2** | `python -m pytest v2/baseline/tests v2/triage/tests v2/evaluation/tests v2/demo/tests -q` | **`177 passed` (`26 subtests`), `0 failed`, `0 skipped` (`exit_code = 0`)** |
 | **Cổng Kiểm định Tích hợp V2** | `python v2/scripts/run_v2_quality_gate.py` | **`PASS` (`11/11` bước kiểm định đạt, `exit_code = 0`)** |
 | **Patch & Handoff Verification** | `python v2/baseline/verify_patch.py` & `python v2/baseline/verify_handoff.py` | **`PASS` (`exit_code = 0`, 4 fork files khớp patch)** |
 | **Review Queue & Tamper Demo** | `python -m v2.triage.demo_queue` & `python -m v2.triage.demo_freshness` | **`PASS` (`exit_code = 0`, `1 -> 0 -> 1`, stale `exit_code = 2`)** |
