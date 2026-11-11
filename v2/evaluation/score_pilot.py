@@ -294,6 +294,7 @@ class IntegrityAnomalies:
     invalid_ground_truth_labels: list[dict[str, Any]] = field(default_factory=list)
     rejected_auto_generated_labels: list[dict[str, Any]] = field(default_factory=list)
     model_mismatches: list[dict[str, Any]] = field(default_factory=list)
+    unverified_scan_provenance: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -316,6 +317,7 @@ class IntegrityAnomalies:
             "invalid_ground_truth_labels": self.invalid_ground_truth_labels,
             "rejected_auto_generated_labels": self.rejected_auto_generated_labels,
             "model_mismatches": self.model_mismatches,
+            "unverified_scan_provenance": self.unverified_scan_provenance,
         }
 
 
@@ -669,13 +671,19 @@ def evaluate_pilot(
     source_root: Path | str | None = None,
     expected_scan_sha256: str | None = None,
     expected_model_prefix: str | None = None,
+    require_scan_provenance: bool = False,
 ) -> dict[str, Any]:
     """Evaluate OpenGrep standalone vs. OpenGrep + Qwen triage on locked alerts and labels."""
     anomalies = IntegrityAnomalies()
     source_root_path = Path(source_root) if source_root else None
 
     # 1. Deduplicate and index OpenGrep alerts
-    raw_alerts = _extract_opengrep_alerts(opengrep_data, scan_sha256=expected_scan_sha256)
+    inferred_scan_sha = expected_scan_sha256
+    if not inferred_scan_sha and isinstance(labels_data, dict):
+        cand_sha = labels_data.get("scan_sha256")
+        if codex_adapter.is_valid_sha256(cand_sha):
+            inferred_scan_sha = str(cand_sha).strip().lower()
+    raw_alerts = _extract_opengrep_alerts(opengrep_data, scan_sha256=inferred_scan_sha)
     alerts_by_id: dict[str, dict[str, Any]] = {}
     alias_to_canonical_id: dict[str, str] = {}
     unique_alerts_ordered: list[dict[str, Any]] = []
@@ -823,6 +831,11 @@ def evaluate_pilot(
     }
 
     per_alert_decisions: list[dict[str, Any]] = []
+    provenance_counts: dict[str, int] = {
+        "VERIFIED_CAPTURE": 0,
+        "UNVERIFIED_CAPTURE": 0,
+        "HISTORICAL_UNBUNDLED": 0,
+    }
 
     # 5. Evaluate each alert in the locked OpenGrep scan
     for aid, alert in alerts_by_id.items():
@@ -937,6 +950,7 @@ def evaluate_pilot(
             override_reasons.append("duplicate_label_id")
 
         raw_model_mapped: str | None = None
+        prov_status: str | None = None
         if triage is None:
             if aid not in malformed_alert_ids:
                 anomalies.missing_triage_alert_ids.append(aid)
@@ -976,6 +990,41 @@ def evaluate_pilot(
             if aid in anomalies.duplicate_triage_ids:
                 effective_verdict = "REVIEW"
                 override_reasons.append("duplicate_triage_id")
+
+            # Check scan_provenance and evidence_issues from Codex c36bc12
+            prov_obj = triage.get("scan_provenance")
+            prov_status = triage.get("scan_provenance_status")
+            if not prov_status:
+                if isinstance(prov_obj, dict):
+                    prov_status = (
+                        "VERIFIED_CAPTURE"
+                        if prov_obj.get("source_capture_verified") is True
+                        else "UNVERIFIED_CAPTURE"
+                    )
+                else:
+                    prov_status = "HISTORICAL_UNBUNDLED"
+            if prov_status in provenance_counts:
+                provenance_counts[prov_status] += 1
+
+            ev_issues = triage.get("evidence_issues") or []
+            if prov_status == "UNVERIFIED_CAPTURE" or bool(ev_issues):
+                anomalies.unverified_scan_provenance.append({
+                    "alert_id": aid,
+                    "scan_provenance_status": prov_status,
+                    "origin": prov_obj.get("origin") if isinstance(prov_obj, dict) else None,
+                    "evidence_issues": ev_issues,
+                    "reason": "Scan provenance explicitly unverified or evidence issues present",
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("unverified_scan_provenance")
+            elif require_scan_provenance and prov_status != "VERIFIED_CAPTURE":
+                anomalies.unverified_scan_provenance.append({
+                    "alert_id": aid,
+                    "scan_provenance_status": prov_status,
+                    "reason": "Strict provenance mode requires scan_provenance.source_capture_verified == True",
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("missing_verified_scan_provenance")
 
             # Verify model family/prefix if expected_model_prefix is specified
             triage_model = str(triage.get("model_id") or triage.get("model") or "").strip()
@@ -1255,6 +1304,7 @@ def evaluate_pilot(
             "arm_a_baseline": "KEEP",
             "raw_model_status": triage.get("raw_model_status") if triage else None,
             "raw_codex_status": triage.get("raw_codex_status") if triage else None,
+            "scan_provenance_status": prov_status,
             "citation_check": triage.get("citation_check") if triage else None,
             "cited_lines": triage.get("cited_lines") if triage else None,
             "model_id": triage.get("model_id") if triage else None,
@@ -1323,6 +1373,10 @@ def evaluate_pilot(
             "by_cwe": {cwe: bucket.to_dict() for cwe, bucket in per_cwe_buckets.items()},
         },
         "anomalies": anomalies.to_dict(),
+        "scan_provenance_summary": {
+            "require_scan_provenance": require_scan_provenance,
+            **provenance_counts,
+        },
         "per_alert_decisions": per_alert_decisions,
     }
 
@@ -1413,6 +1467,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Mark output as synthetic TEST FIXTURE.",
     )
+    parser.add_argument(
+        "--require-scan-provenance",
+        action="store_true",
+        help="Require scan_provenance.source_capture_verified == True on every triage record.",
+    )
     args = parser.parse_args(argv)
 
     opengrep_raw = json.loads(Path(args.opengrep).read_text(encoding="utf-8"))
@@ -1429,6 +1488,7 @@ def main(argv: list[str] | None = None) -> int:
         triage_data=triage_raw_text,
         opengrep_scan_time_ms=args.scan_time_ms,
         source_root=args.source_root,
+        require_scan_provenance=args.require_scan_provenance,
     )
     if args.fixture:
         report["fixture_notice"] = (

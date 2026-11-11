@@ -26,6 +26,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from v2.triage import live_check, scan_receipt
+
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -181,6 +187,74 @@ def verify_live_runtime_rows(rows: list[dict[str, Any]], expected_model: str) ->
     return errors
 
 
+def verify_scan_manifest_contract(
+    manifest_path: Path | None,
+    opengrep_path: Path,
+    source_root: Path,
+    rows: list[dict[str, Any]],
+    disallow_mock_producer: bool = True,
+) -> tuple[dict[str, Any], list[str]]:
+    errors: list[str] = []
+    if manifest_path is None:
+        return {}, ["--scan-manifest is required for manifest-bound verification"]
+    if not opengrep_path.is_file():
+        return {}, [f"OpenGrep JSON file does not exist: {opengrep_path}"]
+
+    raw_bytes = opengrep_path.read_bytes()
+    receipt, issues = scan_receipt.verify_receipt(
+        manifest_path,
+        raw_bytes,
+        source_root,
+        declared_exit=0,
+    )
+    for issue in issues:
+        errors.append(issue)
+    if receipt.get("source_capture_verified") is not True:
+        errors.append("scan receipt source_capture_verified is not True")
+    if receipt.get("exit_capture_verified") is not True or receipt.get("recorded_engine_exit") != 0:
+        errors.append(
+            f"scan receipt exit_capture_verified={receipt.get('exit_capture_verified')!r}, "
+            f"recorded_engine_exit={receipt.get('recorded_engine_exit')!r}"
+        )
+    if disallow_mock_producer and receipt.get("producer") == "UNIT_TEST_MOCK_CAPTURE":
+        errors.append("mock producer UNIT_TEST_MOCK_CAPTURE is forbidden in LIVE mode")
+
+    expected_manifest_sha = receipt.get("manifest_sha256")
+    for idx, row in enumerate(rows):
+        aid = str(row.get("alert_id") or row.get("id") or f"row-{idx}")
+        ev = row.get("evidence")
+        if not isinstance(ev, dict):
+            errors.append(f"{aid}: missing evidence object")
+            continue
+        prov = ev.get("scan_provenance")
+        if not isinstance(prov, dict):
+            errors.append(f"{aid}: missing evidence.scan_provenance object")
+            continue
+        if prov.get("source_capture_verified") is not True:
+            errors.append(f"{aid}: evidence.scan_provenance.source_capture_verified is not True")
+        if prov.get("exit_capture_verified") is not True or prov.get("recorded_engine_exit") != 0:
+            errors.append(
+                f"{aid}: evidence.scan_provenance exit_capture_verified={prov.get('exit_capture_verified')!r}, "
+                f"recorded_engine_exit={prov.get('recorded_engine_exit')!r}"
+            )
+        if expected_manifest_sha and prov.get("manifest_sha256") != expected_manifest_sha:
+            errors.append(
+                f"{aid}: row manifest_sha256 ({prov.get('manifest_sha256')!r}) != "
+                f"receipt manifest_sha256 ({expected_manifest_sha!r})"
+            )
+        ev_issues = ev.get("issues")
+        if isinstance(ev_issues, list) and ev_issues:
+            errors.append(f"{aid}: evidence.issues is non-empty: {ev_issues}")
+
+    return receipt, errors
+
+
+def _paths_align(res_path: str, lbl_path: str) -> bool:
+    r = res_path.replace("\\", "/").strip("/")
+    l = lbl_path.replace("\\", "/").strip("/")
+    return r == l or r.endswith("/" + l) or l.endswith("/" + r)
+
+
 def project_labels_to_live_scan(
     scan_sha256: str,
     results: list[dict[str, Any]],
@@ -201,7 +275,7 @@ def project_labels_to_live_scan(
         lbl_line = lbl.get("start_line")
         res_rule = str(res.get("check_id") or "")
         lbl_rule = str(lbl.get("rule_id") or "")
-        if res_path != lbl_path or res_line != lbl_line or res_rule != lbl_rule:
+        if not _paths_align(res_path, lbl_path) or res_line != lbl_line or res_rule != lbl_rule:
             raise ValueError(
                 f"Live scan finding[{idx}] ({res_path}:{res_line} {res_rule}) does not match "
                 f"template label ({lbl_path}:{lbl_line} {lbl_rule})"
@@ -223,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
     p_replay.add_argument("--opengrep", type=Path, required=True)
     p_replay.add_argument("--triage", type=Path, required=True)
     p_replay.add_argument("--labels", type=Path, required=True)
+    p_replay.add_argument("--scan-manifest", type=Path, default=None)
+    p_replay.add_argument("--source-root", type=Path, default=REPO_ROOT / "v2" / "evaluation" / "smoke_evidence")
     p_replay.add_argument("--output-report", type=Path)
 
     p_live = sub.add_parser("live", help="Verify fresh LIVE scan/triage/runtime contract")
@@ -231,6 +307,8 @@ def main(argv: list[str] | None = None) -> int:
     p_live.add_argument("--template-labels", type=Path, required=True)
     p_live.add_argument("--expected-model", required=True)
     p_live.add_argument("--output-labels", type=Path, required=True)
+    p_live.add_argument("--scan-manifest", type=Path, default=None)
+    p_live.add_argument("--source-root", type=Path, default=REPO_ROOT / "v2" / "evaluation" / "smoke_evidence")
     p_live.add_argument("--output-report", type=Path)
 
     args = parser.parse_args(argv)
@@ -238,9 +316,40 @@ def main(argv: list[str] | None = None) -> int:
         scan_sha256, results, rows = verify_scan_and_triage_alignment(args.opengrep, args.triage)
         if args.mode == "replay":
             verify_labels_alignment(scan_sha256, results, args.labels)
+            if args.scan_manifest is not None:
+                receipt, manifest_errors = verify_scan_manifest_contract(
+                    args.scan_manifest,
+                    args.opengrep,
+                    args.source_root,
+                    rows,
+                    disallow_mock_producer=False,
+                )
+                if manifest_errors:
+                    for err in manifest_errors:
+                        print(f"SCAN_MANIFEST_INVALID: {err}", file=sys.stderr)
+                    return 5
+                provenance_classification = "MANIFEST_BOUND_REPLAY"
+                source_capture_verified = True
+                manifest_sha256 = receipt.get("manifest_sha256")
+            else:
+                for idx, row in enumerate(rows):
+                    ev = row.get("evidence")
+                    prov = ev.get("scan_provenance") if isinstance(ev, dict) else None
+                    if isinstance(prov, dict) and prov.get("source_capture_verified") is True:
+                        raise ValueError(
+                            f"UNBUNDLED_REPLAY_PROVENANCE_ESCALATION at row {idx + 1}: "
+                            "row claims source_capture_verified=True without --scan-manifest"
+                        )
+                provenance_classification = "HISTORICAL_UNBUNDLED_REPLAY"
+                source_capture_verified = False
+                manifest_sha256 = None
+
             report = {
                 "mode": "REPLAY",
                 "status": "PASS",
+                "provenance_classification": provenance_classification,
+                "source_capture_verified": source_capture_verified,
+                "manifest_sha256": manifest_sha256,
                 "scan_sha256": scan_sha256,
                 "findings_count": len(rows),
                 "opengrep_path": str(args.opengrep),
@@ -250,10 +359,34 @@ def main(argv: list[str] | None = None) -> int:
             if args.output_report:
                 args.output_report.parent.mkdir(parents=True, exist_ok=True)
                 args.output_report.write_text(json.dumps(report, indent=2), encoding="utf-8")
-            print(f"PASS: REPLAY contract verified (scan_sha256={scan_sha256}, findings={len(rows)})")
+            print(
+                f"PASS: REPLAY contract verified (scan_sha256={scan_sha256}, "
+                f"provenance={provenance_classification}, findings={len(rows)})"
+            )
             return 0
 
+        receipt, manifest_errors = verify_scan_manifest_contract(
+            args.scan_manifest,
+            args.opengrep,
+            args.source_root,
+            rows,
+            disallow_mock_producer=True,
+        )
+        if manifest_errors:
+            for err in manifest_errors:
+                print(f"SCAN_MANIFEST_INVALID: {err}", file=sys.stderr)
+            return 5
+
         runtime_errors = verify_live_runtime_rows(rows, args.expected_model)
+        live_protocol = live_check.inspect(rows, minimum=len(rows))
+        if (
+            live_protocol.get("protocol_status") != "OLLAMA_REPORTED_UNATTESTED"
+            or live_protocol.get("completed_reported_responses") != len(rows)
+        ):
+            runtime_errors.append(
+                f"live_check protocol_status={live_protocol.get('protocol_status')!r} "
+                f"(completed={live_protocol.get('completed_reported_responses')}/{len(rows)})"
+            )
         if runtime_errors:
             for err in runtime_errors:
                 print(f"LIVE_RUNTIME_VERIFICATION_FAILED: {err}", file=sys.stderr)
@@ -263,10 +396,15 @@ def main(argv: list[str] | None = None) -> int:
         report = {
             "mode": "LIVE",
             "status": "PASS",
+            "provenance_classification": "LIVE_MANIFEST_VERIFIED",
+            "source_capture_verified": True,
+            "manifest_sha256": receipt.get("manifest_sha256"),
+            "live_protocol_status": live_protocol.get("protocol_status"),
             "scan_sha256": scan_sha256,
             "expected_model": args.expected_model,
             "findings_count": len(rows),
             "opengrep_path": str(args.opengrep),
+            "scan_manifest_path": str(args.scan_manifest),
             "triage_path": str(args.triage),
             "output_labels_path": str(args.output_labels),
         }
@@ -274,8 +412,9 @@ def main(argv: list[str] | None = None) -> int:
             args.output_report.parent.mkdir(parents=True, exist_ok=True)
             args.output_report.write_text(json.dumps(report, indent=2), encoding="utf-8")
         print(
-            f"PASS: LIVE contract and model runtime verified "
-            f"(scan_sha256={scan_sha256}, model={args.expected_model}, findings={len(rows)})"
+            f"PASS: LIVE contract, scan-manifest, and model runtime verified "
+            f"(scan_sha256={scan_sha256}, manifest_sha256={receipt.get('manifest_sha256')}, "
+            f"model={args.expected_model}, findings={len(rows)})"
         )
         return 0
     except Exception as exc:

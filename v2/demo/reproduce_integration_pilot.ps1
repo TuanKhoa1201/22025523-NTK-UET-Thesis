@@ -145,39 +145,50 @@ try {
                 --output-report (Join-Path $EvidenceRoot "contract_verification_receipt.json")
         }
     } else {
-        Write-Host "=== [3/4] [MODE=LIVE] Running Fresh OpenGrep Scan, Live Ollama Triage, and Runtime Verification ==="
+        Write-Host "=== [3/4] [MODE=LIVE] Running Fresh OpenGrep Scan (ScanCapture), Live Ollama Triage, and Runtime Verification ==="
         $LiveScanDir = Join-Path $EvidenceRoot "live_scan"
-        New-Item -ItemType Directory -Path $LiveScanDir | Out-Null
-        $WslScanDir = "/mnt/c" + ($LiveScanDir.Substring(2) -replace '\\', '/')
-        $LiveOpenGrepJson = Join-Path $LiveScanDir "smoke_m1_raw.opengrep.json"
-        $LiveOpenGrepSarif = Join-Path $LiveScanDir "smoke_m1_raw.opengrep.sarif"
+        $SmokeSourceRoot = Join-Path $RepoRoot "v2\evaluation\smoke_evidence"
+        $LiveOpenGrepJson = Join-Path $LiveScanDir "opengrep.json"
+        $LiveOpenGrepSarif = Join-Path $LiveScanDir "opengrep.sarif"
+        $LiveScanManifest = Join-Path $LiveScanDir "scan-manifest.json"
 
-        Invoke-CheckedStep "opengrep_json_scan" {
-            wsl.exe -d Ubuntu-IRIS -- /usr/local/bin/opengrep scan `
-                --config v2/baseline/rules/java.yml `
-                --json --dataflow-traces --no-git-ignore --disable-version-check --jobs 1 --timeout 60 `
-                --output "$WslScanDir/smoke_m1_raw.opengrep.json" `
-                v2/evaluation/smoke_evidence/SmokeVulnSample.java
+        $env:PYTHONPATH = "v2/baseline/fork"
+        try {
+            Invoke-CheckedStep "opengrep_json_scan" {
+                python -m semgrepai $SmokeSourceRoot `
+                    --rules-path "v2/baseline/rules/java.yml" `
+                    --output-dir $LiveScanDir
+            }
+        } finally {
+            Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
         }
+
         Invoke-CheckedStep "opengrep_sarif_scan" {
-            wsl.exe -d Ubuntu-IRIS -- /usr/local/bin/opengrep scan `
-                --config v2/baseline/rules/java.yml `
-                --sarif --dataflow-traces --no-git-ignore --disable-version-check --jobs 1 --timeout 60 `
-                --output "$WslScanDir/smoke_m1_raw.opengrep.sarif" `
-                v2/evaluation/smoke_evidence/SmokeVulnSample.java
+            python -c "import pathlib, sys; p_j, p_s, p_m = map(pathlib.Path, sys.argv[1:4]); sys.exit(0 if (p_j.is_file() and p_s.is_file() and p_m.is_file()) else 2)" `
+                $LiveOpenGrepJson $LiveOpenGrepSarif $LiveScanManifest
         }
 
         $LiveOut = Join-Path $EvidenceRoot "triage_live_qwen35"
         Invoke-CheckedStep "live_triage_run" {
             python -m v2.triage run `
-                --source-root $RepoRoot `
-                --path-base $RepoRoot `
+                --source-root $SmokeSourceRoot `
                 --json $LiveOpenGrepJson `
+                --scan-manifest $LiveScanManifest `
                 --engine-exit 0 `
                 --output-dir $LiveOut `
                 --endpoint $Endpoint `
                 --model $Model `
                 --timeout 180
+        }
+
+        Invoke-CheckedStep "verify_handoff" {
+            python v2/baseline/verify_handoff.py `
+                --engine $LiveScanDir `
+                --triage $LiveOut
+        }
+
+        Invoke-CheckedStep "verify_handoff" {
+            python -m v2.triage.live_check $LiveOut --minimum-responses 3
         }
 
         $ScanJsonForEval = $LiveOpenGrepJson
@@ -187,6 +198,8 @@ try {
         Invoke-CheckedStep "verify_scan_hash_contract" {
             python v2/demo/verify_repro_contract.py live `
                 --opengrep $ScanJsonForEval `
+                --scan-manifest $LiveScanManifest `
+                --source-root $SmokeSourceRoot `
                 --triage $TriageJsonlForEval `
                 --template-labels $LabelsJson `
                 --expected-model $Model `
@@ -210,13 +223,24 @@ try {
     $env:PYTHONPATH = "v2/evaluation"
     try {
         Invoke-CheckedStep "score_pilot" {
-            python -m v2.evaluation.score_pilot `
-                --opengrep $ScanJsonForEval `
-                --labels $LabelsJsonForEval `
-                --triage $TriageJsonlForEval `
-                --source-root $RepoRoot `
-                --output-json (Join-Path $EvidenceRoot "score_pilot_verified.json") `
-                --output-md (Join-Path $EvidenceRoot "score_pilot_verified.md")
+            if ($Mode -eq "LIVE") {
+                python -m v2.evaluation.score_pilot `
+                    --opengrep $ScanJsonForEval `
+                    --labels $LabelsJsonForEval `
+                    --triage $TriageJsonlForEval `
+                    --source-root $RepoRoot `
+                    --require-scan-provenance `
+                    --output-json (Join-Path $EvidenceRoot "score_pilot_verified.json") `
+                    --output-md (Join-Path $EvidenceRoot "score_pilot_verified.md")
+            } else {
+                python -m v2.evaluation.score_pilot `
+                    --opengrep $ScanJsonForEval `
+                    --labels $LabelsJsonForEval `
+                    --triage $TriageJsonlForEval `
+                    --source-root $RepoRoot `
+                    --output-json (Join-Path $EvidenceRoot "score_pilot_verified.json") `
+                    --output-md (Join-Path $EvidenceRoot "score_pilot_verified.md")
+            }
         }
     } finally {
         Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue

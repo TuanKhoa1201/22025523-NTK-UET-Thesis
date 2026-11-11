@@ -571,12 +571,33 @@ def convert_single_codex_record(
         evidence.get("scan_sha256")
         or record.get("scan_sha256")
     )
+    scan_provenance = (
+        evidence.get("scan_provenance")
+        if isinstance(evidence.get("scan_provenance"), dict)
+        else (record.get("scan_provenance") if isinstance(record.get("scan_provenance"), dict) else None)
+    )
+    evidence_issues = (
+        [str(x) for x in evidence.get("issues", []) if x]
+        if isinstance(evidence.get("issues"), list)
+        else []
+    )
+    if isinstance(scan_provenance, dict):
+        scan_provenance_status = (
+            "VERIFIED_CAPTURE"
+            if scan_provenance.get("source_capture_verified") is True
+            else "UNVERIFIED_CAPTURE"
+        )
+    else:
+        scan_provenance_status = "HISTORICAL_UNBUNDLED"
 
     return {
         "codex_id": codex_id,
         "alert_id": explicit_alert_id,
         "finding_index": finding_index,
         "scan_sha256": scan_sha256,
+        "scan_provenance": scan_provenance,
+        "scan_provenance_status": scan_provenance_status,
+        "evidence_issues": evidence_issues,
         "canonical_signature": sig,
         "file_path": file_path,
         "start_line": start_line,

@@ -30,6 +30,12 @@ def _load_module(name: str, path: Path):
 
 verify_repo_mod = _load_module("verify_repository", VERIFY_REPO_SCRIPT)
 verify_contract_mod = _load_module("verify_repro_contract", VERIFY_CONTRACT_SCRIPT)
+run_gate_mod = _load_module("run_v2_quality_gate", RUN_GATE_SCRIPT)
+
+from v2.triage import scan_receipt
+from v2.triage.evidence import digest as triage_digest
+from v2.triage.ollama import request_payload as triage_request_payload
+from v2.triage.tests.capture_fixture import make_capture
 
 
 def _find_powershell() -> str:
@@ -243,6 +249,21 @@ class TestGitHubActionsWorkflowGate:
         assert report["status"] == "PASS"
         assert report["total_steps"] >= 9
 
+    def test_pre_push_hook_resolves_for_worktree_and_uses_show_toplevel(self):
+        hook_path = run_gate_mod.install_git_pre_push_hook(REPO_ROOT)
+        assert hook_path.is_file(), f"Expected pre-push hook to exist at {hook_path}"
+        resolved_raw = subprocess.check_output(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "--git-path", "hooks/pre-push"],
+            text=True,
+        ).strip()
+        resolved_path = Path(resolved_raw)
+        if not resolved_path.is_absolute():
+            resolved_path = (REPO_ROOT / resolved_path).resolve()
+        assert resolved_path.resolve() == hook_path.resolve()
+        hook_text = hook_path.read_text(encoding="utf-8")
+        assert "git rev-parse --show-toplevel" in hook_text
+        assert "python v2/scripts/run_v2_quality_gate.py" in hook_text
+
 
 class TestReproductionContractAndFailClosedScript:
     """P0.3 tests for verify_repro_contract.py and reproduce_integration_pilot.ps1."""
@@ -284,18 +305,53 @@ class TestReproductionContractAndFailClosedScript:
         )
         assert code_bad == 3
 
+    def _build_live_manifest_bound_fixture(self, tmp_path: Path, subdir: str = "cap") -> tuple[Path, Path, Path, Path]:
+        og_src = REPO_ROOT / "v2" / "demo" / "smoke_m1_rules_raw.opengrep.json"
+        tr_src = REPO_ROOT / "v2" / "demo" / "triage_qwen35_9b_smoke_m1_assessments.jsonl"
+        smoke_root = REPO_ROOT / "v2" / "evaluation" / "smoke_evidence"
+
+        cap_dir = tmp_path / subdir
+        raw_bytes = og_src.read_bytes()
+        manifest_path = make_capture(smoke_root, raw_bytes, cap_dir)
+        manifest_doc = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_doc["producer"] = "v2.baseline.fork.semgrepai"
+        manifest_path.write_text(json.dumps(manifest_doc), encoding="utf-8")
+
+        receipt, issues = scan_receipt.verify_receipt(manifest_path, raw_bytes, smoke_root, declared_exit=0)
+        assert issues == []
+
+        rows = [json.loads(line) for line in tr_src.read_text(encoding="utf-8").splitlines()]
+        for row in rows:
+            row["evidence"]["scan_provenance"] = receipt
+            row["evidence"]["issues"] = []
+            rt = row["assessment"]["runtime"]
+            rt["finding_id"] = row["id"]
+            rt["request_payload_sha256"] = triage_digest(
+                json.dumps(triage_request_payload(row["evidence"], row["assessment"]["model"])).encode("utf-8")
+            )
+            canonical_resp = json.dumps(
+                row["assessment"]["raw_response"], sort_keys=True, ensure_ascii=False, allow_nan=False
+            ).encode("utf-8")
+            rt["response_json_sha256"] = triage_digest(canonical_resp)
+        bound_triage = cap_dir / "bound_assessments.jsonl"
+        bound_triage.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        return cap_dir / "opengrep.json", manifest_path, bound_triage, smoke_root
+
     def test_live_contract_verifies_runtime_and_rejects_mock_or_incomplete_runtime(self, tmp_path: Path):
-        og_path = REPO_ROOT / "v2" / "demo" / "smoke_m1_rules_raw.opengrep.json"
-        tr_path = REPO_ROOT / "v2" / "demo" / "triage_qwen35_9b_smoke_m1_assessments.jsonl"
+        og_path, manifest_path, tr_path, smoke_root = self._build_live_manifest_bound_fixture(tmp_path, "live_ok")
         lb_path = REPO_ROOT / "v2" / "evaluation" / "smoke_m1_verified_labels.json"
         out_labels = tmp_path / "live_labels.json"
 
-        # Valid live runtime rows should pass
+        # Valid live runtime rows + valid scan-manifest should pass
         code_ok = verify_contract_mod.main(
             [
                 "live",
                 "--opengrep",
                 str(og_path),
+                "--scan-manifest",
+                str(manifest_path),
+                "--source-root",
+                str(smoke_root),
                 "--triage",
                 str(tr_path),
                 "--template-labels",
@@ -321,6 +377,10 @@ class TestReproductionContractAndFailClosedScript:
                 "live",
                 "--opengrep",
                 str(og_path),
+                "--scan-manifest",
+                str(manifest_path),
+                "--source-root",
+                str(smoke_root),
                 "--triage",
                 str(bad_triage),
                 "--template-labels",
@@ -332,6 +392,163 @@ class TestReproductionContractAndFailClosedScript:
             ]
         )
         assert code_bad_rt == 4
+
+    def test_live_and_replay_scan_manifest_tamper_cases_fail_closed(self, tmp_path: Path):
+        og_path, manifest_path, tr_path, smoke_root = self._build_live_manifest_bound_fixture(tmp_path, "tamper_base")
+        lb_path = REPO_ROOT / "v2" / "evaluation" / "smoke_m1_verified_labels.json"
+
+        # 1. Missing --scan-manifest in LIVE mode -> exit code 5
+        code_missing_manifest = verify_contract_mod.main(
+            [
+                "live",
+                "--opengrep",
+                str(og_path),
+                "--triage",
+                str(tr_path),
+                "--template-labels",
+                str(lb_path),
+                "--expected-model",
+                "qwen3.5:9b-q4_K_M",
+                "--output-labels",
+                str(tmp_path / "no_manifest_labels.json"),
+            ]
+        )
+        assert code_missing_manifest == 5
+
+        # 2. Mock producer (UNIT_TEST_MOCK_CAPTURE) in LIVE mode -> exit code 5
+        og_m, manifest_m, tr_m, _ = self._build_live_manifest_bound_fixture(tmp_path, "mock_prod")
+        doc_m = json.loads(manifest_m.read_text(encoding="utf-8"))
+        doc_m["producer"] = "UNIT_TEST_MOCK_CAPTURE"
+        manifest_m.write_text(json.dumps(doc_m), encoding="utf-8")
+        receipt_m, _ = scan_receipt.verify_receipt(manifest_m, og_m.read_bytes(), smoke_root, declared_exit=0)
+        rows_m = [json.loads(line) for line in tr_m.read_text(encoding="utf-8").splitlines()]
+        for r in rows_m:
+            r["evidence"]["scan_provenance"] = receipt_m
+        tr_m.write_text("\n".join(json.dumps(r) for r in rows_m) + "\n", encoding="utf-8")
+        assert (
+            verify_contract_mod.main(
+                [
+                    "live",
+                    "--opengrep",
+                    str(og_m),
+                    "--scan-manifest",
+                    str(manifest_m),
+                    "--source-root",
+                    str(smoke_root),
+                    "--triage",
+                    str(tr_m),
+                    "--template-labels",
+                    str(lb_path),
+                    "--expected-model",
+                    "qwen3.5:9b-q4_K_M",
+                    "--output-labels",
+                    str(tmp_path / "mock_prod_labels.json"),
+                ]
+            )
+            == 5
+        )
+
+        # 3. Wrong source SHA-256 in scan-manifest.json -> exit code 5
+        og_s, manifest_s, tr_s, _ = self._build_live_manifest_bound_fixture(tmp_path, "bad_src_sha")
+        doc_s = json.loads(manifest_s.read_text(encoding="utf-8"))
+        doc_s["sources_before"]["SmokeVulnSample.java"] = "0" * 64
+        doc_s["sources_after"]["SmokeVulnSample.java"] = "0" * 64
+        manifest_s.write_text(json.dumps(doc_s), encoding="utf-8")
+        assert (
+            verify_contract_mod.main(
+                [
+                    "live",
+                    "--opengrep",
+                    str(og_s),
+                    "--scan-manifest",
+                    str(manifest_s),
+                    "--source-root",
+                    str(smoke_root),
+                    "--triage",
+                    str(tr_s),
+                    "--template-labels",
+                    str(lb_path),
+                    "--expected-model",
+                    "qwen3.5:9b-q4_K_M",
+                    "--output-labels",
+                    str(tmp_path / "bad_src_labels.json"),
+                ]
+            )
+            == 5
+        )
+
+        # 4. Wrong rules SHA-256 in scan-manifest.json -> exit code 5
+        og_r, manifest_r, tr_r, _ = self._build_live_manifest_bound_fixture(tmp_path, "bad_rule_sha")
+        doc_r = json.loads(manifest_r.read_text(encoding="utf-8"))
+        doc_r["rules_before_sha256"] = "1" * 64
+        doc_r["rules_after_sha256"] = "1" * 64
+        manifest_r.write_text(json.dumps(doc_r), encoding="utf-8")
+        assert (
+            verify_contract_mod.main(
+                [
+                    "live",
+                    "--opengrep",
+                    str(og_r),
+                    "--scan-manifest",
+                    str(manifest_r),
+                    "--source-root",
+                    str(smoke_root),
+                    "--triage",
+                    str(tr_r),
+                    "--template-labels",
+                    str(lb_path),
+                    "--expected-model",
+                    "qwen3.5:9b-q4_K_M",
+                    "--output-labels",
+                    str(tmp_path / "bad_rule_labels.json"),
+                ]
+            )
+            == 5
+        )
+
+        # 5. Wrong recorded engine exit code in scan-manifest.json -> exit code 5
+        og_e, manifest_e, tr_e, _ = self._build_live_manifest_bound_fixture(tmp_path, "bad_exit")
+        doc_e = json.loads(manifest_e.read_text(encoding="utf-8"))
+        doc_e["runs"]["json"]["exit_code"] = 2
+        manifest_e.write_text(json.dumps(doc_e), encoding="utf-8")
+        assert (
+            verify_contract_mod.main(
+                [
+                    "live",
+                    "--opengrep",
+                    str(og_e),
+                    "--scan-manifest",
+                    str(manifest_e),
+                    "--source-root",
+                    str(smoke_root),
+                    "--triage",
+                    str(tr_e),
+                    "--template-labels",
+                    str(lb_path),
+                    "--expected-model",
+                    "qwen3.5:9b-q4_K_M",
+                    "--output-labels",
+                    str(tmp_path / "bad_exit_labels.json"),
+                ]
+            )
+            == 5
+        )
+
+        # 6. Historical REPLAY without --scan-manifest attempting to claim source_capture_verified=True -> exit code 3
+        assert (
+            verify_contract_mod.main(
+                [
+                    "replay",
+                    "--opengrep",
+                    str(og_path),
+                    "--triage",
+                    str(tr_path),
+                    "--labels",
+                    str(lb_path),
+                ]
+            )
+            == 3
+        )
 
     def test_reproduce_script_negative_fault_injection_does_not_print_complete(self, tmp_path: Path):
         ps_exe = _find_powershell()
@@ -482,3 +699,76 @@ class TestReproductionContractAndFailClosedScript:
         assert (ev_dir / "paired_pilot_summary.json").is_file()
         assert (ev_dir / "score_pilot_verified.json").is_file()
         assert (ev_dir / "score_pilot_verified.md").is_file()
+
+    def test_score_pilot_scan_provenance_modes(self):
+        eval_dir = str(REPO_ROOT / "v2" / "evaluation")
+        if eval_dir not in sys.path:
+            sys.path.insert(0, eval_dir)
+        import score_pilot
+
+        og_raw = json.loads((REPO_ROOT / "v2" / "demo" / "smoke_m1_rules_raw.opengrep.json").read_text(encoding="utf-8"))
+        lb_raw = json.loads((REPO_ROOT / "v2" / "evaluation" / "smoke_m1_verified_labels.json").read_text(encoding="utf-8"))
+        tr_lines = (REPO_ROOT / "v2" / "demo" / "triage_qwen35_9b_smoke_m1_assessments.jsonl").read_text(encoding="utf-8").splitlines()
+
+        # 1. Historical unbundled replay: passes in default mode, overridden to REVIEW in strict mode
+        rep_default = score_pilot.evaluate_pilot(og_raw, lb_raw, "\n".join(tr_lines), source_root=REPO_ROOT)
+        assert rep_default["scan_provenance_summary"]["HISTORICAL_UNBUNDLED"] == 3
+        assert rep_default["anomalies"]["unverified_scan_provenance"] == []
+
+        rep_strict = score_pilot.evaluate_pilot(
+            og_raw, lb_raw, "\n".join(tr_lines), source_root=REPO_ROOT, require_scan_provenance=True
+        )
+        assert len(rep_strict["anomalies"]["unverified_scan_provenance"]) == 3
+        assert all(d["effective_verdict"] == "REVIEW" for d in rep_strict["per_alert_decisions"])
+        assert all("missing_verified_scan_provenance" in d["override_reasons"] for d in rep_strict["per_alert_decisions"])
+
+        # 2. Declared-only / unverified capture: overridden to REVIEW even in default mode
+        unverified_rows = [json.loads(line) for line in tr_lines]
+        for r in unverified_rows:
+            r["evidence"]["scan_provenance"] = {"origin": "declared_only", "source_capture_verified": False}
+            r["evidence"]["issues"] = ["scan-time source/exit manifest unavailable; declaration alone is insufficient"]
+        rep_unverified = score_pilot.evaluate_pilot(
+            og_raw, lb_raw, "\n".join(json.dumps(r) for r in unverified_rows), source_root=REPO_ROOT
+        )
+        assert rep_unverified["scan_provenance_summary"]["UNVERIFIED_CAPTURE"] == 3
+        assert len(rep_unverified["anomalies"]["unverified_scan_provenance"]) == 3
+        assert all(d["effective_verdict"] == "REVIEW" for d in rep_unverified["per_alert_decisions"])
+        assert all("unverified_scan_provenance" in d["override_reasons"] for d in rep_unverified["per_alert_decisions"])
+
+        # 3. Verified capture: passes in strict require_scan_provenance=True mode
+        verified_rows = [json.loads(line) for line in tr_lines]
+        for r in verified_rows:
+            r["evidence"]["scan_provenance"] = {
+                "origin": "recorded_capture_unsigned",
+                "source_capture_verified": True,
+                "exit_capture_verified": True,
+                "recorded_engine_exit": 0,
+            }
+            r["evidence"]["issues"] = []
+        rep_verified = score_pilot.evaluate_pilot(
+            og_raw, lb_raw, "\n".join(json.dumps(r) for r in verified_rows), source_root=REPO_ROOT, require_scan_provenance=True
+        )
+        assert rep_verified["scan_provenance_summary"]["VERIFIED_CAPTURE"] == 3
+        assert rep_verified["anomalies"]["unverified_scan_provenance"] == []
+        assert all(d["effective_verdict"] == "KEEP_TP" for d in rep_verified["per_alert_decisions"])
+
+    def test_strict_lock_gate_rejects_arbitrary_failures(self):
+        # Exit code != 1 (e.g., crash / missing file exit 2) must raise RuntimeError
+        with pytest.raises(RuntimeError, match="exit with code 1"):
+            run_gate_mod.verify_strict_lock_rejection_output("{}", 2)
+
+        # Non-JSON output must raise RuntimeError
+        with pytest.raises(RuntimeError, match="valid JSON"):
+            run_gate_mod.verify_strict_lock_rejection_output("Traceback (most recent call last)...", 1)
+
+        # Missing expected rejection reasons must raise RuntimeError
+        bad_json = json.dumps(
+            {
+                "lock_mode": "STRICT_LOCK",
+                "valid_lock_candidate": False,
+                "m4_acceptance_ready": False,
+                "errors": ["Some unrelated error"],
+            }
+        )
+        with pytest.raises(RuntimeError, match="pilot window"):
+            run_gate_mod.verify_strict_lock_rejection_output(bad_json, 1)
