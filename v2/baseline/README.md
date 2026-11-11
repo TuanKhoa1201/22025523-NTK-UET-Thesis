@@ -1,5 +1,12 @@
 # M1: simple_semgrepAI → local OpenGrep
 
+Current original-task status (including private advisor-patch comparison and the
+blocked full-upstream CLI attempt): [ADVISOR_ORIGINAL_TASK_STATUS.md](ADVISOR_ORIGINAL_TASK_STATUS.md).
+`advisor_probe.py` accepts private `--advisor-dir` and optional `--upstream` clean
+pinned clone, recording patch/help/scan as separate outcomes. It does not publish
+advisor source. `verify_handoff.py` checks that raw JSON, findings, rule IDs and
+traces survive transfer to NTK triage unchanged.
+
 Advisor handover: [ADVISOR_M1_EVIDENCE.md](ADVISOR_M1_EVIDENCE.md), including
 copyable real-engine and source-change demos. Verify patch reproduction/application
 with `python v2/baseline/verify_patch.py`; this checks actual Git apply and exact upstream blobs.

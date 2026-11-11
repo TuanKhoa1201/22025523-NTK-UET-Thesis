@@ -289,7 +289,8 @@ class ReviewTests(Fixture):
         store = self.store()
         item = store.decide(self.record["id"], "confirm-false", "human-tester", "manual inspection")
         self.assertEqual(item["state"], "CONFIRMED_FALSE")
-        self.assertEqual(len(store.queue()), 1)  # even human-confirmed false remains visible
+        self.assertEqual(len(store.queue()), 0)
+        self.assertEqual(len(store.queue(include_all=True)), 1)
         event = store.history(self.record["id"])[0]
         for key in ("actor", "timestamp", "reason", "source_version", "observed_version", "evidence_sha256"):
             self.assertTrue(event[key])

@@ -1,5 +1,17 @@
 # NTK Thesis V2 — M2/M3 local core report
 
+## Original-task continuation (base 682a818)
+
+Queue behavior now matches the supplied five-page advisor PDF: default view excludes
+only human CONFIRMED_FALSE; `--all`/show/history retain access; reopen restores the
+row. No SQLite schema/history migration or row deletion. Real-engine SCRIPTED-DEMO
+on a synthetic SQL allowlist control passed 1 -> 0 -> 1 and stale-hash refusal.
+Explicit --path-map resolves INT-01 paths without editing raw JSON; hash/line/offset
+gates remain active. Real WSL execution is blocked by E_ACCESSDENIED; mappings are
+verified with synthetic-path collector and CLI regressions. No new Qwen execution.
+See `baseline/ADVISOR_ORIGINAL_TASK_STATUS.md` for current evidence and Git delivery;
+earlier queue/all-state descriptions and source-availability claims below are historical.
+
 ## P0 integration handover update
 
 Continuation base: `5a5250643cbe08b3edf86474d9c879fc3c2fb3cc`, `v2/codex-core`, clean at start.

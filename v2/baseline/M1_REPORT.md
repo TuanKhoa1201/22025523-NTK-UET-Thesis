@@ -1,5 +1,14 @@
 # M1 execution report
 
+## Original-task continuation (base 682a818)
+
+Current authoritative handover: `ADVISOR_ORIGINAL_TASK_STATUS.md`. The advisor
+materials are now available and were inspected privately. Patch check/apply on the
+verified offline snapshot passed; full clone failed HTTPS; genuine upstream CLI
+help/scan both failed at missing typer. Therefore full upstream app remains NOT
+PROVEN. Separate binary flag probe and NTK real scan/handoff passed (4 findings,
+rule IDs/trace/raw bytes retained). Earlier sections are historical.
+
 ## P0 advisor handover update
 
 Starting HEAD for this continuation: `5a5250643cbe08b3edf86474d9c879fc3c2fb3cc`.

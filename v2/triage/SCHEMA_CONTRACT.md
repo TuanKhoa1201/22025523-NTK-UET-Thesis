@@ -50,10 +50,15 @@ coordinates and validated against UTF-8 source. `CliLoc` and intermediate_vars a
 supported; unknown `CliCall` structures remain raw and force UNDETERMINED.
 
 `root` is machine-local. Relative engine paths use configured `path_base` or root;
-canonical resolution must remain inside root. No automatic Windows↔WSL absolute-path
-rewriting exists. Collect on the scanning host or supply a correct explicit path base
-for relative JSON. A relocation/translation needs an explicit tested mapping, never
-strip prefixes until a file happens to exist. Direct scans hash inputs before/after;
+canonical resolution must remain inside root. No automatic Windows↔WSL rewriting
+exists. `--path-map /mnt/c/project=C:\project` explicitly maps a POSIX prefix into
+source-root, with longest-prefix/segment-boundary matching. `path_mappings: [{from,to}]`
+is additive metadata in bundle/records; snippets retain `raw_path` alongside the local
+relative `path`. Raw JSON/trace and scan hashes/IDs remain unchanged. Targets must be
+inside root and every resolved trace location still passes hash/line/column/offset
+checks. No path guessing, traversal suffixes, or newline repairs are allowed.
+Collect on the scanning host, or use explicit mappings for absolute WSL paths and
+`path_base` for relative JSON. Direct scans hash inputs before/after;
 imported JSON cannot establish historical file identity beyond supplied traces.
 
 ## Assessment and human review
@@ -91,7 +96,10 @@ evidence_sha256)`. JSON documents carry additive schema metadata; SQL tables are
 Human states are OPEN / CONFIRMED_TRUE / CONFIRMED_FALSE. Human actions are
 `confirm-true`, `confirm-false`, `reopen`; CLI does not accept model states as actions.
 `confirm-false` requires complete evidence and current hashes of **all** referenced
-Java files. Failure appends no event and changes no state. Queue shows every state.
+Java files. Failure appends no event and changes no state. Default queue excludes only
+CONFIRMED_FALSE; `queue --all` / `ReviewStore.queue(include_all=True)` includes every
+state. `show`/`history` still retrieve excluded rows; reopen returns them to default
+queue. The only change is query behavior; SQL tables, evidence and history are unchanged.
 Actor is locally supplied, not authenticated. JSONL is an ingestion snapshot; later
 human state/history must be read from SQLite, not inferred from old JSONL `state`.
 

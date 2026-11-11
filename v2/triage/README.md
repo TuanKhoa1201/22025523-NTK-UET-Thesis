@@ -94,6 +94,7 @@ Suggestions are displayed only; there is no source-rewrite action.
 
 ```powershell
 python -m v2.triage queue --db v2/triage/evidence/my-run/review.sqlite
+python -m v2.triage queue --db v2/triage/evidence/my-run/review.sqlite --all
 python -m v2.triage show --db v2/triage/evidence/my-run/review.sqlite FINDING_ID
 python -m v2.triage decide --db v2/triage/evidence/my-run/review.sqlite FINDING_ID confirm-true --actor reviewer --reason 'Manual inspection confirms the risk'
 python -m v2.triage decide --db v2/triage/evidence/my-run/review.sqlite FINDING_ID confirm-false --actor reviewer --reason 'Describe concrete rebuttal evidence'
@@ -102,8 +103,11 @@ python -m v2.triage decide --db v2/triage/evidence/my-run/review.sqlite FINDING_
 ```
 
 `show` includes original warning, raw trace, verified evidence and Qwen's proposed
-assessment. The queue includes all human states, including CONFIRMED_FALSE; no
-finding is automatically deleted, hidden or dismissed. Each explicit decision
+assessment. The default queue hides only human CONFIRMED_FALSE rows; `queue --all`
+includes them. `show` and `history` still retrieve hidden warnings, and `reopen`
+returns them to the default queue. OPEN and CONFIRMED_TRUE stay visible regardless
+of model status. No warning or audit row is deleted; Qwen never authorizes hiding.
+Each explicit decision
 stores actor, UTC timestamp, reason, warning ID, expected/observed source hashes
 and a digest of the evidence. Actor names are locally supplied, not authenticated.
 SQLite transactions keep history/state updates together; duplicate imports cannot
@@ -144,7 +148,36 @@ Conservative limits or unfamiliar traces lead to UNDETERMINED. The demo rules ha
 narrow coverage and no measured precision/recall. Full upstream UI/LLM integration,
 real Qwen/server acceptance and labeled evaluation remain separate work.
 
-No `opengrep-triage.zip` was found in the inspected workspace (including ignored
-files outside legacy directories). This module is independently authored; it does
-not claim to include the advisor's package. Public interfaces for later integration:
+The advisor PDFs, matrix and `opengrep-triage.zip` are now available in the private
+`_advisor_sources` sibling directory and have been inspected. They are not included
+in public source. This module remains independently authored; the advisor's parser,
+Java-context and triage modules were compared, not silently substituted.
+Public interfaces for later integration:
 `evidence.collect`, `OllamaClient.analyze`, `ReviewStore` and the CLI.
+
+## Queue and Windows/WSL regression demos
+
+```powershell
+python -m v2.triage.demo_queue --output-dir v2/triage/evidence/queue-new
+```
+
+This runs real OpenGrep on a temporary synthetic SQL allowlist control. The scripted
+actor is `SCRIPTED-DEMO`: confirm-false hides its one warning, `--all`/show/history
+retain it, reopen restores it, then editing the same Java copy blocks another
+confirm-false without appending a decision. It is not independent human ground truth.
+Repository fixtures are unchanged. See baseline `ADVISOR_ORIGINAL_TASK_STATUS.md`.
+
+For a raw WSL scan whose paths start with `/mnt/c/my-project`:
+
+```powershell
+python -m v2.triage run --source-root 'C:\my-project' --json 'C:\results\opengrep.json' --engine-exit 0 --path-map '/mnt/c/my-project=C:\my-project' --output-dir v2/triage/evidence/wsl-import-new --no-llm
+```
+
+The mapping is explicit, repeatable and persisted as `path_mappings`; raw JSON,
+scan SHA and alert IDs are not rewritten. Every finding/source/sink/intermediate
+file is still resolved inside source-root, hashed and checked against exact UTF-8
+line/column/byte offsets. A source changed by CRLF conversion is rejected, not repaired.
+Longest matching prefix wins at a path-segment boundary. Unmatched WSL paths do not
+fall back to a guessed file. Mapping targets outside root or traversal suffixes are
+refused. INT-01 is covered by synthetic WSL-path regression tests; a real WSL runtime
+could not be launched in this sandbox, so JavisOS must verify an unchanged real WSL scan.
