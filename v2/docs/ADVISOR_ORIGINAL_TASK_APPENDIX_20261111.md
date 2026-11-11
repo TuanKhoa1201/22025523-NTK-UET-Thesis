@@ -2,7 +2,8 @@
 
 - **Dự án:** NTK Thesis V2 (`TuanKhoa1201/22025523-NTK-UET-Thesis`)
 - **Link nhánh tích hợp trên GitHub:** `https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/tree/v2/integration-pilot`
-- **Commit tích hợp cơ sở đã xác minh kiểm thử:** `fa6fa48c915e9fda0960f9f53579a101d4a32b25` (và bản tài liệu trước đó tại `d89d28dbd31ad09451311557d0ceca879c914940`)
+- **Commit tích hợp đã hợp nhất (`Codex` + `Antigravity` + `JavisOS`):** Hợp nhất `origin/v2/codex-core` (`0c2ffa10c5f0d565325681e8ec2e33796fd4a68c`) và `origin/v2/antigravity-review` (`c061d7ff8a62d58e57ab368ecc6297a938cea28c`) trên nền `4f8de5a6d01fe40d411064146191d52553de1712` / `fa6fa48c915e9fda0960f9f53579a101d4a32b25`
+- **Bảng đối chứng A/B chính thức:** `v2/evaluation/ADVISOR_PAIRED_PILOT_20261111.md` và `v2/evaluation/ADVISOR_PAIRED_PILOT_20261111.csv` (bản sao đồng bộ tại `v2/docs/ADVISOR_PAIRED_PILOT_20261111.md` và `.csv`)
 - **Bản phụ lục tóm tắt (độ dài mục tiêu 2-3 trang khi xuất tài liệu):** `v2/docs/ADVISOR_ORIGINAL_TASK_APPENDIX_SHORT_20261111.md`
 - **Ngày lập báo cáo:** `2026-11-11` (`Asia/Bangkok`)
 - **Phân định phạm vi kỹ thuật (4 nguyên tắc bắt buộc):**
@@ -196,27 +197,29 @@ Nguồn bằng chứng: `C:\Users\Admin\ntk-thesis-v2\evidence\p0_2_qwen35_live_
 
 ---
 
-## E. Kết quả Kiểm thử Phần mềm & Trạng thái Demo Kiểm duyệt
+## E. Kết quả Kiểm thử Phần mềm & Trạng thái Demo Kiểm duyệt (Sau Merge Cuối cùng)
 
-### 1. Kết quả Kiểm thử Tự động (Tại commit tích hợp `fa6fa48c915e9fda0960f9f53579a101d4a32b25`)
-*(Lưu ý: Kết quả dưới đây thuộc phiên bản tích hợp đã xác minh tại commit `fa6fa48`, không tự nhận là kết quả của commit mới `0c2ffa10c5f0d565325681e8ec2e33796fd4a68c` trên nhánh `v2/codex-core` chưa merge).*
+### 1. Kết quả Kiểm thử Tự động (Sau khi merge `v2/codex-core` `0c2ffa1` và `v2/antigravity-review` `c061d7f`)
 
-| Bộ kiểm thử | Lệnh thực thi | Kết quả xác minh |
+| Bộ kiểm thử | Lệnh thực thi | Kết quả xác minh (`PASS` / `FAIL` / `SKIP`) |
 |---|---|---|
-| **M1 Scanner & Provenance Tests** | `python -m unittest discover -s v2/baseline/tests -v` | **24/24 PASS** (`0.181s`) |
-| **M2/M3 Triage & Review Queue Tests** | `python -m unittest discover -s v2/triage/tests -v` | **51/51 PASS** (`2.335s`) |
-| **M4/M5 Evaluation & Adapter Tests** | `python -m unittest discover -s v2/evaluation/tests -v` | **20/20 PASS** (`0.020s`) |
-| **Kiểm chứng khứ hồi `opengrep.patch`** | `python v2/baseline/verify_patch.py` | **PASS** (`exit_code = 0`) |
+| **M1 Scanner & Provenance Tests** | `python -m pytest v2/baseline/tests -v` | **`24 passed`, `14 subtests passed`, `0 failed`, `0 skipped` (`0.18s`)** |
+| **M2/M3 Triage & Review Queue Tests** | `python -m pytest v2/triage/tests -v` | **`59 passed`, `12 subtests passed`, `0 failed`, `0 skipped` (`3.46s`)** |
+| **M4/M5 Evaluation & Adapter Tests** | `python -m pytest v2/evaluation/tests -v` | **`22 passed`, `0 failed`, `0 skipped` (`0.11s`)** |
+| **Tổng hợp Unit Tests (M1 + M2/M3 + M4/M5)** | `python -m pytest v2/baseline/tests v2/triage/tests v2/evaluation/tests -v` | **`105 passed` (`26 subtests passed`), `0 failed`, `0 skipped`** |
+| **Kiểm chứng khứ hồi `opengrep.patch`** | `python v2/baseline/verify_patch.py` | **`PASS` (`exit_code = 0`)** |
+| **Kiểm chứng handoff `OpenGrep -> v2.triage`** | `python v2/baseline/verify_handoff.py --engine ... --triage ...` | **`PASS` (`exit_code = 0`, `4/4` findings, `raw_json_bytes_unchanged = true`)** |
 
-### 2. Trạng thái Từng Bước của Demo Quy trình Kiểm duyệt (`p0_3_review_workflow_demo` & `tamper_demo`)
-Đối chiếu kết quả thực tế trong `C:\Users\Admin\ntk-thesis-v2\evidence\p0_3_review_workflow_demo` và `C:\Users\Admin\ntk-thesis-v2\evidence\p0_integration_pilot\tamper_demo`:
+### 2. Trạng thái Từng Bước của Demo Quy trình Kiểm duyệt Liên hoàn (`demo_queue.py`, `demo_freshness.py` & CLI 7 Bước)
+Đối chiếu kết quả chạy thực tế sau merge trong `C:\Users\Admin\ntk-thesis-v2\evidence\p0_final_integration_20261111\queue_demo\queue-demo.json`, `freshness_demo\freshness-demo.json` và `smoke_m1_cli_workflow\`:
 
-| Bước kiểm duyệt theo yêu cầu | Trạng thái | Bằng chứng thực tế đã ghi nhận |
+| Bước kiểm duyệt theo yêu cầu | Trạng thái | Bằng chứng thực tế đã xác minh (`exit_code` & output) |
 |---|---|---|
-| **1. `confirm-false` trên cảnh báo giả (dòng 47)** | **HOÀN THÀNH (`PASS`)** | `evidence/p0_integration_pilot/tamper_demo/case5a_confirm_false_unchanged.json` (actor `DEMO/SYNTHETIC`, chuyển cảnh báo `3252602f...` sang `CONFIRMED_FALSE`). |
-| **2. Chặn xác nhận khi SHA-256 mã nguồn thay đổi** | **HOÀN THÀNH (`PASS`, `exit_code = 2`)** | `evidence/p0_integration_pilot/tamper_demo/case5b_confirm_false_tampered.stderr.txt`: `UNDETERMINED / operation refused: source unavailable/changed; rescan required: source hash mismatch; rescan required: SmokeVulnSample.java` (cùng `v2/triage/demo_freshness.py`). |
-| **3. Ẩn cảnh báo `CONFIRMED_FALSE` khỏi hàng đợi mặc định** | **PENDING (Chờ merge commit Codex `0c2ffa1`)** | Tại commit `fa6fa48`, lệnh `queue` mặc định vẫn hiển thị bản ghi `CONFIRMED_FALSE` (`queue_after_demo_decisions.json`). Bản sửa trên `v2/codex-core` (`0c2ffa10c5f0d565325681e8ec2e33796fd4a68c`) sẽ được kiểm chứng sau khi merge. |
-| **4. Xem lịch sử (`history`) và mở lại (`reopen`)** | **PASS trong Unit Test / `PENDING` CLI kịch bản `p0_3`** | Đã PASS trong bộ 51 unit test (`v2/triage/tests/test_triage.py`); thư mục `evidence/p0_3_review_workflow_demo` mới dừng ở bước trích xuất `triage_run/evidence.json` do hết thời gian chờ của phiên trước. |
+| **1. `confirm-false` trên cảnh báo giả với actor `SCRIPTED-DEMO`** | **HOÀN THÀNH (`PASS`, `exit_code = 0`)** | `python -m v2.triage decide --db $Db $Id confirm-false --actor SCRIPTED-DEMO --reason ...` chuyển trạng thái cảnh báo sang `CONFIRMED_FALSE` (`queue-demo.json` và `smoke_m1_cli_workflow/04_confirm_false.json`). |
+| **2. Ẩn cảnh báo `CONFIRMED_FALSE` khỏi hàng đợi `queue` mặc định** | **HOÀN THÀNH (`PASS`, `exit_code = 0`)** | Sau `confirm-false`, lệnh `python -m v2.triage queue --db $Db` giảm số cảnh báo từ `1 -> 0` (trong `demo_queue.py`) và từ `3 -> 2` (trong `smoke_m1_cli_workflow/05_queue_default_after_hide.json`). |
+| **3. Truy vấn `queue --all`, `show` và `history`** | **HOÀN THÀNH (`PASS`, `exit_code = 0`)** | `python -m v2.triage queue --db $Db --all` vẫn trả đủ bản ghi (`1` trong `demo_queue.py`, `3` trong `06_queue_all_after_hide.json`); `show` hiển thị `state = "CONFIRMED_FALSE"`; `history` ghi nhận `sequence = 1`, `actor = "SCRIPTED-DEMO"`, `action = "confirm-false"`, kèm `source_version` và `evidence_sha256`. |
+| **4. Mở lại (`reopen`) và xuất hiện lại trong `queue` mặc định** | **HOÀN THÀNH (`PASS`, `exit_code = 0`)** | `python -m v2.triage decide --db $Db $Id reopen --actor SCRIPTED-DEMO --reason ...` đưa trạng thái về `OPEN`; lệnh `queue` mặc định khôi phục `0 -> 1` (`demo_queue.py`) và `2 -> 3` (`10_queue_after_reopen.json`); `history` ghi nhận `sequence = 2` (`action = "reopen"`). |
+| **5. Chặn xác nhận khi SHA-256 mã nguồn thay đổi sau khi quét** | **HOÀN THÀNH (`PASS`, `exit_code = 2`)** | Khi sửa đổi bản sao tệp Java sau lượt quét (`AllowlistedQuery.java`: `aec52e68... -> b0c9daba...`; `SmokeVulnSample.java`: `090c9349... -> 10219f10...`), lệnh `decide ... confirm-false` bị từ chối với `exit_code = 2`: `UNDETERMINED / operation refused: source unavailable/changed; rescan required: source hash mismatch; rescan required`. Lịch sử `history` giữ nguyên `2` sự kiện, không phát sinh bản ghi mới. |
 
 ---
 
