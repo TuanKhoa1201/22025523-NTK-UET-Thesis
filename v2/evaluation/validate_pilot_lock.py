@@ -119,6 +119,18 @@ def validate_pilot_dataset(
         if is_strict and not annotator:
             errors.append(f"Label {aid} is missing independent 'annotated_by' attribution in STRICT_LOCK")
 
+        lbl_type = str(label.get("label_type") or label.get("ground_truth_type") or "").strip().upper()
+        if is_strict and lbl_type == "SYNTHETIC_GROUND_TRUTH":
+            errors.append(
+                f"Label {aid} has label_type=SYNTHETIC_GROUND_TRUTH; STRICT_LOCK requires INDEPENDENT_GROUND_TRUTH"
+            )
+        if (is_strict or lbl_type == "INDEPENDENT_GROUND_TRUTH") and any(
+            tok in annotator.lower() for tok in score_pilot.FORBIDDEN_INDEPENDENT_LABEL_ANNOTATORS
+        ):
+            errors.append(
+                f"Label {aid} claims independent ground truth but has agent/synthetic annotator '{annotator}'"
+            )
+
         label_ids[aid] = label
 
         gt = str(label.get("ground_truth") or "").strip().upper()
@@ -151,9 +163,29 @@ def validate_pilot_dataset(
                 f"CWE mismatch on {aid}: OpenGrep has {alert['cwe']} vs label {lbl_cwe}"
             )
         lbl_path = codex_adapter.normalize_path(lbl.get("file_path") or "")
-        if lbl_path and alert["file_path"] and lbl_path != alert["file_path"]:
+        if lbl_path and alert["file_path"] and not codex_adapter.paths_match(lbl_path, alert["file_path"]):
             errors.append(
                 f"File path mismatch on {aid}: OpenGrep has {alert['file_path']} vs label {lbl_path}"
+            )
+        lbl_line = lbl.get("start_line") if lbl.get("start_line") is not None else lbl.get("line")
+        if (
+            isinstance(lbl_line, int)
+            and not isinstance(lbl_line, bool)
+            and alert.get("start_line") is not None
+            and int(lbl_line) != int(alert["start_line"])
+        ):
+            errors.append(
+                f"Start line mismatch on {aid}: OpenGrep has {alert['start_line']} vs label {lbl_line}"
+            )
+        lbl_fidx = lbl.get("finding_index")
+        if (
+            isinstance(lbl_fidx, int)
+            and not isinstance(lbl_fidx, bool)
+            and isinstance(alert.get("finding_index"), int)
+            and int(lbl_fidx) != int(alert["finding_index"])
+        ):
+            errors.append(
+                f"finding_index mismatch on {aid}: OpenGrep has {alert['finding_index']} vs label {lbl_fidx}"
             )
 
         a_sha = str(alert.get("source_sha256") or "").strip().lower()

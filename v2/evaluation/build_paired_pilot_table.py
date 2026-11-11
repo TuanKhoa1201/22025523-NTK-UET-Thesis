@@ -167,6 +167,8 @@ def compute_arm_b_mandatory_metrics(
         "status": "EVALUATED",
         "fp_correctly_proposed_for_removal": rates["proposed_fp_removal"]["display"],
         "tp_erroneously_proposed_for_removal": rates["erroneous_tp_removal"]["display"],
+        "raw_model_fp_proposed_for_removal": rates["raw_model_fp_removal"]["display"],
+        "raw_model_tp_erroneously_proposed_for_removal": rates["raw_model_erroneous_tp_removal"]["display"],
         "tp_retained_keep_tp": score_pilot.RatioMetric(tp_keep, labeled_tp).format_str(),
         "tp_retained_via_review": score_pilot.RatioMetric(tp_review, labeled_tp).format_str(),
         "tp_total_retained": score_pilot.RatioMetric(tp_retained_total, labeled_tp).format_str(),
@@ -232,6 +234,7 @@ def build_paired_rows_and_summary(
             triage_data=qwen35_extracted,
             source_root=source_root,
             expected_scan_sha256=scan_sha256,
+            expected_model_prefix="qwen3.5",
         )
         if qwen35_extracted is not None
         else None
