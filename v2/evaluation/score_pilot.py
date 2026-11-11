@@ -42,6 +42,16 @@ FORBIDDEN_AUTO_LABEL_SOURCES: frozenset[str] = frozenset({
     "opengrep-triage",
 })
 
+# Markers that cannot masquerade as INDEPENDENT_GROUND_TRUTH (only SYNTHETIC_GROUND_TRUTH is allowed for agent/fixture verification)
+FORBIDDEN_INDEPENDENT_LABEL_ANNOTATORS: frozenset[str] = frozenset({
+    "antigravity",
+    "agent",
+    "javis",
+    "synthetic",
+    "fixture",
+    "ai",
+})
+
 # Normalized triage decisions:
 # - PROPOSED_FP: model proposes alert is a false positive (REFUTED -> candidate only, requires human confirmation)
 # - KEEP_TP: model supports/keeps alert as a likely true positive (SUPPORTED -> KEEP_TP)
@@ -173,6 +183,11 @@ class CweBucketMetrics:
     needs_review_on_ambiguous: int = 0
     needs_review_on_unlabeled: int = 0
     fail_safe_review_overrides: int = 0
+    raw_model_refuted_on_tp: int = 0
+    raw_model_refuted_on_fp: int = 0
+    raw_model_supported_on_tp: int = 0
+    raw_model_supported_on_fp: int = 0
+    fail_safe_blocked_tp_refutations: int = 0
     latency_samples_ms: list[float] = field(default_factory=list)
 
     @property
@@ -184,6 +199,16 @@ class CweBucketMetrics:
     def erroneous_tp_removal_rate(self) -> RatioMetric:
         """True TP alerts wrongly proposed for removal as FP (always shows num/den)."""
         return RatioMetric(self.erroneously_proposed_fp_on_tp, self.labeled_tp)
+
+    @property
+    def raw_model_erroneous_tp_removal_rate(self) -> RatioMetric:
+        """Layer 2: True TP alerts where raw LLM output returned REFUTED (before fail-safe gate)."""
+        return RatioMetric(self.raw_model_refuted_on_tp, self.labeled_tp)
+
+    @property
+    def raw_model_fp_removal_rate(self) -> RatioMetric:
+        """Layer 2: True FP alerts where raw LLM output returned REFUTED (before fail-safe gate)."""
+        return RatioMetric(self.raw_model_refuted_on_fp, self.labeled_fp)
 
     @property
     def review_escalation_rate(self) -> RatioMetric:
@@ -227,10 +252,17 @@ class CweBucketMetrics:
                 "needs_review_on_ambiguous": self.needs_review_on_ambiguous,
                 "needs_review_on_unlabeled": self.needs_review_on_unlabeled,
                 "fail_safe_review_overrides": self.fail_safe_review_overrides,
+                "raw_model_refuted_on_tp": self.raw_model_refuted_on_tp,
+                "raw_model_refuted_on_fp": self.raw_model_refuted_on_fp,
+                "raw_model_supported_on_tp": self.raw_model_supported_on_tp,
+                "raw_model_supported_on_fp": self.raw_model_supported_on_fp,
+                "fail_safe_blocked_tp_refutations": self.fail_safe_blocked_tp_refutations,
             },
             "rates": {
                 "proposed_fp_removal": self.proposed_fp_removal_rate.to_dict(),
                 "erroneous_tp_removal": self.erroneous_tp_removal_rate.to_dict(),
+                "raw_model_erroneous_tp_removal": self.raw_model_erroneous_tp_removal_rate.to_dict(),
+                "raw_model_fp_removal": self.raw_model_fp_removal_rate.to_dict(),
                 "review_escalation": self.review_escalation_rate.to_dict(),
                 "triage_coverage": self.triage_coverage_rate.to_dict(),
                 "label_coverage": self.label_coverage_rate.to_dict(),
@@ -261,6 +293,7 @@ class IntegrityAnomalies:
     human_approval_violations: list[dict[str, Any]] = field(default_factory=list)
     invalid_ground_truth_labels: list[dict[str, Any]] = field(default_factory=list)
     rejected_auto_generated_labels: list[dict[str, Any]] = field(default_factory=list)
+    model_mismatches: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -282,6 +315,7 @@ class IntegrityAnomalies:
             "human_approval_violations": self.human_approval_violations,
             "invalid_ground_truth_labels": self.invalid_ground_truth_labels,
             "rejected_auto_generated_labels": self.rejected_auto_generated_labels,
+            "model_mismatches": self.model_mismatches,
         }
 
 
@@ -531,8 +565,12 @@ def _validate_evidence_grounding(
     triage_record: dict[str, Any],
     verified_line_map: dict[int, str],
     require_verified_lines: bool,
+    expected_sha: str | None = None,
 ) -> tuple[bool, str | None]:
     """Verify that a PROPOSED_FP (REFUTED) verdict has grounded citations in verified source."""
+    if str(triage_record.get("citation_check") or "").strip().upper() == "NOT_VERIFIED":
+        return False, "Codex citation_check is NOT_VERIFIED; cannot accept PROPOSED_FP"
+
     rationale = triage_record.get("rationale") or triage_record.get("explanation") or ""
     if not isinstance(rationale, str) or len(rationale.strip()) < 10:
         return False, "Missing or insufficient security rationale for FP proposal"
@@ -589,6 +627,29 @@ def _validate_evidence_grounding(
             "No verified Java source file or snapshot lines available to confirm cited_lines",
         )
 
+    # Verify per-citation quote text and sha256 if present
+    citation_quotes = triage_record.get("citation_quotes") or []
+    if isinstance(citation_quotes, list):
+        for cq in citation_quotes:
+            if not isinstance(cq, dict):
+                continue
+            c_line = cq.get("line")
+            c_quote = cq.get("quote")
+            c_sha = cq.get("sha256")
+            if c_sha and expected_sha and str(c_sha).strip().lower() != str(expected_sha).strip().lower():
+                return (
+                    False,
+                    f"Citation sha256 '{c_sha}' at line {c_line} does not match expected source_sha256 '{expected_sha}'",
+                )
+            if c_quote is not None and isinstance(c_line, int) and verified_line_map and c_line in verified_line_map:
+                actual_line_str = verified_line_map[c_line].strip()
+                quote_str = str(c_quote).strip()
+                if not quote_str or (quote_str != actual_line_str and quote_str not in actual_line_str):
+                    return (
+                        False,
+                        f"Citation quote at line {c_line} ('{quote_str}') does not match verified source line ('{actual_line_str}')",
+                    )
+
     return True, None
 
 
@@ -607,6 +668,7 @@ def evaluate_pilot(
     opengrep_scan_time_ms: float | None = None,
     source_root: Path | str | None = None,
     expected_scan_sha256: str | None = None,
+    expected_model_prefix: str | None = None,
 ) -> dict[str, Any]:
     """Evaluate OpenGrep standalone vs. OpenGrep + Qwen triage on locked alerts and labels."""
     anomalies = IntegrityAnomalies()
@@ -664,6 +726,36 @@ def evaluate_pilot(
                 "alert_id": aid,
                 "annotated_by": annotator or "model_output",
                 "reason": "Ground-truth labels must be independent; auto-generated LLM verdicts are forbidden",
+            })
+            continue
+
+        # Validate label provenance when label_type / ground_truth_type is claimed
+        lbl_type = str(label.get("label_type") or label.get("ground_truth_type") or "").strip().upper()
+        rationale_txt = str(label.get("annotator_rationale") or label.get("rationale") or "").strip()
+        if lbl_type == "INDEPENDENT_GROUND_TRUTH":
+            if not annotator or any(tok in annotator for tok in FORBIDDEN_INDEPENDENT_LABEL_ANNOTATORS):
+                anomalies.invalid_ground_truth_labels.append({
+                    "alert_id": aid,
+                    "annotated_by": annotator or "MISSING",
+                    "label_type": lbl_type,
+                    "reason": (
+                        "Label claims INDEPENDENT_GROUND_TRUTH but is missing human annotated_by "
+                        f"or uses agent/synthetic annotator '{annotator or 'MISSING'}'"
+                    ),
+                })
+                continue
+            if len(rationale_txt) < 10:
+                anomalies.invalid_ground_truth_labels.append({
+                    "alert_id": aid,
+                    "label_type": lbl_type,
+                    "reason": "Label claims INDEPENDENT_GROUND_TRUTH without substantive annotator_rationale (>=10 chars)",
+                })
+                continue
+        elif lbl_type and not annotator:
+            anomalies.invalid_ground_truth_labels.append({
+                "alert_id": aid,
+                "label_type": lbl_type,
+                "reason": "Label with explicit label_type is missing annotated_by attribution",
             })
             continue
 
@@ -754,10 +846,17 @@ def evaluate_pilot(
         # Match ground-truth label
         label = labels_by_id.get(aid)
         label_cwe_mismatch = False
-        if label is None:
+        duplicate_label_conflict = aid in anomalies.duplicate_label_ids
+        if duplicate_label_conflict:
+            gt_status = "UNLABELED"
+            if aid not in anomalies.unlabeled_alert_ids:
+                anomalies.unlabeled_alert_ids.append(aid)
+        elif label is None:
             anomalies.unlabeled_alert_ids.append(aid)
             gt_status = "UNLABELED"
         else:
+            lbl_line = label.get("start_line") if label.get("start_line") is not None else label.get("line")
+            lbl_fidx = label.get("finding_index")
             if label["cwe"] != "UNKNOWN_CWE" and label["cwe"] != alert_cwe:
                 anomalies.cwe_mismatches.append({
                     "alert_id": aid,
@@ -777,6 +876,34 @@ def evaluate_pilot(
                     "alert_id": aid,
                     "alert_file_path": alert["file_path"],
                     "label_file_path": codex_adapter.normalize_path(label["file_path"]),
+                })
+                gt_status = "UNLABELED"
+                anomalies.unlabeled_alert_ids.append(aid)
+            elif (
+                isinstance(lbl_line, int)
+                and not isinstance(lbl_line, bool)
+                and alert.get("start_line") is not None
+                and int(lbl_line) != int(alert["start_line"])
+            ):
+                anomalies.location_mismatches.append({
+                    "alert_id": aid,
+                    "stage": "alert_vs_label_line",
+                    "alert_start_line": alert["start_line"],
+                    "label_start_line": lbl_line,
+                })
+                gt_status = "UNLABELED"
+                anomalies.unlabeled_alert_ids.append(aid)
+            elif (
+                isinstance(lbl_fidx, int)
+                and not isinstance(lbl_fidx, bool)
+                and isinstance(alert.get("finding_index"), int)
+                and int(lbl_fidx) != int(alert["finding_index"])
+            ):
+                anomalies.location_mismatches.append({
+                    "alert_id": aid,
+                    "stage": "alert_vs_label_finding_index",
+                    "alert_finding_index": alert["finding_index"],
+                    "label_finding_index": lbl_fidx,
                 })
                 gt_status = "UNLABELED"
                 anomalies.unlabeled_alert_ids.append(aid)
@@ -806,7 +933,10 @@ def evaluate_pilot(
 
         if label_cwe_mismatch:
             override_reasons.append("label_cwe_mismatch")
+        if duplicate_label_conflict:
+            override_reasons.append("duplicate_label_id")
 
+        raw_model_mapped: str | None = None
         if triage is None:
             if aid not in malformed_alert_ids:
                 anomalies.missing_triage_alert_ids.append(aid)
@@ -817,6 +947,14 @@ def evaluate_pilot(
                 anomalies.missing_trace_alerts.append(aid)
 
             raw_verdict = str(triage.get("verdict") or triage.get("status") or "").strip().upper()
+            raw_m_stat = str(
+                triage.get("raw_model_status")
+                or triage.get("raw_codex_status")
+                or raw_verdict
+            ).strip().upper()
+            if raw_m_stat in VALID_MODEL_VERDICTS:
+                raw_model_mapped = VALID_MODEL_VERDICTS[raw_m_stat]
+
             if triage.get("has_error"):
                 anomalies.malformed_triage_records.append({
                     "alert_id": aid,
@@ -834,6 +972,67 @@ def evaluate_pilot(
             else:
                 triage_covered = True
                 effective_verdict = VALID_MODEL_VERDICTS[raw_verdict]
+
+            if aid in anomalies.duplicate_triage_ids:
+                effective_verdict = "REVIEW"
+                override_reasons.append("duplicate_triage_id")
+
+            # Verify model family/prefix if expected_model_prefix is specified
+            triage_model = str(triage.get("model_id") or triage.get("model") or "").strip()
+            if expected_model_prefix:
+                if not triage_model or not triage_model.lower().startswith(expected_model_prefix.strip().lower()):
+                    anomalies.model_mismatches.append({
+                        "alert_id": aid,
+                        "expected_model_prefix": expected_model_prefix,
+                        "actual_model_id": triage_model or "MISSING",
+                    })
+                    effective_verdict = "REVIEW"
+                    override_reasons.append(f"model_mismatch:{triage_model or 'MISSING'}")
+
+            # Check intra-file location / line / finding_index consistency on triage record
+            t_line = triage.get("start_line")
+            t_fidx = triage.get("finding_index")
+            if (
+                triage.get("file_path")
+                and alert.get("file_path")
+                and not codex_adapter.paths_match(triage["file_path"], alert["file_path"])
+            ):
+                anomalies.location_mismatches.append({
+                    "alert_id": aid,
+                    "stage": "alert_vs_triage_path",
+                    "alert_file_path": alert["file_path"],
+                    "triage_file_path": codex_adapter.normalize_path(triage["file_path"]),
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("triage_file_path_mismatch")
+            elif (
+                isinstance(t_line, int)
+                and not isinstance(t_line, bool)
+                and alert.get("start_line") is not None
+                and int(t_line) != int(alert["start_line"])
+            ):
+                anomalies.location_mismatches.append({
+                    "alert_id": aid,
+                    "stage": "alert_vs_triage_line",
+                    "alert_start_line": alert["start_line"],
+                    "triage_start_line": t_line,
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("triage_line_mismatch")
+            elif (
+                isinstance(t_fidx, int)
+                and not isinstance(t_fidx, bool)
+                and isinstance(alert.get("finding_index"), int)
+                and int(t_fidx) != int(alert["finding_index"])
+            ):
+                anomalies.location_mismatches.append({
+                    "alert_id": aid,
+                    "stage": "alert_vs_triage_finding_index",
+                    "alert_finding_index": alert["finding_index"],
+                    "triage_finding_index": t_fidx,
+                })
+                effective_verdict = "REVIEW"
+                override_reasons.append("triage_finding_index_mismatch")
 
             # Record latency if valid
             raw_latency = triage.get("latency_ms")
@@ -956,6 +1155,7 @@ def evaluate_pilot(
                     triage,
                     verified_line_map=verified_line_map,
                     require_verified_lines=require_verified_lines,
+                    expected_sha=expected_sha or triage_sha,
                 )
                 if not grounded:
                     anomalies.missing_or_invalid_citations.append({
@@ -977,6 +1177,20 @@ def evaluate_pilot(
                 b.latency_samples_ms.append(latency_val)
             if override_reasons:
                 b.fail_safe_review_overrides += 1
+
+            # Layer 2: Raw model TP/FP classification before citation/fail-safe overrides
+            if raw_model_mapped == "PROPOSED_FP":
+                if gt_status == "TRUE_POSITIVE":
+                    b.raw_model_refuted_on_tp += 1
+                    if effective_verdict != "PROPOSED_FP":
+                        b.fail_safe_blocked_tp_refutations += 1
+                elif gt_status == "FALSE_POSITIVE":
+                    b.raw_model_refuted_on_fp += 1
+            elif raw_model_mapped == "KEEP_TP":
+                if gt_status == "TRUE_POSITIVE":
+                    b.raw_model_supported_on_tp += 1
+                elif gt_status == "FALSE_POSITIVE":
+                    b.raw_model_supported_on_fp += 1
 
             if effective_verdict == "PROPOSED_FP":
                 b.grounding_verified_fp_proposals += 1

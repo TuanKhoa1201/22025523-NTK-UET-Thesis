@@ -483,6 +483,20 @@ def convert_single_codex_record(
         raw_citations, default_path=file_path
     )
 
+    citation_quotes: list[dict[str, Any]] = []
+    if isinstance(raw_citations, list):
+        for item in raw_citations:
+            if isinstance(item, dict):
+                lno = item.get("line") if item.get("line") is not None else item.get("line_number")
+                q_txt = item.get("quote")
+                c_sha = item.get("sha256") or item.get("source_sha256")
+                if isinstance(lno, int) and not isinstance(lno, bool) and (q_txt is not None or c_sha is not None):
+                    citation_quotes.append({
+                        "line": lno,
+                        "quote": str(q_txt) if q_txt is not None else None,
+                        "sha256": str(c_sha).strip().lower() if c_sha is not None else None,
+                    })
+
     explanation = str(
         assessment.get("explanation")
         or assessment.get("rationale")
@@ -578,6 +592,7 @@ def convert_single_codex_record(
         "verdict": mapped_verdict,
         "cited_lines": cited_lines,
         "cited_paths": cited_paths,
+        "citation_quotes": citation_quotes,
         "citation_parse_errors": citation_parse_errors,
         "rationale": explanation,
         "source_sha256": source_sha256,
@@ -673,7 +688,7 @@ def match_and_convert_codex_records(
         sig = norm["canonical_signature"]
         loc_rule = (sig[0], sig[1], sig[2], sig[5])
 
-        # 2. Try explicit alert_id or Contract 1.1 codex_id if it exists in alerts_by_id and does not conflict on location
+        # 2. Try explicit alert_id or Contract 1.1 codex_id if it exists in alerts_by_id and does not conflict on location, line, rule, or finding_index
         for candidate_id_key in (norm["alert_id"], norm["codex_id"]):
             if candidate_id_key and candidate_id_key in alerts_by_id:
                 candidate_alert = alerts_by_id[candidate_id_key]
@@ -688,6 +703,53 @@ def match_and_convert_codex_records(
                         "reason": (
                             f"Explicit alert_id {candidate_id_key} location conflict: "
                             f"{norm['file_path']} vs {candidate_alert['file_path']}"
+                        ),
+                    })
+                    matched_aid = "__CONFLICT__"
+                    break
+                if (
+                    norm["start_line"] is not None
+                    and candidate_alert.get("start_line") is not None
+                    and int(norm["start_line"]) != int(candidate_alert["start_line"])
+                ):
+                    mapping_errors.append({
+                        "codex_id": norm["codex_id"],
+                        "alert_id": candidate_id_key,
+                        "reason": (
+                            f"Explicit alert_id {candidate_id_key} intra-file line conflict: "
+                            f"record start_line={norm['start_line']} vs alert start_line={candidate_alert['start_line']}"
+                        ),
+                    })
+                    matched_aid = "__CONFLICT__"
+                    break
+                if (
+                    norm["rule_id"]
+                    and norm["rule_id"] != "unknown_rule"
+                    and candidate_alert.get("rule_id")
+                    and candidate_alert.get("rule_id") != "unknown_rule"
+                    and norm["rule_id"] != candidate_alert["rule_id"]
+                ):
+                    mapping_errors.append({
+                        "codex_id": norm["codex_id"],
+                        "alert_id": candidate_id_key,
+                        "reason": (
+                            f"Explicit alert_id {candidate_id_key} rule_id conflict: "
+                            f"{norm['rule_id']} vs {candidate_alert['rule_id']}"
+                        ),
+                    })
+                    matched_aid = "__CONFLICT__"
+                    break
+                if (
+                    isinstance(norm["finding_index"], int)
+                    and isinstance(candidate_alert.get("finding_index"), int)
+                    and norm["finding_index"] != candidate_alert["finding_index"]
+                ):
+                    mapping_errors.append({
+                        "codex_id": norm["codex_id"],
+                        "alert_id": candidate_id_key,
+                        "reason": (
+                            f"Explicit alert_id {candidate_id_key} finding_index conflict: "
+                            f"record finding_index={norm['finding_index']} vs alert finding_index={candidate_alert['finding_index']}"
                         ),
                     })
                     matched_aid = "__CONFLICT__"

@@ -681,6 +681,435 @@ class TestCodexCompatibilityAndFailSafes(unittest.TestCase):
         self.assertEqual(summary["arm_b_qwen35_9b"]["status"], "PENDING_QWEN3_5_9B_RUN")
         self.assertEqual(summary["reference_qwen3_8b"]["tp_erroneously_proposed_for_removal"], "0/1 (0.0%)")
 
+    def test_12_shuffled_finding_order_vs_intra_file_alert_id_swap(self) -> None:
+        """12. P0.3: Đảo thứ tự finding vẫn ghép đúng 1-1; ghép sai/tráo alert_id trong cùng file bị chặn."""
+        scan_sha = "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4"
+        aid_0 = codex_adapter.compute_contract_alert_id(scan_sha, 0)
+        aid_1 = codex_adapter.compute_contract_alert_id(scan_sha, 1)
+
+        opengrep_scan = {
+            "results": [
+                {
+                    "check_id": "v2.baseline.rules.ntk.java.cwe22",
+                    "path": "v2/evaluation/smoke_evidence/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 8, "col": 30},
+                    "extra": {"metadata": {"cwe": ["CWE-22"]}},
+                },
+                {
+                    "check_id": "v2.baseline.rules.ntk.java.cwe22",
+                    "path": "v2/evaluation/smoke_evidence/FileService.java",
+                    "start": {"line": 10, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "extra": {"metadata": {"cwe": ["CWE-22"]}},
+                },
+            ]
+        }
+        labels = [
+            {
+                "alert_id": aid_0,
+                "finding_index": 0,
+                "file_path": "v2/evaluation/smoke_evidence/FileService.java",
+                "start_line": 7,
+                "cwe": "CWE-22",
+                "ground_truth": "FALSE_POSITIVE",
+                "label_type": "SYNTHETIC_GROUND_TRUTH",
+                "annotated_by": "human-reviewer",
+                "source_sha256": self.sha_cwe22,
+            },
+            {
+                "alert_id": aid_1,
+                "finding_index": 1,
+                "file_path": "v2/evaluation/smoke_evidence/FileService.java",
+                "start_line": 10,
+                "cwe": "CWE-22",
+                "ground_truth": "TRUE_POSITIVE",
+                "label_type": "SYNTHETIC_GROUND_TRUTH",
+                "annotated_by": "human-reviewer",
+                "source_sha256": self.sha_cwe22,
+            },
+        ]
+
+        # Case A: Reordered triage records ([finding 1, finding 0]) join 1-to-1 cleanly
+        shuffled_records = [
+            {
+                "id": aid_1,
+                "evidence": {
+                    "scan_sha256": scan_sha,
+                    "finding_index": 1,
+                    "path": "v2/evaluation/smoke_evidence/FileService.java",
+                    "start": {"line": 10, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+                    "cwe": ["CWE-22"],
+                    "snapshots": {"FileService.java": {"sha256": self.sha_cwe22, "content": self.java_code_cwe22}},
+                },
+                "assessment": {
+                    "status": "SUPPORTED",
+                    "citation_check": "MATCHED",
+                    "model": "qwen3.5:9b-q4_K_M",
+                    "citations": [10, 11],
+                    "explanation": "Unsafe sink at line 11.",
+                },
+            },
+            {
+                "id": aid_0,
+                "evidence": {
+                    "scan_sha256": scan_sha,
+                    "finding_index": 0,
+                    "path": "v2/evaluation/smoke_evidence/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 8, "col": 30},
+                    "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+                    "cwe": ["CWE-22"],
+                    "snapshots": {"FileService.java": {"sha256": self.sha_cwe22, "content": self.java_code_cwe22}},
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "citation_check": "MATCHED",
+                    "model": "qwen3.5:9b-q4_K_M",
+                    "citations": [7, 8],
+                    "explanation": "Normalized path checked with startsWith.",
+                },
+            },
+        ]
+        report_shuffled = score_pilot.evaluate_pilot(
+            opengrep_scan, labels, shuffled_records, expected_scan_sha256=scan_sha
+        )
+        self.assertEqual(len(report_shuffled["anomalies"]["unmatched_or_ambiguous_triage_records"]), 0)
+        self.assertEqual(report_shuffled["summary"]["overall"]["counts"]["proposed_fp_on_true_fp"], 1)
+        self.assertEqual(report_shuffled["summary"]["overall"]["counts"]["kept_tp_on_true_tp"], 1)
+
+        # Case B: Intra-file alert_id swap (aid_0 attached to line 10, aid_1 attached to line 7) MUST be rejected
+        swapped_records = [
+            {
+                "id": aid_0,  # Wrong ID for line 10!
+                "evidence": {
+                    "scan_sha256": scan_sha,
+                    "finding_index": 1,
+                    "path": "v2/evaluation/smoke_evidence/FileService.java",
+                    "start": {"line": 10, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+                    "cwe": ["CWE-22"],
+                    "snapshots": {"FileService.java": {"sha256": self.sha_cwe22, "content": self.java_code_cwe22}},
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "citation_check": "MATCHED",
+                    "model": "qwen3.5:9b-q4_K_M",
+                    "citations": [7, 8],
+                    "explanation": "Swapped alert_id attempting to dismiss TP.",
+                },
+            }
+        ]
+        report_swapped = score_pilot.evaluate_pilot(
+            opengrep_scan, labels, swapped_records, expected_scan_sha256=scan_sha
+        )
+        self.assertEqual(len(report_swapped["anomalies"]["unmatched_or_ambiguous_triage_records"]), 1)
+        self.assertEqual(report_swapped["summary"]["overall"]["counts"]["erroneously_proposed_fp_on_tp"], 0)
+        self.assertEqual(report_swapped["summary"]["overall"]["counts"]["needs_review_total"], 2)
+
+    def test_13_wrong_model_id_rejected_and_routed_to_review(self) -> None:
+        """13. P0.3: Sai model_id (vd qwen3:8b khi yêu cầu qwen3.5) bị ghi nhận model_mismatches và chuyển REVIEW."""
+        opengrep_scan = {
+            "results": [
+                {
+                    "alert_id": "A-MODEL-1",
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "check_id": "java.cwe22.path-traversal",
+                    "extra": {"metadata": {"cwe": ["CWE-22"]}},
+                }
+            ]
+        }
+        labels = [
+            {
+                "alert_id": "A-MODEL-1",
+                "file_path": "src/com/example/web/FileService.java",
+                "cwe": "CWE-22",
+                "ground_truth": "FALSE_POSITIVE",
+                "annotated_by": "human-reviewer",
+                "source_sha256": self.sha_cwe22,
+            }
+        ]
+        wrong_model_triage = [
+            {
+                "id": "A-MODEL-1",
+                "evidence": {
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "rule_id": "java.cwe22.path-traversal",
+                    "cwe": ["CWE-22"],
+                    "snapshots": [{"path": "src/com/example/web/FileService.java", "sha256": self.sha_cwe22, "content": self.java_code_cwe22}],
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "citation_check": "MATCHED",
+                    "model": "qwen3:8b",
+                    "citations": [7, 8],
+                    "explanation": "Normalized path checked with startsWith.",
+                },
+            }
+        ]
+        report = score_pilot.evaluate_pilot(
+            opengrep_scan,
+            labels,
+            wrong_model_triage,
+            expected_model_prefix="qwen3.5",
+        )
+        self.assertEqual(len(report["anomalies"]["model_mismatches"]), 1)
+        self.assertEqual(report["summary"]["overall"]["counts"]["proposed_fp_on_true_fp"], 0)
+        self.assertEqual(report["per_alert_decisions"][0]["effective_verdict"], "REVIEW")
+        self.assertIn("model_mismatch:qwen3:8b", report["per_alert_decisions"][0]["override_reasons"])
+
+    def test_14_wrong_citation_quote_and_citation_sha256_blocked(self) -> None:
+        """14. P0.3: Trích dẫn sai nội dung quote hoặc sai sha256 trong citation hoặc NOT_VERIFIED bị chặn."""
+        opengrep_scan = {
+            "results": [
+                {
+                    "alert_id": "A-QUOTE-1",
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "check_id": "java.cwe22.path-traversal",
+                    "extra": {"metadata": {"cwe": ["CWE-22"]}},
+                }
+            ]
+        }
+        labels = [
+            {
+                "alert_id": "A-QUOTE-1",
+                "file_path": "src/com/example/web/FileService.java",
+                "cwe": "CWE-22",
+                "ground_truth": "FALSE_POSITIVE",
+                "annotated_by": "human-reviewer",
+                "source_sha256": self.sha_cwe22,
+            }
+        ]
+        fabricated_quote_triage = [
+            {
+                "id": "A-QUOTE-1",
+                "evidence": {
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "rule_id": "java.cwe22.path-traversal",
+                    "cwe": ["CWE-22"],
+                    "snapshots": [{"path": "src/com/example/web/FileService.java", "sha256": self.sha_cwe22, "content": self.java_code_cwe22}],
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "citation_check": "MATCHED",
+                    "model": "qwen3.5:9b-q4_K_M",
+                    "citations": [
+                        {
+                            "path": "src/com/example/web/FileService.java",
+                            "line": 7,
+                            "quote": "String safeName = FilenameUtils.getName(userInput);",
+                            "sha256": self.sha_cwe22,
+                        }
+                    ],
+                    "explanation": "Fabricated quote claiming FilenameUtils.getName on line 7.",
+                },
+            }
+        ]
+        report = score_pilot.evaluate_pilot(opengrep_scan, labels, fabricated_quote_triage)
+        self.assertEqual(report["summary"]["overall"]["counts"]["proposed_fp_on_true_fp"], 0)
+        self.assertEqual(len(report["anomalies"]["ungrounded_fp_overrides"]), 1)
+        self.assertEqual(report["per_alert_decisions"][0]["effective_verdict"], "REVIEW")
+
+    def test_15_duplicate_triage_and_label_records_fail_safe_to_review(self) -> None:
+        """15. P0.3: Dữ liệu đánh giá trùng lặp (duplicate triage/label) tự động chuyển cảnh báo về REVIEW."""
+        opengrep_scan = {
+            "results": [
+                {
+                    "alert_id": "A-DUP-1",
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "check_id": "java.cwe22.path-traversal",
+                    "extra": {"metadata": {"cwe": ["CWE-22"]}},
+                }
+            ]
+        }
+        labels = [
+            {
+                "alert_id": "A-DUP-1",
+                "file_path": "src/com/example/web/FileService.java",
+                "cwe": "CWE-22",
+                "ground_truth": "FALSE_POSITIVE",
+                "annotated_by": "human-reviewer",
+                "source_sha256": self.sha_cwe22,
+            }
+        ]
+        dup_triage = [
+            {
+                "id": "A-DUP-1",
+                "evidence": {
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "rule_id": "java.cwe22.path-traversal",
+                    "cwe": ["CWE-22"],
+                    "snapshots": [{"path": "src/com/example/web/FileService.java", "sha256": self.sha_cwe22, "content": self.java_code_cwe22}],
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "citation_check": "MATCHED",
+                    "citations": [7, 8],
+                    "explanation": "First record proposes FP.",
+                },
+            },
+            {
+                "id": "A-DUP-1",
+                "evidence": {
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "rule_id": "java.cwe22.path-traversal",
+                    "cwe": ["CWE-22"],
+                    "snapshots": [{"path": "src/com/example/web/FileService.java", "sha256": self.sha_cwe22, "content": self.java_code_cwe22}],
+                },
+                "assessment": {
+                    "status": "SUPPORTED",
+                    "citation_check": "MATCHED",
+                    "citations": [7, 11],
+                    "explanation": "Second conflicting duplicate record.",
+                },
+            },
+        ]
+        report = score_pilot.evaluate_pilot(opengrep_scan, labels, dup_triage)
+        self.assertEqual(report["anomalies"]["duplicate_triage_ids"], ["A-DUP-1"])
+        self.assertEqual(report["summary"]["overall"]["counts"]["proposed_fp_on_true_fp"], 0)
+        self.assertEqual(report["per_alert_decisions"][0]["effective_verdict"], "REVIEW")
+        self.assertIn("duplicate_triage_id", report["per_alert_decisions"][0]["override_reasons"])
+
+    def test_16_labels_missing_provenance_or_masquerading_as_independent_rejected(self) -> None:
+        """16. P0.3: Nhãn thiếu nguồn gốc hoặc dùng agent/synthetic giả danh INDEPENDENT_GROUND_TRUTH bị từ chối."""
+        opengrep_scan = {
+            "results": [
+                {
+                    "alert_id": "A-PROV-1",
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "check_id": "java.cwe22.path-traversal",
+                    "extra": {"metadata": {"cwe": ["CWE-22"]}},
+                }
+            ]
+        }
+        masquerading_labels = [
+            {
+                "alert_id": "A-PROV-1",
+                "file_path": "src/com/example/web/FileService.java",
+                "cwe": "CWE-22",
+                "ground_truth": "FALSE_POSITIVE",
+                "label_type": "INDEPENDENT_GROUND_TRUTH",
+                "annotated_by": "antigravity-audit-verification",
+                "annotator_rationale": "Agent verified code inspection.",
+                "source_sha256": self.sha_cwe22,
+            }
+        ]
+        triage = [
+            {
+                "id": "A-PROV-1",
+                "evidence": {
+                    "path": "src/com/example/web/FileService.java",
+                    "start": {"line": 7, "col": 9},
+                    "end": {"line": 11, "col": 34},
+                    "rule_id": "java.cwe22.path-traversal",
+                    "cwe": ["CWE-22"],
+                    "snapshots": [{"path": "src/com/example/web/FileService.java", "sha256": self.sha_cwe22, "content": self.java_code_cwe22}],
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "citation_check": "MATCHED",
+                    "citations": [7, 8],
+                    "explanation": "Normalized path checked with startsWith.",
+                },
+            }
+        ]
+        report = score_pilot.evaluate_pilot(opengrep_scan, masquerading_labels, triage)
+        self.assertEqual(len(report["anomalies"]["invalid_ground_truth_labels"]), 1)
+        self.assertEqual(report["summary"]["overall"]["counts"]["unlabeled_alerts"], 1)
+        self.assertEqual(report["summary"]["overall"]["counts"]["proposed_fp_on_true_fp"], 0)
+
+        lock_res = validate_pilot_lock.validate_pilot_dataset(
+            opengrep_scan,
+            masquerading_labels,
+            min_alerts=1,
+            max_alerts=5,
+            min_priority_share=0.5,
+            mode="STRICT_LOCK",
+        )
+        self.assertFalse(lock_res["valid_lock_candidate"])
+        self.assertTrue(any("agent/synthetic annotator" in e for e in lock_res["errors"]))
+
+    def test_17_tp_proposed_for_removal_counted_in_both_raw_layer2_and_post_gate_layer3(self) -> None:
+        """17. P0.3: Cảnh báo TP bị đề xuất loại được đếm ở cả Layer 2 (raw model) và Layer 3 (post-gate)."""
+        opengrep_scan = {
+            "results": [
+                {
+                    "alert_id": "A-TP-RAW-1",
+                    "path": "src/com/example/dao/UserDao.java",
+                    "start": {"line": 5, "col": 9},
+                    "end": {"line": 7, "col": 38},
+                    "check_id": "java.cwe89.sql-concat",
+                    "extra": {"metadata": {"cwe": ["CWE-89"]}},
+                }
+            ]
+        }
+        labels = [
+            {
+                "alert_id": "A-TP-RAW-1",
+                "file_path": "src/com/example/dao/UserDao.java",
+                "cwe": "CWE-89",
+                "ground_truth": "TRUE_POSITIVE",
+                "annotated_by": "human-security-reviewer",
+                "annotator_rationale": "Direct SQL concatenation without bind parameters.",
+                "source_sha256": self.sha_cwe89,
+            }
+        ]
+        # Model raw response returned REFUTED on a TP, but Codex downgraded status to UNDETERMINED because citation failed
+        codex_blocked_tp_refutation = [
+            {
+                "id": "A-TP-RAW-1",
+                "evidence": {
+                    "path": "src/com/example/dao/UserDao.java",
+                    "start": {"line": 5, "col": 9},
+                    "end": {"line": 7, "col": 38},
+                    "rule_id": "java.cwe89.sql-concat",
+                    "cwe": ["CWE-89"],
+                    "snapshots": [{"path": "src/com/example/dao/UserDao.java", "sha256": self.sha_cwe89, "content": self.java_code_cwe89}],
+                },
+                "assessment": {
+                    "status": "UNDETERMINED",
+                    "citation_check": "NOT_VERIFIED",
+                    "citations": [999],
+                    "explanation": "Model falsely claimed prepared statement at line 999.",
+                    "raw_response": {
+                        "message": {
+                            "content": '{"status":"REFUTED","citations":[{"path":"UserDao.java","line":999}],"explanation":"Prepared statement"}'
+                        }
+                    },
+                },
+            }
+        ]
+        report = score_pilot.evaluate_pilot(opengrep_scan, labels, codex_blocked_tp_refutation)
+        counts = report["summary"]["overall"]["counts"]
+        rates = report["summary"]["overall"]["rates"]
+        # Layer 2 records that the raw model attempted to refute a TP (1/1)
+        self.assertEqual(counts["raw_model_refuted_on_tp"], 1)
+        self.assertEqual(counts["fail_safe_blocked_tp_refutations"], 1)
+        self.assertEqual(rates["raw_model_erroneous_tp_removal"]["display"], "1/1 (100.0%)")
+        # Layer 3 records that the fail-safe gate blocked the TP removal proposal (0/1 post-gate, routed to REVIEW)
+        self.assertEqual(counts["erroneously_proposed_fp_on_tp"], 0)
+        self.assertEqual(rates["erroneous_tp_removal"]["display"], "0/1 (0.0%)")
+        self.assertEqual(counts["needs_review_on_tp"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
