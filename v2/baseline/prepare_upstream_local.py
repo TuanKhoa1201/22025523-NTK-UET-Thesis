@@ -15,6 +15,49 @@ BASE = Path(__file__).resolve().parent
 PIN = "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9"
 
 
+def validate_checkout_identity(head, tree, files, expected=None):
+    expected = expected or json.loads((BASE / "pinned_upstream_tree.json").read_text(encoding="utf-8"))
+    wanted = {x["path"]: {"mode": x["mode"], "git_blob_sha": x["git_blob_sha"]} for x in expected["files"]}
+    if head != PIN or head != expected["upstream_commit"]:
+        raise ValueError("wrong upstream commit")
+    if tree != expected["tree_sha"] or files != wanted:
+        raise ValueError("upstream tree is incomplete or differs from pinned public inventory")
+    return len(wanted)
+
+
+def prepared_hashes(source):
+    source = Path(source).resolve()
+    hashes = {}
+    for p in sorted(source.rglob("*")):
+        if "__pycache__" in p.parts or p.suffix == ".pyc" or not p.is_file():
+            continue
+        if p.is_symlink() or not p.resolve(strict=True).is_relative_to(source):
+            raise ValueError("prepared source escapes source directory")
+        hashes[p.relative_to(source).as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
+    return hashes
+
+
+def apply_advisor_patch(source, output, advisor, git):
+    """Log check/apply and stop on the first actual patch failure."""
+    with zipfile.ZipFile(Path(advisor) / "opengrep-triage.zip") as z:
+        patch = z.read("opengrep-triage/patches/simple_semgrepAI_opengrep.patch")
+    patchfile = output / "advisor-private.patch"
+    patchfile.write_bytes(patch)
+    commands = []
+    for flags in (("--check",), ()):
+        command = git + ["apply", *flags, str(patchfile)]
+        import os
+        env = os.environ.copy()
+        env["GIT_CEILING_DIRECTORIES"] = str(source.parent)
+        result = subprocess.run(command, cwd=source, env=env, capture_output=True)
+        commands.append({"argv": command, "exit": result.returncode,
+                         "stdout": result.stdout.decode("utf-8", "replace"), "stderr": result.stderr.decode("utf-8", "replace")})
+        (output / "patch-results.json").write_text(json.dumps(commands, indent=2), encoding="utf-8")
+        if result.returncode:
+            raise ValueError("advisor patch failed; do not run upstream")
+    return patch
+
+
 def overlay_cli(original):
     result = original
     for module, name in (("validator", "AIValidator"), ("reporter", "HTMLReporter"), ("rag", "RAGStore"), ("config", "ConfigManager")):
@@ -37,9 +80,12 @@ def overlay_cli(original):
     result = result.replace(call, call + '''        console.print("NTK local verification: original scanner completed; no RAG/LLM invoked")
         return
 ''')
-    result = result.replace("from .scanner import SemgrepScanner\n", "from .scanner import SemgrepScanner\nfrom .scan_recording import recording\n")
+    result = result.replace("from .scanner import SemgrepScanner\n", "from .scanner import SemgrepScanner\nfrom .scan_recording import recording, record_cli_origin\n")
     block = "        scanner = SemgrepScanner(config_path=str(config_path) if config_path else None)\n" + call
-    wrapped = "        with recording(target_path, rules_path, output_dir):\n" + "".join("    " + line for line in block.splitlines(keepends=True))
+    wrapped = ("        with recording(target_path, rules_path, output_dir):\n"
+               '            record_cli_origin(__file__, SemgrepScanner, "enter")\n'
+               + "".join("    " + line for line in block.splitlines(keepends=True))
+               + '            record_cli_origin(__file__, SemgrepScanner, "exit")\n')
     if result.count(block) != 1:
         raise ValueError("unexpected upstream scan initialization")
     result = result.replace(block, wrapped)
@@ -60,13 +106,29 @@ def overlay_cli(original):
 
 def prepare(upstream, advisor, output):
     upstream, output = Path(upstream).resolve(), Path(output).resolve()
+    if not upstream.is_dir():
+        raise ValueError("full upstream checkout directory is unavailable; clone the pinned repository first")
     workspace = BASE.parents[1].as_posix()
     git = ["git", "-c", "safe.directory=" + workspace, "-c", "core.autocrlf=false"]
     def read_git(*args):
         return subprocess.run(git + list(args), cwd=upstream, check=True, capture_output=True).stdout
-    if read_git("rev-parse", "HEAD").decode().strip() != PIN or read_git("status", "--porcelain").strip():
+    head = read_git("rev-parse", "HEAD").decode().strip()
+    if head != PIN or read_git("status", "--porcelain").strip():
         raise ValueError("full upstream must be clean at exact pinned commit")
+    tree_sha = read_git("rev-parse", "HEAD^{tree}").decode().strip()
+    files = {}
+    for entry in read_git("ls-tree", "-r", "-z", "HEAD").split(b"\0"):
+        if not entry:
+            continue
+        header, name = entry.split(b"\t", 1)
+        mode, kind, blob = header.decode().split()
+        if kind != "blob":
+            raise ValueError("unsupported upstream tree entry")
+        files[name.decode("utf-8")] = {"mode": mode, "git_blob_sha": blob}
+    file_count = validate_checkout_identity(head, tree_sha, files)
     tracked = [p.decode("utf-8") for p in read_git("ls-files", "-z").split(b"\0") if p]
+    if set(tracked) != set(files):
+        raise ValueError("index does not contain the complete pinned tree")
     required = {"main.py", "semgrepai/__init__.py", "semgrepai/__main__.py", "semgrepai/cli.py", "semgrepai/scanner.py", "semgrepai/validator.py", "semgrepai/rag.py"}
     if not required.issubset(tracked):
         raise ValueError("not a full pinned upstream checkout")
@@ -80,26 +142,15 @@ def prepare(upstream, advisor, output):
         dst = source / relative
         dst.parent.mkdir(parents=True, exist_ok=True)
         # Object bytes avoid Windows checkout CRLF conversion changing patch context.
-        dst.write_bytes(read_git("show", "HEAD:" + relative))
-    with zipfile.ZipFile(Path(advisor) / "opengrep-triage.zip") as z:
-        patch = z.read("opengrep-triage/patches/simple_semgrepAI_opengrep.patch")
-    patchfile = output / "advisor-private.patch"
-    patchfile.write_bytes(patch)
-    commands = []
-    for flags in (("--check",), ()):
-        command = git + ["apply", *flags, str(patchfile)]
-        # Disable repository discovery above the plain copied tree.
-        import os
-        env = os.environ.copy()
-        env["GIT_CEILING_DIRECTORIES"] = str(source.parent)
-        result = subprocess.run(command, cwd=source, env=env, capture_output=True)
-        commands.append({"argv": command, "exit": result.returncode,
-                         "stdout": result.stdout.decode("utf-8", "replace"), "stderr": result.stderr.decode("utf-8", "replace")})
-        (output / "patch-results.json").write_text(json.dumps(commands, indent=2), encoding="utf-8")
-        if result.returncode:
-            raise ValueError("advisor patch failed; do not run upstream")
+        raw = read_git("show", "HEAD:" + relative)
+        if hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() != files[relative]["git_blob_sha"]:
+            raise ValueError("upstream blob mismatch: " + relative)
+        dst.write_bytes(raw)
+    patch = apply_advisor_patch(source, output, advisor, git)
     overlay_sha = apply_local_overlay(source, output)
     manifest = {"upstream_commit": PIN, "full_checkout_verified": True,
+                "upstream_tree_sha": tree_sha, "upstream_files_verified": file_count,
+                "prepared_files_sha256": prepared_hashes(source),
                 "advisor_patch_sha256": hashlib.sha256(patch).hexdigest(),
                 "scope": "upstream Typer scan function and advisor-patched scanner; --scan-only only; not full RAG/LLM acceptance",
                 "overlay_sha256": overlay_sha}

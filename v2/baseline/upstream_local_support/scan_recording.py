@@ -1,6 +1,8 @@
 """Instrument real upstream scanner subprocesses; never synthesize engine outcomes."""
 import json
 import subprocess
+import sys
+import inspect
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -33,6 +35,30 @@ def capture_output_dir():
     if cap is None:
         raise RuntimeError("scanner must run inside local recording context")
     return cap.output / "legacy_reports"
+
+
+def record_cli_origin(cli_file, scanner_class, stage):
+    """Executed inside the inherited CLI scan function, not by direct-scanner probes."""
+    cap = _active.get()
+    if cap is None:
+        raise RuntimeError("CLI origin requires active capture")
+    blocked = ("semgrepai.rag", "semgrepai.validator", "semgrepai.reporter", "semgrepai.llm.providers",
+               "chromadb", "langchain", "openai", "anthropic")
+    loaded = sorted(n for n in sys.modules if any(n == b or n.startswith(b + ".") for b in blocked))
+    if loaded:
+        raise RuntimeError("forbidden RAG/provider import in scan-only CLI: " + ", ".join(loaded))
+    cli = Path(cli_file).resolve()
+    scanner = Path(inspect.getsourcefile(scanner_class)).resolve()
+    if scanner.parent != cli.parent or cli.name != "cli.py":
+        raise RuntimeError("scanner does not belong to this upstream CLI package")
+    spec = getattr(sys.modules.get("__main__"), "__spec__", None)
+    from .scan_manifest import sha
+    (cap.output / "cli-origin.json").write_text(json.dumps({
+        "stage": stage, "main_module": getattr(spec, "name", None), "argv": list(sys.argv),
+        "cli_file": str(cli), "scanner_file": str(scanner),
+        "cli_sha256": sha(cli.read_bytes()), "scanner_sha256": sha(scanner.read_bytes()),
+        "function": "semgrepai.cli.scan", "forbidden_imports": loaded,
+        "producer": "inherited-cli-function-hook"}, indent=2), encoding="utf-8")
 
 
 def recorded_run(command, **kwargs):

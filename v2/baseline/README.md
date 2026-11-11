@@ -1,15 +1,27 @@
 # M1: simple_semgrepAI → local OpenGrep
 
-Latest original-task verification: [ROOT_CAUSE_REPAIR_REPORT.md](ROOT_CAUSE_REPAIR_REPORT.md).
+Current original CLI handover: [ADVISOR_M1_ORIGINAL_CLI_PROOF.md](ADVISOR_M1_ORIGINAL_CLI_PROOF.md).
+`prove_original_cli.py` requires a real clean pinned upstream checkout, prepares
+the inherited Typer CLI and records its actual `python -m semgrepai ... --scan-only`
+invocation, source hashes, engine receipts and raw triage handoff. It rejects
+direct-scanner/alternative-CLI substitutes. LIVE laptop CLI runtime is PASS
+(OpenGrep 1.20.0, 4 JSON / 4 SARIF / 4 triage findings); server acceptance remains
+PENDING. `proof.json` keeps its original `SERVER_RUNTIME_PENDING` aggregate.
+Use `python v2/baseline/audit_original_cli.py <existing-proof-dir>` for a read-only
+audit of command receipts, hashes, full rule IDs, locations and handoff; it never rescans.
+`run_original_cli_proof.ps1` is optional; direct Python commands in the report do
+not require changing PowerShell execution policy. Private outputs remain ignored.
+
+Earlier root-cause verification: [ROOT_CAUSE_REPAIR_REPORT.md](ROOT_CAUSE_REPAIR_REPORT.md).
 `prepare_upstream_local.py` requires a clean full pinned checkout and the private
 advisor ZIP, and prepares the inherited Typer scan path with a guarded --scan-only
 overlay, minimal scanner config and real subprocess recording. It never activates
 RAG/cloud. This is distinct from the extracted scanner-only fork below; full CLI
-runtime remains PENDING here. The NTK patch now includes the new scan_manifest.py
-module (four resulting fork files), not only the original three-file extraction.
+runtime is verified on the laptop; server acceptance remains PENDING. The NTK
+patch includes the new scan_manifest.py module (four resulting fork files), not only the original three-file extraction.
 
-Current original-task status (including private advisor-patch comparison and the
-blocked full-upstream CLI attempt): [ADVISOR_ORIGINAL_TASK_STATUS.md](ADVISOR_ORIGINAL_TASK_STATUS.md).
+Historical original-task status (private advisor-patch comparison and earlier
+blocked CLI attempt, superseded by the LIVE proof above): [ADVISOR_ORIGINAL_TASK_STATUS.md](ADVISOR_ORIGINAL_TASK_STATUS.md).
 `advisor_probe.py` accepts private `--advisor-dir` and optional `--upstream` clean
 pinned clone, recording patch/help/scan as separate outcomes. It does not publish
 advisor source. `verify_handoff.py` checks that raw JSON, findings, rule IDs and
