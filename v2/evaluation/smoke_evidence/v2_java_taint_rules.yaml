@@ -1,0 +1,51 @@
+# NTK Thesis V2 - Verified Java Taint Rules for OpenGrep Smoke Test
+# Provenance: Derived from pinned Semgrep/OpenGrep p/java ruleset (p-java-pinned-20260929, SHA256: 5e652fa9ac09c9fac36bbadc3562a0c8eed1a47438a9d1f545e021ae3c5648b1)
+# License: Semgrep Rules License v1.0 / LGPL-2.1 compatible for local SAST evaluation
+rules:
+  - id: ntk.v2.java.cwe89.httpservlet-jdbc-sqli-taint
+    mode: taint
+    languages:
+      - java
+    severity: ERROR
+    message: >-
+      [CWE-89] Untrusted HTTP parameter flows into JDBC SQL execution sink without parameterization.
+    metadata:
+      cwe:
+        - "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      owasp:
+        - "A03:2021 - Injection"
+      category: security
+      confidence: HIGH
+      provenance: "Derived from p/java (p-java-pinned-20260929) & OWASP Java SQLi taint patterns"
+    pattern-sources:
+      - pattern: (HttpServletRequest $REQ).getParameter(...)
+    pattern-sanitizers:
+      - pattern: Integer.parseInt(...)
+      - pattern: Long.parseLong(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: (java.sql.Statement $STMT).executeQuery($SQL)
+          - pattern: (java.sql.Statement $STMT).execute($SQL)
+          - pattern: (java.sql.Statement $STMT).executeUpdate($SQL)
+
+  - id: ntk.v2.java.cwe22.httpservlet-path-traversal-taint
+    mode: taint
+    languages:
+      - java
+    severity: ERROR
+    message: >-
+      [CWE-22] Untrusted HTTP parameter flows into File/FileInputStream sink without path sanitization.
+    metadata:
+      cwe:
+        - "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      owasp:
+        - "A01:2021 - Broken Access Control"
+      category: security
+      confidence: HIGH
+      provenance: "Derived fromsemgrep.dev/r/java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal (r_id: 9160, rv_id: 1263064)"
+    pattern-sources:
+      - pattern: (HttpServletRequest $REQ).getParameter(...)
+    pattern-sanitizers:
+      - pattern: org.apache.commons.io.FilenameUtils.getName(...)
+    pattern-sinks:
+      - pattern: new java.io.FileInputStream(...)
