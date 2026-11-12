@@ -232,8 +232,15 @@ def audit_sqlite_queue(
                 f"SQLite warning {exp_id} citation_check '{w_ass.get('citation_check')}' != JSONL '{exp.get('citation_check')}'"
             )
 
-        if w_state != "OPEN":
-            w_events = events_by_warning.get(exp_id, [])
+        w_events = events_by_warning.get(exp_id, [])
+        if w_state not in ("OPEN", "CONFIRMED_TRUE", "CONFIRMED_FALSE"):
+            issues.append(f"SQLite warning {exp_id} has invalid state '{w_state}'")
+        elif w_state == "OPEN":
+            if w_events and w_events[-1].get("action") != "reopen":
+                issues.append(
+                    f"SQLite warning {exp_id} state 'OPEN' contradicts last event {w_events[-1]}"
+                )
+        else:
             if not w_events:
                 issues.append(
                     f"SQLite safety violation: warning {exp_id} is in state '{w_state}' with 0 human review events"
@@ -241,7 +248,11 @@ def audit_sqlite_queue(
             else:
                 last_ev = w_events[-1]
                 expected_action = "confirm-true" if w_state == "CONFIRMED_TRUE" else "confirm-false"
-                if last_ev.get("action") != expected_action or not str(last_ev.get("actor") or "").strip():
+                if (
+                    last_ev.get("action") != expected_action
+                    or not str(last_ev.get("actor") or "").strip()
+                    or not str(last_ev.get("reason") or "").strip()
+                ):
                     issues.append(
                         f"SQLite warning {exp_id} state '{w_state}' does not match last event {last_ev}"
                     )
@@ -737,6 +748,27 @@ def audit_scan_and_evidence(
                 f"Finding [{f_idx}] cited lines {cited_lines} are outside finding/trace location window {sorted(allowed_window)}"
             )
 
+        # 3-tier citation provenance check (in_source vs in_prompt vs posthoc_only; never claims security proof)
+        if isinstance(evidence.get("snippets"), list) and isinstance(evidence.get("snapshots"), dict) and citations:
+            try:
+                from v2.triage.ollama import inspect_citations_provenance
+
+                cite_prov = inspect_citations_provenance(
+                    [c for c in citations if isinstance(c, dict)], evidence
+                )
+                finding_info["citation_provenance"] = {
+                    "citation_in_source": cite_prov["citation_in_source"],
+                    "citation_in_prompt": cite_prov["citation_in_prompt"],
+                    "citation_posthoc_only": cite_prov["citation_posthoc_only"],
+                    "supports_security_claim_verified": False,
+                }
+                if cite_prov["citation_posthoc_only"]:
+                    issues.append(
+                        f"Finding [{f_idx}] citation exists in source snapshot but was omitted from compacted prompt (post-hoc only)"
+                    )
+            except Exception as exc:
+                finding_info["citation_provenance_error"] = str(exc)
+
         # Verify human safety state
         state = str(rec.get("state") or rec.get("human_review_state") or assessment.get("state") or "OPEN").strip().upper()
         auto_dismissed = bool(rec.get("auto_dismissed") or assessment.get("auto_dismissed") or False)
@@ -778,7 +810,9 @@ def audit_scan_and_evidence(
 
     # 6. Compute Paired Comparison (Arm A: OpenGrep-only vs Arm B: OpenGrep+Qwen) if labels are available
     paired_comparison: dict[str, Any] | None = None
-    if labels_path and labels_path.is_file() and len(results) > 0:
+    if labels_path is not None and not labels_path.is_file():
+        issues.append(f"Missing Ground Truth labels file: {labels_path}")
+    elif labels_path and labels_path.is_file() and len(results) > 0:
         try:
             labels_doc = json.loads(labels_path.read_text(encoding="utf-8"))
             pilot_eval = score_pilot.evaluate_pilot(
@@ -789,6 +823,16 @@ def audit_scan_and_evidence(
                 expected_scan_sha256=active_scan_sha,
                 require_scan_provenance=require_scan_manifest,
             )
+            anomalies = pilot_eval.get("anomalies") if isinstance(pilot_eval.get("anomalies"), dict) else {}
+            for anom_key in (
+                "missing_labels",
+                "invalid_labels",
+                "duplicate_label_ids",
+                "scan_sha256_mismatches",
+                "unmatched_or_ambiguous_triage_records",
+            ):
+                if anomalies.get(anom_key):
+                    issues.append(f"Ground Truth / pairing anomaly ({anom_key}): {anomalies[anom_key]}")
             overall_dict = (pilot_eval.get("summary") or {}).get("overall") or {}
             overall = overall_dict.get("counts", {})
             rates = overall_dict.get("rates", {})
@@ -822,6 +866,7 @@ def audit_scan_and_evidence(
             }
         except Exception as exc:
             paired_comparison = {"error": str(exc)}
+            issues.append(f"Ground Truth / paired evaluation failed: {exc}")
 
     audit_pass = len(issues) == 0
     return {
@@ -923,15 +968,22 @@ def main(argv: list[str] | None = None) -> int:
         sqlite_path = args.sqlite_db or (live_dir / "triage_live_qwen35" / "review.sqlite")
         if not sqlite_path.is_file() and (live_dir / "triage_live" / "review.sqlite").is_file():
             sqlite_path = live_dir / "triage_live" / "review.sqlite"
-        live_labels = args.labels or (live_dir / "live_scan" / "smoke_m1_live_labels.json")
-        if not live_labels.is_file() and DEFAULT_HISTORICAL_LABELS.is_file():
-            live_labels = DEFAULT_HISTORICAL_LABELS
+        if args.labels is not None:
+            live_labels: Path | None = args.labels
+        else:
+            cand_labels = live_dir / "live_scan" / "smoke_m1_live_labels.json"
+            if cand_labels.is_file():
+                live_labels = cand_labels
+            elif DEFAULT_HISTORICAL_LABELS.is_file():
+                live_labels = DEFAULT_HISTORICAL_LABELS
+            else:
+                live_labels = None
 
         report = audit_scan_and_evidence(
             opengrep_path=og_path,
             assessments_path=ass_path,
             source_root=args.source_root,
-            labels_path=live_labels if live_labels.is_file() else None,
+            labels_path=live_labels,
             scan_manifest_path=manifest_path,
             expected_scan_sha=EXPECTED_LIVE_SCAN_SHA,
             require_scan_manifest=True,
@@ -1021,7 +1073,7 @@ def main(argv: list[str] | None = None) -> int:
         args.output_json.write_text(json.dumps(report, indent=2), encoding="utf-8")
         print(f"\nWrote full audit JSON to: {args.output_json}")
 
-    return {"PASS": 0, "AWAITING_SERVER_EVIDENCE": 2}.get(verdict, 1)
+    return {"PASS": 0, "INCOMPLETE": 2, "AWAITING_SERVER_EVIDENCE": 2}.get(verdict, 1)
 
 
 if __name__ == "__main__":

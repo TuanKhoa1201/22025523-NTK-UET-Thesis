@@ -171,7 +171,9 @@ class Stage3HeuristicsAndPromptTests(Fixture):
             "}\n"
         )
         rec2 = self._make_java_record(code_safe_src, "CWE-22", 3, 'scr.getTheValue("x")', 4, "new java.io.File(p)")
-        self.assertEqual(heuristic_analyze(rec2)["status"], "REFUTED")
+        # SeparateClassRequest is absent from snapshots: must degrade to UNDETERMINED, never infer REFUTED from name
+        self.assertEqual(extract_evidence_signals(rec2)["recommended_status"], "UNDETERMINED")
+        self.assertEqual(heuristic_analyze(rec2)["status"], "UNDETERMINED")
 
     def test_switch_arithmetic_list_and_map_flows(self):
         # 1. Switch constant 'B' -> safe literal
@@ -233,6 +235,9 @@ class Stage3HeuristicsAndPromptTests(Fixture):
         msgs_full = prompt(self.record)
         user_full = json.loads(msgs_full[1]["content"])
         self.assertIn("evidence_signals", user_full)
+        self.assertNotIn("recommended_status", user_full["evidence_signals"])
+        self.assertNotIn("recommendation_reason", user_full["evidence_signals"])
+        self.assertNotIn("candidate_citations", user_full["evidence_signals"])
         self.assertIn("trace_steps", user_full)
 
         rec_ablation = copy.deepcopy(self.record)

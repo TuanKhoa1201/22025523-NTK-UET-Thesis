@@ -1,11 +1,16 @@
 {
-  "schema_version": "ntk-independent-audit-1.0",
+  "schema_version": "ntk-independent-audit-1.1",
   "audited_repository": "https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis",
   "audited_experimental_branch": "v2/post-report-cwe22-cwe89-20261112",
   "audited_base_commit": "86636b9de22e59efcca2d3786434727c6ae082e4",
   "owasp_benchmark_commit": "8b67a88d73b2594570fc21150705283de884620b",
   "owasp_expectedresults_lf_sha256": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1",
   "overall_experimental_claims_status": "FAIL",
+  "standardized_exit_code_contract": {
+    "PASS": 0,
+    "FAIL": 1,
+    "INCOMPLETE": 2
+  },
   "acceptance_criteria": {
     "1_labels_sourced_and_independently_verified": "PARTIAL",
     "2_metrics_recomputed_from_scratch_with_adversarial_tests": "PASS",
@@ -28,16 +33,19 @@
       "testcase_level_owasp_tpr_fpr_status": "NOT_VERIFIED"
     },
     "citations_and_evidence_verifier": {
-      "code_verifier_mechanics_status": "PARTIAL",
+      "historical_v2_1_verifier_status": "FAIL",
+      "remediated_v2_2_verifier_status": "PASS",
       "raw_assessments_citations_on_server": "NOT_VERIFIED"
     },
     "ollama_runtime_evidence": {
-      "status": "NOT_VERIFIED"
+      "local_mount_status": "NOT_VERIFIED",
+      "javisos_server_receipt_commit": "e81c75681605034449820f5eb3fe7db9c2b4fcfc"
     },
     "heuristic_steering_risk": {
-      "status": "FAIL",
+      "historical_v2_1_arm_c_status": "FAIL",
+      "remediated_v2_2_prompt_neutrality_status": "PASS",
       "risk_level": "CRITICAL",
-      "summary": "heuristics.py computes `recommended_status` (defaulting to SUPPORTED, never UNDETERMINED, matching 16/16 dev and 40/40 held-out OWASP labels) and ollama.py injects it plus `recommendation_reason` and `candidate_citations` directly into Qwen's prompt in Arm C, while Arm B suppresses 24/40 cases to UNDETERMINED."
+      "summary": "Historical v2.1 Arm C injected heuristic `recommended_status`, `recommendation_reason`, and `candidate_citations` into Qwen's prompt (100% 76/76 concordance on ADMIN-PC), so 40/40 is a combined pipeline result rather than standalone Qwen reasoning. Code v2.2 strips steering fields without overwriting historical experimental artifacts."
     }
   },
   "label_audit": {
@@ -2536,20 +2544,87 @@
   "heuristic_steering_audit": {
     "status": "FAIL",
     "severity": "CRITICAL",
+    "audit_separation_note": "Historical experimental data (v2.1) remains FAIL for standalone LLM claim because historical Arm C prompts injected heuristic recommended_status, recommendation_reason, and candidate_citations (76/76 concordance). Current working-tree code (v2.2) remediates the blind spots without retroactively altering historical runs.",
     "owasp_ground_truth_passed_to_qwen_in_code": false,
-    "heuristic_pre_verdict_passed_to_qwen_in_arm_c": true,
-    "recommended_status_has_undetermined_branch": false,
-    "recommended_status_defaults_to_supported": true,
-    "prompt_instructs_copying_candidate_citations": true,
-    "arm_b_suppresses_signals_that_arm_c_exposes": true,
-    "live_40_raw_prompts_verification_status": "NOT_VERIFIED",
-    "empirical_recommended_status_match_on_benchmark": null,
-    "sanitizer_and_crossfile_bugs": {
-      "global_startsWith_anywhere_in_snippet_satisfies_canonical_guard": true,
-      "pre_sink_line_filter_misses_post_constructor_guards": true,
-      "unsound_crossfile_ThingFactory_assumed_supported": true,
-      "evidence_attaches_heuristic_signals_unconditionally": true
-    }
+    "historical_v2_1_experimental_audit": {
+      "recorded_prompt_version": "v2.1-cwe22-cwe89-grounded",
+      "recorded_heuristic_version": "heuristic-cwe22-cwe89-v2.1",
+      "heuristic_pre_verdict_passed_to_qwen_in_historical_arm_c": true,
+      "prompt_instructed_copying_candidate_citations_in_v2_1": true,
+      "server_receipt_raw_qwen_concordance_with_heuristic": "76/76 (100.0%)",
+      "standalone_qwen_reasoning_proven_by_arm_c": false
+    },
+    "current_v2_2_code_remediation_status": {
+      "heuristic_version_in_code": "v2.2-flow-grounded",
+      "prompt_version_in_code": "v2.2-cwe22-cwe89-neutral",
+      "active_prompt_strips_heuristic_verdict_and_citations": true,
+      "recommended_status_has_undetermined_branch": true,
+      "global_startswith_bug_present": false,
+      "unsound_crossfile_thing_factory_supported_present": false,
+      "citation_validator_enforces_prompt_window_and_executable_code": true,
+      "post_patch_live_qwen_heldout_rerun_executed": false
+    },
+    "historical_v2_1_vs_patched_v2_2_heuristic_impact": {
+      "dev_set_16_signals": {
+        "historical_v2_1": {
+          "tp_supported": 8,
+          "fp_refuted": 8,
+          "undetermined": 0,
+          "false_refuted_on_tp": 0
+        },
+        "patched_v2_2": {
+          "tp_supported": 6,
+          "fp_refuted": 7,
+          "undetermined": 3,
+          "false_refuted_on_tp": 0,
+          "changed_cases_to_undetermined": [
+            "BenchmarkTest00102",
+            "BenchmarkTest00527",
+            "BenchmarkTest00863"
+          ]
+        }
+      },
+      "heldout_set_40_signals": {
+        "historical_v2_1": {
+          "tp_supported": 20,
+          "fp_refuted": 20,
+          "undetermined": 0,
+          "false_refuted_on_tp": 0
+        },
+        "patched_v2_2": {
+          "tp_supported": 19,
+          "fp_refuted": 18,
+          "undetermined": 3,
+          "false_refuted_on_tp": 0,
+          "changed_cases_to_undetermined": [
+            "BenchmarkTest00040",
+            "BenchmarkTest01746",
+            "BenchmarkTest01752"
+          ]
+        }
+      },
+      "heldout_set_40_arm_b_heuristic_analyze": {
+        "historical_v2_1_paired_csv": {
+          "tp_supported": 9,
+          "fp_refuted": 7,
+          "undetermined": 24,
+          "false_refuted_on_tp": 0
+        },
+        "patched_v2_2": {
+          "tp_supported": 8,
+          "fp_refuted": 4,
+          "undetermined": 28,
+          "false_refuted_on_tp": 0,
+          "changed_cases_to_undetermined": [
+            "BenchmarkTest00040",
+            "BenchmarkTest00864",
+            "BenchmarkTest01746",
+            "BenchmarkTest01752"
+          ]
+        }
+      }
+    },
+    "empirical_recommended_status_match_on_benchmark": null
   },
   "documentation_and_lock_audit": {
     "status": "FAIL",
@@ -2568,8 +2643,75 @@
     "lock_manifest_check": {
       "config_locked": false,
       "lf_checkout_matches_manifest": false,
-      "crlf_matches_manifest": true
+      "crlf_matches_manifest": true,
+      "rules_lf_sha256": "4519435641bf825c25dcec8196e60863c545bbb1943c5f37501c4d0e5894096e",
+      "rules_crlf_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+      "split_disjointness": {
+        "dev_alert_count": 16,
+        "heldout_alert_count": 40,
+        "overlap_alert_ids": [],
+        "overlap_java_files": [],
+        "disjoint_verified": true
+      },
+      "historical_runtime_lock": {
+        "model": "qwen3.5:9b-q4_K_M",
+        "ollama_endpoint": "http://127.0.0.1:11434",
+        "options": {
+          "temperature": 0,
+          "num_ctx": 8192,
+          "num_predict": 1200,
+          "stream": false,
+          "think": false
+        },
+        "active_prompt_version": "v2.1-cwe22-cwe89-grounded",
+        "active_heuristic_version": "heuristic-cwe22-cwe89-v2.1"
+      }
     },
+    "lock_and_hash_errata_registry": [
+      {
+        "artifact": "v2/docs/thesis/CHUONG_4_THUC_NGHIEM_VA_DANH_GIA.md",
+        "field": "dev_set_16.scan_sha256",
+        "recorded_value": "c1be1d5e1be23a7ddba48fa7e0d61049234fd6003be057cf15893977c04d08c2",
+        "verified_value": "ecc1fa4634bfc86266c43dd6790422546367293d1810712fddc7c0d15a6c015f",
+        "verification_source": "v2/evaluation/post_report/dev_alerts.json & SERVER_FORENSIC_AUDIT_RECEIPT_20261112.json",
+        "root_cause": "Stale pre-lock scan digest copied into Chapter 4 table"
+      },
+      {
+        "artifact": "v2/docs/POST_REPORT_IMPLEMENTATION_HANDOVER.md",
+        "field": "expectedresults-1.2.csv SHA-256",
+        "recorded_value": "353762c72ef5bcd7fd2dc9ad3bc8dc1fa2fae1ade4cd4aa1dedf7ea42de2a040",
+        "verified_value": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1",
+        "verification_source": "OWASP BenchmarkJava v1.2 commit 8b67a88d73b2594570fc21150705283de884620b (expectedresults-1.2.csv LF)",
+        "root_cause": "Unverified digest string cited in handover narrative"
+      },
+      {
+        "artifact": "v2/evaluation/post_report/heldout_strict_lock_manifest.json",
+        "field": "opengrep_sha256 & labels_sha256",
+        "recorded_value": {
+          "opengrep_sha256": "ba9967f3ae1dcbe940e8e7dea7df36ff873232fe5787f42c3fd2c84e066b1826",
+          "labels_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3"
+        },
+        "verified_value": {
+          "lf_opengrep_sha256": "3ea68283fdbece7425c6af9caf65cc0942031752c62eab6dc73820a31a920f7d",
+          "crlf_opengrep_sha256": "ba9967f3ae1dcbe940e8e7dea7df36ff873232fe5787f42c3fd2c84e066b1826",
+          "lf_labels_sha256": "1e7306127dbf5f91c62a7f143d047e4714aa6197624990a0c31c9dd3e9ddc1a4",
+          "crlf_labels_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3"
+        },
+        "verification_source": "Git blob bytes (LF) vs Windows CRLF working-tree normalization",
+        "root_cause": "Manifest hashed CRLF working-tree files prior to Git LF normalization"
+      },
+      {
+        "artifact": "v2/evaluation/post_report/DATASET_PROVENANCE.json",
+        "field": "pinned_ruleset.sha256",
+        "recorded_value": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+        "verified_value": {
+          "lf_sha256": "4519435641bf825c25dcec8196e60863c545bbb1943c5f37501c4d0e5894096e",
+          "crlf_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9"
+        },
+        "verification_source": "v2/evaluation/post_report/rules/p_java_cwe22_cwe89.yml",
+        "root_cause": "CRLF working-tree hash recorded before Git LF normalization"
+      }
+    ],
     "stage5_real_and_demo_20_breakdown": {
       "total_rows": 20,
       "webgoat_alerts": 11,
@@ -2629,6 +2771,14 @@
         "crlf_labels_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3"
       },
       {
+        "id": "LOCK-03",
+        "severity": "MEDIUM",
+        "title": "DATASET_PROVENANCE.json pinned_ruleset.sha256 records CRLF digest rather than Git LF blob digest",
+        "provenance_rule_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+        "checkout_lf_rule_sha256": "4519435641bf825c25dcec8196e60863c545bbb1943c5f37501c4d0e5894096e",
+        "crlf_rule_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9"
+      },
+      {
         "id": "DOC-04",
         "severity": "HIGH",
         "title": "CASE_STUDIES_CWE22_CWE89.md fabricates mechanisms/lines for BenchmarkTest00949, 01110 (claims valuesList), and 01215 (claims HashMap)"
@@ -2662,8 +2812,29 @@
   },
   "server_raw_evidence_audit": {
     "status": "NOT_VERIFIED",
-    "reason": "Raw ADMIN-PC server evidence directory is not mounted in this workspace; awaiting JavisOS execution receipt for the 10 assessments.jsonl artifacts.",
+    "reason": "Raw ADMIN-PC server evidence directory is not mounted in this workspace; cross-verified against JavisOS forensic receipt (e81c75681605034449820f5eb3fe7db9c2b4fcfc).",
     "verified_assessments_files": 0,
     "expected_assessments_files": 10
-  }
+  },
+  "javisos_server_receipt_cross_audit": {
+    "inspected_branch_commit": "e81c75681605034449820f5eb3fe7db9c2b4fcfc",
+    "server_host": "ADMIN-PC",
+    "attested_facts": {
+      "assessments_jsonl_files_verified": 10,
+      "total_assessment_records": 240,
+      "owasp_label_leakage_in_evidence": "0/240",
+      "raw_prompt_persistence_status": "PROMPT_NOT_ATTESTED (prompts not persisted; 116/116 v2.1 request_payload_sha256 replayed)",
+      "v2_1_arm_c_raw_qwen_concordance_with_heuristic": "76/76 (100.0%: 16/16 dev + 40/40 held-out + 20/20 stage5)",
+      "arm_d_ablation_without_signals": "40/40 raw SUPPORTED (6/40 post-citation UNDETERMINED)",
+      "historical_ground_truth_verifier_script": "HISTORICAL_GATE_NOT_REPRODUCED (external ops script checked 0 thesis artifacts)"
+    },
+    "discrepancies_caught_in_javisos_summary": [
+      {
+        "id": "JAVIS-CROSS-01",
+        "severity": "MEDIUM",
+        "detail": "SERVER_FORENSIC_AUDIT_SUMMARY_20261112.md line 41 misstates Arm B heldout40 as TP kept 8/20, FP refuted 8/20, drop_fp precision 20/32 (62.5%), keep_tp_only recall 8/20 (40.0%) while claiming 0 mismatches with PAIRED_EVALUATION.csv; actual PAIRED_EVALUATION.csv / METRICS_BY_CWE.csv values are TP kept 9/20, FP refuted 7/20, drop_fp precision 20/33 (60.6%), keep_tp_only recall 9/20 (45.0%)."
+      }
+    ]
+  },
+  "expected_exit_code": 1
 }

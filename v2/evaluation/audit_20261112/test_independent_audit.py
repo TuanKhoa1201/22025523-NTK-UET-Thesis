@@ -400,18 +400,23 @@ class IndependentAuditCounterfactualTests(unittest.TestCase):
             self.assertIn("wrong_model_id", err_types)
             self.assertIn("auto_dismissal_without_human_event", err_types)
 
-    def test_15_proves_heuristic_steering_and_unsound_startswith_sanitizer_in_triage_code(self) -> None:
+    def test_15_proves_remediated_v2_2_blocks_startswith_bypass_and_strips_prompt_steering(self) -> None:
+        # [REPRODUCES_OLD_BUG_NOW_FIXED]
         from v2.triage.heuristics import extract_evidence_signals
-        from v2.triage.ollama import request_payload
+        from v2.triage.ollama import legacy_v2_1_request_payload, request_payload
 
-        # Construct a genuinely vulnerable CWE-22 snippet that calls normalize() WITHOUT checking path prefix,
-        # while having an unrelated header.startsWith("Bearer ") on line 2!
+        # Construct a genuinely vulnerable CWE-22 method that calls normalize() WITHOUT checking path prefix,
+        # while having an unrelated token.startsWith("Bearer ") on an earlier line.
         vuln_lines = [
-            {"line": 1, "text": "String token = request.getHeader(\"Authorization\");"},
-            {"line": 2, "text": "if (token != null && token.startsWith(\"Bearer \")) {"},
-            {"line": 3, "text": "    String p = java.nio.file.Paths.get(request.getParameter(\"f\")).normalize().toString();"},
-            {"line": 4, "text": "    new java.io.FileInputStream(\"/var/data/\" + p);"},
-            {"line": 5, "text": "}"},
+            {"line": 1, "text": "public class Vuln {"},
+            {"line": 2, "text": "    public void handle(javax.servlet.http.HttpServletRequest request) throws Exception {"},
+            {"line": 3, "text": "        String token = request.getHeader(\"Authorization\");"},
+            {"line": 4, "text": "        if (token != null && token.startsWith(\"Bearer \")) {"},
+            {"line": 5, "text": "            String p = java.nio.file.Paths.get(request.getParameter(\"f\")).normalize().toString();"},
+            {"line": 6, "text": "            new java.io.FileInputStream(\"/var/data/\" + p);"},
+            {"line": 7, "text": "        }"},
+            {"line": 8, "text": "    }"},
+            {"line": 9, "text": "}"},
         ]
         record = {
             "id": "b" * 64,
@@ -420,15 +425,15 @@ class IndependentAuditCounterfactualTests(unittest.TestCase):
             "severity": "ERROR",
             "message": "path traversal",
             "path": "Vuln.java",
-            "start": {"line": 4},
-            "end": {"line": 4},
+            "start": {"line": 6},
+            "end": {"line": 6},
             "snapshots": {"Vuln.java": {"sha256": "c" * 64}},
             "snippets": [{
                 "role": "finding",
                 "path": "Vuln.java",
                 "sha256": "c" * 64,
                 "start": {"line": 1},
-                "end": {"line": 5},
+                "end": {"line": 9},
                 "lines": vuln_lines,
             }],
             "issues": [],
@@ -436,18 +441,367 @@ class IndependentAuditCounterfactualTests(unittest.TestCase):
         signals = extract_evidence_signals(record)
         record["heuristic_signals"] = signals
 
-        # Unsound sanitizer bug: unrelated `token.startsWith("Bearer ")` causes heuristics.py
-        # to classify `normalize()` as a valid CWE-22 sanitizer and steer Qwen to REFUTED!
-        self.assertEqual(signals["recommended_status"], "REFUTED")
-        self.assertTrue(any(s["name"] == "normalize_startsWith" for s in signals["sanitizers_found"]))
+        # Old v2.1 bug classified this real CWE-22 TP as REFUTED via `normalize_startsWith`.
+        # Patched v2.2-flow-grounded keeps it SUPPORTED and records zero effective sanitizers.
+        self.assertNotEqual(signals["recommended_status"], "REFUTED")
+        self.assertEqual(signals["recommended_status"], "SUPPORTED")
+        self.assertEqual(signals["sanitizers_found"], [])
 
-        # Verify ollama.py request_payload injects recommended_status + recommendation_reason + candidate_citations
+        # Active v2.2 request_payload strips heuristic verdict, rationale, and candidate_citations.
         payload = request_payload(record, ia.EXPECTED_MODEL_ID)
         user_msg = json.loads(payload["messages"][1]["content"])
         injected_signals = user_msg["evidence_signals"]
-        self.assertEqual(injected_signals["recommended_status"], "REFUTED")
-        self.assertIn("làm sạch đúng ngữ cảnh CWE-22", injected_signals["recommendation_reason"])
-        self.assertTrue(len(injected_signals["candidate_citations"]) >= 1)
+        self.assertNotIn("recommended_status", injected_signals)
+        self.assertNotIn("recommendation_reason", injected_signals)
+        self.assertNotIn("candidate_citations", injected_signals)
+        self.assertNotIn("sanitizers_found", injected_signals)
+
+        # Read-only forensic v2.1 replay helper retains historical steering structure for ADMIN-PC hash verification.
+        legacy_payload = legacy_v2_1_request_payload(record, ia.EXPECTED_MODEL_ID)
+        legacy_user_msg = json.loads(legacy_payload["messages"][1]["content"])
+        self.assertIn("recommended_status", legacy_user_msg["evidence_signals"])
+        self.assertIn("candidate_citations", legacy_user_msg["evidence_signals"])
+
+    def test_16_truncated_ollama_json_and_truncated_jsonl_fail_closed(self) -> None:
+        # [REPRODUCES_OLD_BUG_NOW_FIXED] Section XII #14
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "run_trunc"
+            run_dir.mkdir()
+            og_bytes = b'{"results":[{"check_id":"r1"}],"errors":[]}'
+            scan_sha = ia.sha256_bytes(og_bytes)
+            (run_dir / "input.opengrep.json").write_bytes(og_bytes)
+            aid = ia.canonical_alert_id(scan_sha, 0)
+
+            trunc_ollama_row = {
+                "schema_version": "1.1",
+                "id": aid,
+                "alert_id": aid,
+                "scan_sha256": scan_sha,
+                "finding_index": 0,
+                "state": "OPEN",
+                "evidence": {
+                    "id": aid,
+                    "scan_sha256": scan_sha,
+                    "finding_index": 0,
+                    "snapshots": self.sample_snapshots,
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "transport": "ollama-http",
+                    "model": ia.EXPECTED_MODEL_ID,
+                    "citations": [{
+                        "path": "Sample.java",
+                        "start_line": 6,
+                        "end_line": 6,
+                        "quote": self.sample_lines[5],
+                        "sha256": self.sample_sha,
+                    }],
+                    "runtime": {
+                        "origin": "unverified",
+                        "request_attempted": True,
+                        "http_response_received": True,
+                        "http_status": 200,
+                    },
+                    "raw_response": {
+                        "eval_count": 17,
+                        "done": True,
+                        "message": {"role": "assistant", "content": '{"status":"REFUTED","explanation":"trunc'},
+                    },
+                },
+            }
+            a_file = run_dir / "assessments.jsonl"
+            a_file.write_text(json.dumps(trunc_ollama_row) + "\n{truncated_jsonl_line\n", encoding="utf-8")
+
+            res = ia.audit_server_raw_evidence(root)
+            self.assertEqual(res["status"], "FAIL")
+            err_types = {e["type"] for e in res["errors"]}
+            self.assertIn("truncated_or_malformed_ollama_json", err_types)
+            self.assertIn("truncated_or_malformed_jsonl", err_types)
+
+    def test_17_missing_raw_opengrep_never_passes(self) -> None:
+        # [REPRODUCES_OLD_BUG_NOW_FIXED] Section XII #15
+        from v2.evaluation import verify_evidence_audit as vea
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            # Build 10 assessment files WITHOUT any raw *opengrep*.json files
+            for i in range(10):
+                rdir = root / f"run_{i:02d}"
+                rdir.mkdir()
+                scan_sha = f"{i:064x}"
+                aid = ia.canonical_alert_id(scan_sha, 0)
+                row = {
+                    "schema_version": "1.1",
+                    "id": aid,
+                    "alert_id": aid,
+                    "scan_sha256": scan_sha,
+                    "finding_index": 0,
+                    "state": "OPEN",
+                    "evidence": {"id": aid, "scan_sha256": scan_sha, "finding_index": 0, "snapshots": self.sample_snapshots},
+                    "assessment": {"status": "UNDETERMINED", "transport": "heuristic-only", "model": "heuristic", "citations": []},
+                }
+                (rdir / "assessments.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+            res_incomplete = ia.audit_server_raw_evidence(root, require_raw_opengrep=False)
+            self.assertEqual(res_incomplete["status"], "INCOMPLETE")
+            self.assertNotEqual(res_incomplete["status"], "PASS")
+            self.assertEqual(len(res_incomplete["missing_raw_opengrep_scans"]), 10)
+
+            res_strict_fail = ia.audit_server_raw_evidence(root, require_raw_opengrep=True)
+            self.assertEqual(res_strict_fail["status"], "FAIL")
+            self.assertTrue(any(e["type"] == "missing_raw_opengrep_scan" for e in res_strict_fail["errors"]))
+
+            vea_rep = vea.audit_scan_and_evidence(
+                opengrep_path=root / "nonexistent.opengrep.json",
+                assessments_path=root / "run_00" / "assessments.jsonl",
+                source_root=root,
+            )
+            self.assertEqual(vea_rep["audit_verdict"], "FAIL")
+
+    def test_18_corrupt_or_missing_ground_truth_fails_closed(self) -> None:
+        # [REPRODUCES_OLD_BUG_NOW_FIXED] Section XII #16
+        from v2.evaluation import verify_evidence_audit as vea
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tpath = Path(tmp)
+            # 1. Corrupt Ground Truth JSON passed to verify_evidence_audit must FAIL (previously swallowed Exception!)
+            corrupt_labels = tpath / "corrupt_labels.json"
+            corrupt_labels.write_text("{not_valid_json", encoding="utf-8")
+            rep_corrupt = vea.audit_scan_and_evidence(
+                opengrep_path=vea.DEFAULT_HISTORICAL_SCAN,
+                assessments_path=vea.DEFAULT_HISTORICAL_ASSESSMENTS,
+                source_root=vea.DEFAULT_SOURCE_ROOT,
+                labels_path=corrupt_labels,
+                expected_scan_sha=vea.EXPECTED_HISTORICAL_SCAN_SHA,
+            )
+            self.assertEqual(rep_corrupt["audit_verdict"], "FAIL")
+            self.assertTrue(any("Ground Truth / paired evaluation failed" in x for x in rep_corrupt["issues"]))
+
+            # 2. Missing Ground Truth file passed to verify_evidence_audit must FAIL
+            rep_missing = vea.audit_scan_and_evidence(
+                opengrep_path=vea.DEFAULT_HISTORICAL_SCAN,
+                assessments_path=vea.DEFAULT_HISTORICAL_ASSESSMENTS,
+                source_root=vea.DEFAULT_SOURCE_ROOT,
+                labels_path=tpath / "missing_labels.json",
+                expected_scan_sha=vea.EXPECTED_HISTORICAL_SCAN_SHA,
+            )
+            self.assertEqual(rep_missing["audit_verdict"], "FAIL")
+            self.assertTrue(any("Missing Ground Truth labels file" in x for x in rep_missing["issues"]))
+
+            # 3. Missing or corrupt expectedresults-1.2.csv in independent_audit must FAIL
+            res_missing_csv = ia.audit_owasp_labels(
+                self.dev_alerts,
+                self.dev_labels_json,
+                self.dev_labels_csv,
+                self.ho_alerts,
+                self.ho_labels_json,
+                self.ho_labels_csv,
+                self.owasp_ref,
+                expectedresults_csv_path=tpath / "missing_expectedresults.csv",
+            )
+            self.assertEqual(res_missing_csv["status"], "FAIL")
+            self.assertTrue(any(e["type"] == "missing_expectedresults_csv" for e in res_missing_csv["errors"]))
+
+    def test_19_sqlite_open_state_contradicting_confirm_false_event_fails(self) -> None:
+        # [REPRODUCES_OLD_BUG_NOW_FIXED] Section XII #17
+        from v2.evaluation import verify_evidence_audit as vea
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "run_sqlite"
+            run_dir.mkdir()
+            og_bytes = b'{"results":[{"check_id":"r1"}],"errors":[]}'
+            scan_sha = ia.sha256_bytes(og_bytes)
+            (run_dir / "input.opengrep.json").write_bytes(og_bytes)
+            aid = ia.canonical_alert_id(scan_sha, 0)
+
+            row = {
+                "schema_version": "1.1",
+                "id": aid,
+                "alert_id": aid,
+                "scan_sha256": scan_sha,
+                "finding_index": 0,
+                "state": "OPEN",
+                "evidence": {"id": aid, "scan_sha256": scan_sha, "finding_index": 0, "snapshots": self.sample_snapshots},
+                "assessment": {"status": "UNDETERMINED", "transport": "heuristic-only", "model": "heuristic", "citations": []},
+            }
+            (run_dir / "assessments.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+            db_path = run_dir / "review.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.executescript(
+                f"""
+                CREATE TABLE scans(id TEXT PRIMARY KEY, bundle TEXT NOT NULL);
+                CREATE TABLE warnings(id TEXT PRIMARY KEY, scan_id TEXT NOT NULL, evidence TEXT NOT NULL, assessment TEXT NOT NULL, state TEXT NOT NULL);
+                CREATE TABLE events(
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    warning_id TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    source_version TEXT,
+                    observed_version TEXT,
+                    evidence_sha256 TEXT
+                );
+                INSERT INTO scans VALUES ('{scan_sha}', '{{}}');
+                INSERT INTO warnings VALUES (
+                    '{aid}',
+                    '{scan_sha}',
+                    '{{"id":"{aid}"}}',
+                    '{{"status":"REFUTED","citation_check":"MATCHED"}}',
+                    'OPEN'
+                );
+                INSERT INTO events(warning_id, actor, timestamp, action, reason)
+                VALUES ('{aid}', 'reviewer-1', '2026-11-12T00:00:00Z', 'confirm-false', 'Marked FP but warning table tampered back to OPEN');
+                """
+            )
+            conn.commit()
+            conn.close()
+
+            # Both independent_audit and verify_evidence_audit must catch OPEN vs confirm-false contradiction!
+            res_ia = ia.audit_server_raw_evidence(root)
+            self.assertEqual(res_ia["status"], "FAIL")
+            self.assertTrue(any(e["type"] == "sqlite_state_event_mismatch" for e in res_ia["errors"]))
+
+            _, vea_issues = vea.audit_sqlite_queue(
+                sqlite_path=db_path,
+                active_scan_sha=scan_sha,
+                expected_records=[{"expected_alert_id": aid, "status": "REFUTED", "citation_check": "MATCHED"}],
+                source_root=run_dir,
+                actual_source_sha=self.sample_sha,
+                verify_lifecycle=False,
+            )
+            self.assertTrue(any("state 'OPEN' contradicts last event" in i for i in vea_issues), vea_issues)
+
+    def test_20_fail_closed_exit_code_contract_never_returns_zero_on_fail_or_incomplete(self) -> None:
+        # [REPRODUCES_OLD_BUG_NOW_FIXED] Section XI & Section XII #18
+        from v2.evaluation import verify_evidence_audit as vea
+
+        # 1. Pure PASS -> 0
+        self.assertEqual(
+            ia.resolve_acceptance_exit_code({
+                "overall_experimental_claims_status": "PASS",
+                "acceptance_criteria": {"c1": "PASS", "c2": "PASS"},
+                "label_audit": {"errors": []},
+                "recomputed_metrics": {"anomalies": []},
+                "reported_table_comparison": {"status": "PASS"},
+            }),
+            0,
+        )
+        # 2. INCOMPLETE / NOT_VERIFIED / PARTIAL without FAIL -> 2
+        self.assertEqual(
+            ia.resolve_acceptance_exit_code({
+                "overall_experimental_claims_status": "INCOMPLETE",
+                "acceptance_criteria": {"c1": "PASS", "c2": "NOT_VERIFIED"},
+                "label_audit": {"errors": []},
+                "recomputed_metrics": {"anomalies": []},
+                "reported_table_comparison": {"status": "PASS"},
+            }),
+            2,
+        )
+        # 3. Any FAIL (even alongside NOT_VERIFIED) -> 1 (FAIL takes precedence, never 0!)
+        self.assertEqual(
+            ia.resolve_acceptance_exit_code({
+                "overall_experimental_claims_status": "FAIL",
+                "acceptance_criteria": {"c1": "NOT_VERIFIED", "c2": "FAIL"},
+                "label_audit": {"errors": []},
+                "recomputed_metrics": {"anomalies": []},
+                "reported_table_comparison": {"status": "PASS"},
+            }),
+            1,
+        )
+
+        # 4. End-to-end CLI main() on historical repository data MUST return 1 (FAIL), never 0!
+        with tempfile.TemporaryDirectory() as tmp:
+            out_json = Path(tmp) / "summary_check.json"
+            rc = ia.main(["--output-json", str(out_json)])
+            self.assertEqual(rc, 1)
+            written = json.loads(out_json.read_text(encoding="utf-8"))
+            self.assertEqual(written["overall_experimental_claims_status"], "FAIL")
+            self.assertEqual(written["expected_exit_code"], 1)
+
+            # 5. verify_evidence_audit live mode with missing remote directory returns 2 (INCOMPLETE)
+            rc_live = vea.main(["--mode", "live", "--live-dir", str(Path(tmp) / "missing_admin_pc")])
+            self.assertEqual(rc_live, 2)
+
+    def test_21_three_tier_citation_provenance_rejects_posthoc_outside_prompt_quote(self) -> None:
+        # [REPRODUCES_OLD_BUG_NOW_FIXED] Section VII & Section XII #10
+        long_lines = ["package demo;", "public class BigFile {"]
+        for idx in range(3, 95):
+            long_lines.append(f"    int filler{idx} = {idx};")
+        long_lines.append("    public void vuln(String p) throws Exception {")  # 95
+        long_lines.append("        new java.io.FileInputStream(p);")  # 96 (sink)
+        long_lines.append("    }")  # 97
+        long_lines.append("    public String distantHelper(String x) { return org.apache.commons.io.FilenameUtils.getName(x); }")  # 98
+        long_lines.append("}")  # 99
+        long_sha = ia.sha256_text("\n".join(long_lines) + "\n")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "run_posthoc"
+            run_dir.mkdir()
+            og_bytes = b'{"results":[{"check_id":"r1"}],"errors":[]}'
+            scan_sha = ia.sha256_bytes(og_bytes)
+            (run_dir / "input.opengrep.json").write_bytes(og_bytes)
+            aid = ia.canonical_alert_id(scan_sha, 0)
+
+            # Snippet covers enclosing method lines 94..99 (as extracted by evidence.py),
+            # while full file snapshot has lines 1..99 — citing line 20 is post-hoc outside prompt!
+            snip_lines = [{"line": lno, "text": long_lines[lno - 1]} for lno in range(94, 100)]
+            row = {
+                "schema_version": "1.1",
+                "id": aid,
+                "alert_id": aid,
+                "scan_sha256": scan_sha,
+                "finding_index": 0,
+                "state": "OPEN",
+                "evidence": {
+                    "id": aid,
+                    "scan_sha256": scan_sha,
+                    "finding_index": 0,
+                    "path": "BigFile.java",
+                    "start": {"line": 96},
+                    "end": {"line": 96},
+                    "snapshots": {"BigFile.java": {"sha256": long_sha, "lines": long_lines}},
+                    "snippets": [{
+                        "role": "enclosing_method",
+                        "path": "BigFile.java",
+                        "sha256": long_sha,
+                        "start": {"line": 94},
+                        "end": {"line": 99},
+                        "focus_start": 96,
+                        "focus_end": 96,
+                        "lines": snip_lines,
+                    }],
+                },
+                "assessment": {
+                    "status": "REFUTED",
+                    "transport": "ollama-http",
+                    "model": ia.EXPECTED_MODEL_ID,
+                    "citations": [{
+                        "path": "BigFile.java",
+                        "start_line": 20,
+                        "end_line": 20,
+                        "quote": long_lines[19],
+                        "sha256": long_sha,
+                    }],
+                    "runtime": {
+                        "origin": "unverified",
+                        "request_attempted": True,
+                        "http_response_received": True,
+                        "http_status": 200,
+                    },
+                    "raw_response": {"eval_count": 30, "done": True},
+                },
+            }
+            (run_dir / "assessments.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+            res = ia.audit_server_raw_evidence(root)
+            self.assertEqual(res["status"], "FAIL")
+            self.assertTrue(any(e["type"] == "citation_outside_prompt_window" for e in res["errors"]))
+            self.assertEqual(res["assessment_receipts"][0]["rows_with_posthoc_only_citations"], 1)
 
 
 if __name__ == "__main__":
