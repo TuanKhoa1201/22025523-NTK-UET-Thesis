@@ -1,0 +1,77 @@
+{
+  "schema": "ntk.g0_server_final_handoff_summary.v1",
+  "generated_at": "2026-11-13T01:12:00+07:00",
+  "branch": "v2/javis-benchmark",
+  "base_commit_before_handoff": "955edab4a03def71850f095918ce2890d5e544e0",
+  "audited_worktree_commit": "86636b9de22e59efcca2d3786434727c6ae082e4",
+  "scope": "Java CWE-22 and CWE-89 only (OpenGrep + local Ollama qwen3.5:9b-q4_K_M)",
+  "four_axis_final_conclusion": {
+    "A_technical_server_audit": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "passed_criteria": "9/9",
+      "historical_immutability_verified": true,
+      "inventoried_evidence_files": 263
+    },
+    "B_ground_truth_attestation": {
+      "owasp_56_labels_and_cwe_verdict": "VERIFIED",
+      "owasp_56_java_rationale_prose_verdict": "CONDITIONAL_9_EXPLANATION_DISCREPANCIES_LOGGED",
+      "real_projects_4_manual_fps_verdict": "CONDITIONAL_AND_LABEL_REVIEW_REQUIRED",
+      "real_projects_4_manual_fps_breakdown": {
+        "finding_08_WebGoat_SqlInjectionLesson8_line_154": {
+          "status": "CONDITIONAL",
+          "confidence": "MEDIUM",
+          "condition": "Safe in WebGoat default HSQLDB dialect where backslash escaping is disabled; action.replace('\\'', '\"') is dialect-dependent"
+        },
+        "finding_09_WebGoat_SqlInjectionLesson8_line_158": {
+          "status": "CONDITIONAL",
+          "confidence": "MEDIUM",
+          "condition": "Paired executeUpdate sink consuming logQuery from line 154 after action.replace('\\'', '\"') in HSQLDB"
+        },
+        "finding_10_WebGoat_UserService_line_52": {
+          "status": "LABEL_REVIEW_REQUIRED",
+          "confidence": "LOW",
+          "condition": "Zero local sanitization in UserService.java; @Pattern([a-z0-9-]*) is in UserForm.java:20 on RegistrationController.registration, whereas RegistrationController.registrationOAUTH:54 calls addUser directly without UserForm"
+        },
+        "finding_15_demo_UserDao_line_63": {
+          "status": "CONDITIONAL",
+          "confidence": "MEDIUM",
+          "condition": "Downgraded from HIGH to CONDITIONAL_MEDIUM: getCanonicalPath().startsWith(BASE_DIR) relies on literal trailing '/' in BASE_DIR='/var/app/files/' on POSIX non-symlink dir; fails on Windows ('\\' separator), fails if BASE_DIR is a symlink, and returns uncanonicalized File f at line 67 (TOCTOU)"
+        }
+      }
+    },
+    "C_independent_contribution_of_qwen": {
+      "verdict": "CONFOUNDED",
+      "concordance_with_heuristic_recommended_status_v2_1": "76/76 (100.0%)",
+      "heldout_40_arm_c_concordance": "40/40 (100.0%)",
+      "real_projects_20_arm_c_concordance": "20/20 (100.0%)",
+      "heldout_40_arm_d_unsteered_raw_qwen_output": "40/40 SUPPORTED (0/20 FP refuted; 9/40 downgraded to UNDETERMINED by post-LLM citation validator: 3 TP + 6 FP)",
+      "reason": "v2/triage/ollama.py injects heuristic_signals (including recommended_status, recommendation_reason, candidate_citations) into evidence_signals in the Arm C prompt, where extract_evidence_signals already solved 40/40 OWASP held-out cases deterministically"
+    },
+    "D_conditions_to_close_g0_with_codex_and_antigravity": {
+      "javis_server_audit_deliverables_complete": true,
+      "conditions": [
+        "Codex acknowledges ISS-01/ISS-02 (heuristic_signals.recommended_status steering in Arm C) and ISS-03 (post-sink line_no <= sink_line filter in heuristics.py) for G1 planning",
+        "Antigravity updates G3 documentation to fix 9-rule count, dev_set_16 SHA ecc1fa46..., expectedresults-1.2.csv SHA 1809f6a6..., UserForm.java:20 attribution, 9 OWASP Java mechanism explanations (especially BenchmarkTest01746, 01752, 00863), and reports Arm C as a guided hybrid system rather than unsteered standalone LLM reasoning"
+      ]
+    }
+  },
+  "criteria_verdicts": {
+    "C01_historical_immutability": "PASS",
+    "C02_opengrep_three_scans_and_9_rules": "PASS",
+    "C03_ollama_10_assessments_and_6_checkpoints": "PASS",
+    "C04_citations_and_post_validator_integrity": "PASS",
+    "C05_paired_evaluation_per_alert_table": "PASS",
+    "C06_ground_truth_56_owasp_and_20_real_projects": "PASS",
+    "C07_sqlite_readonly_and_stale_source_lifecycle": "PASS",
+    "C08_guided_llm_confounder_and_zero_label_leakage": "PASS",
+    "C09_metrics_recomputation_alignment": "PASS"
+  },
+  "attestation_limits": {
+    "ollama_runtime": "OLLAMA_SELF_REPORTED_LOCAL_HTTP_UNATTESTED",
+    "independently_verified_model_runtime": false,
+    "prompt_attestation": "PROMPT_NOT_ATTESTED",
+    "frozen_v2_1_request_payload_sha256_matches": "116/116",
+    "pre_v2_1_request_payload_sha256_matches": "0/42"
+  }
+}

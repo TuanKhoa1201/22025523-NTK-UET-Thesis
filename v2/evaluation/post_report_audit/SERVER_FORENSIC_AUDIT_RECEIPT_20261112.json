@@ -70,15 +70,24 @@
     "real_projects_alerts": 20,
     "real_projects_unique_loci": 12,
     "real_projects_manual_fp_confidence": {
-      "finding_8_SqlInjectionLesson8": "MEDIUM",
-      "finding_9_SqlInjectionLesson8": "MEDIUM",
-      "finding_10_UserService": "MEDIUM_LOW",
-      "finding_15_UserDao": "HIGH"
+      "finding_8_SqlInjectionLesson8": "CONDITIONAL_MEDIUM",
+      "finding_9_SqlInjectionLesson8": "CONDITIONAL_MEDIUM",
+      "finding_10_UserService": "LABEL_REVIEW_REQUIRED_LOW",
+      "finding_15_UserDao": "CONDITIONAL_MEDIUM"
     }
   },
   "task_e_metrics_recomputation": {
     "paired_evaluation_csv_mismatches": 0,
     "sqlite_evaluation_human_events": 0,
+    "heldout_40_arm_b": {
+      "tp_kept": "9/20",
+      "fp_proposed_refuted": "7/20",
+      "tp_erroneously_refuted": "0/20",
+      "undetermined": "24/40",
+      "drop_fp_precision": "20/33",
+      "keep_tp_only_precision": "9/9",
+      "keep_tp_only_recall": "9/20"
+    },
     "heldout_40_arm_c": {
       "tp_kept": "20/20",
       "fp_proposed_refuted": "20/20",

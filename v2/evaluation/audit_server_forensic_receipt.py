@@ -152,34 +152,38 @@ REAL_PROJECT_MANUAL_LABELS: dict[int, dict[str, Any]] = {
     8: {
         "label": "FALSE_POSITIVE",
         "locus": "WebGoat/SqlInjectionLesson8.java:log_insert",
-        "confidence": "MEDIUM",
+        "confidence": "CONDITIONAL_MEDIUM",
         "independent_evidence": (
-            "Line 148 executes action = action.replace('\\'', '\"') prior to single-quoted HSQLDB literal "
-            "INSERT at lines 154/158. In WebGoat's default HSQLDB dialect (standard SQL quoting without MySQL "
-            "backslash-escape), single-quote breakout is neutralized; however, String.replace is dialect-specific "
-            "defense rather than PreparedStatement parameterization."
+            "Flow: @RequestParam(name, auth_tan) line 59 -> injectableQueryConfidentiality builds query lines 65-70 "
+            "-> log(connection, query) line 77 -> action = action.replace('\\'', '\"') line 148 -> "
+            "logQuery = \"INSERT INTO access_log (time, action) VALUES ('\" + time + \"', '\" + action + \"')\" line 154. "
+            "In WebGoat's default HSQLDB dialect (standard SQL single-quote escaping without backslash escape), "
+            "single-quote breakout is neutralized; however, log(Connection, String) is public static and dialect-dependent "
+            "(vulnerable if called on a connection with MySQL backslash escaping enabled)."
         ),
     },
     9: {
         "label": "FALSE_POSITIVE",
         "locus": "WebGoat/SqlInjectionLesson8.java:log_insert",
-        "confidence": "MEDIUM",
+        "confidence": "CONDITIONAL_MEDIUM",
         "independent_evidence": (
-            "Paired executeUpdate sink at line 158 consuming logQuery built at line 154 after line 148 "
-            "action.replace('\\'', '\"'). Unexploitable in default HSQLDB lesson context, though non-parameterized."
+            "Paired executeUpdate(logQuery) sink at line 158 consuming logQuery built at line 154 after line 148 "
+            "action.replace('\\'', '\"'). Unexploitable in default HSQLDB lesson context, but CONDITIONAL on SQL dialect "
+            "having backslash-escaping disabled and non-parameterized."
         ),
     },
     10: {
         "label": "FALSE_POSITIVE",
         "locus": "WebGoat/UserService.java:createLessonsForUser",
-        "confidence": "MEDIUM_LOW",
+        "confidence": "LABEL_REVIEW_REQUIRED_LOW",
         "independent_evidence": (
-            "Line 52 concatenates webGoatUser.getUsername() into CREATE SCHEMA \"...\" authorization dba. "
-            "Form registration (RegistrationController.registration -> @Valid UserForm, UserForm.java:20) enforces "
-            "@Pattern(regexp = \"[a-z0-9-]*\"), preventing quote injection on /register.mvc. However, note two "
-            "forensic nuances: (1) Stage 5/7 prose docs misattributed @Pattern to WebGoatUser.java instead of "
+            "Flow: addUser(String username, String password) line 39 -> createLessonsForUser(webGoatUser) line 47 -> "
+            "jdbcTemplate.execute(\"CREATE SCHEMA \\\"\" + webGoatUser.getUsername() + \"\\\" authorization dba\") line 52. "
+            "UserService.java has zero local sanitization. Form registration (RegistrationController.registration -> "
+            "@Valid UserForm, UserForm.java:20) enforces @Pattern(regexp = \"[a-z0-9-]*\"), preventing double-quote breakout "
+            "on /register.mvc. However: (1) Stage 5/7 prose docs misattributed @Pattern to WebGoatUser.java instead of "
             "UserForm.java; (2) RegistrationController.registrationOAUTH (line 54) calls userService.addUser("
-            "authentication.getName(), ...) without UserForm validation, making safety caller-dependent."
+            "authentication.getName(), ...) without UserForm validation, making safety strictly caller-dependent."
         ),
     },
     11: {"label": "TRUE_POSITIVE", "locus": "demo/UserDao.java:findUnsafe", "confidence": "HIGH"},
@@ -189,12 +193,16 @@ REAL_PROJECT_MANUAL_LABELS: dict[int, dict[str, Any]] = {
     15: {
         "label": "FALSE_POSITIVE",
         "locus": "demo/UserDao.java:open_canonical_guard",
-        "confidence": "HIGH",
+        "confidence": "CONDITIONAL_MEDIUM",
         "independent_evidence": (
-            "Line 63 constructs File f = new File(BASE_DIR + fileName) with BASE_DIR = \"/var/app/files/\" "
-            "(trailing slash prevents sibling-prefix bypass), performs zero filesystem I/O before line 64 "
-            "if (!f.getCanonicalPath().startsWith(BASE_DIR)) throw new IOException(\"blocked\"), and only returns "
-            "f at line 67 if canonical prefix check passes."
+            "Flow: String fileName = request.getParameter(\"f\") line 62 -> File f = new File(BASE_DIR + fileName) line 63 "
+            "(BASE_DIR = \"/var/app/files/\" line 17) -> if (!f.getCanonicalPath().startsWith(BASE_DIR)) throw new IOException(\"blocked\") "
+            "lines 64-66 -> return f line 67. Downgraded from unconditional HIGH to CONDITIONAL_MEDIUM because raw string "
+            "getCanonicalPath().startsWith(BASE_DIR) is weaker than Path.toRealPath().startsWith(realBase): while the literal "
+            "trailing slash in BASE_DIR (\"/var/app/files/\") blocks sibling-prefix bypass (/var/app/files_sibling) on POSIX "
+            "when /var/app/files is a real directory, (a) on Windows (ADMIN-PC host) getCanonicalPath() returns C:\\\\var\\\\app\\\\files\\\\... "
+            "with backslashes which never starts with BASE_DIR, (b) BASE_DIR itself is not canonicalized so a symlinked "
+            "/var/app/files breaks the check, and (c) line 67 returns uncanonicalized File f (TOCTOU window before caller I/O)."
         ),
     },
     16: {"label": "TRUE_POSITIVE", "locus": "java-sec-code/SQLI.java:jdbc_sqli_vul", "confidence": "HIGH"},
@@ -1307,16 +1315,114 @@ def audit_ground_truth_labels(
                 mismatches.append({"file": fname, "lines": f"{sl}-{el}", "span": span_txt, "reason": "No recognizable sink token"})
 
             full_java = "\n".join(lines)
-            if "scr.getTheValue(" in full_java and "ThingFactory.createThing()" in full_java:
+            rat_txt = str(item.get("annotator_rationale") or item.get("rationale") or "")
+            san_tag = str(item.get("sanitizer_or_reason") or "")
+            if fname == "BenchmarkTest00863.java":
                 rationale_notes.append(
                     {
                         "file": fname,
                         "owasp_label": owasp_ref["expected_label"],
+                        "recorded_sanitizer_or_reason": san_tag,
+                        "issue_type": "INACCURATE_JAVA_MECHANISM_EXPLANATION",
+                        "note": (
+                            "Label FALSE_POSITIVE matches OWASP CSV, but `labels_development.json` and "
+                            "`LABELING_PROTOCOL.md` line 27 misattribute safety to `ThingInterface.doSomething` "
+                            "returning a constant (`external_thing_interface_constant_return`). In reality, "
+                            "`Thing1`/`Thing2` pass input through; the actual safe mechanism in Java is line 45 "
+                            "`scr.getTheValue(\"BenchmarkTest00863\")` returning constant `\"bar\"`."
+                        ),
+                    }
+                )
+            elif fname == "BenchmarkTest00864.java":
+                rationale_notes.append(
+                    {
+                        "file": fname,
+                        "owasp_label": owasp_ref["expected_label"],
+                        "recorded_sanitizer_or_reason": san_tag,
+                        "issue_type": "INCOMPLETE_DUAL_SAFE_MECHANISM_EXPLANATION",
+                        "note": (
+                            "Label FALSE_POSITIVE matches OWASP CSV. Has dual safe mechanisms: line 45 "
+                            "`scr.getTheValue(\"BenchmarkTest00864\")` returns constant `\"bar\"`, AND lines 54-56 "
+                            "`valuesList.remove(0)` + `valuesList.get(1)` selects constant `\"moresafe\"`. "
+                            "`labels_heldout.json` calls line 44 an HTTP input read without noting `scr.getTheValue` is constant."
+                        ),
+                    }
+                )
+            elif fname == "BenchmarkTest01746.java":
+                rationale_notes.append(
+                    {
+                        "file": fname,
+                        "owasp_label": owasp_ref["expected_label"],
+                        "recorded_sanitizer_or_reason": san_tag,
+                        "issue_type": "FACTUALLY_WRONG_ARITHMETIC_TERNARY_EXPLANATION",
+                        "note": (
+                            "Label FALSE_POSITIVE matches OWASP CSV, but `labels_heldout.json` (lines 707-708) "
+                            "falsely claims line 96 evaluates `(7 * 18) + num > 200` (`true`) to assign a constant. "
+                            "In actual Java line 96 (`bar = (7 * 42) - num > 200 ? \"This should never happen\" : param;` "
+                            "with `num = 106`), `(7 * 42) - 106 = 188 <= 200` (`false`), which selects `param`! "
+                            "The true reason `BenchmarkTest01746` is FALSE_POSITIVE is line 45 "
+                            "`scr.getTheValue(\"BenchmarkTest01746\")` returning constant `\"bar\"`."
+                        ),
+                    }
+                )
+            elif fname == "BenchmarkTest01752.java":
+                rationale_notes.append(
+                    {
+                        "file": fname,
+                        "owasp_label": owasp_ref["expected_label"],
+                        "recorded_sanitizer_or_reason": san_tag,
+                        "issue_type": "INACCURATE_MAP_OVERWRITE_EXPLANATION",
+                        "note": (
+                            "Label FALSE_POSITIVE matches OWASP CSV, but `labels_heldout.json` (lines 725-726) "
+                            "claims value reaching sink line 60 is overwritten/neutralized in `Test.doSomething`. "
+                            "In actual Java lines 78-81, `map11351.put(\"keyB-11351\", param)` and "
+                            "`map11351.get(\"keyB-11351\")` return `param` (taint-preserving!). The true reason "
+                            "`BenchmarkTest01752` is FALSE_POSITIVE is line 45 `scr.getTheValue(\"BenchmarkTest01752\")` "
+                            "returning constant `\"bar\"`."
+                        ),
+                    }
+                )
+            elif fname in ("BenchmarkTest00062.java", "BenchmarkTest01006.java", "BenchmarkTest01156.java") and "no_sanitizer_direct" in san_tag:
+                rationale_notes.append(
+                    {
+                        "file": fname,
+                        "owasp_label": owasp_ref["expected_label"],
+                        "recorded_sanitizer_or_reason": san_tag,
+                        "issue_type": "GENERIC_TEMPLATE_OMITTING_MAP_KEYB_TAINT_FLOW",
+                        "note": (
+                            "Label TRUE_POSITIVE matches OWASP CSV, but `labels_heldout.json` uses generic "
+                            "`no_sanitizer_direct_or_intrafile_taint_flow` (`Direct flow from source to sink`) "
+                            "instead of documenting that `param` flows through `HashMap.put(\"keyB-...\", param)` "
+                            "and `HashMap.get(\"keyB-...\")` (`map_key_tainted_value`)."
+                        ),
+                    }
+                )
+            elif fname in ("BenchmarkTest00949.java", "BenchmarkTest00950.java") and "no_sanitizer_direct" in san_tag:
+                rationale_notes.append(
+                    {
+                        "file": fname,
+                        "owasp_label": owasp_ref["expected_label"],
+                        "recorded_sanitizer_or_reason": san_tag,
+                        "issue_type": "GENERIC_TEMPLATE_OMITTING_INNER_CLASS_ARITHMETIC_TERNARY_FLOW",
+                        "note": (
+                            "Label TRUE_POSITIVE matches OWASP CSV, but `labels_*.json` uses generic "
+                            "`no_sanitizer_direct_or_intrafile_taint_flow` instead of documenting that `param` "
+                            "passes into inner class `new Test().doSomething(request, param)` where `(7 * 42) - 106 = 188 <= 200` "
+                            "evaluates to `false` and returns `param`."
+                        ),
+                    }
+                )
+            elif "scr.getTheValue(" in full_java and "ThingFactory.createThing()" in full_java:
+                rationale_notes.append(
+                    {
+                        "file": fname,
+                        "owasp_label": owasp_ref["expected_label"],
+                        "recorded_sanitizer_or_reason": san_tag,
+                        "issue_type": "INACCURATE_JAVA_MECHANISM_EXPLANATION",
                         "note": (
                             "Label FALSE_POSITIVE matches OWASP CSV, and actual safe mechanism in Java is "
                             "`SeparateClassRequest.getTheValue(...)` (which returns constant `\"bar\"` in "
-                            "`SeparateClassRequest.java:51`), whereas `Thing1`/`Thing2` pass input through. "
-                            "Note `LABELING_PROTOCOL.md` line 27 misdescribed `ThingInterface` as returning a constant."
+                            "`SeparateClassRequest.java:51`), whereas `Thing1`/`Thing2` pass input through."
                         ),
                     }
                 )
@@ -2281,6 +2387,24 @@ def write_markdown_deliverables(
             f"| `{fp_item['finding_index']}` | `{fp_item['file_path']}:{fp_item['lines']}` | `{fp_item['cwe']}` | "
             f"`{fp_item['confidence']}` | {fp_item['independent_evidence']} |"
         )
+    all_rat_notes = (
+        gt_labels_audit["dev_set_16_audit"].get("forensic_rationale_notes", [])
+        + gt_labels_audit["heldout_set_40_audit"].get("forensic_rationale_notes", [])
+    )
+    if all_rat_notes:
+        lines6.extend(
+            [
+                "",
+                "## Tách Biệt Độ Khớp Nhãn OWASP (`56/56`) Và Lỗi Giải Thích Cơ Chế Java Trong `labels_*.json` / `LABELING_PROTOCOL.md`",
+                "",
+                "| Tệp Benchmark | Nhãn OWASP | Loại lỗi giải thích | Phân tích đối chiếu mã nguồn Java thực tế |",
+                "|---|---|---|---|",
+            ]
+        )
+        for rn in all_rat_notes:
+            lines6.append(
+                f"| `{rn['file']}` | `{rn['owasp_label']}` | `{rn.get('issue_type', 'NOTE')}` | {rn['note']} |"
+            )
     (out_dir / "06_owasp_and_manual_ground_truth_audit.md").write_text("\n".join(lines6) + "\n", encoding="utf-8")
 
     # 7. Independent Metrics Recomputation CSV + MD
