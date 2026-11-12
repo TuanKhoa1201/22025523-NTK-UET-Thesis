@@ -1,0 +1,103 @@
+{
+  "schema": "ntk.server_forensic_audit_summary.v1",
+  "audited_at": "2026-11-12T16:20:00+07:00",
+  "audited_branch": "v2/post-report-cwe22-cwe89-20261112",
+  "audited_commit": "86636b9de22e59efcca2d3786434727c6ae082e4",
+  "historical_evidence_immutability": {
+    "inventoried_files": 263,
+    "zero_mutation_verified": true
+  },
+  "task_a_raw_scans": {
+    "ruleset_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+    "actual_rule_count": 9,
+    "opengrep_version": "1.25.0",
+    "opengrep_windows_exe_sha256": "b010709bb790086083442eabe9a0b6bf48064ed87cdf808591baecdb60ccdf73",
+    "scans": {
+      "stage1_dev_set_16_scan": {
+        "sha256": "ecc1fa4634bfc86266c43dd6790422546367293d1810712fddc7c0d15a6c015f",
+        "manifest_sha256": "67d708880cb7a93f972586a137c159fff478783788c0bcb1a30d6cb866e8f298",
+        "findings": 16,
+        "errors": 0,
+        "matched_expected": true
+      },
+      "stage1_heldout_set_40_scan": {
+        "sha256": "67c3b04903e75f4bd7294cb17452d0dcb2b6d56244330cec485c4422efabfa8b",
+        "manifest_sha256": "3f5488d9a8de308b33111b5b5b88fd2bf6342ff3a18d8b9458b6936725b64fab",
+        "findings": 40,
+        "errors": 0,
+        "matched_expected": true
+      },
+      "stage5_real_projects_scan": {
+        "sha256": "99d2445c218030fb10082176c299bc328eeb62c6b23c7ab745cffd824f31f041",
+        "manifest_sha256": "688083ecec3e04bc03d2e6ae5f958c7df3bdf1c69af0b2971c574abb7f4b90b6",
+        "findings": 20,
+        "errors": 0,
+        "matched_expected": true
+      }
+    }
+  },
+  "task_b_ollama_assessments": {
+    "assessments_jsonl_files": 10,
+    "total_records": 240,
+    "malformed_lines": 0,
+    "llm_http_200_completed_records": 158,
+    "pre_llm_clicall_blocked_records": 6,
+    "heuristic_only_records": 76,
+    "prompt_attestation_status": "PROMPT_NOT_ATTESTED",
+    "frozen_v2_1_request_payload_sha256_verified": "116/116",
+    "ollama_attestation_level": "OLLAMA_SELF_REPORTED_LOCAL_HTTP_UNATTESTED",
+    "ground_truth_leakage_in_evidence": 0,
+    "arm_c_v2_1_concordance_with_heuristic_recommended_status": "76/76",
+    "arm_d_heldout40_raw_supported_vs_post_validator": {
+      "raw_supported": 40,
+      "post_validator_supported": 31,
+      "post_validator_undetermined_from_citation_mismatch": 9
+    }
+  },
+  "task_c_historical_ground_truth_verifier": {
+    "thesis_reproduction_status": "HISTORICAL_GATE_NOT_REPRODUCED",
+    "present_in_thesis_repo": false,
+    "located_host_script_sha256": "b16796e4bc4b7a2f4040988533db1ef04527507e0fb6f0afea185b073dae171c",
+    "historical_receipt_sha256": "56e9c1d2b5e926043c192697403182e74eca6c757fe593d8eec002dfa577d424",
+    "thesis_artifacts_checked": 0
+  },
+  "task_d_ground_truth_labels": {
+    "owasp_expectedresults_csv_sha256": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1",
+    "dev_16_owasp_matches": "16/16",
+    "heldout_40_owasp_matches": "40/40",
+    "dev_heldout_overlap": 0,
+    "heldout_strict_lock_sha256": "4fb556371eb9eb520aec6df96e4a151685df261025b2893eb7bae51c435bca09",
+    "real_projects_alerts": 20,
+    "real_projects_unique_loci": 12,
+    "real_projects_manual_fp_confidence": {
+      "finding_8_SqlInjectionLesson8": "MEDIUM",
+      "finding_9_SqlInjectionLesson8": "MEDIUM",
+      "finding_10_UserService": "MEDIUM_LOW",
+      "finding_15_UserDao": "HIGH"
+    }
+  },
+  "task_e_metrics_recomputation": {
+    "paired_evaluation_csv_mismatches": 0,
+    "sqlite_evaluation_human_events": 0,
+    "heldout_40_arm_c": {
+      "tp_kept": "20/20",
+      "fp_proposed_refuted": "20/20",
+      "tp_erroneously_refuted": "0/20",
+      "undetermined": "0/40",
+      "valid_citations": "40/40"
+    },
+    "real_projects_20_arm_c": {
+      "tp_kept": "16/16",
+      "fp_proposed_refuted": "0/4",
+      "fp_kept_supported": "4/4",
+      "undetermined": "0/20",
+      "valid_citations": "20/20"
+    }
+  },
+  "task_f_doc_discrepancies_found": [
+    "Stage 7 handover & Chapter 4 draft state 14 rules instead of 9 in p_java_cwe22_cwe89.yml",
+    "Chapter 4 draft cites non-existent dev_set_16 scan hash c1be1d5e... instead of ecc1fa46...",
+    "Stage 7 handover cites non-existent expectedresults-1.2.csv hash 353762c7... instead of 1809f6a6...",
+    "Stage 5/7 prose attributes @Pattern to WebGoatUser.java instead of UserForm.java:20, and LABELING_PROTOCOL.md attributes BenchmarkTest00863 constant return to ThingInterface instead of SeparateClassRequest.getTheValue"
+  ]
+}
