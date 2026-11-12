@@ -2,10 +2,11 @@
 import json
 import re
 import time
+from pathlib import Path
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, ProxyHandler, HTTPRedirectHandler, build_opener
-from .evidence import EvidenceError, strict_json, check_current, now, digest
+from .evidence import EvidenceError, StaleSourceError, strict_json, check_current, now, digest
 from .runtime import execution
 
 
@@ -60,7 +61,7 @@ DERIVED_ANALYSIS_KEYS = frozenset({
 PROMPT_CONTRACT_BLIND = "blind"
 PROMPT_CONTRACT_NEUTRAL_HINTS = "neutral_hints"
 PROMPT_CONTRACTS = (PROMPT_CONTRACT_BLIND, PROMPT_CONTRACT_NEUTRAL_HINTS)
-DEFAULT_PROMPT_CONTRACT = PROMPT_CONTRACT_NEUTRAL_HINTS
+DEFAULT_PROMPT_CONTRACT = PROMPT_CONTRACT_BLIND
 
 NEUTRAL_HINT_WHITELIST = ("source_line", "sink_line", "source_kind", "unresolved_external_calls")
 SOURCE_KIND_VALUES = frozenset({"HTTP_SERVLET_INPUT", "METHOD_OR_EXTERNAL_INPUT"})
@@ -72,18 +73,62 @@ _METHOD_SUMMARY_FIELDS = (
     "name", "owner_class", "signature", "return_type", "parameters", "annotations",
     "header_line", "start_line", "end_line", "is_entrypoint",
 )
+_SNIPPET_WHITELIST_KEYS = ("role", "path", "raw_path", "start", "end", "sha256", "lines")
+_LOC_POINT_KEYS = ("line", "col", "offset")
+_SNIPPET_LINE_KEYS = ("line", "text")
+_TRACE_STEP_KEYS = ("role", "path", "start_line", "end_line")
+_JAVA_CTX_SUMMARY_KEYS = ("enclosing_class", "enclosing_method", "same_file_callees")
+_UNRESOLVED_CALL_KEYS = ("method", "line", "qualifier")
+_EVIDENCE_BASE_KEYS = frozenset({
+    "rule_id", "cwe", "severity", "start", "end", "snippets", "trace_steps", "java_context_summary",
+})
+GROUND_TRUTH_FORBIDDEN_KEYS = frozenset({
+    "ground_truth",
+    "expected_result",
+    "expected_status",
+    "is_vulnerable",
+    "real_vulnerability",
+    "benchmark_label",
+    "gold_label",
+    "label",
+    "true_positive",
+    "false_positive",
+    "answer_key",
+})
 _PROMPT_SOURCE_TEXT_KEYS = frozenset({
     # verbatim source-derived strings (the model already sees the same code in snippets)
     "text", "matched", "signature", "parameters", "annotations", "return_type", "name",
     "owner_class", "enclosing_class", "qualifier", "method", "path", "raw_path", "rule_id",
 })
-_FORBIDDEN_PROMPT_KEYS = STEERING_SIGNAL_KEYS | DERIVED_ANALYSIS_KEYS
+_FORBIDDEN_PROMPT_KEYS = STEERING_SIGNAL_KEYS | DERIVED_ANALYSIS_KEYS | GROUND_TRUTH_FORBIDDEN_KEYS
 _VERDICT_TOKEN_RE = re.compile(r"\b(?:SUPPORTED|REFUTED|UNDETERMINED|SAFE_CONST(?:ANT)?|TAINTED|SANITIZED_CWE\d+)\b")
 
 
+def _extract_raw_model_status(content):
+    """Extract raw model-emitted status string prior to validator checks, without altering it."""
+    if not isinstance(content, str) or not content.strip():
+        return None
+    try:
+        parsed = json.loads(content)
+    except (ValueError, TypeError, RecursionError):
+        return None
+    if isinstance(parsed, dict) and isinstance(parsed.get("status"), str):
+        return parsed["status"]
+    return None
+
+
 def undecided(reason, **provenance):
+    raw_model_status = provenance.pop("raw_model_status", None)
+    failure_kind = provenance.pop("failure_kind", None)
+    if failure_kind is None:
+        failure_kind = "DISABLED" if provenance.get("transport") == "disabled" else "UNDETERMINED_FALLBACK"
+    validator_downgraded = bool(raw_model_status in STATUSES and raw_model_status != "UNDETERMINED")
     return {
         "status": "UNDETERMINED",
+        "raw_model_status": raw_model_status,
+        "validated_status": "UNDETERMINED",
+        "validator_downgraded": validator_downgraded,
+        "failure_kind": failure_kind,
         "explanation": reason,
         "citations": [],
         "fix_suggestion": "",
@@ -184,6 +229,35 @@ def _is_executable_java_span(lines_text):
     return len(meaningful) > 0
 
 
+def _project_loc_point(pt):
+    if not isinstance(pt, dict):
+        return None
+    out = {}
+    for k in _LOC_POINT_KEYS:
+        if k in pt and type(pt[k]) is int:
+            out[k] = pt[k]
+    return out
+
+
+def _project_snippet(s, lines_override=None):
+    if not isinstance(s, dict):
+        return {}
+    out = {}
+    for k in ("role", "path", "raw_path", "sha256"):
+        if k in s and isinstance(s[k], str):
+            out[k] = s[k]
+    for k in ("start", "end"):
+        if k in s and isinstance(s[k], dict):
+            out[k] = _project_loc_point(s[k])
+    raw_lines = s.get("lines") if lines_override is None else lines_override
+    clean_lines = []
+    for ln in raw_lines or []:
+        if isinstance(ln, dict) and type(ln.get("line")) is int and isinstance(ln.get("text"), str):
+            clean_lines.append({"line": ln["line"], "text": ln["text"]})
+    out["lines"] = clean_lines
+    return out
+
+
 def _compact_snippets_for_prompt(record, mode="evidence+llm"):
     snippets = record.get("snippets") or []
     if not snippets:
@@ -199,17 +273,17 @@ def _compact_snippets_for_prompt(record, mode="evidence+llm"):
             if key in seen:
                 continue
             seen.add(key)
-            short_lines = [ln for ln in (s.get("lines") or []) if sl - 3 <= ln["line"] <= el + 3]
-            out.append({**s, "lines": short_lines})
+            short_lines = [
+                ln for ln in (s.get("lines") or [])
+                if isinstance(ln, dict) and type(ln.get("line")) is int and sl - 3 <= ln["line"] <= el + 3
+            ]
+            out.append(_project_snippet(s, lines_override=short_lines))
             if len(out) >= 6:
                 break
         return out
 
     # Default mode (Arm C: evidence+llm): finding snippet already covers enclosing method + same-file callees.
-    def _clean_snip(s):
-        return {k: v for k, v in s.items() if k != "matched"}
-
-    primary = _clean_snip(snippets[0])
+    primary = _project_snippet(snippets[0])
     covered = {(primary.get("path"), ln["line"]) for ln in (primary.get("lines") or [])}
     out = [primary]
     seen_ranges = {(primary.get("path"), (primary.get("start") or {}).get("line"), (primary.get("end") or {}).get("line"))}
@@ -218,13 +292,14 @@ def _compact_snippets_for_prompt(record, mode="evidence+llm"):
         sl = (s.get("start") or {}).get("line")
         el = (s.get("end") or {}).get("line")
         s_lines = s.get("lines") or []
-        if all((p, ln["line"]) in covered for ln in s_lines) and s.get("role") == "intermediate":
+        if all((p, ln["line"]) in covered for ln in s_lines if isinstance(ln, dict) and "line" in ln) and s.get("role") == "intermediate":
             continue
         if (p, sl, el) in seen_ranges and s.get("role") == "intermediate":
             continue
         seen_ranges.add((p, sl, el))
-        out.append(_clean_snip(s))
-        for ln in s_lines:
+        proj = _project_snippet(s)
+        out.append(proj)
+        for ln in proj.get("lines") or []:
             covered.add((p, ln["line"]))
     return out
 
@@ -389,28 +464,64 @@ def validate_answer(content, record):
     sig = raw_sig if isinstance(raw_sig, dict) else {}
     if answer["status"] == "REFUTED":
         # A safety (REFUTED) claim is only verifiable when the evidence package is known to contain the
-        # code the flow depends on. Missing completeness analysis or any unresolved call on an undecided
-        # flow (absent helper, call chain beyond the analysed hop depth, unknown call wrapping input)
+        # code the flow depends on. Missing completeness analysis or any undecided flow (absent helper,
+        # call chain beyond the analysed hop depth, unknown call wrapping input, or ambiguous path boundary)
         # means the snippets cannot prove the code safe -> fail closed to UNDETERMINED.
         if not isinstance(raw_sig, dict):
             raise EvidenceError(
                 "cannot verify REFUTED: flow-completeness analysis (heuristic_signals) unavailable for this record"
             )
         unresolved = [u for u in (sig.get("unresolved_calls") or []) if isinstance(u, dict)]
-        if sig.get("recommended_status") == "UNDETERMINED" and unresolved:
+        if sig.get("recommended_status") == "UNDETERMINED":
             if any(u.get("reason") == "missing_helper_implementation" for u in unresolved):
                 raise EvidenceError(
                     "cannot verify REFUTED when flow depends on an external helper absent from evidence snapshots"
                 )
+            if unresolved:
+                raise EvidenceError(
+                    "cannot verify REFUTED when the call path is unresolved (hop depth exceeded or unknown call on input)"
+                )
             raise EvidenceError(
-                "cannot verify REFUTED when the call path is unresolved (hop depth exceeded or unknown call on input)"
+                "cannot verify REFUTED when flow or sanitizer boundary is undetermined in provided evidence"
             )
+        if sig.get("recommended_status") != "REFUTED":
+            cited_line_nos = {
+                ln
+                for c in answer["citations"]
+                if c.get("path") == record.get("path")
+                for ln in range(c["start_line"], c["end_line"] + 1)
+            }
+            non_san_lines = {
+                ns.get("line")
+                for ns in (sig.get("non_sanitizers_found") or [])
+                if isinstance(ns, dict) and type(ns.get("line")) is int
+            }
+            if cited_line_nos & non_san_lines:
+                raise EvidenceError(
+                    "cannot verify REFUTED: cited API is a wrong-context encoder/decoder, not an effective sanitizer"
+                )
+            valid_canon_guards = {
+                sf.get("line")
+                for sf in (sig.get("sanitizers_found") or [])
+                if isinstance(sf, dict) and sf.get("name") == "getCanonicalPath_startsWith"
+            }
+            for c in answer["citations"]:
+                if ".startsWith(" in c.get("quote", "") and not (
+                    set(range(c["start_line"], c["end_line"] + 1)) & valid_canon_guards
+                ):
+                    raise EvidenceError(
+                        "cannot verify REFUTED: cited startsWith guard lacks verified canonical path and directory separator boundary"
+                    )
 
     if record["issues"]:
         raise EvidenceError("insufficient evidence: " + "; ".join(record["issues"]))
     check_current(record)
     return {
         **answer,
+        "raw_model_status": answer["status"],
+        "validated_status": answer["status"],
+        "validator_downgraded": False,
+        "failure_kind": "NONE",
         "citation_check": "MATCHED" if answer["citations"] else "NONE",
         "citation_provenance": {
             "citation_in_source": prov["citation_in_source"],
@@ -493,21 +604,96 @@ def _java_context_summary(jctx):
 
 
 def assert_prompt_contract(evidence, contract):
-    """Fail closed if the final user payload carries heuristic conclusions for the given contract."""
+    """Fail closed if the final user payload carries heuristic conclusions or non-whitelisted nested keys."""
     if contract not in PROMPT_CONTRACTS:
         raise EvidenceError("unknown prompt contract: " + repr(contract))
+    if not isinstance(evidence, dict):
+        raise EvidenceError("prompt evidence payload must be a dict")
     if contract == PROMPT_CONTRACT_BLIND and "evidence_signals" in evidence:
         raise EvidenceError("blind prompt contract must not carry evidence_signals")
+    allowed_top = (
+        _EVIDENCE_BASE_KEYS
+        if contract == PROMPT_CONTRACT_BLIND
+        else (_EVIDENCE_BASE_KEYS | {"evidence_signals"})
+    )
+    extra_top = set(evidence) - allowed_top
+    if extra_top:
+        raise EvidenceError("prompt payload carries non-whitelisted top-level field(s): " + ", ".join(sorted(map(str, extra_top))))
+
+    for str_key in ("rule_id", "severity"):
+        val = evidence.get(str_key)
+        if val is not None and not isinstance(val, str):
+            raise EvidenceError(f"prompt {str_key} must be a string or null")
+
+    cwe_val = evidence.get("cwe")
+    if cwe_val is not None:
+        if not isinstance(cwe_val, list) or any(not isinstance(item, str) for item in cwe_val):
+            raise EvidenceError("prompt cwe must be a list of strings")
+
+    for loc_key in ("start", "end"):
+        loc_val = evidence.get(loc_key)
+        if loc_val is not None:
+            if not isinstance(loc_val, dict) or (set(loc_val) - set(_LOC_POINT_KEYS)):
+                raise EvidenceError("prompt location carries non-whitelisted nested key")
+
+    snippets = evidence.get("snippets")
+    if snippets is not None:
+        if not isinstance(snippets, list):
+            raise EvidenceError("prompt snippets must be a list")
+        for snip in snippets:
+            if not isinstance(snip, dict) or (set(snip) - set(_SNIPPET_WHITELIST_KEYS)):
+                raise EvidenceError("prompt snippet carries non-whitelisted nested key")
+            for loc_key in ("start", "end"):
+                if snip.get(loc_key) is not None:
+                    if not isinstance(snip[loc_key], dict) or (set(snip[loc_key]) - set(_LOC_POINT_KEYS)):
+                        raise EvidenceError("prompt snippet location carries non-whitelisted nested key")
+            if snip.get("lines") is not None:
+                if not isinstance(snip["lines"], list):
+                    raise EvidenceError("prompt snippet lines must be a list")
+                for ln in snip["lines"]:
+                    if not isinstance(ln, dict) or (set(ln) - set(_SNIPPET_LINE_KEYS)):
+                        raise EvidenceError("prompt snippet line carries non-whitelisted nested key")
+
+    trace_steps = evidence.get("trace_steps")
+    if trace_steps is not None:
+        if not isinstance(trace_steps, list):
+            raise EvidenceError("prompt trace_steps must be a list")
+        for step in trace_steps:
+            if not isinstance(step, dict) or (set(step) - set(_TRACE_STEP_KEYS)):
+                raise EvidenceError("prompt trace_steps carries non-whitelisted nested key")
+
+    jctx = evidence.get("java_context_summary")
+    if jctx is not None:
+        if not isinstance(jctx, dict) or (set(jctx) - set(_JAVA_CTX_SUMMARY_KEYS)):
+            raise EvidenceError("prompt java_context_summary carries non-whitelisted nested key")
+        enc = jctx.get("enclosing_method")
+        if enc is not None and (not isinstance(enc, dict) or (set(enc) - set(_METHOD_SUMMARY_FIELDS))):
+            raise EvidenceError("prompt enclosing_method carries non-whitelisted nested key")
+        callees = jctx.get("same_file_callees")
+        if callees is not None:
+            if not isinstance(callees, list):
+                raise EvidenceError("prompt same_file_callees must be a list")
+            for callee in callees:
+                if not isinstance(callee, dict) or (set(callee) - set(_METHOD_SUMMARY_FIELDS)):
+                    raise EvidenceError("prompt callee summary carries non-whitelisted nested key")
+
     signals = evidence.get("evidence_signals")
     if signals is not None:
         if not isinstance(signals, dict) or set(signals) - set(NEUTRAL_HINT_WHITELIST):
             raise EvidenceError("evidence_signals contains fields outside the neutral whitelist")
+        ext_calls = signals.get("unresolved_external_calls")
+        if ext_calls is not None:
+            if not isinstance(ext_calls, list):
+                raise EvidenceError("unresolved_external_calls must be a list")
+            for call in ext_calls:
+                if not isinstance(call, dict) or (set(call) - set(_UNRESOLVED_CALL_KEYS)):
+                    raise EvidenceError("unresolved_external_calls carries non-whitelisted nested key")
 
     def walk(node, parent_key=None):
         if isinstance(node, dict):
             for key, value in node.items():
                 if key in _FORBIDDEN_PROMPT_KEYS:
-                    raise EvidenceError("prompt payload carries heuristic analysis field: " + str(key))
+                    raise EvidenceError("prompt payload carries heuristic or ground-truth field: " + str(key))
                 walk(value, key)
         elif isinstance(node, list):
             for value in node:
@@ -530,12 +716,14 @@ def _prompt_contract_for(record):
 def prompt(record):
     mode = record.get("triage_mode", "evidence+llm") if isinstance(record, dict) else "evidence+llm"
     contract = _prompt_contract_for(record)
+    start_pt = _project_loc_point(record.get("start")) if isinstance(record.get("start"), dict) else None
+    end_pt = _project_loc_point(record.get("end")) if isinstance(record.get("end"), dict) else None
     evidence = {
         "rule_id": record.get("rule_id"),
-        "cwe": record.get("cwe"),
+        "cwe": list(record.get("cwe") or []),
         "severity": record.get("severity"),
-        "start": record.get("start"),
-        "end": record.get("end"),
+        "start": start_pt,
+        "end": end_pt,
         "snippets": _compact_snippets_for_prompt(record, mode=mode),
     }
     if mode != "llm":
@@ -586,6 +774,50 @@ def prompt(record):
         {"role": "user", "content": json.dumps(evidence, ensure_ascii=False)}]
 
 
+def _legacy_compact_snippets_for_prompt(record, mode="evidence+llm"):
+    """Exact v2.1 snippet compaction preserved strictly for legacy_v2_1_request_payload hash forensics."""
+    snippets = record.get("snippets") or []
+    if not snippets:
+        return []
+    if mode == "llm":
+        out = []
+        seen = set()
+        for s in snippets:
+            sl = (s.get("start") or {}).get("line", 1)
+            el = (s.get("end") or {}).get("line", sl)
+            key = (s.get("role"), s.get("path"), sl, el)
+            if key in seen:
+                continue
+            seen.add(key)
+            short_lines = [ln for ln in (s.get("lines") or []) if sl - 3 <= ln["line"] <= el + 3]
+            out.append({**s, "lines": short_lines})
+            if len(out) >= 6:
+                break
+        return out
+
+    def _clean_snip(s):
+        return {k: v for k, v in s.items() if k != "matched"}
+
+    primary = _clean_snip(snippets[0])
+    covered = {(primary.get("path"), ln["line"]) for ln in (primary.get("lines") or [])}
+    out = [primary]
+    seen_ranges = {(primary.get("path"), (primary.get("start") or {}).get("line"), (primary.get("end") or {}).get("line"))}
+    for s in snippets[1:]:
+        p = s.get("path")
+        sl = (s.get("start") or {}).get("line")
+        el = (s.get("end") or {}).get("line")
+        s_lines = s.get("lines") or []
+        if all((p, ln["line"]) in covered for ln in s_lines) and s.get("role") == "intermediate":
+            continue
+        if (p, sl, el) in seen_ranges and s.get("role") == "intermediate":
+            continue
+        seen_ranges.add((p, sl, el))
+        out.append(_clean_snip(s))
+        for ln in s_lines:
+            covered.add((p, ln["line"]))
+    return out
+
+
 def legacy_v2_1_request_payload(record, model):
     """Read-only forensic replay helper reproducing the historical v2.1 steered payload structure
     solely for verifying `request_payload_sha256` in historical server receipts. Never used by `OllamaClient`.
@@ -597,7 +829,7 @@ def legacy_v2_1_request_payload(record, model):
         "severity": record.get("severity"),
         "start": record.get("start"),
         "end": record.get("end"),
-        "snippets": _compact_snippets_for_prompt(record, mode=mode),
+        "snippets": _legacy_compact_snippets_for_prompt(record, mode=mode),
     }
     if mode != "llm":
         trace_steps = []
@@ -662,9 +894,52 @@ def request_payload(record, model):
             "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 1200}}
 
 
+def _classify_failure(exc, http_status=None, error_body_text=""):
+    msg = str(exc)
+    msg_low = msg.lower()
+    body_low = (error_body_text or "").lower()
+    if isinstance(exc, HTTPError):
+        if exc.code == 404 or "not found" in body_low or ("model" in body_low and "not found" in body_low):
+            return "MODEL_UNAVAILABLE"
+        return "HTTP_ERROR"
+    if http_status == 404 or ("model" in body_low and "not found" in body_low):
+        return "MODEL_UNAVAILABLE"
+    if "unexpected model identifier" in msg_low:
+        return "MODEL_UNAVAILABLE"
+    if "redirects are forbidden" in msg_low:
+        return "REDIRECT_FORBIDDEN"
+    if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError) or "timed out" in msg_low or "timeout" in msg_low:
+        return "TIMEOUT"
+    if isinstance(exc, URLError) or (isinstance(exc, OSError) and not isinstance(exc, EvidenceError)):
+        return "CONNECTION_ERROR"
+    if "incomplete ollama response" in msg_low:
+        return "TRUNCATED_OUTPUT"
+    if "prompt contract" in msg_low or "prompt payload" in msg_low or "non-whitelisted" in msg_low or "evidence_signals" in msg_low:
+        return "PROMPT_CONTRACT_VIOLATION"
+    if "exceeds bounded evidence size" in msg_low or "response too large" in msg_low:
+        return "PROMPT_TOO_LARGE"
+    if isinstance(exc, StaleSourceError) or "insufficient evidence" in msg_low or "source hash mismatch" in msg_low or "source identity" in msg_low:
+        return "EVIDENCE_PRECHECK_FAILED"
+    if "invalid json" in msg_low or "duplicate json key" in msg_low or "nonfinite json" in msg_low:
+        return "MALFORMED_JSON"
+    if (
+        "do not match schema" in msg_low
+        or "invalid status" in msg_low
+        or "missing explanation" in msg_low
+        or "invalid fix or citations" in msg_low
+        or "requires citations" in msg_low
+    ):
+        return "INVALID_SCHEMA"
+    if "cannot verify refuted" in msg_low:
+        return "UNVERIFIED_REFUTATION"
+    if "citation" in msg_low:
+        return "INVALID_CITATION"
+    return "VALIDATION_ERROR"
+
+
 class OllamaClient:
     def __init__(self, endpoint="http://127.0.0.1:11434", model="qwen3.5:9b-q4_K_M", timeout=60,
-                 runtime_origin="unverified"):
+                 runtime_origin="unverified", io_log_dir=None):
         parsed = urlsplit(endpoint)
         if (parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "::1", "localhost")
                 or parsed.username or parsed.password or parsed.path not in ("", "/")
@@ -681,14 +956,21 @@ class OllamaClient:
         if runtime_origin not in ("unverified", "mock"):
             raise EvidenceError("runtime origin must be unverified or mock; HTTP alone cannot attest a model")
         self.runtime_origin = runtime_origin
+        self.io_log_dir = Path(io_log_dir) if io_log_dir is not None else None
+        self._last_error_body_text = ""
         self.runtime = execution(runtime_origin)
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
     def request(self, path, payload=None):
+        self._last_error_body_text = ""
         data = None if payload is None else json.dumps(payload).encode("utf-8")
         if data is not None:
             self.runtime["request_payload_sha256"] = digest(data)
-        req = Request(self.endpoint + path, data=data, headers={"Content-Type": "application/json"})
+        req = Request(
+            self.endpoint + path,
+            data=data,
+            headers={"Content-Type": "application/json", "Connection": "close"},
+        )
         self.runtime["request_attempted"] = True
         try:
             with self.opener.open(req, timeout=self.timeout) as response:
@@ -702,6 +984,7 @@ class OllamaClient:
                 body = exc.read(1_000_001)
                 if len(body) <= 1_000_000:
                     self.runtime["response_body_sha256"] = digest(body)
+                    self._last_error_body_text = body.decode("utf-8", errors="replace")
             finally:
                 exc.close()
             raise
@@ -715,22 +998,116 @@ class OllamaClient:
     def tags(self):
         return self.request("/api/tags")
 
-    def analyze(self, record):
+    def verify_model_installed(self):
+        """Query local Ollama /api/tags without failing closed on probe errors; return actual tag inventory."""
+        saved_runtime = self.runtime
+        self.runtime = execution(self.runtime_origin)
+        try:
+            doc = self.tags()
+            models = doc.get("models") if isinstance(doc, dict) and isinstance(doc.get("models"), list) else []
+            installed = []
+            matched_digest = None
+            for m in models:
+                if not isinstance(m, dict):
+                    continue
+                name = m.get("name") or m.get("model")
+                if isinstance(name, str):
+                    installed.append({"name": name, "digest": m.get("digest"), "size": m.get("size")})
+                    if name == self.model:
+                        matched_digest = m.get("digest")
+            return {
+                "reachable": True,
+                "endpoint": self.endpoint,
+                "requested_model": self.model,
+                "model_found": any(item["name"] == self.model for item in installed),
+                "model_digest": matched_digest,
+                "installed_models": installed,
+                "error": None,
+            }
+        except (EvidenceError, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
+            return {
+                "reachable": False,
+                "endpoint": self.endpoint,
+                "requested_model": self.model,
+                "model_found": False,
+                "model_digest": None,
+                "installed_models": [],
+                "error": str(exc),
+            }
+        finally:
+            self.runtime = saved_runtime
+
+    def _write_io_artifacts(self, io_dir, finding_id, *, contract, messages, prompt_sha, req_payload, response, error_text, elapsed):
+        if io_dir is None:
+            return
+        io_dir = Path(io_dir)
+        io_dir.mkdir(parents=True, exist_ok=True)
+        safe_id = re.sub(r"[^0-9a-fA-F_-]", "_", str(finding_id or "unknown"))[:80]
+        if messages is not None:
+            (io_dir / f"{safe_id}.prompt.json").write_text(
+                json.dumps(
+                    {
+                        "finding_id": finding_id,
+                        "prompt_version": PROMPT_VERSION,
+                        "prompt_contract": contract,
+                        "prompt_sha256": prompt_sha,
+                        "messages": messages,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+        if req_payload is not None:
+            (io_dir / f"{safe_id}.request.json").write_text(
+                json.dumps(req_payload, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        (io_dir / f"{safe_id}.response.json").write_text(
+            json.dumps(
+                {
+                    "finding_id": finding_id,
+                    "model": self.model,
+                    "endpoint": self.endpoint,
+                    "elapsed_seconds": elapsed,
+                    "latency_ms": round(elapsed * 1000.0, 3),
+                    "runtime": dict(self.runtime),
+                    "raw_response": response,
+                    "error": error_text,
+                    "http_error_body": self._last_error_body_text or None,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    def analyze(self, record, io_log_dir=None):
+        active_io_dir = Path(io_log_dir) if io_log_dir is not None else self.io_log_dir
         self.runtime = execution(self.runtime_origin)
         self.runtime["finding_id"] = record["id"]
+        contract_val = record.get("prompt_contract", DEFAULT_PROMPT_CONTRACT) if isinstance(record, dict) else None
         provenance = {"transport": "ollama-http", "model": self.model, "endpoint": self.endpoint,
                       "raw_response": None, "runtime": self.runtime,
-                      "prompt_contract": record.get("prompt_contract", DEFAULT_PROMPT_CONTRACT)
-                      if isinstance(record, dict) else None}
+                      "prompt_contract": contract_val, "prompt_sha256": None}
+        messages = None
+        req_body = None
+        prompt_sha = None
+        raw_model_status = None
         started = time.monotonic()
         try:
             if record["issues"]:
                 raise EvidenceError("insufficient evidence: " + "; ".join(record["issues"]))
             check_current(record)
             messages = prompt(record)
+            prompt_bytes = json.dumps(messages, ensure_ascii=False).encode("utf-8")
+            prompt_sha = digest(prompt_bytes)
+            provenance["prompt_sha256"] = prompt_sha
+            self.runtime["prompt_sha256"] = prompt_sha
             if len(json.dumps(messages).encode("utf-8")) > 32_000:
                 raise EvidenceError("prompt exceeds bounded evidence size; use UNDETERMINED")
-            response = self.request("/api/chat", request_payload(record, self.model))
+            req_body = request_payload(record, self.model)
+            response = self.request("/api/chat", req_body)
             provenance["raw_response"] = response
             if isinstance(response, dict):
                 if response.get("mock_test_fixture") is True:
@@ -741,6 +1118,8 @@ class OllamaClient:
                     value = response.get(raw_key)
                     if type(value) is int and value >= 0:
                         self.runtime[field] = value
+                raw_content = response.get("message", {}).get("content") if isinstance(response.get("message"), dict) else None
+                raw_model_status = _extract_raw_model_status(raw_content)
             if (not isinstance(response, dict) or response.get("done") is not True
                     or response.get("done_reason") not in (None, "stop")):
                 raise EvidenceError("incomplete Ollama response")
@@ -749,6 +1128,45 @@ class OllamaClient:
             content = response.get("message", {}).get("content") if isinstance(response.get("message"), dict) else None
             answer = validate_answer(content, record)
             self.runtime["answer_validated"] = True
-            return {**answer, **provenance, "elapsed_seconds": time.monotonic() - started}
+            self.runtime["failure_kind"] = "NONE"
+            elapsed = time.monotonic() - started
+            self._write_io_artifacts(
+                active_io_dir,
+                record["id"],
+                contract=contract_val,
+                messages=messages,
+                prompt_sha=prompt_sha,
+                req_payload=req_body,
+                response=response,
+                error_text=None,
+                elapsed=elapsed,
+            )
+            return {
+                **answer,
+                **provenance,
+                "elapsed_seconds": elapsed,
+                "latency_ms": round(elapsed * 1000.0, 3),
+            }
         except (EvidenceError, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
-            return undecided(str(exc), **provenance, elapsed_seconds=time.monotonic() - started)
+            elapsed = time.monotonic() - started
+            f_kind = _classify_failure(exc, http_status=self.runtime.get("http_status"), error_body_text=self._last_error_body_text)
+            self.runtime["failure_kind"] = f_kind
+            self._write_io_artifacts(
+                active_io_dir,
+                record.get("id") if isinstance(record, dict) else "unknown",
+                contract=contract_val,
+                messages=messages,
+                prompt_sha=prompt_sha,
+                req_payload=req_body,
+                response=provenance.get("raw_response"),
+                error_text=str(exc),
+                elapsed=elapsed,
+            )
+            return undecided(
+                str(exc),
+                raw_model_status=raw_model_status,
+                failure_kind=f_kind,
+                **provenance,
+                elapsed_seconds=elapsed,
+                latency_ms=round(elapsed * 1000.0, 3),
+            )

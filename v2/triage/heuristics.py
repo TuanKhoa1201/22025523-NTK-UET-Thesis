@@ -1588,16 +1588,17 @@ def extract_evidence_signals(record: dict[str, Any]) -> dict[str, Any]:
     uses_inner_helper = False
     uses_thing_factory = False
     for ln_no, m_txt in masked_str.items():
-        if HTTP_SOURCE_CALL_RE.search(m_txt) and http_source_line is None:
-            http_source_line = ln_no
-            source_kind = "HTTP_SERVLET_INPUT"
+        if HTTP_SOURCE_CALL_RE.search(m_txt):
+            if http_source_line is None or (http_source_line > sink_line and ln_no <= sink_line):
+                http_source_line = ln_no
+                source_kind = "HTTP_SERVLET_INPUT"
         if re.search(r"\bdoSomething\s*\(", m_txt):
             uses_inner_helper = True
         if re.search(r"\bThingFactory\.createThing\s*\(", m_txt):
             uses_thing_factory = True
 
     if enclosing_method is not None and http_source_line is not None:
-        if source_line < enclosing_method["start_line"] <= http_source_line:
+        if source_line < enclosing_method["start_line"] <= http_source_line <= sink_line:
             source_line = http_source_line
 
     analyzer = _FlowAnalyzer(

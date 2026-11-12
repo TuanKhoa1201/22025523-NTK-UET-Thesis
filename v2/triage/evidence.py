@@ -9,7 +9,27 @@ from .java_context import extract_java_context
 
 
 class EvidenceError(ValueError):
-    pass
+    error_code = "EVIDENCE_ERROR"
+
+
+class StaleSourceError(EvidenceError):
+    error_code = "STALE_SOURCE"
+
+    def __init__(self, message, *, mismatched_paths=(), expected_hashes=None, observed_hashes=None):
+        prefix = "" if str(message).startswith("STALE_SOURCE:") else "STALE_SOURCE: "
+        super().__init__(prefix + str(message))
+        self.mismatched_paths = list(mismatched_paths)
+        self.expected_hashes = dict(expected_hashes or {})
+        self.observed_hashes = dict(observed_hashes or {})
+
+    def to_dict(self):
+        return {
+            "error_code": self.error_code,
+            "message": str(self),
+            "mismatched_paths": list(self.mismatched_paths),
+            "expected_hashes": dict(self.expected_hashes),
+            "observed_hashes": dict(self.observed_hashes),
+        }
 
 
 def now():
@@ -294,8 +314,38 @@ def check_current(record):
         raise EvidenceError("scan-time source identity unavailable; rescan required")
     if not record.get("snapshots"):
         raise EvidenceError("no source hashes; rescan required")
-    tree = SourceTree(record["root"])
+    expected = {p: v.get("sha256") for p, v in record["snapshots"].items() if isinstance(v, dict)}
+    try:
+        tree = SourceTree(record["root"])
+    except (EvidenceError, OSError, ValueError, RuntimeError) as exc:
+        raise StaleSourceError(
+            "source root unavailable; rescan required: " + str(exc),
+            mismatched_paths=sorted(expected),
+            expected_hashes=expected,
+            observed_hashes={p: "MISSING_OR_UNREADABLE" for p in expected},
+        ) from exc
+    observed = {}
+    mismatched = []
+    first_reason = None
     for path, snapshot in record["snapshots"].items():
-        _, data, _ = tree.read(path)
-        if digest(data) != snapshot["sha256"]:
-            raise EvidenceError("source hash mismatch; rescan required: " + path)
+        exp_sha = snapshot.get("sha256") if isinstance(snapshot, dict) else None
+        try:
+            _, data, _ = tree.read(path)
+            obs_sha = digest(data)
+            observed[path] = obs_sha
+            if obs_sha != exp_sha:
+                mismatched.append(path)
+                if first_reason is None:
+                    first_reason = "source hash mismatch; rescan required: " + path
+        except (EvidenceError, OSError, UnicodeError, ValueError, RuntimeError) as exc:
+            observed[path] = "MISSING_OR_UNREADABLE"
+            mismatched.append(path)
+            if first_reason is None:
+                first_reason = f"source unavailable/changed ({path}); rescan required: {exc}"
+    if mismatched:
+        raise StaleSourceError(
+            first_reason or ("source hash mismatch; rescan required: " + ", ".join(mismatched)),
+            mismatched_paths=mismatched,
+            expected_hashes=expected,
+            observed_hashes=observed,
+        )

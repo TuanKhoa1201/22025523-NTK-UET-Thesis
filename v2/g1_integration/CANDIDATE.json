@@ -1,0 +1,51 @@
+{
+  "candidate_id": "G1-C1",
+  "status": "READY_FOR_INDEPENDENT_TEST",
+  "integration_branch": "v2/antigravity-review",
+  "base_commit": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "upstream_repo": "hardw00t/simple_semgrepAI",
+  "upstream_version": "0.2.0",
+  "upstream_commit": "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9",
+  "upstream_tree_sha": "c0ab3e20152ce5c3e6b80e1525288ad59c9aee93",
+  "candidate_commit_resolution_note": "Do not read candidate SHA from this file; resolve the exact commit SHA directly via `git rev-parse v2/antigravity-review` (or `origin/v2/antigravity-review`) and pin that commit during independent verification.",
+  "entrypoint": "python -B -m semgrepai (semgrepai.__main__ -> semgrepai.cli:app in prepared fork)",
+  "default_prompt_contract": "blind",
+  "default_rules_path": "v2/g1_integration/rules/java_g1_cwe22_cwe89.yml",
+  "reference_model": "qwen3.5:9b-q4_K_M",
+  "reference_endpoint": "http://127.0.0.1:11434",
+  "setup_instructions": [
+    "1. Checkout detached HEAD at the exact resolved commit of origin/v2/antigravity-review in an isolated workspace.",
+    "2. Verify or clone clean upstream `https://github.com/hardw00t/simple_semgrepAI.git` checked out at `2c79a58a16d11e9dea3723e30d2a7faffba7bdc9`.",
+    "3. Prepare the G1 fork into a fresh private directory outside Git: `python -B -m v2.g1_integration.prepare_g1_fork --upstream <UPSTREAM_DIR> --advisor-dir <PRIVATE_ADVISOR_DIR> --output-dir <PRIVATE_OUT>/fork-g1` (or pass `--scanner-layer ntk-cleanroom` if running on a clean server without the private advisor ZIP).",
+    "4. Set `PYTHONPATH=<PRIVATE_OUT>/fork-g1/source:<REPO_ROOT>` (use `;` separator on Windows PowerShell)."
+  ],
+  "run_instructions": [
+    "M1 compatibility check: `python -B -m semgrepai scan v2/g1_integration/demo_fixtures/Demo1TruePositive.java --rules-path v2/g1_integration/rules/java_g1_cwe22_cwe89.yml --output-dir <PRIVATE_OUT>/m1-check --executable <OPENGREP_BIN> --scan-only`",
+    "G1 integrated local triage: `python -B -m semgrepai scan v2/g1_integration/demo_fixtures/Demo1TruePositive.java --rules-path v2/g1_integration/rules/java_g1_cwe22_cwe89.yml --output-dir <PRIVATE_OUT>/g1-run --executable <OPENGREP_BIN> --local-triage --endpoint http://127.0.0.1:11434 --model qwen3.5:9b-q4_K_M --prompt-contract blind --timeout 180`",
+    "Human review queue lifecycle: `python -B -m semgrepai queue --db <PRIVATE_OUT>/g1-run/triage/review.sqlite`, `show <ID>`, `confirm-true <ID> --actor <ACTOR> --reason <REASON>`, `confirm-false <ID> --actor <ACTOR> --reason <REASON>`, `reopen <ID> --actor <ACTOR> --reason <REASON>`, `history <ID> --include-rejected`",
+    "Full 4-scenario reproducible demo: `python -B -m v2.g1_integration.run_g1_demo --prepared-source <PRIVATE_OUT>/fork-g1/source --output-dir <PRIVATE_OUT>/demo-suite --executable <OPENGREP_BIN> --endpoint http://127.0.0.1:11434 --model qwen3.5:9b-q4_K_M --timeout 180`"
+  ],
+  "test_instructions": [
+    "python -B -m unittest discover -s v2/g1_integration/tests -p \"test_*.py\" -v",
+    "python -B -m unittest discover -s v2/triage/tests -p \"test_*.py\" -q",
+    "python -B -m unittest discover -s v2/baseline/tests -p \"test_*.py\" -q",
+    "python -B v2/baseline/verify_patch.py",
+    "python -B scripts/verify-repository.py"
+  ],
+  "required_environment": {
+    "python": ">=3.11 with typer, rich, PyYAML",
+    "opengrep": "Local OpenGrep CLI binary (>=1.20.0); Semgrep is rejected by design",
+    "ollama": "Local loopback HTTP Ollama at http://127.0.0.1:11434 (verify installed model tags via /api/tags; server reference model is qwen3.5:9b-q4_K_M; on Windows+WSL2 keep a WSL session active during HTTP calls so WSL2 does not auto-suspend)"
+  },
+  "expected_independent_verdict_paths": {
+    "codex_audit": "v2/g1_audit/G1-C1/VERDICT.json",
+    "javis_runtime": "v2/g1_runtime/G1-C1/VERDICT.json"
+  },
+  "private_evidence_excluded": true,
+  "known_limitations": [
+    "Java context extraction is bounded to the enclosing method and same-file helper callees (<=150 lines); cross-file callees are treated as unresolved external calls and fail closed to UNDETERMINED when safety is claimed.",
+    "On the development laptop (4GB VRAM / 21 GiB free disk), `qwen2.5-coder:1.5b` is installed in local WSL2 Ollama whereas `qwen3.5:9b-q4_K_M` resides on the GPU server (`ADMIN-PC`); requesting an uninstalled tag fails closed with `MODEL_UNAVAILABLE` -> `UNDETERMINED` while keeping all alerts `OPEN` in SQLite. Independent `qwen3.5:9b-q4_K_M` execution is expected from JavisOS on `ADMIN-PC`.",
+    "CLI `--actor` is an unauthenticated operator string for local audit trail, and SQLite does not claim OS-level tamper resistance against privileged local users.",
+    "Historical G0 findings and 14 pending errata remain untouched and locked (`G0_ACCEPTANCE=CONDITIONAL`, historical Arm C independent contribution `CONFOUNDED`)."
+  ]
+}

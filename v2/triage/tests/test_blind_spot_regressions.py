@@ -525,7 +525,15 @@ class CitationProvenanceAndPromptNeutralityRegressions(unittest.TestCase):
         self.assertEqual(PROMPT_VERSION, "v2.2.1-cwe22-cwe89-whitelist")
         self.assertEqual(LEGACY_STEERED_PROMPT_VERSION, "v2.1-cwe22-cwe89-grounded")
 
-        active_req = request_payload(self.rec, "qwen3.5:9b-q4_K_M")
+        # Default G1 mode is blind (no evidence_signals at all)
+        default_req = request_payload(self.rec, "qwen3.5:9b-q4_K_M")
+        default_usr = json.loads(default_req["messages"][1]["content"])
+        self.assertNotIn("evidence_signals", default_usr)
+
+        # Controlled neutral_hints mode includes only whitelisted structural positions
+        rec_hints = copy.deepcopy(self.rec)
+        rec_hints["prompt_contract"] = "neutral_hints"
+        active_req = request_payload(rec_hints, "qwen3.5:9b-q4_K_M")
         sys_txt = active_req["messages"][0]["content"]
         usr_obj = json.loads(active_req["messages"][1]["content"])
         ev_sig = usr_obj["evidence_signals"]

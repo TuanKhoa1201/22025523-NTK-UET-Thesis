@@ -104,6 +104,7 @@ class PayloadContractAudit(unittest.TestCase):
     def test_01_v22_blacklist_leaked_dead_branch_result_now_whitelisted(self):
         """[REPRODUCES_V22_GAP_NOW_FIXED] Constant switch: dead_branch_lines pointed at the tainted branch."""
         rec = _pl01()
+        rec["prompt_contract"] = PROMPT_CONTRACT_NEUTRAL_HINTS
         sig = rec["heuristic_signals"]
         self.assertEqual(sig["recommended_status"], "REFUTED")
         self.assertTrue(sig["dead_branch_lines"], "fixture must exercise the dead-branch analysis")
@@ -118,6 +119,7 @@ class PayloadContractAudit(unittest.TestCase):
     def test_02_nested_and_unknown_fields_cannot_pass_through(self):
         """[REPRODUCES_V22_GAP_NOW_FIXED] Nested verdict text inside an allowed list and unknown keys are dropped."""
         rec = _pl01()
+        rec["prompt_contract"] = PROMPT_CONTRACT_NEUTRAL_HINTS
         planted = copy.deepcopy(rec["heuristic_signals"])
         planted["verdict_hint"] = "REFUTED"
         planted["extra"] = {"recommended_status": "REFUTED", "recommendation_reason": "safe constant"}
@@ -140,15 +142,18 @@ class PayloadContractAudit(unittest.TestCase):
                 self.assertNotIn(token, text)
         self.assertFalse(_all_keys(user) & (STEERING_SIGNAL_KEYS | {"verdict_hint", "extra", "note", "reason"}))
 
-    def test_03_blind_contract_sends_no_heuristic_signals(self):
-        """[HARDENED_INVARIANT] C_blind: code, location, trace and structural Java context only."""
-        rec = _pl01()
-        rec["prompt_contract"] = PROMPT_CONTRACT_BLIND
-        user = _user_payload(rec)
-        self.assertNotIn("evidence_signals", user)
-        self.assertEqual(set(user), {"rule_id", "cwe", "severity", "start", "end", "snippets", "trace_steps",
-                                     "java_context_summary"})
-        self.assertFalse(_all_keys(user) & ollama._FORBIDDEN_PROMPT_KEYS)
+    def test_03_blind_contract_is_g1_default_and_sends_no_heuristic_signals(self):
+        """[HARDENED_INVARIANT] G1 default is blind: code, location, trace and structural Java context only."""
+        self.assertEqual(ollama.DEFAULT_PROMPT_CONTRACT, PROMPT_CONTRACT_BLIND)
+        for explicit in (None, PROMPT_CONTRACT_BLIND):
+            rec = _pl01()
+            if explicit is not None:
+                rec["prompt_contract"] = explicit
+            user = _user_payload(rec)
+            self.assertNotIn("evidence_signals", user)
+            self.assertEqual(set(user), {"rule_id", "cwe", "severity", "start", "end", "snippets", "trace_steps",
+                                         "java_context_summary"})
+            self.assertFalse(_all_keys(user) & ollama._FORBIDDEN_PROMPT_KEYS)
 
     def test_04_java_context_summary_is_projected_not_copied(self):
         """[HARDENED_INVARIANT] Extra fields planted in java_context never reach the model."""

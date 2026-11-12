@@ -232,7 +232,17 @@ class Stage3HeuristicsAndPromptTests(Fixture):
 
     def test_prompt_modes_evidence_llm_vs_ablation_llm(self):
         self.assertTrue(PROMPT_VERSION.startswith("v2."))
-        msgs_full = prompt(self.record)
+        # G1 default is blind: trace_steps + java_context_summary included, evidence_signals excluded
+        msgs_blind = prompt(self.record)
+        user_blind = json.loads(msgs_blind[1]["content"])
+        self.assertNotIn("evidence_signals", user_blind)
+        self.assertIn("trace_steps", user_blind)
+        self.assertIn("java_context_summary", user_blind)
+
+        # Controlled neutral_hints option includes only whitelisted structural hints
+        rec_hints = copy.deepcopy(self.record)
+        rec_hints["prompt_contract"] = "neutral_hints"
+        msgs_full = prompt(rec_hints)
         user_full = json.loads(msgs_full[1]["content"])
         self.assertIn("evidence_signals", user_full)
         self.assertNotIn("recommended_status", user_full["evidence_signals"])

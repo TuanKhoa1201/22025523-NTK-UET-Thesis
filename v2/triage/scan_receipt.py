@@ -1,17 +1,31 @@
 """Check captured scan integrity; declared exit codes are not recorded process evidence."""
 import json
+import re
 from collections import Counter
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 from .evidence import EvidenceError, SourceTree, digest, strict_json
 
 
 def _norm_finding_path(value):
     if not isinstance(value, str) or not value:
         raise EvidenceError("finding without path")
-    value = unquote(value).replace("\\", "/")
+    if value.lower().startswith("file:"):
+        parsed = urlsplit(value)
+        if parsed.query or parsed.fragment:
+            raise EvidenceError("ambiguous file URI")
+        value = unquote(parsed.path)
+        if parsed.netloc and parsed.netloc.lower() != "localhost":
+            value = "//" + parsed.netloc + value
+        if re.match(r"^/[A-Za-z]:/", value):
+            value = value[1:]
+    else:
+        value = unquote(value)
+    value = value.replace("\\", "/")
     while value.startswith("./"):
         value = value[2:]
+    if re.match(r"^[A-Za-z]:/", value):
+        value = value[0].lower() + value[1:]
     return value
 
 

@@ -2,11 +2,23 @@
 import json
 import sqlite3
 from pathlib import Path
-from .evidence import EvidenceError, check_current, now, digest, SourceTree
+from .evidence import EvidenceError, StaleSourceError, check_current, now, digest, SourceTree
 
 
 def encode(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _observe_snapshots(record):
+    observed = {}
+    snapshots = record.get("snapshots") if isinstance(record.get("snapshots"), dict) else {}
+    for path in snapshots:
+        try:
+            _, data, _ = SourceTree(record["root"]).read(path)
+            observed[path] = digest(data)
+        except (OSError, ValueError, UnicodeError, RuntimeError):
+            observed[path] = "MISSING_OR_UNREADABLE"
+    return observed
 
 
 class ReviewStore:
@@ -25,6 +37,12 @@ class ReviewStore:
                 warning_id TEXT NOT NULL REFERENCES warnings(id), actor TEXT NOT NULL,
                 timestamp TEXT NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL,
                 source_version TEXT NOT NULL, observed_version TEXT NOT NULL, evidence_sha256 TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS rejected_decisions(
+                sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                warning_id TEXT NOT NULL REFERENCES warnings(id), actor TEXT NOT NULL,
+                timestamp TEXT NOT NULL, attempted_action TEXT NOT NULL, reason TEXT NOT NULL,
+                rejection_code TEXT NOT NULL, source_version TEXT NOT NULL,
+                observed_version TEXT NOT NULL, detail TEXT NOT NULL);
         """)
 
     def close(self):
@@ -62,32 +80,83 @@ class ReviewStore:
         return [dict(row) for row in self.db.execute(
             "SELECT * FROM events WHERE warning_id=? ORDER BY sequence", (identifier,))]
 
+    def rejected_decisions(self, identifier):
+        self.get(identifier)
+        return [dict(row) for row in self.db.execute(
+            "SELECT * FROM rejected_decisions WHERE warning_id=? ORDER BY sequence", (identifier,))]
+
+    def _record_rejected_decision(self, identifier, actor, action, reason, rejection_code, snapshots, observed, detail):
+        with self.db:
+            self.db.execute(
+                "INSERT INTO rejected_decisions("
+                "warning_id,actor,timestamp,attempted_action,reason,rejection_code,source_version,observed_version,detail"
+                ") VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    identifier,
+                    actor.strip(),
+                    now(),
+                    action,
+                    reason.strip(),
+                    rejection_code,
+                    encode(snapshots),
+                    encode(observed),
+                    encode(detail),
+                ),
+            )
+
     def decide(self, identifier, action, actor, reason):
         states = {"confirm-true": "CONFIRMED_TRUE", "confirm-false": "CONFIRMED_FALSE", "reopen": "OPEN"}
         if action not in states or not isinstance(actor, str) or not actor.strip() or not isinstance(reason, str) or not reason.strip():
             raise EvidenceError("valid action, human actor and nonempty reason required")
-        with self.db:
-            self.db.execute("BEGIN IMMEDIATE")
-            item = self.get(identifier)
-            record = item["evidence"]
-            if action == "confirm-false":
-                if record["issues"]:
-                    raise EvidenceError("incomplete evidence; rescan before confirming false")
-                try:
-                    check_current(record)
-                except (OSError, ValueError, RuntimeError) as exc:
-                    raise EvidenceError("source unavailable/changed; rescan required: " + str(exc)) from exc
-            observed = {}
-            for path in record["snapshots"]:
-                try:
-                    _, data, _ = SourceTree(record["root"]).read(path)
-                    observed[path] = digest(data)
-                except (OSError, ValueError, UnicodeError, RuntimeError):
-                    observed[path] = "MISSING_OR_UNREADABLE"
-            if action == "confirm-false" and any(observed.get(p) != v["sha256"] for p, v in record["snapshots"].items()):
-                raise EvidenceError("source changed during review; rescan required")
-            self.db.execute("INSERT INTO events(warning_id,actor,timestamp,action,reason,source_version,observed_version,evidence_sha256) VALUES (?,?,?,?,?,?,?,?)",
-                            (identifier, actor.strip(), now(), action, reason.strip(), encode(record["snapshots"]),
-                             encode(observed), digest(encode(record).encode("utf-8"))))
-            self.db.execute("UPDATE warnings SET state=? WHERE id=?", (states[action], identifier))
+        stale_exc = None
+        stale_snapshots = {}
+        try:
+            with self.db:
+                self.db.execute("BEGIN IMMEDIATE")
+                item = self.get(identifier)
+                record = item["evidence"]
+                stale_snapshots = record.get("snapshots") or {}
+                if action == "confirm-false":
+                    if record["issues"]:
+                        raise EvidenceError("incomplete evidence; rescan before confirming false")
+                    try:
+                        check_current(record)
+                    except StaleSourceError:
+                        raise
+                    except (OSError, ValueError, RuntimeError) as exc:
+                        raise EvidenceError("source unavailable/changed; rescan required: " + str(exc)) from exc
+                observed = _observe_snapshots(record)
+                if action == "confirm-false":
+                    mismatched = [
+                        p for p, v in record["snapshots"].items()
+                        if observed.get(p) != (v.get("sha256") if isinstance(v, dict) else None)
+                    ]
+                    if mismatched:
+                        expected = {p: v.get("sha256") for p, v in record["snapshots"].items() if isinstance(v, dict)}
+                        raise StaleSourceError(
+                            "source changed during review; rescan required: " + ", ".join(mismatched),
+                            mismatched_paths=mismatched,
+                            expected_hashes=expected,
+                            observed_hashes=observed,
+                        )
+                self.db.execute(
+                    "INSERT INTO events(warning_id,actor,timestamp,action,reason,source_version,observed_version,evidence_sha256) VALUES (?,?,?,?,?,?,?,?)",
+                    (identifier, actor.strip(), now(), action, reason.strip(), encode(record["snapshots"]),
+                     encode(observed), digest(encode(record).encode("utf-8"))),
+                )
+                self.db.execute("UPDATE warnings SET state=? WHERE id=?", (states[action], identifier))
+        except StaleSourceError as exc:
+            stale_exc = exc
+        if stale_exc is not None:
+            self._record_rejected_decision(
+                identifier,
+                actor,
+                action,
+                reason,
+                stale_exc.error_code,
+                stale_snapshots,
+                stale_exc.observed_hashes,
+                stale_exc.to_dict(),
+            )
+            raise stale_exc
         return self.get(identifier)
