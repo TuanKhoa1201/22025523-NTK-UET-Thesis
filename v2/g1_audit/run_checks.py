@@ -9,10 +9,26 @@ import re
 import subprocess
 import sys
 import time
-from audit import git, sha
+from audit import git, sha, load
+from contracts import require
 
 
 def now(): return datetime.now(timezone.utc).isoformat()
+
+
+def reconcile(receipt, code, log):
+    require(receipt['schema'] == 'ntk-unittest-receipt-1', 'invalid unittest receipt schema')
+    counts = receipt['counts']
+    require(set(counts) == {'PASS','FAIL','ERROR','SKIP','XFAIL','XPASS'} and
+            all(type(v) is int and v >= 0 for v in counts.values()), 'invalid test counts')
+    require(type(receipt['discovered']) is int and receipt['discovered'] > 0, 'zero tests discovered')
+    require(receipt['run'] == receipt['discovered'] == sum(counts.values()) == len(receipt['outcomes']), 'discovered/run/outcome count mismatch')
+    require(all(list(receipt['outcomes'].values()).count(k) == v for k,v in counts.items()), 'outcome/summary mismatch')
+    announced = re.findall(r'^Ran (\d+) tests? in ', log, re.M)
+    require(len(announced) == 1 and int(announced[0]) == receipt['run'], 'log/structured test count mismatch')
+    successful = code == 0 and receipt['import_errors'] == 0 and not any(counts[k] for k in ('FAIL','ERROR','XPASS'))
+    require(receipt['successful'] is successful, 'exit/summary success mismatch')
+    return successful
 
 
 def main():
@@ -29,10 +45,13 @@ def main():
     env = dict(os.environ, G1_CHECKOUT=str(root), PYTHONDONTWRITEBYTECODE='1', PYTHONUTF8='1')
     audit_root = Path(__file__).resolve().parent
     specs = [(audit_root, 'test_candidate.py'), (audit_root, 'test_auditor.py'),
+             (audit_root, 'test_deep_audit.py'), (audit_root, 'test_runner.py'),
              (root / 'v2/triage/tests', 'test_g0_v22_payload_contract.py'),
              (root / 'v2/triage/tests', 'test_human_review_negative_suite.py')]
     for index, (folder, pattern) in enumerate(specs):
-        cmd = [sys.executable, '-X', 'utf8', '-B', '-m', 'unittest', 'discover', '-s', str(folder), '-p', pattern, '-v']
+        structured_path = out / f'{index}.unittest.json'
+        cmd = [sys.executable, '-X', 'utf8', '-B', str(audit_root / 'unittest_probe.py'),
+               '--start', str(folder), '--pattern', pattern, '--receipt', str(structured_path)]
         tick = time.monotonic()
         try:
             proc = subprocess.run(cmd, cwd=root, env=env, capture_output=True, timeout=90)
@@ -40,11 +59,17 @@ def main():
         except subprocess.TimeoutExpired as exc:
             code, stdout, stderr = 124, exc.stdout or b'', exc.stderr or b''
         text = stderr.decode('utf-8', errors='replace')
-        counts = dict(PASS=len(re.findall(r'\.\.\. ok\s*$', text, re.M)),
-                      FAIL=len(re.findall(r'\.\.\. (?:FAIL|ERROR)\s*$', text, re.M)),
-                      SKIP=len(re.findall(r'\.\.\. skipped', text)))
+        structured, valid, error = None, False, None
+        try:
+            structured = load(structured_path)
+            valid = reconcile(structured, code, text)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            error = str(exc)
+        counts = structured['counts'] if structured else {k:0 for k in ('PASS','FAIL','ERROR','SKIP','XFAIL','XPASS')}
         (out / f'{index}.stdout.txt').write_bytes(stdout); (out / f'{index}.stderr.txt').write_bytes(stderr)
         receipts.append(dict(argv=cmd, cwd=str(root), exit_code=code, counts=counts,
+                             structured=structured, reconciled=valid, receipt_error=error,
+                             structured_sha256=sha(structured_path.read_bytes()) if structured_path.exists() else None,
                              elapsed_seconds=time.monotonic()-tick, stdout_sha256=sha(stdout), stderr_sha256=sha(stderr),
                              test_file_sha256=sha((folder / pattern).read_bytes())))
     if git(root, 'rev-parse', 'HEAD') != args.expected_sha or git(root, 'status', '--porcelain', '--untracked-files=no'):
@@ -52,8 +77,9 @@ def main():
     result = dict(started_at=started, finished_at=now(), tested_sha=args.expected_sha,
                   environment=dict(python=platform.python_version(), platform=platform.platform()),
                   evidence_kind='SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN', commands=receipts,
-                  counts={k:sum(r['counts'][k] for r in receipts) for k in ('PASS','FAIL','SKIP')},
-                  tests_succeeded=all(r['exit_code']==0 and sum(r['counts'].values())>0 for r in receipts),
+                  counts={k:sum(r['counts'][k] for r in receipts) for k in ('PASS','FAIL','ERROR','SKIP','XFAIL','XPASS')},
+                  tests_succeeded=all(r['reconciled'] for r in receipts),
+                  harness_sha256=sha((audit_root / 'unittest_probe.py').read_bytes()),
                   g1_acceptance='INCOMPLETE')
     (out / 'checks.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(json.dumps(result['counts'])); return 0 if result['tests_succeeded'] else 1

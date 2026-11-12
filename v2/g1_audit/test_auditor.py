@@ -37,9 +37,12 @@ class AuditorChecks(unittest.TestCase):
         with self.assertRaises(ValueError): self.audit.sarif()
 
     def test_mock_engine_cannot_pass_manifest(self):
-        self.write('engine/scan-manifest.json', dict(schema='ntk-scan-capture-1', artifacts={}, runs={'version':{'argv':['MOCK_ENGINE']}}))
-        self.write('engine/version.command.json', ['MOCK_ENGINE'])
-        with self.assertRaises(ValueError): self.audit.manifest()
+        from artifact_fixture import Fixture
+        fixture = Fixture(self.root)
+        fixture.manifest['runs']['version']['argv'] = ['MOCK_ENGINE','--version']
+        fixture.write('engine/version.command.json', ['MOCK_ENGINE','--version']); fixture.rehash()
+        self.audit.check('manifest', self.audit.manifest)
+        self.assertEqual(self.audit.checks[-1]['status'],'FAIL')
 
     def test_reencoded_handoff_rejected(self):
         self.write('input.opengrep.json', {'results':[]})
@@ -47,7 +50,10 @@ class AuditorChecks(unittest.TestCase):
         with self.assertRaises(ValueError): self.audit.identity()
 
     def test_false_state_is_not_model_status(self):
-        self.write('assessments.jsonl', {'assessment':{'status':'REFUTED','runtime':{'answer_validated':False}}})
+        from artifact_fixture import Fixture
+        fixture = Fixture(self.root)
+        fixture.rows[0]['assessment']['status'] = 'CONFIRMED_FALSE'
+        fixture.write('assessments.jsonl', b''.join(json.dumps(row).encode()+b'\n' for row in fixture.rows))
         with self.assertRaises(ValueError): self.audit.runtime()
 
 
