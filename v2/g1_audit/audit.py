@@ -95,7 +95,9 @@ class Audit:
                 raise ValueError('command mismatch: ' + label)
             executable = argv[0].replace('\\', '/').split('/')[-1].lower()
             if executable not in ('opengrep', 'opengrep.exe'):
-                raise ValueError('engine executable requires review: ' + executable)
+                if executable in ('semgrep','semgrep.exe','mock_engine'):
+                    raise ValueError('engine executable is not real OpenGrep: ' + executable)
+                raise FileNotFoundError('engine wrapper/binary chain unverified; require original wrapper and child-exec receipts: ' + executable)
             executables.add(path_key(argv[0]))
             require(argv.count('--' + label) == 1, 'recorded command format mismatch')
             code = int(self.path('engine/' + label + '.exit.txt').read_text())

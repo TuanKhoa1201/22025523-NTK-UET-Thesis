@@ -2,6 +2,8 @@
 
 Baseline 59 PASS tại `b74e5a3` giữ nguyên lịch sử. Lượt nâng cấp checkpoint 97 PASS có receipt riêng; lượt cuối được ghi trong `receipts/FINAL_CHECKS.json`. Không cộng các lượt chạy lại để tăng số test.
 
+Bổ sung sau receipt JavisOS: lượt mới nhất 130 PASS được ghi riêng trong `receipts/POST_JAVIS_CHECKS.json`, thay cho số 127 của cửa sổ trước. `review_javis.py` kiểm tra public readiness report, có synthetic positive/negative controls trong `test_release.py`; bảy kiểm tra report thật được ghi riêng ở `RUNTIME_CROSSCHECK.md`, không tính thành unittest/live runtime.
+
 | Nhóm yêu cầu | Mã kiểm tra chính | Loại bằng chứng | Phần còn thiếu khi chưa có candidate |
 |---|---|---|---|
 | B1 JSON/JSONL | `contracts.strict`, `validate_bundle`, `validate_rows`; `test_deep_audit` | Synthetic corruption + positive control | Artifact thực của integration |

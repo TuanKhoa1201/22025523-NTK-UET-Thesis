@@ -2,6 +2,8 @@
 
 **PREPARED_WAITING_FOR_CANDIDATE; phán quyết nghiệm thu G1: INCOMPLETE — CANDIDATE_NOT_AVAILABLE.**
 
+**Bổ sung sau công bố:** JavisOS phát hành receipt readiness tại `4de45981cd83dcada56186d707fe9f11609ed006`. Đã đối chiếu public report, chưa đọc raw máy chủ; candidate vẫn chưa có. Lượt regression mới nhất **130 PASS**, receipt `receipts/POST_JAVIS_CHECKS.json`; xem `RUNTIME_CROSSCHECK.md`. Các số 127 và nhận định chưa có report bên dưới mô tả cửa sổ kiểm tra trước cập nhật này, được giữ lại làm lịch sử rõ ràng.
+
 `reference_sha = 457183f9e17892fe284da04b57ef6c5c24b008e0`; `candidate_sha = null`; `javis_tested_sha = null`. Bốn lần đọc remote xen giữa các chặng công việc đều thấy Antigravity giữ SHA trên và JavisOS giữ `bf19b5e1392645baba55e5039ebc0d71a1af9aaa`. Git tree ở các HEAD đó không có `v2/g1_integration/CANDIDATE.json` hoặc `v2/g1_runtime/.../VERDICT.json`. Không coi reference là ứng viên G1 mới.
 
 ## Kết quả và bằng chứng

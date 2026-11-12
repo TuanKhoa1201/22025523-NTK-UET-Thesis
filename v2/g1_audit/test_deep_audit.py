@@ -138,6 +138,14 @@ class DeepArtifactChecks(unittest.TestCase):
                          str(self.f.source),'--json','--output',output],output_mode='file',engine_output_path=output)
         self.f.write('engine/json.command.json',run['argv']); self.f.rehash(); self.reject('manifest')
 
+    def test_wrapper_requires_chain_but_semgrep_fails(self):
+        for executable,expected in (('opengrep_counted.cmd','INCOMPLETE'),('semgrep','FAIL')):
+            with self.subTest(executable=executable):
+                self.f.manifest['runs']['version']['argv'][0]=executable
+                self.f.write('engine/version.command.json',self.f.manifest['runs']['version']['argv']);self.f.rehash()
+                self.audit.check('manifest',self.audit.manifest)
+                self.assertEqual(self.audit.checks[-1]['status'],expected)
+
     def test_success_exit_missing_output_is_incomplete(self):
         (self.root/'engine/opengrep.json').unlink()
         self.audit.check('manifest',self.audit.manifest)

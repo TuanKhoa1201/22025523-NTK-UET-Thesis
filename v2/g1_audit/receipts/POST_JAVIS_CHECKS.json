@@ -1,0 +1,262 @@
+{
+  "started_at": "2026-11-12T21:29:14.491839+00:00",
+  "finished_at": "2026-11-12T21:29:23.565948+00:00",
+  "tested_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "environment": {
+    "python": "3.13.3",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "evidence_kind": "SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN",
+  "counts": {
+    "PASS": 130,
+    "FAIL": 0,
+    "ERROR": 0,
+    "SKIP": 0,
+    "XFAIL": 0,
+    "XPASS": 0
+  },
+  "tests_succeeded": true,
+  "g1_acceptance": "INCOMPLETE",
+  "harness_sha256": "7d2fb3c651b1e5166e7b4eac753e0f874bb27b87d4128905365fbcdf93484573",
+  "private_receipt_sha256": "cb8921bc732a583859847d935533a138e177313152fb60a3c8f5a9540b0aff7f",
+  "commands": [
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 28,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.1607738999955473,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "930a7f261dfa4fb31911f1559a1a3a76f55cf3037ed00fa41723318a848ec516",
+      "test_file_sha256": "b0fa17e80bc80a16f356b9f6b347018322b4129fd45d9aa829af8e132f8ff812",
+      "structured_sha256": "98d5f5b4116fc4cb7bf230f5ecee173abb6877d3b626a40a8ffd641c8ed8dc5e",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_candidate.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\post-javis-final-v2\\0.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 28,
+      "run": 28,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 8,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.36949279999680584,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "336a052b162bb235dd913e2ab9d097df247dc7385e352594d288c369bc9667c0",
+      "test_file_sha256": "24bed591ae057375ade9e15ae1b9380f6db6f48cb15b1dd70d3c18dd3508553f",
+      "structured_sha256": "75fd67c1d04cb3a03091c5fa5764bfc21d73a47438ea8a1daa9a6c6072ba4a3e",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_auditor.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\post-javis-final-v2\\1.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 8,
+      "run": 8,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 41,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 3.804125800001202,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "58c4e71ad9439741b6390410c2bbfa1c2e259541c0246c183439cf1055442bf1",
+      "test_file_sha256": "496d98d8540824bb212abe59f33e05f597bd4ed0ec08a90a44e65521e56a09dc",
+      "structured_sha256": "b539ddc62b2c158cd84dfb900040a35395f126da595c043c11c2e52d8414d8e1",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_deep_audit.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\post-javis-final-v2\\2.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 41,
+      "run": 41,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 11,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.6625086000058218,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "f48d4814cb61481d115731cd3d9babf3a7e26b88db89f448b1436cb330e47255",
+      "test_file_sha256": "93465d4d1e64a7415a9496bae2e45225c77367b64a34788fd9c4a47e2e50cdc1",
+      "structured_sha256": "c6ec6844bbf6a83d3381585638cd3789fa381ecc04bbc859321f6a041a593797",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_runner.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\post-javis-final-v2\\3.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 11,
+      "run": 11,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 10,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.3730878999995184,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "3087a28ac19a79786455fa1c1dba4bf5185224b1ae14364232ab69985393bd07",
+      "test_file_sha256": "1f3993f88aa137ffe0a45895c7337b81e1d70e6fd5072f4b6394d6fb8359283a",
+      "structured_sha256": "79b0b613c7f283727b16bc6463fcaade9d5fcab4ba99989dd5b173b5f69d3f1b",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_release.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\post-javis-final-v2\\4.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 10,
+      "run": 10,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.5959193000016967,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "ff7598786dccf183b4f28cd99a61aed6abc92964a3a2b44f7b472f247b36ed55",
+      "test_file_sha256": "761ffa8ac283aecfd269ab24ddfad370e1856b631de888e7a325578ecdc8fa6c",
+      "structured_sha256": "83f01900f4ff3fbd7f7232992fbdf02cbaeb2f14c8f134f75bc55fb162cf3b4c",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "--pattern",
+        "test_g0_v22_payload_contract.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\post-javis-final-v2\\5.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 16,
+      "run": 16,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.9652241999938269,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e8bce3e253ebd0e4cf65238dca9393d6cf0e91454836c1f99e91b1b051380b3b",
+      "test_file_sha256": "9de7cd0df7820213bbc947e6d78b90b38b0546b10006f1b3cd71ad9bc0c2d878",
+      "structured_sha256": "59471558b3df9be255dfcf641268713807ae5519475d4b704f6831be986bbe59",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "--pattern",
+        "test_human_review_negative_suite.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\post-javis-final-v2\\6.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 16,
+      "run": 16,
+      "import_errors": 0
+    }
+  ]
+}

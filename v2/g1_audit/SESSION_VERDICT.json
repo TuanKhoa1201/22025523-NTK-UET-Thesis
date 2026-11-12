@@ -11,16 +11,16 @@
   "candidate_id": null,
   "candidate_sha": null,
   "javis_tested_sha": null,
-  "javis_observed_head": "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+  "javis_observed_head": "4de45981cd83dcada56186d707fe9f11609ed006",
   "started_at": "2026-11-12T21:24:34.616582+00:00",
-  "finished_at": "2026-11-12T21:25:04.134468+00:00",
+  "finished_at": "2026-11-12T21:31:02.584323+00:00",
   "timestamp_scope": "Final verification window; earlier preparation/remote checks were not separately timestamped",
   "environment": {
     "python": "3.13.3",
     "platform": "Windows-11-10.0.26200-SP0"
   },
   "tests": {
-    "PASS": 127,
+    "PASS": 130,
     "FAIL": 0,
     "ERROR": 0,
     "SKIP": 0,
@@ -29,14 +29,15 @@
   },
   "tests_kind": "SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN",
   "provenance": {
-    "independent_tests": 95,
+    "independent_tests": 98,
     "producer_tests": 32,
     "real_opengrep_runs": 0,
     "real_qwen_runs": 0,
     "historical_pair_use": "FORMAT_COMPATIBILITY_ONLY",
-    "runtime_receipt_checked": false,
+    "runtime_receipt_checked": true,
     "raw_server_artifacts_checked": false,
-    "server_runtime_observed": false
+    "server_runtime_observed": false,
+    "runtime_receipt_evidence_level": "PUBLIC_RECEIPT_ONLY"
   },
   "previous_receipt_preserved": {
     "path": "G1-C1/VERDICT.json",
@@ -64,7 +65,14 @@
       "b74e5a31f24daa2141bb17ff5195801923b1512c",
       "b74e5a31f24daa2141bb17ff5195801923b1512c",
       "b74e5a31f24daa2141bb17ff5195801923b1512c"
-    ]
+    ],
+    "after_publication": {
+      "antigravity": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+      "codex": "dfca40ab179356330c770c963d03913b4feb7173",
+      "javis": "4de45981cd83dcada56186d707fe9f11609ed006",
+      "ls_remote_exit_code": 0,
+      "fetch_javis_exit_code": 0
+    }
   },
   "gates": [
     {
@@ -155,7 +163,7 @@
       "kind": "MISSING_ACCEPTANCE_EVIDENCE",
       "file": "v2/g1_runtime/<candidate_id>/VERDICT.json",
       "line": null,
-      "description": "No candidate-bound runtime receipt on observed JavisOS HEAD"
+      "description": "Public readiness receipt now exists at JavisOS 4de4598; tested_sha is null and no candidate-bound raw evidence is available for G1 acceptance."
     },
     {
       "id": "G1-GIT-01",
@@ -318,21 +326,24 @@
     "receipts/FINAL_CHECKS.json": "38ebbf8b7d1cdc7aa31faf69a4064bbbc7e79df1ef6a6581b87000e2aacd4e43",
     "receipts/GIT_ATTRIBUTES.json": "b96a454c8f5687b5de7bec59ba3f7a0a56fbb9d9389c14d3c68c3e4a7bb523d7",
     "receipts/HARDENING_CHECKPOINT.json": "642492511d8d80d90124561dcb97f52c2b8b43d2c7ba01dc29cdc4befd6444b9",
+    "receipts/JAVIS_PUBLIC_REVIEW.json": "c59da362bdbc8e10ded1e0a8b227b9ba51f10e8d6528c796a3e4817748818bc6",
+    "receipts/POST_JAVIS_CHECKS.json": "81130c0bbc0c7de18533a9e009fa8cc9686c1be0bf0f1b1d050e70b5c817a13d",
     "receipts/STATIC_CLI_REFERENCE.json": "0d1d04e188b6a671019c5c5c183fa93908cda1f97dd677a1027ac2fe4eb6b3dd"
   },
   "auditor_code_sha256": {
     "artifact_fixture.py": "aec64c3e6a966b92609fea392df9fb972673b04ff5c606ef7b2184b573bef039",
-    "audit.py": "f8e198d0d269303a3a5e98fbfc0c203ee77baaa70bff0ee4339d7000888e2071",
+    "audit.py": "808afa33880dea4fdf13b46ac0d7f318a86ada10def02cb1e5de6f8760661703",
     "contracts.py": "f793aeb91f99d380f416d3fa9b36a6f56bd237e324340d5471e0f52fea540a77",
     "inspect_cli.py": "45a02a8f7575afb2c052820ed0d1e39724a63870e2fc3196e94cdf054d79d727",
     "inspect_git_attributes.py": "865ddfc74e7154d7a373497a4e2d24a7d4190a5927cc4d7bebfbb1396dd267c1",
     "inspect_release.py": "f1250cd47b45e48dbd23945d88e180a1d44e41b4c158e750f7ada48da4a3f003",
     "public_receipt.py": "8bbcca6f3a98d54f56a8f18601a5c2c27ba2aef6b54601c3bea709c3a145d719",
+    "review_javis.py": "c7a91e9f509713f93b2fbb4f31eaba6bb80ebee66f279db8e57645545c584c34",
     "run_checks.py": "bc0ad6460bec10a1e257180794848d6fdc771e6d576fa6e225f700774ca51b1d",
     "test_auditor.py": "24bed591ae057375ade9e15ae1b9380f6db6f48cb15b1dd70d3c18dd3508553f",
     "test_candidate.py": "b0fa17e80bc80a16f356b9f6b347018322b4129fd45d9aa829af8e132f8ff812",
-    "test_deep_audit.py": "68fc11172a6110699db360f1aad7589cec158e6033edb22ad507e48021e3ddc4",
-    "test_release.py": "80f8f5ea1bd3373e85e7b9a57f70198b11d1c9633dcd17b7ec962266c9f3c635",
+    "test_deep_audit.py": "496d98d8540824bb212abe59f33e05f597bd4ed0ec08a90a44e65521e56a09dc",
+    "test_release.py": "1f3993f88aa137ffe0a45895c7337b81e1d70e6fd5072f4b6394d6fb8359283a",
     "test_runner.py": "93465d4d1e64a7415a9496bae2e45225c77367b64a34788fd9c4a47e2e50cdc1",
     "unittest_probe.py": "7d2fb3c651b1e5166e7b4eac753e0f874bb27b87d4128905365fbcdf93484573",
     "verify_test_receipt.py": "d4ef73a0375d303c5c4a244593e8830162435867cf401782e0d53b4e49d962c8"
@@ -347,5 +358,32 @@
     "Missing optional SARIF fields are disclosed; path_base/cross-host relocation is not guessed.",
     "No OS isolation against source replacement between checks; tracked-file guards observe before/after state.",
     "No Qwen accuracy or benefit claims; G3 remains out of scope."
-  ]
+  ],
+  "test_run_history": [
+    {
+      "receipt": "receipts/FINAL_CHECKS.json",
+      "counts": {
+        "PASS": 127,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      }
+    },
+    {
+      "receipt": "receipts/POST_JAVIS_CHECKS.json",
+      "counts": {
+        "PASS": 130,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      }
+    }
+  ],
+  "current_test_receipt": "receipts/POST_JAVIS_CHECKS.json",
+  "latest_tests_started_at": "2026-11-12T21:29:14.491839+00:00",
+  "javis_public_review": "receipts/JAVIS_PUBLIC_REVIEW.json"
 }
