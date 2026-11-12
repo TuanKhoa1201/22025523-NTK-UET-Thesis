@@ -8,19 +8,19 @@
 
 | Nhánh | Mục đích | Nguồn bàn giao |
 | --- | --- | --- |
-| [`main`](../../tree/main) | Giữ nguyên đồ án phát triển trước khi thầy điều chỉnh phạm vi; không phải phiên bản thực nghiệm mới nhất | Lịch sử cũ |
-| [`v2/codex-core`](../../tree/v2/codex-core) | Nghiên cứu, bảo toàn nhiệm vụ gốc simple_semgrepAI → OpenGrep và kiểm tra chéo mã nguồn | Commit `8db7daf` |
-| [`v2/antigravity-review`](../../tree/v2/antigravity-review) | Kiểm toán độc lập nhãn OWASP, số liệu, bằng chứng và chất lượng kết luận | Commit `a1b9130` |
-| [`v2/javis-benchmark`](../../tree/v2/javis-benchmark) | Chạy thực nghiệm, lưu biên nhận và kiểm chứng từ máy chủ dùng OpenGrep + Qwen cục bộ | Commit `e81c756` |
+| [`main`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/tree/main) | Giữ nguyên đồ án phát triển trước khi thầy điều chỉnh phạm vi; không phải phiên bản thực nghiệm mới nhất | Lịch sử cũ |
+| [`v2/codex-core`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/tree/v2/codex-core) | Nghiên cứu, bảo toàn nhiệm vụ gốc simple_semgrepAI → OpenGrep và kiểm tra chéo mã nguồn | Commit `8db7daf` |
+| [`v2/antigravity-review`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/tree/v2/antigravity-review) | Kiểm toán độc lập nhãn OWASP, số liệu, bằng chứng và chất lượng kết luận | Commit `a1b9130` |
+| [`v2/javis-benchmark`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/tree/v2/javis-benchmark) | Chạy thực nghiệm, lưu biên nhận và kiểm chứng từ máy chủ dùng OpenGrep + Qwen cục bộ | Commit `e81c756` |
 
 Đường dẫn tài liệu trên mỗi nhánh và commit SHA cần được giữ chính xác; không suy luận rằng một báo cáo trên nhánh này là bằng chứng đã được kiểm chứng trên nhánh khác.
 
 ## Bằng chứng có thể tra cứu
 
-- [Chứng minh nhiệm vụ gốc và phụ lục lệnh chạy](../../blob/v2/codex-core/v2/baseline/ADVISOR_M1_ORIGINAL_CLI_PROOF.md).
-- [Kiểm toán độc lập từ GitHub, các vấn đề về heuristic và Ground Truth](../../blob/v2/antigravity-review/v2/evaluation/audit_20261112/DISCREPANCY_AND_EVIDENCE_AUDIT.md).
-- [Báo cáo kiểm toán chứng cứ máy chủ](../../blob/v2/javis-benchmark/v2/evaluation/post_report_audit/SERVER_FORENSIC_AUDIT_SUMMARY_20261112.md).
-- [Bảng đối chứng thực nghiệm 40 cảnh báo](../../blob/v2/javis-benchmark/v2/evaluation/post_report/PAIRED_EVALUATION.csv).
+- [Chứng minh nhiệm vụ gốc và phụ lục lệnh chạy](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/blob/v2/codex-core/v2/baseline/ADVISOR_M1_ORIGINAL_CLI_PROOF.md).
+- [Kiểm toán độc lập từ GitHub, các vấn đề về heuristic và Ground Truth](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/blob/v2/antigravity-review/v2/evaluation/audit_20261112/DISCREPANCY_AND_EVIDENCE_AUDIT.md).
+- [Báo cáo kiểm toán chứng cứ máy chủ](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/blob/v2/javis-benchmark/v2/evaluation/post_report_audit/SERVER_FORENSIC_AUDIT_SUMMARY_20261112.md).
+- [Bảng đối chứng thực nghiệm 40 cảnh báo](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/blob/v2/javis-benchmark/v2/evaluation/post_report/PAIRED_EVALUATION.csv).
 
 **Lưu ý về hai hệ thống đối chứng:** OpenGrep chỉ phát hiện ứng viên; Qwen và heuristic đưa ra nhận định để người dùng xem xét. `REFUTED` không đồng nghĩa người dùng đã xác nhận và xóa cảnh báo. Cần báo riêng các lỗ hổng thật bị đề xuất loại nhầm và các kết quả `UNDETERMINED`.
 
