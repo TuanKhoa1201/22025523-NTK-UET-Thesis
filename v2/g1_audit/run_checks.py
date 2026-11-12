@@ -16,8 +16,16 @@ from contracts import require
 def now(): return datetime.now(timezone.utc).isoformat()
 
 
+def guard_checkout(root, expected_sha):
+    require(git(root, 'rev-parse', 'HEAD') == expected_sha, 'checkout SHA differs')
+    require(git(root, 'rev-parse', '--abbrev-ref', 'HEAD') == 'HEAD', 'detached checkout required')
+    require(not git(root, 'status', '--porcelain', '--untracked-files=no'), 'tracked checkout files changed')
+
+
 def reconcile(receipt, code, log):
     require(receipt['schema'] == 'ntk-unittest-receipt-1', 'invalid unittest receipt schema')
+    require(type(receipt['run']) is int and type(receipt['import_errors']) is int and receipt['import_errors'] >= 0
+            and type(receipt['successful']) is bool and isinstance(receipt['outcomes'],dict), 'invalid structured test receipt types')
     counts = receipt['counts']
     require(set(counts) == {'PASS','FAIL','ERROR','SKIP','XFAIL','XPASS'} and
             all(type(v) is int and v >= 0 for v in counts.values()), 'invalid test counts')
@@ -38,14 +46,15 @@ def main():
     args = p.parse_args()
     root, out = Path(args.checkout).resolve(strict=True), Path(args.output).resolve()
     if out.is_relative_to(root): p.error('output must be outside tested checkout')
-    if git(root, 'rev-parse', 'HEAD') != args.expected_sha: p.error('checkout SHA differs')
-    if git(root, 'status', '--porcelain', '--untracked-files=no'): p.error('tracked checkout files changed')
+    try: guard_checkout(root,args.expected_sha)
+    except ValueError as exc: p.error(str(exc))
     out.mkdir(parents=True, exist_ok=False)
     started = now(); receipts = []
-    env = dict(os.environ, G1_CHECKOUT=str(root), PYTHONDONTWRITEBYTECODE='1', PYTHONUTF8='1')
+    env = dict(os.environ, G1_CHECKOUT=str(root), G1_EXPECTED_SHA=args.expected_sha, PYTHONDONTWRITEBYTECODE='1', PYTHONUTF8='1')
     audit_root = Path(__file__).resolve().parent
     specs = [(audit_root, 'test_candidate.py'), (audit_root, 'test_auditor.py'),
              (audit_root, 'test_deep_audit.py'), (audit_root, 'test_runner.py'),
+             (audit_root, 'test_release.py'),
              (root / 'v2/triage/tests', 'test_g0_v22_payload_contract.py'),
              (root / 'v2/triage/tests', 'test_human_review_negative_suite.py')]
     for index, (folder, pattern) in enumerate(specs):
@@ -72,13 +81,15 @@ def main():
                              structured_sha256=sha(structured_path.read_bytes()) if structured_path.exists() else None,
                              elapsed_seconds=time.monotonic()-tick, stdout_sha256=sha(stdout), stderr_sha256=sha(stderr),
                              test_file_sha256=sha((folder / pattern).read_bytes())))
-    if git(root, 'rev-parse', 'HEAD') != args.expected_sha or git(root, 'status', '--porcelain', '--untracked-files=no'):
-        raise RuntimeError('checkout changed during tests')
+    checkout_error = None
+    try: guard_checkout(root,args.expected_sha)
+    except ValueError as exc: checkout_error = str(exc)
     result = dict(started_at=started, finished_at=now(), tested_sha=args.expected_sha,
                   environment=dict(python=platform.python_version(), platform=platform.platform()),
                   evidence_kind='SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN', commands=receipts,
                   counts={k:sum(r['counts'][k] for r in receipts) for k in ('PASS','FAIL','ERROR','SKIP','XFAIL','XPASS')},
-                  tests_succeeded=all(r['reconciled'] for r in receipts),
+                  tests_succeeded=checkout_error is None and all(r['reconciled'] for r in receipts),
+                  checkout_guard_error=checkout_error,
                   harness_sha256=sha((audit_root / 'unittest_probe.py').read_bytes()),
                   g1_acceptance='INCOMPLETE')
     (out / 'checks.json').write_text(json.dumps(result, indent=2), encoding='utf-8')

@@ -40,12 +40,16 @@ def git(root, *args):
 
 
 class Audit:
-    def __init__(self, checkout, evidence):
+    def __init__(self, checkout, evidence, capture=None):
         self.checkout, self.root = Path(checkout).resolve(), Path(evidence).resolve()
+        self.capture = Path(capture).resolve() if capture else self.root / 'engine'
         self.checks, self.artifacts = [], {}
 
+    def path(self, name):
+        return inside(self.capture, name[len('engine/'):]) if name.startswith('engine/') else inside(self.root,name)
+
     def read(self, name):
-        p = inside(self.root, name)
+        p = self.path(name)
         self.artifacts[str(name)] = sha(p.read_bytes())
         return load(p)
 
@@ -78,7 +82,7 @@ class Audit:
         for name, expected in m['artifacts'].items():
             require('/' not in name and '\\' not in name, 'manifest artifacts must be basenames')
             hexhash(expected)
-            p = inside(self.root / 'engine', name)
+            p = inside(self.capture, name)
             actual = sha(p.read_bytes())
             self.artifacts['engine/' + name] = actual
             if actual != expected:
@@ -94,7 +98,7 @@ class Audit:
                 raise ValueError('engine executable requires review: ' + executable)
             executables.add(path_key(argv[0]))
             require(argv.count('--' + label) == 1, 'recorded command format mismatch')
-            code = int(inside(self.root, 'engine/' + label + '.exit.txt').read_text())
+            code = int(self.path('engine/' + label + '.exit.txt').read_text())
             if type(run['exit_code']) is not int or code != run['exit_code'] or code != 0:
                 raise ValueError('recorded engine failure: ' + label)
             if label != 'version':
@@ -106,28 +110,41 @@ class Audit:
                 require(len(selected) == 1 and selected[0] != 'auto' and '://' not in selected[0]
                         and not selected[0].startswith(('p/', 'r/')), 'one explicit local rules file required')
                 rules.add(path_key(selected[0]))
-                target = path_key(argv[-1]); targets.add(target)
+                # Inherited CLI places target BEFORE --json/--sarif/--output.
+                # Scanner-only CLI places it last. Parse value-taking flags rather than argv[-1].
+                value_flags = {'--config','-c','--output','-o','--timeout','--jobs','-j','--include','--exclude',
+                               '--max-target-bytes','--max-memory','--timeout-threshold'}
+                positional, i = [], 1
+                while i < len(argv):
+                    token = argv[i]
+                    if token in value_flags:
+                        require(i+1 < len(argv), 'option missing argument'); i += 2; continue
+                    if token == 'scan' and i == 1 or token.startswith('-'):
+                        i += 1; continue
+                    positional.append(path_key(token)); i += 1
+                require(len(positional)==1,'ambiguous or missing scanner target; review argv')
+                target = positional[0]; targets.add(target)
                 expected_target = path_key(m['source_root'])
                 if m['target_kind'] == 'file': expected_target += '/' + next(iter(m['sources_before']))
                 require(target == expected_target, 'scan target differs from manifest source root')
                 if run.get('output_mode', 'stdout') == 'stdout':
-                    if inside(self.root, 'engine/' + label + '.stdout.txt').read_bytes() != inside(self.root, 'engine/opengrep.' + label).read_bytes():
+                    if self.path('engine/' + label + '.stdout.txt').read_bytes() != self.path('engine/opengrep.' + label).read_bytes():
                         raise ValueError('stdout mismatch')
                 elif run['output_mode'] == 'file':
                     if argv.count('--output') != 1 or argv[argv.index('--output') + 1] != run['engine_output_path'] or '--' + label not in argv:
                         raise ValueError('file output argv mismatch')
                     output = path_key(run['engine_output_path'])
-                    capture = path_key(str((self.root / 'engine').resolve()))
+                    capture = path_key(str(self.capture.resolve()))
                     require(output.startswith(capture + '/'), 'engine file output outside capture; explicit original-path mapping required')
                 else:
                     raise ValueError('unsupported output mode')
         require(len(executables) == len(targets) == len(rules) == 1, 'engine/rules/target changed across scan formats')
-        engine_version = inside(self.root, 'engine/version.stdout.txt').read_text().strip()
+        engine_version = self.path('engine/version.stdout.txt').read_text().strip()
         require(re.fullmatch(r'(?:opengrep\s+)?\d+\.\d+\.\d+(?:[-+][\w.-]+)?', engine_version, re.I) is not None,
                 'unrecognized engine version; review original version stdout')
         if m['success'] is not True or m['issues'] != [] or m['sources_before'] != m['sources_after'] or m['rules_before_sha256'] != m['rules_after_sha256']:
             raise ValueError('unsuccessful capture or changed inputs')
-        if sha(inside(self.root, 'engine/rules.snapshot.yml').read_bytes()) != m['rules_before_sha256']:
+        if sha(self.path('engine/rules.snapshot.yml').read_bytes()) != m['rules_before_sha256']:
             raise ValueError('rule hash mismatch')
         for fmt in ('json', 'sarif'):
             doc = self.read('engine/opengrep.' + fmt)
@@ -145,7 +162,7 @@ class Audit:
 
     def identity(self):
         raw = inside(self.root, 'input.opengrep.json').read_bytes()
-        if raw != inside(self.root, 'engine/opengrep.json').read_bytes():
+        if raw != self.path('engine/opengrep.json').read_bytes():
             raise ValueError('handoff changed raw bytes')
         doc, bundle = self.read('input.opengrep.json'), self.read('evidence.json')
         records = validate_bundle(raw, doc, bundle)
@@ -175,6 +192,41 @@ class Audit:
             require(isinstance(rec['issues'], list), 'invalid record issues')
             if not rec['snapshots'] or rec['issues']:
                 raise FileNotFoundError('complete Java evidence unavailable; warning retained for review')
+            for snippet in rec['snippets']:
+                name = relative_java(snippet['path'])
+                raw_path = snippet.get('raw_path', rec['path'] if snippet['role'] == 'finding' else name)
+                resolved_raw = path_key(raw_path)
+                root_key = path_key(str(root))
+                for mapping in sorted(rec.get('path_mappings', []), key=lambda m:len(m['from']), reverse=True):
+                    prefix, destination = path_key(mapping['from']), path_key(mapping['to'])
+                    require(destination == root_key or destination.startswith(root_key+'/'), 'path-map destination escapes source root')
+                    if resolved_raw == prefix or resolved_raw.startswith(prefix+'/'):
+                        resolved_raw = destination + resolved_raw[len(prefix):]; break
+                if not resolved_raw.startswith('/') and not re.match(r'^[a-zA-Z]:/',resolved_raw):
+                    resolved_raw = root_key + '/' + resolved_raw
+                require(resolved_raw.startswith(root_key+'/'), 'raw finding/trace path outside source root')
+                if resolved_raw != root_key + '/' + name:
+                    raise FileNotFoundError('explicit path_base mapping missing; auditor will not guess source prefix')
+                data = inside(root, name).read_bytes()
+                require(snippet['sha256'] == sha(data) == rec['snapshots'][name]['sha256'], 'snippet source hash differs')
+                lines = data.decode('utf-8').splitlines(keepends=True)
+                offsets = []
+                for point in (snippet['start'], snippet['end']):
+                    line, col = point['line'], point['col']
+                    require(type(line) is int and type(col) is int and 1 <= line <= len(lines)
+                            and 1 <= col <= len(lines[line-1].rstrip('\r\n').encode('utf-8'))+1, 'snippet line/column out of range')
+                    offset = sum(len(x.encode('utf-8')) for x in lines[:line-1])+col-1
+                    require('offset' not in point or type(point['offset']) is int and point['offset'] == offset, 'snippet byte offset differs')
+                    offsets.append(offset)
+                require(offsets[0] < offsets[1], 'empty/reversed snippet span')
+                matched = data[offsets[0]:offsets[1]].decode('utf-8')
+                require(snippet['matched'] == matched, 'snippet matched bytes differ')
+                seen_lines = set()
+                for line in snippet['lines']:
+                    i = line['line']
+                    require(type(i) is int and 1 <= i <= len(lines) and i not in seen_lines, 'invalid/duplicate snippet line')
+                    require(line['text'] == lines[i-1].rstrip('\r\n'), 'snippet quote differs from Java source')
+                    seen_lines.add(i)
         return 'current source matches captured hashes'
 
     def rows(self):
@@ -215,6 +267,8 @@ class Audit:
                     require(type(event['sequence']) is int and event['sequence'] > previous_seq, 'invalid event sequence')
                     at = timestamp(event['timestamp'])
                     require(previous_time is None or at >= previous_time, 'event timestamps reversed')
+                    if 'collected_at' in rec:
+                        require(at >= timestamp(rec['collected_at']), 'event predates evidence collection')
                     previous_time, previous_seq = at, event['sequence']
                     state = {'confirm-true': 'CONFIRMED_TRUE', 'confirm-false': 'CONFIRMED_FALSE', 'reopen': 'OPEN'}[event['action']]
                     if not event['actor'].strip() or not event['reason'].strip():
@@ -233,6 +287,7 @@ class Audit:
                         require(rec['scan_provenance']['source_capture_verified'] is True, 'false confirmation lacks captured source identity')
                         require(observed_version == {k:v['sha256'] for k,v in expected_version.items()}, 'false confirmation with stale source')
                         manifest = self.read('engine/scan-manifest.json')
+                        require(at >= timestamp(manifest['finished_at']), 'false-confirm event predates captured scan')
                         require(all(manifest['sources_before'].get(k) == v['sha256'] for k,v in expected_version.items()),
                                 'event snapshot differs from scan-time inventory')
                 if w['state'] != state:
@@ -270,6 +325,8 @@ class Audit:
             if a['status'] != 'UNDETERMINED':
                 rec = row['evidence']
                 require(not rec['issues'] and bool(a['citations']), 'conclusive status with insufficient evidence')
+                require(isinstance(rec['raw_trace'], dict) and rec['raw_trace'].get('taint_source')
+                        and rec['raw_trace'].get('taint_sink'), 'conclusive taint verdict lacks source/sink trace')
                 available = {(s['path'], line['line']):line['text'] for s in rec['snippets'] for line in s['lines']}
                 for cite in a['citations']:
                     relative_java(cite['path']); start, end = cite['start_line'], cite['end_line']
@@ -288,6 +345,7 @@ class Audit:
         statuses = [c['status'] for c in self.checks]
         return dict(schema='ntk-g1-independent-audit-1', timestamp=datetime.now(timezone.utc).isoformat(),
                     tested_sha=git(self.checkout, 'rev-parse', 'HEAD'), checks=self.checks,
+                    evidence_layout=dict(triage=str(self.root),capture=str(self.capture)),
                     counts=dict(Counter(statuses)), artifacts=self.artifacts,
                     verdict='FAIL' if 'FAIL' in statuses else 'INCOMPLETE' if 'INCOMPLETE' in statuses else 'PASS')
 
@@ -295,12 +353,13 @@ class Audit:
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--checkout', required=True); p.add_argument('--evidence', required=True)
+    p.add_argument('--capture',help='explicit separate original CLI capture directory; default <evidence>/engine')
     p.add_argument('--output', required=True, help='new directory outside checkout/evidence')
     a = p.parse_args(); out = Path(a.output).resolve()
     checkout, evidence = Path(a.checkout).resolve(), Path(a.evidence).resolve()
-    if out.is_relative_to(evidence) or out.is_relative_to(checkout):
+    if out.is_relative_to(evidence) or out.is_relative_to(checkout) or a.capture and out.is_relative_to(Path(a.capture).resolve()):
         p.error('output must be outside inspected checkout and evidence')
-    result = Audit(checkout, evidence).run()
+    result = Audit(checkout, evidence, a.capture).run()
     out.mkdir(parents=True, exist_ok=False)
     (out / 'audit.json').write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
     (out / 'audit.md').write_text('# G1 artifact audit: ' + result['verdict'] + '\n\n' +

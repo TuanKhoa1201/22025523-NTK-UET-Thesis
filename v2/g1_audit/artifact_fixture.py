@@ -31,7 +31,8 @@ class Fixture:
                 cwe=['CWE-89'],severity='ERROR',raw_finding=finding,raw_trace=finding['extra']['dataflow_trace'],
                 snapshots={'Probe.java':{'sha256':self.source_hash,'size':len(self.java.read_bytes())}},
                 snippets=[dict(path='Probe.java',role='finding',start=finding['start'],end=finding['end'],
-                    sha256=self.source_hash,lines=[{'line':i+1,'text':line} for i,line in enumerate(self.text.splitlines())])],
+                    sha256=self.source_hash,matched=self.text.splitlines()[2][2:22],
+                    lines=[{'line':i+1,'text':line} for i,line in enumerate(self.text.splitlines())])],
                 issues=[],scan_provenance={'source_capture_verified':True})
             self.records.append(rec)
         self.bundle = dict(schema_version='1.1',scan_sha256=self.scan,root=str(self.source),raw_document=self.doc,

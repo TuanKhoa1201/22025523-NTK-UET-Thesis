@@ -28,6 +28,12 @@ class DeepArtifactChecks(unittest.TestCase):
         for name in ('manifest','identity','sarif','sources','database','runtime'):
             with self.subTest(check=name): self.audit.check(name,getattr(self.audit,name)); self.assertEqual(self.audit.checks[-1]['status'],'PASS',self.audit.checks[-1])
 
+    def test_explicit_capture_layout_positive(self):
+        capture=self.root/'separate-cli-capture';self.f.engine.rename(capture)
+        # File-output paths are not involved: the original stdout capture remains byte-identical.
+        audit=Audit(self.root,self.root,capture=capture)
+        audit.manifest();audit.identity();audit.sarif()
+
     def test_empty_results_positive(self):
         d=copy.deepcopy(self.f.doc); d['results']=[]
         s=copy.deepcopy(self.f.sarif); s['runs'][0]['results']=[]
@@ -116,6 +122,22 @@ class DeepArtifactChecks(unittest.TestCase):
         run=self.f.manifest['runs']['sarif']; run['argv'][3]='auto'
         self.f.write('engine/sarif.command.json',run['argv']); self.f.rehash(); self.reject('manifest')
 
+    def test_inherited_file_output_argv_positive(self):
+        for label in ('json','sarif'):
+            run=self.f.manifest['runs'][label]
+            output=str(self.f.engine/('legacy.'+label))
+            run.update(argv=['opengrep','scan','--config',str(self.f.engine/'rules.snapshot.yml'),
+                             str(self.f.source),'--'+label,'--output',output],
+                       output_mode='file',engine_output_path=output)
+            self.f.write('engine/'+label+'.command.json',run['argv'])
+        self.f.rehash(); self.audit.manifest()
+
+    def test_engine_file_output_outside_capture(self):
+        run=self.f.manifest['runs']['json']; output=str(self.root/'outside.json')
+        run.update(argv=['opengrep','scan','--config',str(self.f.engine/'rules.snapshot.yml'),
+                         str(self.f.source),'--json','--output',output],output_mode='file',engine_output_path=output)
+        self.f.write('engine/json.command.json',run['argv']); self.f.rehash(); self.reject('manifest')
+
     def test_success_exit_missing_output_is_incomplete(self):
         (self.root/'engine/opengrep.json').unlink()
         self.audit.check('manifest',self.audit.manifest)
@@ -133,6 +155,37 @@ class DeepArtifactChecks(unittest.TestCase):
     def test_snapshot_wrong_hash(self):
         self.f.bundle['records'][0]['snapshots']['Probe.java']['sha256']='0'*64
         self.f.write('evidence.json',self.f.bundle); self.reject('sources')
+
+    def test_snippet_forgery(self):
+        for changes in ({'matched':'invented'}, {'start':{'line':999,'col':1}}, {'end':{'line':3,'col':999}},
+                        {'sha256':'0'*64}, {'lines':[{'line':3,'text':'invented'}]}):
+            with self.subTest(changes=changes):
+                bundle=copy.deepcopy(self.f.bundle); bundle['records'][0]['snippets'][0].update(changes)
+                self.f.write('evidence.json',bundle); self.reject('sources')
+
+    def test_absolute_finding_outside_root(self):
+        bundle=copy.deepcopy(self.f.bundle)
+        bundle['records'][0]['snippets'][0]['raw_path']='/outside/Probe.java'
+        self.f.write('evidence.json',bundle); self.reject('sources')
+
+    def test_explicit_source_mapping_positive(self):
+        bundle=copy.deepcopy(self.f.bundle)
+        for rec in bundle['records']:
+            rec['snippets'][0]['raw_path']='/synthetic/source/Probe.java'
+            rec['path_mappings']=[{'from':'/synthetic/source','to':str(self.f.source)}]
+        self.f.write('evidence.json',bundle); self.audit.sources()
+
+    def test_sqlite_backdated_event(self):
+        self.f.event(); self.f.event('reopen','2026-10-01T00:00:00Z'); self.reject('database')
+
+    def test_sqlite_unknown_warning_event(self):
+        self.f.event(); self.sql("UPDATE events SET warning_id='unknown'"); self.reject('database')
+
+    def test_sqlite_duplicate_import_and_rejected_action_control(self):
+        self.f.event(); before=(self.root/'review.sqlite').read_bytes()
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.sql('INSERT INTO scans VALUES (?,?)',(self.f.scan,json.dumps(self.f.bundle)))
+        self.audit.database();self.assertEqual((self.root/'review.sqlite').read_bytes(),before)
 
     def test_false_confirmation_positive_and_reopen(self):
         self.f.event(); self.audit.database()

@@ -1,0 +1,380 @@
+{
+  "schema": "ntk-g1-static-cli-1",
+  "timestamp": "2026-11-12T21:14:28.028880+00:00",
+  "reference_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "candidate_sha": null,
+  "evidence_kind": "STATIC_SOURCE_ONLY",
+  "gate_verdict": "INCOMPLETE",
+  "files": [
+    {
+      "path": "v2/baseline/upstream/PROVENANCE.json",
+      "sha256": "12866023d1e85fac84cca6bcd82bf14f2e24134c9f2e1cf8e8d70ca42624bfb4",
+      "status": "READ"
+    },
+    {
+      "path": "v2/baseline/upstream/pyproject.toml",
+      "sha256": "96f6aeefede4c3ae305eee1162f04de3fdd7c7d9b866f4d46711c085885e7f86",
+      "status": "READ"
+    },
+    {
+      "path": "v2/baseline/upstream/semgrepai/cli.py",
+      "sha256": "3cb2220f9adf1e244eb3adc9aca41216ab967579cadffc1046435d1d66f3e546",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 3,
+          "module": "pathlib"
+        },
+        {
+          "line": 4,
+          "module": "rich.console"
+        },
+        {
+          "line": 5,
+          "module": "typing"
+        },
+        {
+          "line": 6,
+          "module": "scanner"
+        },
+        {
+          "line": 7,
+          "module": "validator"
+        },
+        {
+          "line": 8,
+          "module": "reporter"
+        },
+        {
+          "line": 9,
+          "module": "rag"
+        },
+        {
+          "line": 10,
+          "module": "config"
+        },
+        {
+          "line": 179,
+          "module": "api.db"
+        }
+      ],
+      "calls": [
+        {
+          "line": 32,
+          "call": "SemgrepScanner"
+        },
+        {
+          "line": 33,
+          "call": "scanner.scan"
+        },
+        {
+          "line": 37,
+          "call": "scanner._process_results"
+        }
+      ]
+    },
+    {
+      "path": "v2/baseline/upstream/semgrepai/scanner.py",
+      "sha256": "aefc0f80ac59d38abd70a749667428d0f0768ae37625bba852130e9e6cfb1561",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 3,
+          "module": "pathlib"
+        },
+        {
+          "line": 4,
+          "module": "typing"
+        },
+        {
+          "line": 6,
+          "module": "rich.console"
+        },
+        {
+          "line": 7,
+          "module": "rich.progress"
+        }
+      ],
+      "calls": [
+        {
+          "line": 18,
+          "call": "subprocess.run"
+        },
+        {
+          "line": 60,
+          "call": "subprocess.run"
+        },
+        {
+          "line": 64,
+          "call": "subprocess.run"
+        }
+      ]
+    },
+    {
+      "path": "v2/baseline/fork/semgrepai/__main__.py",
+      "sha256": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 1,
+          "module": "cli"
+        }
+      ],
+      "calls": []
+    },
+    {
+      "path": "v2/baseline/fork/semgrepai/cli.py",
+      "sha256": "19e7ffe28affd9aa4f19e150acd879f955c4f3a4f0173fa9dfa3e67add8c811a",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 5,
+          "module": "pathlib"
+        },
+        {
+          "line": 6,
+          "module": "config"
+        },
+        {
+          "line": 7,
+          "module": "scanner"
+        }
+      ],
+      "calls": [
+        {
+          "line": 21,
+          "call": "SemgrepScanner"
+        },
+        {
+          "line": 22,
+          "call": "scanner.scan"
+        },
+        {
+          "line": 23,
+          "call": "scanner._process_results"
+        }
+      ]
+    },
+    {
+      "path": "v2/baseline/fork/semgrepai/config.py",
+      "sha256": "462c7309e6dff4500ba176d7b62aac55f02e3e25cf28203176d240e43d6cb6e6",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 2,
+          "module": "dataclasses"
+        },
+        {
+          "line": 3,
+          "module": "pathlib"
+        }
+      ],
+      "calls": []
+    },
+    {
+      "path": "v2/baseline/fork/semgrepai/scan_manifest.py",
+      "sha256": "789083d18c6799a418d9fced505b86b20cbd5211737cbaa1db288d39d7efb31d",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 4,
+          "module": "datetime"
+        },
+        {
+          "line": 5,
+          "module": "pathlib"
+        }
+      ],
+      "calls": []
+    },
+    {
+      "path": "v2/baseline/prepare_upstream_local.py",
+      "sha256": "a18d4e2c8c23e1aeb8b135d48605568e2f6c4e5870e84e90a0aab8fc8fdac364",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 12,
+          "module": "pathlib"
+        }
+      ],
+      "calls": [
+        {
+          "line": 121,
+          "call": "(source / 'semgrepai/scanner.py').read_text"
+        },
+        {
+          "line": 124,
+          "call": "scanner.replace"
+        },
+        {
+          "line": 127,
+          "call": "scanner.replace('subprocess.run(', 'recorded_run(').replace"
+        },
+        {
+          "line": 95,
+          "call": "subprocess.run"
+        },
+        {
+          "line": 122,
+          "call": "scanner.count"
+        },
+        {
+          "line": 129,
+          "call": "(BASE / 'upstream_local_support/scanner_config.py').read_text"
+        },
+        {
+          "line": 130,
+          "call": "(BASE / 'upstream_local_support/scan_recording.py').read_text"
+        },
+        {
+          "line": 66,
+          "call": "subprocess.run"
+        },
+        {
+          "line": 125,
+          "call": "scanner.count"
+        },
+        {
+          "line": 125,
+          "call": "scanner.count"
+        },
+        {
+          "line": 127,
+          "call": "scanner.replace"
+        },
+        {
+          "line": 150,
+          "call": "prepare"
+        }
+      ]
+    },
+    {
+      "path": "v2/baseline/upstream_local_support/scan_recording.py",
+      "sha256": "8536e36d326e7d96b8e3c2a350c112b61c791e9c9e423e995d67db271d4acc23",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 4,
+          "module": "contextlib"
+        },
+        {
+          "line": 5,
+          "module": "contextvars"
+        },
+        {
+          "line": 6,
+          "module": "pathlib"
+        },
+        {
+          "line": 7,
+          "module": "scan_manifest"
+        }
+      ],
+      "calls": [
+        {
+          "line": 46,
+          "call": "subprocess.run"
+        }
+      ]
+    },
+    {
+      "path": "v2/baseline/upstream_local_support/scanner_config.py",
+      "sha256": "22a18c38aa85faa03e625c1f7100dbcdcc90ab945ad9be4cd4be17a3b3ccc083",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 2,
+          "module": "pathlib"
+        },
+        {
+          "line": 3,
+          "module": "types"
+        }
+      ],
+      "calls": [
+        {
+          "line": 12,
+          "call": "scanner.get"
+        },
+        {
+          "line": 17,
+          "call": "scanner.get"
+        },
+        {
+          "line": 18,
+          "call": "scanner.get"
+        },
+        {
+          "line": 19,
+          "call": "scanner.get"
+        }
+      ]
+    },
+    {
+      "path": "v2/triage/cli.py",
+      "sha256": "e1677bbdd1ec197c315571bb81da5852448f1e641b24ab5006acf2e34137342e",
+      "status": "READ",
+      "imports": [
+        {
+          "line": 6,
+          "module": "pathlib"
+        },
+        {
+          "line": 7,
+          "module": "evidence"
+        },
+        {
+          "line": 8,
+          "module": "ollama"
+        },
+        {
+          "line": 9,
+          "module": "heuristics"
+        },
+        {
+          "line": 10,
+          "module": "store"
+        },
+        {
+          "line": 11,
+          "module": "runtime"
+        },
+        {
+          "line": 12,
+          "module": "scan_receipt"
+        },
+        {
+          "line": 47,
+          "module": "semgrepai.scanner"
+        },
+        {
+          "line": 48,
+          "module": "semgrepai.config"
+        }
+      ],
+      "calls": [
+        {
+          "line": 73,
+          "call": "collect"
+        },
+        {
+          "line": 51,
+          "call": "SemgrepScanner"
+        },
+        {
+          "line": 53,
+          "call": "scanner.scan"
+        },
+        {
+          "line": 79,
+          "call": "record['snapshots'].items"
+        },
+        {
+          "line": 81,
+          "call": "record['issues'].append"
+        }
+      ]
+    }
+  ],
+  "limitation": "Names, imports and call AST do not prove a call executed. Inspect prepared CLI/runtime argv/modules/hash/handoff at candidate SHA."
+}

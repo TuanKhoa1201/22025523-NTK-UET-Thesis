@@ -1,0 +1,168 @@
+{
+  "schema": "ntk-g1-git-attributes-1",
+  "timestamp": "2026-11-12T21:10:53.429778+00:00",
+  "reference_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "git_version": "git version 2.39.1.windows.1",
+  "attribute_blob_sha256": "ca4975e17cadebdd7a8076cf72ff72eaea3b67d1a73d52764bd413a32d517f4e",
+  "attribute_working_sha256": "2d3c1aca54613dd49ddbe0780bbe81e37df2e1aaa54bfea2af28569e3b077d64",
+  "blob_has_utf8_bom": true,
+  "working_has_utf8_bom": true,
+  "pinned_raw_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+  "working_raw_sha256": "005863f208b58de1195d252a9544fbcef53c53801281345328cf0aff32d4ccb4",
+  "raw_bytes_equal": true,
+  "commands": [
+    {
+      "cached": false,
+      "exit_code": 0,
+      "warning_reproduced": false
+    },
+    {
+      "cached": true,
+      "exit_code": 0,
+      "warning_reproduced": true
+    }
+  ],
+  "synthetic_controls": [
+    {
+      "variant": "bom",
+      "warning": true,
+      "text_unset": true,
+      "exit_code": 0
+    },
+    {
+      "variant": "no_bom",
+      "warning": false,
+      "text_unset": true,
+      "exit_code": 0
+    }
+  ],
+  "processes": [
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<pinned-checkout>",
+        "show",
+        "HEAD:v2/demo/.gitattributes"
+      ],
+      "exit_code": 0,
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<pinned-checkout>",
+        "check-attr",
+        "-a",
+        "--",
+        "v2/demo/smoke_m1_rules_raw.opengrep.json"
+      ],
+      "exit_code": 0,
+      "stdout": "v2/demo/smoke_m1_rules_raw.opengrep.json: text: unset\nv2/demo/smoke_m1_rules_raw.opengrep.json: eol: lf",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<pinned-checkout>",
+        "check-attr",
+        "--cached",
+        "-a",
+        "--",
+        "v2/demo/smoke_m1_rules_raw.opengrep.json"
+      ],
+      "exit_code": 0,
+      "stdout": "v2/demo/smoke_m1_rules_raw.opengrep.json: text: unset\nv2/demo/smoke_m1_rules_raw.opengrep.json: eol: lf",
+      "stderr": "(SHA-256: is not a valid attribute name: v2/demo/.gitattributes:1"
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<pinned-checkout>",
+        "show",
+        "HEAD:v2/demo/smoke_m1_rules_raw.opengrep.json"
+      ],
+      "exit_code": 0,
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<temporary-synthetic-repo>",
+        "init",
+        "--quiet"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<temporary-synthetic-repo>",
+        "-c",
+        "core.autocrlf=false",
+        "add",
+        "--",
+        ".gitattributes",
+        "probe.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<temporary-synthetic-repo>",
+        "check-attr",
+        "--cached",
+        "-a",
+        "--",
+        "probe.json"
+      ],
+      "exit_code": 0,
+      "stdout": "probe.json: text: unset",
+      "stderr": "(SHA-256: is not a valid attribute name: .gitattributes:1"
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<temporary-synthetic-repo>",
+        "-c",
+        "core.autocrlf=false",
+        "add",
+        "--",
+        ".gitattributes",
+        "probe.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<temporary-synthetic-repo>",
+        "check-attr",
+        "--cached",
+        "-a",
+        "--",
+        "probe.json"
+      ],
+      "exit_code": 0,
+      "stdout": "probe.json: text: unset",
+      "stderr": ""
+    }
+  ],
+  "finding": "MINOR: cached Git attribute parser treats BOM-prefixed comment as pattern; -text rule still applied",
+  "limitation": "Observed on this Git version; no production files modified, no proof of unrelated historical transformations"
+}

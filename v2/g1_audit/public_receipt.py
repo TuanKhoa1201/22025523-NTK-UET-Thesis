@@ -4,10 +4,12 @@ import json
 from pathlib import Path
 import sys
 from audit import load, sha
+from verify_test_receipt import verify
 
 
 def publish(source, target, repo):
     source, target, repo = Path(source).resolve(), Path(target).resolve(), Path(repo).resolve()
+    verify(source.parent)
     value = load(source)
     # Only allow the known runner schema fields; never copy arbitrary source payloads.
     result = {k:value[k] for k in ('started_at','finished_at','tested_sha','environment','evidence_kind',

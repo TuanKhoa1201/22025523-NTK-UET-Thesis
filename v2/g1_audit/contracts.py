@@ -29,7 +29,10 @@ def strict(text):
         return result
     def constant(value):
         raise ValueError('invalid JSON constant: ' + value)
-    return json.loads(text, object_pairs_hook=pairs, parse_float=number, parse_constant=constant)
+    try:
+        return json.loads(text, object_pairs_hook=pairs, parse_float=number, parse_constant=constant)
+    except RecursionError as exc:
+        raise ValueError('JSON nesting exceeds parser limit') from exc
 
 
 def digest(value):
@@ -193,7 +196,8 @@ def compare_sarif(doc, sarif):
             level = r.get('level', descriptor.get('defaultConfiguration', {}).get('level'))
             tags = descriptor.get('properties', {}).get('tags')
             metadata = r.get('properties', {}).get('metadata', {})
-            observed_cwes = cwes(metadata['cwe']) if 'cwe' in metadata else cwes(tags) if tags is not None else None
+            observed_cwes = cwes(metadata['cwe']) if 'cwe' in metadata else (cwes(tags) or None) if tags is not None else None
+            coverage['codeFlows_present'] += bool(r.get('codeFlows'))
             sarif_by_key[key].append(dict(region=region, level=level, cwes=observed_cwes))
     require(set(raw_by_key) == set(sarif_by_key), 'JSON/SARIF full rule/path/line sets differ')
     for key, left in raw_by_key.items():

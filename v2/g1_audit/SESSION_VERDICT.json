@@ -1,0 +1,351 @@
+{
+  "schema": "ntk-g1-independent-session-2",
+  "status": "PREPARED_WAITING_FOR_CANDIDATE",
+  "verdict": "INCOMPLETE",
+  "reason": "CANDIDATE_NOT_AVAILABLE",
+  "repository": "https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis",
+  "branch": "v2/codex-core",
+  "base_sha": "b74e5a31f24daa2141bb17ff5195801923b1512c",
+  "checkpoint_sha": "6d9d3f5361d4a6d4d914f876fc432275923176bd",
+  "reference_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "candidate_id": null,
+  "candidate_sha": null,
+  "javis_tested_sha": null,
+  "javis_observed_head": "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+  "started_at": "2026-11-12T21:24:34.616582+00:00",
+  "finished_at": "2026-11-12T21:25:04.134468+00:00",
+  "timestamp_scope": "Final verification window; earlier preparation/remote checks were not separately timestamped",
+  "environment": {
+    "python": "3.13.3",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "tests": {
+    "PASS": 127,
+    "FAIL": 0,
+    "ERROR": 0,
+    "SKIP": 0,
+    "XFAIL": 0,
+    "XPASS": 0
+  },
+  "tests_kind": "SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN",
+  "provenance": {
+    "independent_tests": 95,
+    "producer_tests": 32,
+    "real_opengrep_runs": 0,
+    "real_qwen_runs": 0,
+    "historical_pair_use": "FORMAT_COMPATIBILITY_ONLY",
+    "runtime_receipt_checked": false,
+    "raw_server_artifacts_checked": false,
+    "server_runtime_observed": false
+  },
+  "previous_receipt_preserved": {
+    "path": "G1-C1/VERDICT.json",
+    "commit": "b74e5a31f24daa2141bb17ff5195801923b1512c",
+    "sha256": "3f0854685fa6d1e2dca8f151a504c1b4f264dce4d615928c8d3f9779cfb60aed"
+  },
+  "remote_observations": {
+    "source": "Transcribed from four successful ls-remote tool results during this continuation",
+    "command": "git -c safe.directory=<audit-repo> ls-remote --heads origin v2/codex-core v2/antigravity-review v2/javis-benchmark",
+    "all_exit_codes": 0,
+    "antigravity_heads": [
+      "457183f9e17892fe284da04b57ef6c5c24b008e0",
+      "457183f9e17892fe284da04b57ef6c5c24b008e0",
+      "457183f9e17892fe284da04b57ef6c5c24b008e0",
+      "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    ],
+    "javis_heads": [
+      "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+      "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+      "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+      "bf19b5e1392645baba55e5039ebc0d71a1af9aaa"
+    ],
+    "codex_remote_heads": [
+      "b74e5a31f24daa2141bb17ff5195801923b1512c",
+      "b74e5a31f24daa2141bb17ff5195801923b1512c",
+      "b74e5a31f24daa2141bb17ff5195801923b1512c",
+      "b74e5a31f24daa2141bb17ff5195801923b1512c"
+    ]
+  },
+  "gates": [
+    {
+      "gate": 1,
+      "name": "Fork CLI",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; receipts/STATIC_CLI_REFERENCE.json",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    },
+    {
+      "gate": 2,
+      "name": "Engine",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; No candidate scan",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    },
+    {
+      "gate": 3,
+      "name": "Qwen local",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; No candidate request/response/digest",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    },
+    {
+      "gate": 4,
+      "name": "Validator",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; Synthetic/mock only",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    },
+    {
+      "gate": 5,
+      "name": "Human review",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; Synthetic SQLite only",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    },
+    {
+      "gate": 6,
+      "name": "STALE_SOURCE",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; Synthetic temporary Java only",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    },
+    {
+      "gate": 7,
+      "name": "Reproducibility",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; No integrated candidate demo",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    },
+    {
+      "gate": 8,
+      "name": "Candidate integrity",
+      "status": "INCOMPLETE",
+      "evidence_kind": "NO_CANDIDATE_RUNTIME",
+      "evidence": "receipts/FINAL_CHECKS.json; CLI_REVIEW.md; No candidate diff to inspect",
+      "reproduce": "See README.md and command receipts",
+      "limitation": "Synthetic/static evidence does not establish candidate runtime"
+    }
+  ],
+  "issues": [
+    {
+      "id": "G1-EVIDENCE-01",
+      "severity": "BLOCKER",
+      "kind": "MISSING_ACCEPTANCE_EVIDENCE",
+      "file": "v2/g1_integration/CANDIDATE.json",
+      "line": null,
+      "description": "No READY marker at observed Antigravity HEAD; not a confirmed production defect"
+    },
+    {
+      "id": "G1-EVIDENCE-02",
+      "severity": "BLOCKER",
+      "kind": "MISSING_ACCEPTANCE_EVIDENCE",
+      "file": "v2/g1_runtime/<candidate_id>/VERDICT.json",
+      "line": null,
+      "description": "No candidate-bound runtime receipt on observed JavisOS HEAD"
+    },
+    {
+      "id": "G1-GIT-01",
+      "severity": "MINOR",
+      "kind": "REPRODUCED_REFERENCE_DEFECT",
+      "file": "v2/demo/.gitattributes",
+      "line": 1,
+      "description": "UTF-8 BOM causes cached comment parsing warning in Git 2.39.1.windows.1; -text effective and pinned raw bytes unchanged",
+      "reproduce": "git -C <reference-checkout> check-attr --cached -a -- v2/demo/smoke_m1_rules_raw.opengrep.json"
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "-c",
+        "safe.directory=<audit-repo>",
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "457183f9e17892fe284da04b57ef6c5c24b008e0",
+        "v2/g1_integration"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "git",
+        "-c",
+        "safe.directory=<audit-repo>",
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+        "v2/g1_runtime"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "v2/g1_audit/audit.py",
+        "--checkout",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference",
+        "--evidence",
+        "<audit-repo>\\v2\\g1_audit\\.local\\final-synthetic-bundle-02",
+        "--output",
+        "<audit-repo>\\v2\\g1_audit\\.local\\final-synthetic-output-02"
+      ],
+      "exit_code": 2,
+      "stdout": "INCOMPLETE",
+      "stderr": "",
+      "stdout_sha256": "ddadacf173fa621d3e39b06ef43d735fc0bcdd861446368bdfd7d697d9fd8af2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "v2/g1_audit/audit.py",
+        "--checkout",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference",
+        "--evidence",
+        "<audit-repo>\\v2\\g1_audit\\.local\\final-synthetic-bundle-02",
+        "--output",
+        "<audit-repo>\\v2\\g1_audit\\.local\\final-corrupt-output-02"
+      ],
+      "exit_code": 1,
+      "stdout": "FAIL",
+      "stderr": "",
+      "stdout_sha256": "765489fd1b16cabfd78a744ff35dbeccd0d050fb1bff907dca6e1eafa8d44938",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "v2/g1_audit/audit.py",
+        "--checkout",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference",
+        "--evidence",
+        "<audit-repo>\\v2\\g1_audit\\.local\\runtime-not-provided",
+        "--output",
+        "<audit-repo>\\v2\\g1_audit\\.local\\final-missing-output-02"
+      ],
+      "exit_code": 2,
+      "stdout": "INCOMPLETE",
+      "stderr": "",
+      "stdout_sha256": "ddadacf173fa621d3e39b06ef43d735fc0bcdd861446368bdfd7d697d9fd8af2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "v2/g1_audit/inspect_release.py",
+        "--checkout",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference",
+        "--expected-sha",
+        "457183f9e17892fe284da04b57ef6c5c24b008e0",
+        "--output",
+        "<audit-repo>\\v2\\g1_audit\\.local\\release-final-02.json"
+      ],
+      "exit_code": 2,
+      "stdout": "CANDIDATE_NOT_AVAILABLE",
+      "stderr": "",
+      "stdout_sha256": "42a8cde26c61b358946e34be3760e2e84a16f29b8baaafe7907e6af7d76cb605",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "git",
+        "-c",
+        "safe.directory=<audit-repo>",
+        "diff",
+        "--name-only",
+        "b74e5a3"
+      ],
+      "exit_code": 0,
+      "stdout": "v2/g1_audit/AUDITOR_UPGRADE.md\nv2/g1_audit/README.md\nv2/g1_audit/artifact_fixture.py\nv2/g1_audit/audit.py\nv2/g1_audit/contracts.py\nv2/g1_audit/public_receipt.py\nv2/g1_audit/receipts/HARDENING_CHECKPOINT.json\nv2/g1_audit/run_checks.py\nv2/g1_audit/test_auditor.py\nv2/g1_audit/test_candidate.py\nv2/g1_audit/test_deep_audit.py\nv2/g1_audit/test_runner.py\nv2/g1_audit/unittest_probe.py",
+      "stderr": "warning: in the working copy of 'v2/g1_audit/README.md', LF will be replaced by CRLF the next time Git touches it",
+      "stdout_sha256": "de95f01534343858c940f0cd60c6aff6cb9b604c9d4a8b16ac5782a11beb5d60",
+      "stderr_sha256": "1ba83c67682abf6d11afc58c4e7fcb14d20b453d415aa433de75ffc78e3a294e"
+    },
+    {
+      "argv": [
+        "git",
+        "-c",
+        "safe.directory=<audit-repo>",
+        "diff",
+        "--check",
+        "--",
+        "v2/g1_audit"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: in the working copy of 'v2/g1_audit/README.md', LF will be replaced by CRLF the next time Git touches it",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "1ba83c67682abf6d11afc58c4e7fcb14d20b453d415aa433de75ffc78e3a294e"
+    }
+  ],
+  "evidence_sha256": {
+    "receipts/FINAL_CHECKS.json": "38ebbf8b7d1cdc7aa31faf69a4064bbbc7e79df1ef6a6581b87000e2aacd4e43",
+    "receipts/GIT_ATTRIBUTES.json": "b96a454c8f5687b5de7bec59ba3f7a0a56fbb9d9389c14d3c68c3e4a7bb523d7",
+    "receipts/HARDENING_CHECKPOINT.json": "642492511d8d80d90124561dcb97f52c2b8b43d2c7ba01dc29cdc4befd6444b9",
+    "receipts/STATIC_CLI_REFERENCE.json": "0d1d04e188b6a671019c5c5c183fa93908cda1f97dd677a1027ac2fe4eb6b3dd"
+  },
+  "auditor_code_sha256": {
+    "artifact_fixture.py": "aec64c3e6a966b92609fea392df9fb972673b04ff5c606ef7b2184b573bef039",
+    "audit.py": "f8e198d0d269303a3a5e98fbfc0c203ee77baaa70bff0ee4339d7000888e2071",
+    "contracts.py": "f793aeb91f99d380f416d3fa9b36a6f56bd237e324340d5471e0f52fea540a77",
+    "inspect_cli.py": "45a02a8f7575afb2c052820ed0d1e39724a63870e2fc3196e94cdf054d79d727",
+    "inspect_git_attributes.py": "865ddfc74e7154d7a373497a4e2d24a7d4190a5927cc4d7bebfbb1396dd267c1",
+    "inspect_release.py": "f1250cd47b45e48dbd23945d88e180a1d44e41b4c158e750f7ada48da4a3f003",
+    "public_receipt.py": "8bbcca6f3a98d54f56a8f18601a5c2c27ba2aef6b54601c3bea709c3a145d719",
+    "run_checks.py": "bc0ad6460bec10a1e257180794848d6fdc771e6d576fa6e225f700774ca51b1d",
+    "test_auditor.py": "24bed591ae057375ade9e15ae1b9380f6db6f48cb15b1dd70d3c18dd3508553f",
+    "test_candidate.py": "b0fa17e80bc80a16f356b9f6b347018322b4129fd45d9aa829af8e132f8ff812",
+    "test_deep_audit.py": "68fc11172a6110699db360f1aad7589cec158e6033edb22ad507e48021e3ddc4",
+    "test_release.py": "80f8f5ea1bd3373e85e7b9a57f70198b11d1c9633dcd17b7ec962266c9f3c635",
+    "test_runner.py": "93465d4d1e64a7415a9496bae2e45225c77367b64a34788fd9c4a47e2e50cdc1",
+    "unittest_probe.py": "7d2fb3c651b1e5166e7b4eac753e0f874bb27b87d4128905365fbcdf93484573",
+    "verify_test_receipt.py": "d4ef73a0375d303c5c4a244593e8830162435867cf401782e0d53b4e49d962c8"
+  },
+  "historical_format_source_sha256": {
+    "smoke_v2_taint_raw.opengrep.json": "3099688f6323939b04539ad8c3acd427cd5d905868748eba324e769f7d643fb0",
+    "smoke_v2_taint_raw.opengrep.sarif": "ec53baa4a2e04aad7942848af554254bb20e8ff6345ae2b959456712b9a41097"
+  },
+  "limitations": [
+    "No real candidate tested and no G1-C2 released in observed refs.",
+    "Unsigned artifact checks prove consistency, not authenticated human action or physical model execution.",
+    "Missing optional SARIF fields are disclosed; path_base/cross-host relocation is not guessed.",
+    "No OS isolation against source replacement between checks; tracked-file guards observe before/after state.",
+    "No Qwen accuracy or benefit claims; G3 remains out of scope."
+  ]
+}

@@ -1,0 +1,262 @@
+{
+  "started_at": "2026-11-12T21:24:34.616582+00:00",
+  "finished_at": "2026-11-12T21:24:43.553204+00:00",
+  "tested_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "environment": {
+    "python": "3.13.3",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "evidence_kind": "SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN",
+  "counts": {
+    "PASS": 127,
+    "FAIL": 0,
+    "ERROR": 0,
+    "SKIP": 0,
+    "XFAIL": 0,
+    "XPASS": 0
+  },
+  "tests_succeeded": true,
+  "g1_acceptance": "INCOMPLETE",
+  "harness_sha256": "7d2fb3c651b1e5166e7b4eac753e0f874bb27b87d4128905365fbcdf93484573",
+  "private_receipt_sha256": "b8f642a6d2f14ae73a8548576474c4d593d92fb27c7755cb8a22a9770f1aea81",
+  "commands": [
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 28,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.1500314000004437,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "f6489c650cbe1c1673a4070b90361c2ff3440f5606e0aba2d6fd3e8a2bb31a3d",
+      "test_file_sha256": "b0fa17e80bc80a16f356b9f6b347018322b4129fd45d9aa829af8e132f8ff812",
+      "structured_sha256": "98d5f5b4116fc4cb7bf230f5ecee173abb6877d3b626a40a8ffd641c8ed8dc5e",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_candidate.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-final-v2\\0.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 28,
+      "run": 28,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 8,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.3575923000025796,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "0fab5073a0e3bf7bfdb20f774fd3f360a7c72c1da5013a1c7e4e18215519e4e6",
+      "test_file_sha256": "24bed591ae057375ade9e15ae1b9380f6db6f48cb15b1dd70d3c18dd3508553f",
+      "structured_sha256": "75fd67c1d04cb3a03091c5fa5764bfc21d73a47438ea8a1daa9a6c6072ba4a3e",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_auditor.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-final-v2\\1.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 8,
+      "run": 8,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 40,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 3.65150690000155,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "106d9d5ac91dded4e528700a8f0af14769098f72e34959b9bffa47c1701be3c5",
+      "test_file_sha256": "68fc11172a6110699db360f1aad7589cec158e6033edb22ad507e48021e3ddc4",
+      "structured_sha256": "b665820a7d1c2d175c37c078d63f326cc0be4c75e0b15ee362416d3e0aca40e7",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_deep_audit.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-final-v2\\2.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 40,
+      "run": 40,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 11,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.6923643000045558,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "9ebf0d57f685992e98c17936a9c6cc68a572894527de6443dd8dcdb85b4a2bd0",
+      "test_file_sha256": "93465d4d1e64a7415a9496bae2e45225c77367b64a34788fd9c4a47e2e50cdc1",
+      "structured_sha256": "c6ec6844bbf6a83d3381585638cd3789fa381ecc04bbc859321f6a041a593797",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_runner.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-final-v2\\3.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 11,
+      "run": 11,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 8,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.35118449999572476,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "61b514e3be7832a879c9a4f045d494ee64909c733997447f20b98aa081c3b7e8",
+      "test_file_sha256": "80f8f5ea1bd3373e85e7b9a57f70198b11d1c9633dcd17b7ec962266c9f3c635",
+      "structured_sha256": "ce7faa991afb3ab4d0f8bec4037c755b87ebd53e156b5dcc9418422b81442800",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_release.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-final-v2\\4.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 8,
+      "run": 8,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.600394299995969,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "cd66da0afc483d66c08c289cc18dd60db6f83c5f915fdfb9a12b5612110e97aa",
+      "test_file_sha256": "761ffa8ac283aecfd269ab24ddfad370e1856b631de888e7a325578ecdc8fa6c",
+      "structured_sha256": "83f01900f4ff3fbd7f7232992fbdf02cbaeb2f14c8f134f75bc55fb162cf3b4c",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "--pattern",
+        "test_g0_v22_payload_contract.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-final-v2\\5.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 16,
+      "run": 16,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.9938464999941061,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "ade2ad62e3929a206cd53c0e9802c0ded6c0015be26be5aaa7896f3470b8a3a0",
+      "test_file_sha256": "9de7cd0df7820213bbc947e6d78b90b38b0546b10006f1b3cd71ad9bc0c2d878",
+      "structured_sha256": "59471558b3df9be255dfcf641268713807ae5519475d4b704f6831be986bbe59",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "--pattern",
+        "test_human_review_negative_suite.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-final-v2\\6.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 16,
+      "run": 16,
+      "import_errors": 0
+    }
+  ]
+}

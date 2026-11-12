@@ -6,6 +6,9 @@ import sys
 import tempfile
 import unittest
 from run_checks import reconcile
+from run_checks import guard_checkout
+from unittest.mock import patch
+import os
 
 
 class RunnerChecks(unittest.TestCase):
@@ -50,6 +53,41 @@ class RunnerChecks(unittest.TestCase):
         p,r=self.child('import unittest\nclass T(unittest.TestCase):\n def test_ok(self): pass\n')
         r['counts']['PASS']=2
         with self.assertRaises(ValueError): reconcile(r,p.returncode,p.stderr.decode())
+        r['counts']['PASS']=1;r['run']=True
+        with self.assertRaises(ValueError): reconcile(r,p.returncode,p.stderr.decode())
+
+    def test_wrong_sha_stops_before_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)/'not-created'
+            cmd=[sys.executable,'-B',str(Path(__file__).with_name('run_checks.py')),'--checkout',os.environ['G1_CHECKOUT'],
+                 '--expected-sha','0'*40,'--output',str(out)]
+            p=subprocess.run(cmd,capture_output=True,timeout=15)
+            self.assertEqual(p.returncode,2); self.assertFalse(out.exists())
+
+    def test_mutated_checkout_or_branch_is_rejected(self):
+        for replies in (['a'*40,'HEAD',' M tracked.py'], ['a'*40,'moving-branch']):
+            with self.subTest(replies=replies), patch('run_checks.git',side_effect=replies):
+                with self.assertRaises(ValueError): guard_checkout(Path('.'),'a'*40)
+
+    def test_clean_detached_checkout_positive(self):
+        guard_checkout(Path(os.environ['G1_CHECKOUT']),os.environ['G1_EXPECTED_SHA'])
+
+    def test_receipt_log_hash_and_aggregate_corruption(self):
+        from verify_test_receipt import verify
+        from audit import sha
+        p,r=self.child('import unittest\nclass T(unittest.TestCase):\n def test_ok(self): pass\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'0.stdout.txt').write_bytes(p.stdout);(root/'0.stderr.txt').write_bytes(p.stderr)
+            path=root/'0.unittest.json';path.write_text(json.dumps(r),encoding='utf-8')
+            command=dict(stdout_sha256=sha(p.stdout),stderr_sha256=sha(p.stderr),structured_sha256=sha(path.read_bytes()),
+                         structured=r,counts=r['counts'],exit_code=p.returncode,reconciled=True)
+            receipt=dict(commands=[command],counts=dict(r['counts']),tests_succeeded=True,checkout_guard_error=None)
+            (root/'checks.json').write_text(json.dumps(receipt));self.assertTrue(verify(root)['receipts_consistent'])
+            receipt['counts']['PASS']=2;(root/'checks.json').write_text(json.dumps(receipt))
+            with self.assertRaises(ValueError):verify(root)
+            receipt['counts']['PASS']=1;(root/'checks.json').write_text(json.dumps(receipt))
+            (root/'0.stderr.txt').write_bytes(p.stderr+b'changed')
+            with self.assertRaises(ValueError):verify(root)
 
 
 if __name__ == '__main__': unittest.main()
