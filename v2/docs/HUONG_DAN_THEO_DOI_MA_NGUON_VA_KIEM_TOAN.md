@@ -45,3 +45,20 @@
 ## Lịch sử nhánh
 
 Các nhánh công việc từng tạo theo từng phiên trước được giữ nguyên trong lịch sử commit của ba nhánh làm việc lâu dài. Commit gốc vẫn có thể truy cập bằng SHA khi các nhánh tham chiếu cũ được dọn khỏi danh sách branch. Không force-push để viết lại lịch sử.
+
+
+## Tra cứu các đầu nhánh cũ theo commit
+
+Các nhánh tham chiếu dưới đây được kế thừa trong lịch sử của ba nhánh làm việc chính. Khi dọn tên nhánh, **commit SHA vẫn giữ nguyên**:
+
+| Tên nhánh cũ | Commit cuối | Nhánh giữ lịch sử |
+| --- | --- | --- |
+| `thesis-v2/opengrep-qwen` | [`b724682`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/b7246823dba53c0c4cd3f6d8a7e853147f901bac) | Codex |
+| `v2/advisor-m1-proof-20261111` | [`8db7daf`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/8db7dafae6c4abc99ca8a78e9b2e83a0e0b9f204) | Codex |
+| `v2/advisor-evaluation-proof-20261111` | [`bad92ec`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/bad92ec9d25e2ab06bb9aac814a035e8bedb9a94) | Antigravity |
+| `v2/advisor-evaluation-javis-20261111` | [`150dcca`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/150dccab3c7faa7af9e37533378dd863cb643292) | JavisOS |
+| `v2/integration-pilot` | [`940363f`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/940363f93aecaec5d2872a688addf974b31cccf7) | Antigravity và JavisOS |
+| `v2/post-report-cwe22-cwe89-20261112` | [`86636b9`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/86636b9de22e59efcca2d3786434727c6ae082e4) | Antigravity và JavisOS |
+| `kiem-toan/du-lieu-va-ket-qua-20261112` | [`a1b9130`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/a1b9130682f32c784378e624776d2eb5b035c6ff) | Antigravity |
+| `v2/kiem-toan-bang-chung-may-chu-20261112` | [`e81c756`](https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis/commit/e81c75681605034449820f5eb3fe7db9c2b4fcfc) | JavisOS |
+
