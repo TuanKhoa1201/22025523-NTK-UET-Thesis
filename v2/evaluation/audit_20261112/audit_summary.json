@@ -1,0 +1,2669 @@
+{
+  "schema_version": "ntk-independent-audit-1.0",
+  "audited_repository": "https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis",
+  "audited_experimental_branch": "v2/post-report-cwe22-cwe89-20261112",
+  "audited_base_commit": "86636b9de22e59efcca2d3786434727c6ae082e4",
+  "owasp_benchmark_commit": "8b67a88d73b2594570fc21150705283de884620b",
+  "owasp_expectedresults_lf_sha256": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1",
+  "overall_experimental_claims_status": "FAIL",
+  "acceptance_criteria": {
+    "1_labels_sourced_and_independently_verified": "PARTIAL",
+    "2_metrics_recomputed_from_scratch_with_adversarial_tests": "PASS",
+    "3_data_model_and_heuristic_divergences_identified": "PASS",
+    "4_server_raw_evidence_verified_within_accessible_scope": "NOT_VERIFIED",
+    "5_no_overstated_100pct_claims_in_original_reports": "FAIL",
+    "6_reproducible_audit_suite_deterministic": "PASS",
+    "7_github_files_and_base_commit_verified": "PASS"
+  },
+  "section_conclusions": {
+    "labels_owasp_56_and_stage5_20": {
+      "boolean_cwe_56_status": "PASS",
+      "annotator_rationale_status": "FAIL",
+      "stage5_20_manual_labels_status": "PARTIAL",
+      "pre_inference_selection_proof": "PARTIAL"
+    },
+    "recomputed_arithmetic": {
+      "alert_level_math_status": "PASS",
+      "verdict_vi": "số liệu tái tính khớp",
+      "testcase_level_owasp_tpr_fpr_status": "NOT_VERIFIED"
+    },
+    "citations_and_evidence_verifier": {
+      "code_verifier_mechanics_status": "PARTIAL",
+      "raw_assessments_citations_on_server": "NOT_VERIFIED"
+    },
+    "ollama_runtime_evidence": {
+      "status": "NOT_VERIFIED"
+    },
+    "heuristic_steering_risk": {
+      "status": "FAIL",
+      "risk_level": "CRITICAL",
+      "summary": "heuristics.py computes `recommended_status` (defaulting to SUPPORTED, never UNDETERMINED, matching 16/16 dev and 40/40 held-out OWASP labels) and ollama.py injects it plus `recommendation_reason` and `candidate_citations` directly into Qwen's prompt in Arm C, while Arm B suppresses 24/40 cases to UNDETERMINED."
+    }
+  },
+  "label_audit": {
+    "status": "PARTIAL",
+    "boolean_labels_and_cwe_status": "PASS",
+    "rationale_integrity_status": "FAIL",
+    "raw_opengrep_finding_offset_check": "NOT_VERIFIED",
+    "expectedresults_csv_direct_verified": null,
+    "dev_set_16": {
+      "split": "dev_set_16",
+      "expected_count": 16,
+      "unique_alerts": 16,
+      "unique_labels_json": 16,
+      "unique_labels_csv": 16,
+      "owasp_boolean_and_cwe_verified_count": 16,
+      "disk_source_sha256_verified_count": null,
+      "single_alert_per_testcase_verified": true,
+      "errors": [],
+      "rationale_discrepancies": [
+        {
+          "split": "dev_set_16",
+          "alert_id": "008d4e65556a0fa6837193af88914fb201e03a79cef27f22519a5e2a6e42be8e",
+          "test_case": "BenchmarkTest00863",
+          "severity": "HIGH",
+          "actual_value": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). Line 47 (`org.owasp.benchmark.helpers.ThingInterface thing =`) delegates `param` to `ThingInterface.doSomething` (external helper class), which in this OWASP Benchmark v1.2 test case returns a non-tainted value before sink line 51.",
+          "expected_value": "Line 45 calls SeparateClassRequest.getTheValue() returning constant \"bar\"; both Thing1 and Thing2 in BenchmarkJava v1.2 preserve their input parameter.",
+          "cause": "Rationale falsely attributed FP to ThingInterface returning a constant instead of SeparateClassRequest.getTheValue()."
+        }
+      ],
+      "test_cases": [
+        "BenchmarkTest00001",
+        "BenchmarkTest00008",
+        "BenchmarkTest00102",
+        "BenchmarkTest00103",
+        "BenchmarkTest00131",
+        "BenchmarkTest00190",
+        "BenchmarkTest00191",
+        "BenchmarkTest00216",
+        "BenchmarkTest00527",
+        "BenchmarkTest00620",
+        "BenchmarkTest00863",
+        "BenchmarkTest00950",
+        "BenchmarkTest00998",
+        "BenchmarkTest01010",
+        "BenchmarkTest01031",
+        "BenchmarkTest01096"
+      ],
+      "alert_ids": [
+        "008d4e65556a0fa6837193af88914fb201e03a79cef27f22519a5e2a6e42be8e",
+        "0a26cd70e57f9944a61685ac1359c70c0c2ed3caa74a27955434416fdc0209d1",
+        "0b3135089efde602b7a13676f2039711516796e9095c7e41a8978f2a992f2026",
+        "0d87edbd8846f3add7de44f8772bde014310e181a4eeadde7947feb2a394694b",
+        "10764728975922ca8731e972b0d1c2b821956bdaf16e43405b931eae51442cd3",
+        "3db21430f4800cc0e913cb0496086ca09d4523a512f1ba151ca99c887b1138a6",
+        "45cfdd7df6e674c32d7716bef159bc6373a6c96bf1008f1fea34cc54074d0d32",
+        "5ff4fe183aa4268b6f380281fea253a15130215adb0c3a290fdc6ac32c15aef1",
+        "6b01dc857ebfd29ec5442e4fb163f0def2c4400e001e9a087216a9168ebbbc97",
+        "81c5ca177e6a4347e4536a5327085979f44ee0e8202efb961a98944dbd9b3f54",
+        "8a09630643f253c680445a2e03968b00a5c5b74d1678ce4f8d23018e6ae951ce",
+        "adda1efd53e2711bc939e1f3ea2206b62ba66f6d49c67fc521facad1c51c1125",
+        "be8b8eda376d1ffae9f95b8b3daf8037574c621bc566f58289da951479150a54",
+        "de4d654cfc4d71b51d47b72a6504186be31e17f055e5c8f897e3590958a9d211",
+        "e48f7f8251c4bbcf96f2911ac9a718120d63c931ada4b59e406e018d3ecf89b9",
+        "f9e551b9afd84e333fc8be5400657c1a506d247fa91d237502fe0d48ae45661f"
+      ],
+      "source_shas": [
+        "12bf356c39f6ba2aa91b2c60bb253f8558e91141c75510b5be32d296757c90ae",
+        "258434bdbb2c3b20f1e83824ac7a69bf430cbdcb3d85173bedb0c2a88ee403ce",
+        "3700b27707423bab0516531004f5d943de3d12e845af8ed96e50afb09bdc8430",
+        "4ee3d85461784e6bba63b6342342db69991252b9d1260ce869fe3d408d372717",
+        "62a893d3dbaf217e02fd5795b3d9945f9b3fc79712c07d697c4bb4dbcdddaf6e",
+        "69d31a8b396303a3b1908ad0c21d0b1d35edb944a11f7bb8a7d6326f63074a35",
+        "7091b80b2b9f186efb922d80fea3c20042f2af29affb157b154e67789c0c889a",
+        "8cfaacce6f3aea7b1ff71a1f3ad8228359e645d79405bed8800401933025466b",
+        "9bc49dbe491a39162c97b0c43b8ce5e42a4de5c0552c52117b1a51b0a541dfbe",
+        "9d89a8a68982822f01d9b1fcb272d8de27c32fd96edaad46ba6601788052f14a",
+        "a2835ca20d356ed6fd3191c1ef6df5e2c9fa796add6ea5dae360e41202241e9d",
+        "a5729f499e742ab51e6fd12c1dfc5687fcb3971180a6a7d8d1004bfb1431acb9",
+        "a83e78f8e9dd7b941c19eb2709429a2b7bec32b8921c193f3d02c4a04097a4b7",
+        "c8151e0cd1f3bce72bf21bb9fabc48f563e315cba3137ca32def203323492bf4",
+        "e9b906300fd16ae1738dd1b174e22b6baa00db262fecb4e9f43f80575f0572e0",
+        "efb0bce0a68e68f8696ed667e7d686f13005e2a27041d2e0d80c3f0658561dc9"
+      ]
+    },
+    "heldout_set_40": {
+      "split": "heldout_set_40",
+      "expected_count": 40,
+      "unique_alerts": 40,
+      "unique_labels_json": 40,
+      "unique_labels_csv": 40,
+      "owasp_boolean_and_cwe_verified_count": 40,
+      "disk_source_sha256_verified_count": null,
+      "single_alert_per_testcase_verified": true,
+      "errors": [],
+      "rationale_discrepancies": [
+        {
+          "split": "heldout_set_40",
+          "alert_id": "ce1ab49f5158511a983a4a6682dc56659d3924692d4e18a3258ac8eb98361f01",
+          "test_case": "BenchmarkTest00864",
+          "severity": "LOW",
+          "actual_value": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). After `valuesList.remove(0)`, index 0 holds `param` while index 1 holds constant `\"moresafe\"`; line 56 (`bar = valuesList.get(1); // get the last 'safe' value`) retrieves the safe constant element rather than `param` before line 59.",
+          "expected_value": "Both line 45 (`scr.getTheValue` -> constant \"bar\") and line 56 (`valuesList.get(1)` -> \"moresafe\") neutralize taint.",
+          "cause": "Rationale mentions `SeparateClassRequest` as HTTP input reader at line 44 without noting `getTheValue()` at line 45 already returns constant \"bar\"."
+        },
+        {
+          "split": "heldout_set_40",
+          "alert_id": "bb5a6a2cee5cf796b32c04c7e553b6ea275b8c8a843875285dea1338d9798ad7",
+          "test_case": "BenchmarkTest01746",
+          "severity": "HIGH",
+          "actual_value": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). Line 96 (`bar = (7 * 42) - num > 200 ? \"This should never happen\" : param;`) uses a deterministic arithmetic condition `(7 * 18) + num > 200` (with `num = 106`) that always evaluates to true and assigns a constant string to `bar` before sink line 66.",
+          "expected_value": "Line 45 calls SeparateClassRequest.getTheValue() returning constant \"bar\"; line 96 has `(7 * 42) - 106 = 188 <= 200` (false), which assigns `param`, NOT the constant branch.",
+          "cause": "Templated rationale script misidentified `(7 * 42) - num > 200` as `(7 * 18) + num > 200` and missed `getTheValue()`."
+        },
+        {
+          "split": "heldout_set_40",
+          "alert_id": "f905aaf22f022c1ed4c90d47547aa47f6d1e883bed4d766fcccf2c3e12f237d7",
+          "test_case": "BenchmarkTest01752",
+          "severity": "MEDIUM",
+          "actual_value": "csv_tag='benchmark_false_positive_non_tainted_flow (source line 44, sink line 60)' | rationale='Verified against OWASP Benchmark v1.2 expectedresults-1.2.csv and servlet source code: value reaching sink line 60 is overwritten or neutralized before execution.'",
+          "expected_value": "Line 45 calls SeparateClassRequest.getTheValue() returning constant \"bar\"; inner Test.doSomething puts and gets the SAME tainted key `keyB-11351` in HashMap.",
+          "cause": "Generic unverified fallback rationale string left in locked held-out label file."
+        }
+      ],
+      "test_cases": [
+        "BenchmarkTest00011",
+        "BenchmarkTest00018",
+        "BenchmarkTest00024",
+        "BenchmarkTest00025",
+        "BenchmarkTest00038",
+        "BenchmarkTest00040",
+        "BenchmarkTest00062",
+        "BenchmarkTest00108",
+        "BenchmarkTest00132",
+        "BenchmarkTest00134",
+        "BenchmarkTest00135",
+        "BenchmarkTest00197",
+        "BenchmarkTest00205",
+        "BenchmarkTest00218",
+        "BenchmarkTest00264",
+        "BenchmarkTest00340",
+        "BenchmarkTest00763",
+        "BenchmarkTest00864",
+        "BenchmarkTest00949",
+        "BenchmarkTest00952",
+        "BenchmarkTest00953",
+        "BenchmarkTest00956",
+        "BenchmarkTest00996",
+        "BenchmarkTest00997",
+        "BenchmarkTest01004",
+        "BenchmarkTest01006",
+        "BenchmarkTest01011",
+        "BenchmarkTest01012",
+        "BenchmarkTest01028",
+        "BenchmarkTest01030",
+        "BenchmarkTest01085",
+        "BenchmarkTest01110",
+        "BenchmarkTest01156",
+        "BenchmarkTest01212",
+        "BenchmarkTest01215",
+        "BenchmarkTest01233",
+        "BenchmarkTest01385",
+        "BenchmarkTest01389",
+        "BenchmarkTest01746",
+        "BenchmarkTest01752"
+      ],
+      "alert_ids": [
+        "0087514f08783ab075832bc9af31754cd20e5a670163acb16e9b75f87a4c1b1a",
+        "07b9d6d3ccac118a1cf164fb82be72532018889a041e6963d4e1681c36b2c0c3",
+        "0b1c14f42f01160ee7055f7bf3dbf98f0ae38eb65576d29d66c575dcc1759fa1",
+        "10a608f64c51ce2d8e74bcad8d7c5a3f367b195e4315890b4061fd5fc8c9afea",
+        "1518315231b7ef198055998d9bdf9a5e8f71d75074361dc4862842321dfde316",
+        "1c748ea1d401e25f257119a01131fe2ceae19f553b8e7b7ea53db7cb1db4f040",
+        "1d0b8450fd01148310eb75d70903aa3c88b7191d9935a3e611b864e530e4a5be",
+        "2270eee06f11868593f76ab670e031279e15b85f6877b2c3d65a8cf8f1b1ec1d",
+        "2de0a3453be3d18de60f547786f52cbac59267eee98e66c78be4cf1501660756",
+        "39e3ac2349bbd04b522ab520d6fa7f90d4423dee1d360d37036cd6b4a55bacd0",
+        "3f970f7b166464e5edb54e3ef514ba57cd25682c790351017625f571b3fb2a80",
+        "4a1e861d01f23cd49d503c4dbc0ae3bbdce3e368868fcc608510dafd2e0392d4",
+        "4be5c0c464927d40841dc1aca4ae8e7a610242366a4b3d4acca4987440184b02",
+        "514513ac3ff599927cc368a70b4ff61bc8535d23dc264e8cf5fcd1f8b1f9a017",
+        "68aead5b27fa910714b0c22c37282edac22028ec45b4f60ff2bbf373ae74e8a7",
+        "76c8d80a5b7b73bb21b892c383d77afd0052ef603fa367c8a37b508f8d572541",
+        "783253de48f562b336c212e5a5280c9f6ca20313a26f4836ac5ad60ffa19a740",
+        "78335d89636f4fa4066b248bfa17dcd3be36b616934c04bccff2631299a0196c",
+        "7d7adb3d38571a7dde6d1edc1d426f00272eed6513f67b988896b03520513c68",
+        "7ed9426a9e63dccd3deff2258fb920b8cdb6fa57e0b32ba9074de0b155596dbe",
+        "82319c89f8f5902c3cfab362940ce99384a9656177f1c4424f291317c15d80f4",
+        "8508d6d3b51d187dcf4ef05bdb95a0d479b53e88e2c3157c766310a05a037b97",
+        "8be8928bcdc7b21fdee4f24c78252928920ddb5cac079b18577a3104ef023cfe",
+        "9c28cf5cbd300cc9f6c0f6c1fec2915bd97753775b4d73630f866ab3609b7c69",
+        "b0548ed692c38b7cf1830a08a1526d0068b2af51fb3b3cd678f6cc890f689597",
+        "b4a91a85f13412dc8e6258cccc88f3a3daab812693356451dfcf66e323c65b9c",
+        "b6ac4bae34f5a99f4197ac13d04567f75581e96cca4cd0fb73f85dd02eb0b303",
+        "bb5a6a2cee5cf796b32c04c7e553b6ea275b8c8a843875285dea1338d9798ad7",
+        "c554325ad8296fe73860cbad86d4c1c4e6defc25202eec945de3dbc6f67f55b3",
+        "c5a3c93b933df539247b2385a29a58c73dbfa12e468d5c42e6036fa9e4fadf73",
+        "c81a7f3d12a543a8106f014f7af6cccdf0a2b33250faece3215a9ee047884ba9",
+        "ce1ab49f5158511a983a4a6682dc56659d3924692d4e18a3258ac8eb98361f01",
+        "d25c3ad4983d4d50821525826850ba9f3498c10858174efb8a9e5d70d68b78f6",
+        "d8dbd11032a246eac6c9794eef7326542f8c2680a9b18daed0c8b24ffb58d0e8",
+        "dc49c503cf414124dc8719975be7af701793d61d35c3cc5dfb315e05ed52e308",
+        "e197a657cd9771f42066f1ade48f43125cf4d56fb80478d171630377cf30a4e3",
+        "e2b908ee857d586829450fd94d3bf56a911751814932393802eac34f83784066",
+        "f905aaf22f022c1ed4c90d47547aa47f6d1e883bed4d766fcccf2c3e12f237d7",
+        "fca6e3bbc96d9133661ae2d94e479c297d0f8725ea76e910a1ffc2e2ab76ec1d",
+        "ff267a5069e11ff3c5a7112f8ee63e1f1fca0e92d99a5fd8ec96e52f01273a25"
+      ],
+      "source_shas": [
+        "0b7b0d2ccc2cfd09114c7eb2048d9a2d3cbac6b3aa54ae23643dfc495fff2a6d",
+        "0d6d1a3a413aea99e79038035278dd6bf80214a14a630bcca0b1c0aa25e1a33f",
+        "0f805f0b449de79b62a7da8c3846cc29b791ca42e394dc5970ed6ec9cb6e4f0b",
+        "12177004ce7ceba88d3d010d16fdd2e11a990a218599db0f7034840ca14ebdd5",
+        "259e1de65a3a1ad6a7b2943ab95bf3d3a9dc3c4609d451980f53667ac81ae7c3",
+        "2c7371e6232d98484ad4ae42e2771c60d1258e5770172762c1aa39451323cd8a",
+        "2d482fabb5d2550cedb08c1928733e39ef1a1300b8ba11b077e45f3c7fcf4828",
+        "2d84e8b0a1979a8d1fd7e33fa34eb48d9a6128deb94327871dd2a68b615480bc",
+        "2f7d82f88b6c0d4f2220c1b4b3ae4108cb8d9d8c766393e2473ec7f78db9c116",
+        "396d6ec97ed0fc306cc0e88560ec3750b68e3646e9a2b782fb9b8209a08110e3",
+        "402ffac5a02c4cf683961650c573b44a08917fec072f753fdbe5921e977ed2fd",
+        "47fce56105247369d3e0038d472713e9ae2ab73f28a36a1a93bfb8e5855dac5a",
+        "4f1f5e85a4234befb6a1bec7f57aadb004cf5aabaa9f9a94e47b77a204ae7751",
+        "5af30fbd350e93ecde2b93846730e42105b8409b638096bb88969d1a101a36c6",
+        "6121cac0d07b3ace9952b7650f890a8621b7747f54bec82f57bd0efc43ecd211",
+        "617fbdacf592a9cd53689cb122899cca1a3d7c9c980be08e0df5cec2046cf4a5",
+        "62faeec88b757bf0a2e1c3f2d2d47365bc90696ca320388c16fc84dc78ebfcef",
+        "63312fa0af7682ae57c947c2524acf889318bf3b2ffe94886a9b5d936a0106e9",
+        "67d81ccf4b8144741748d4420d44075aa2705a867393a6629abe6d17d6acd69e",
+        "6886ac19a08825f801e4222341f2ba26685abf710203ac2ee85f7e2b46216fd4",
+        "7f87ad19c6c0517c136ec5d76aaf790d176ea1cbab7fb4a55a9001b40155c87a",
+        "8f8b95414642bc4fcf31609acead6a64884fc3647510b0727316894daa60694a",
+        "9bdaf8e09e3e73e5fabdda592d88541858af8cda475f38dc2ba07dfcf029ba00",
+        "9fd2a74645c6dca2726ea064900dcc8799c3aa07ff0526a12d76230a8211f75e",
+        "a35197feae5ed8a7adb52c219160f7f42ee6c0c3001206512958acd4a37c06d6",
+        "a823a02ac4283b0f6021bb609122696b82f99e97170b6f8a3cebb694d7c7c794",
+        "ae204f5ae3264983adf67f1bd32c9ab4ea8a4ca07cd16fedfb03b318bd964f80",
+        "afa995514e4055661e63bcba3b1e167d8bdcf032453bb9061e56737fa7c57ec0",
+        "b740e58e539ebe493d573572c1ea20a6daae4fa81b4cd4590e8ed176bcc7df56",
+        "c01963ab392a2ca74bacd452324e12515a272948558e1403f868fec2db734987",
+        "c136d4ea5dc4f7f5f210968d90c0803c575b7faeb5ab5e00511467ee6197812a",
+        "c44197ff092d91e57aad6e70b913ef1216b59af9d562f5c7ada9e3294e59b9f7",
+        "c4c13f85e8839211002c7c7e7fca92774031ec59588b08e4fd4ebcf3ec1e74ea",
+        "c896625d387667de0acc9593e64aeeb77ec5e62d7256c9a77817abdc945e0f3f",
+        "cefc086af3dfc9af08f3f0aa6a5dcfeb4edafc3062930539910cfd756250c5e3",
+        "cf6aa646d4a85e57d08dc53411837685c4c1526126f9f769757186c4f33255c0",
+        "d0c0a5ae358ae44c612d959104e0ffe3440db7ef1c6da8cb1a59c855d18bfffe",
+        "e129ef03fbfb10f7a5e524a43dbe19860eb98f1a9cb86426af38f7678a3a2290",
+        "f050b4ae7057c0e3a8271eae86cdb92a0337fe7b61f05f4b9d8015ca9d707da7",
+        "f40f07651b12d1da41ed130543d4b05cbe1410f09233ef76163db695e0d80e62"
+      ]
+    },
+    "zero_overlap_verified": true,
+    "errors": [],
+    "rationale_discrepancies": [
+      {
+        "split": "dev_set_16",
+        "alert_id": "008d4e65556a0fa6837193af88914fb201e03a79cef27f22519a5e2a6e42be8e",
+        "test_case": "BenchmarkTest00863",
+        "severity": "HIGH",
+        "actual_value": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). Line 47 (`org.owasp.benchmark.helpers.ThingInterface thing =`) delegates `param` to `ThingInterface.doSomething` (external helper class), which in this OWASP Benchmark v1.2 test case returns a non-tainted value before sink line 51.",
+        "expected_value": "Line 45 calls SeparateClassRequest.getTheValue() returning constant \"bar\"; both Thing1 and Thing2 in BenchmarkJava v1.2 preserve their input parameter.",
+        "cause": "Rationale falsely attributed FP to ThingInterface returning a constant instead of SeparateClassRequest.getTheValue()."
+      },
+      {
+        "split": "heldout_set_40",
+        "alert_id": "ce1ab49f5158511a983a4a6682dc56659d3924692d4e18a3258ac8eb98361f01",
+        "test_case": "BenchmarkTest00864",
+        "severity": "LOW",
+        "actual_value": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). After `valuesList.remove(0)`, index 0 holds `param` while index 1 holds constant `\"moresafe\"`; line 56 (`bar = valuesList.get(1); // get the last 'safe' value`) retrieves the safe constant element rather than `param` before line 59.",
+        "expected_value": "Both line 45 (`scr.getTheValue` -> constant \"bar\") and line 56 (`valuesList.get(1)` -> \"moresafe\") neutralize taint.",
+        "cause": "Rationale mentions `SeparateClassRequest` as HTTP input reader at line 44 without noting `getTheValue()` at line 45 already returns constant \"bar\"."
+      },
+      {
+        "split": "heldout_set_40",
+        "alert_id": "bb5a6a2cee5cf796b32c04c7e553b6ea275b8c8a843875285dea1338d9798ad7",
+        "test_case": "BenchmarkTest01746",
+        "severity": "HIGH",
+        "actual_value": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). Line 96 (`bar = (7 * 42) - num > 200 ? \"This should never happen\" : param;`) uses a deterministic arithmetic condition `(7 * 18) + num > 200` (with `num = 106`) that always evaluates to true and assigns a constant string to `bar` before sink line 66.",
+        "expected_value": "Line 45 calls SeparateClassRequest.getTheValue() returning constant \"bar\"; line 96 has `(7 * 42) - 106 = 188 <= 200` (false), which assigns `param`, NOT the constant branch.",
+        "cause": "Templated rationale script misidentified `(7 * 42) - num > 200` as `(7 * 18) + num > 200` and missed `getTheValue()`."
+      },
+      {
+        "split": "heldout_set_40",
+        "alert_id": "f905aaf22f022c1ed4c90d47547aa47f6d1e883bed4d766fcccf2c3e12f237d7",
+        "test_case": "BenchmarkTest01752",
+        "severity": "MEDIUM",
+        "actual_value": "csv_tag='benchmark_false_positive_non_tainted_flow (source line 44, sink line 60)' | rationale='Verified against OWASP Benchmark v1.2 expectedresults-1.2.csv and servlet source code: value reaching sink line 60 is overwritten or neutralized before execution.'",
+        "expected_value": "Line 45 calls SeparateClassRequest.getTheValue() returning constant \"bar\"; inner Test.doSomething puts and gets the SAME tainted key `keyB-11351` in HashMap.",
+        "cause": "Generic unverified fallback rationale string left in locked held-out label file."
+      }
+    ],
+    "grain_note": "OWASP expectedresults-1.2.csv provides test-case-level labels (1 servlet = 1 intended sink). All 56 audited alerts map 1-to-1 to 56 distinct BenchmarkTest servlets at their sink lines, so test-case polarity aligns with sink polarity here; however, raw OpenGrep AST/offset findings require ADMIN-PC raw opengrep.json verification."
+  },
+  "recomputed_metrics": {
+    "status": "PASS",
+    "evaluation_grain": "ALERT_LEVEL_CONDITIONAL_ON_OPENGREP_FIRING",
+    "owasp_testcase_level_tpr_fpr": {
+      "status": "NOT_VERIFIED",
+      "corpus_cwe22_cwe89_total": 772,
+      "corpus_cwe22_cwe89_tp": 405,
+      "corpus_cwe22_cwe89_fp": 367,
+      "reason": "Held-out evaluation covers a stratified 40-alert subset of OpenGrep alerts (20 TP, 20 FP), not a full-corpus scan across all 772 OWASP BenchmarkJava CWE-22/CWE-89 test cases; true negatives (TN) and scanner false negatives (FN) on the remaining 732 test cases are not in Git."
+    },
+    "joined_alert_count": 40,
+    "anomalies": [],
+    "arms": {
+      "Arm_A_OpenGrep_Standalone": {
+        "ALL (CWE-22 + CWE-89)": {
+          "counts": {
+            "total_alerts": 40,
+            "labeled_tp": 20,
+            "labeled_fp": 20,
+            "tp_kept_supported": 20,
+            "tp_retained_with_review": 20,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 20,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 40,
+            "citation_matched": null
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 40,
+              "pct": 0.0,
+              "display": "0/40 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 40,
+              "denominator": 40,
+              "pct": 100.0,
+              "display": "40/40 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 20,
+              "denominator": 40,
+              "pct": 50.0,
+              "display": "20/40 (50.0%)"
+            },
+            "citation_verified_rate": null
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 40,
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 40,
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 40,
+            "sum_ms": 0.0,
+            "mean_ms": 0.0,
+            "p50_ms": 0.0,
+            "p95_nearest_rank_ms": 0.0,
+            "p95_linear_ms": 0.0
+          }
+        },
+        "CWE-22": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 10,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 10,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 20,
+            "citation_matched": null
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 10,
+              "denominator": 20,
+              "pct": 50.0,
+              "display": "10/20 (50.0%)"
+            },
+            "citation_verified_rate": null
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 0.0,
+            "mean_ms": 0.0,
+            "p50_ms": 0.0,
+            "p95_nearest_rank_ms": 0.0,
+            "p95_linear_ms": 0.0
+          }
+        },
+        "CWE-89": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 10,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 10,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 20,
+            "citation_matched": null
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 10,
+              "denominator": 20,
+              "pct": 50.0,
+              "display": "10/20 (50.0%)"
+            },
+            "citation_verified_rate": null
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 0.0,
+            "mean_ms": 0.0,
+            "p50_ms": 0.0,
+            "p95_nearest_rank_ms": 0.0,
+            "p95_linear_ms": 0.0
+          }
+        }
+      },
+      "Arm_B_Heuristic": {
+        "ALL (CWE-22 + CWE-89)": {
+          "counts": {
+            "total_alerts": 40,
+            "labeled_tp": 20,
+            "labeled_fp": 20,
+            "tp_kept_supported": 9,
+            "tp_retained_with_review": 20,
+            "fp_correctly_proposed_refuted": 7,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 0,
+            "undetermined_total": 24,
+            "undetermined_on_tp": 11,
+            "undetermined_on_fp": 13,
+            "decided_total": 16,
+            "citation_matched": 16
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 9,
+              "denominator": 20,
+              "pct": 45.0,
+              "display": "9/20 (45.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 7,
+              "denominator": 20,
+              "pct": 35.0,
+              "display": "7/20 (35.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 24,
+              "denominator": 40,
+              "pct": 60.0,
+              "display": "24/40 (60.0%)"
+            },
+            "coverage": {
+              "numerator": 16,
+              "denominator": 40,
+              "pct": 40.0,
+              "display": "16/40 (40.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 16,
+              "denominator": 16,
+              "pct": 100.0,
+              "display": "16/16 (100.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 16,
+              "denominator": 40,
+              "pct": 40.0,
+              "display": "16/40 (40.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 33,
+              "precision": {
+                "numerator": 20,
+                "denominator": 33,
+                "pct": 60.61,
+                "display": "20/33 (60.6%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 13,
+                "denominator": 20,
+                "pct": 65.0,
+                "display": "13/20 (65.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 9,
+              "precision": {
+                "numerator": 9,
+                "denominator": 9,
+                "pct": 100.0,
+                "display": "9/9 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 9,
+                "denominator": 20,
+                "pct": 45.0,
+                "display": "9/20 (45.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 20,
+                "pct": 0.0,
+                "display": "0/20 (0.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 40,
+            "sum_ms": 0.0,
+            "mean_ms": 0.0,
+            "p50_ms": 0.0,
+            "p95_nearest_rank_ms": 0.0,
+            "p95_linear_ms": 0.0
+          }
+        },
+        "CWE-22": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 4,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 5,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 0,
+            "undetermined_total": 11,
+            "undetermined_on_tp": 6,
+            "undetermined_on_fp": 5,
+            "decided_total": 9,
+            "citation_matched": 9
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 4,
+              "denominator": 10,
+              "pct": 40.0,
+              "display": "4/10 (40.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 5,
+              "denominator": 10,
+              "pct": 50.0,
+              "display": "5/10 (50.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 11,
+              "denominator": 20,
+              "pct": 55.0,
+              "display": "11/20 (55.0%)"
+            },
+            "coverage": {
+              "numerator": 9,
+              "denominator": 20,
+              "pct": 45.0,
+              "display": "9/20 (45.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 9,
+              "denominator": 9,
+              "pct": 100.0,
+              "display": "9/9 (100.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 9,
+              "denominator": 20,
+              "pct": 45.0,
+              "display": "9/20 (45.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 15,
+              "precision": {
+                "numerator": 10,
+                "denominator": 15,
+                "pct": 66.67,
+                "display": "10/15 (66.7%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 5,
+                "denominator": 10,
+                "pct": 50.0,
+                "display": "5/10 (50.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 4,
+              "precision": {
+                "numerator": 4,
+                "denominator": 4,
+                "pct": 100.0,
+                "display": "4/4 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 4,
+                "denominator": 10,
+                "pct": 40.0,
+                "display": "4/10 (40.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 10,
+                "pct": 0.0,
+                "display": "0/10 (0.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 0.0,
+            "mean_ms": 0.0,
+            "p50_ms": 0.0,
+            "p95_nearest_rank_ms": 0.0,
+            "p95_linear_ms": 0.0
+          }
+        },
+        "CWE-89": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 5,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 2,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 0,
+            "undetermined_total": 13,
+            "undetermined_on_tp": 5,
+            "undetermined_on_fp": 8,
+            "decided_total": 7,
+            "citation_matched": 7
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 5,
+              "denominator": 10,
+              "pct": 50.0,
+              "display": "5/10 (50.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 2,
+              "denominator": 10,
+              "pct": 20.0,
+              "display": "2/10 (20.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 13,
+              "denominator": 20,
+              "pct": 65.0,
+              "display": "13/20 (65.0%)"
+            },
+            "coverage": {
+              "numerator": 7,
+              "denominator": 20,
+              "pct": 35.0,
+              "display": "7/20 (35.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 7,
+              "denominator": 7,
+              "pct": 100.0,
+              "display": "7/7 (100.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 7,
+              "denominator": 20,
+              "pct": 35.0,
+              "display": "7/20 (35.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 18,
+              "precision": {
+                "numerator": 10,
+                "denominator": 18,
+                "pct": 55.56,
+                "display": "10/18 (55.6%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 8,
+                "denominator": 10,
+                "pct": 80.0,
+                "display": "8/10 (80.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 5,
+              "precision": {
+                "numerator": 5,
+                "denominator": 5,
+                "pct": 100.0,
+                "display": "5/5 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 5,
+                "denominator": 10,
+                "pct": 50.0,
+                "display": "5/10 (50.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 10,
+                "pct": 0.0,
+                "display": "0/10 (0.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 0.0,
+            "mean_ms": 0.0,
+            "p50_ms": 0.0,
+            "p95_nearest_rank_ms": 0.0,
+            "p95_linear_ms": 0.0
+          }
+        }
+      },
+      "Arm_C_Evidence_LLM": {
+        "ALL (CWE-22 + CWE-89)": {
+          "counts": {
+            "total_alerts": 40,
+            "labeled_tp": 20,
+            "labeled_fp": 20,
+            "tp_kept_supported": 20,
+            "tp_retained_with_review": 20,
+            "fp_correctly_proposed_refuted": 20,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 0,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 40,
+            "citation_matched": 40
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 40,
+              "pct": 0.0,
+              "display": "0/40 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 40,
+              "denominator": 40,
+              "pct": 100.0,
+              "display": "40/40 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 40,
+              "denominator": 40,
+              "pct": 100.0,
+              "display": "40/40 (100.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 40,
+              "denominator": 40,
+              "pct": 100.0,
+              "display": "40/40 (100.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 20,
+                "pct": 0.0,
+                "display": "0/20 (0.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 20,
+                "pct": 0.0,
+                "display": "0/20 (0.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 40,
+            "sum_ms": 421000.0,
+            "mean_ms": 10525.0,
+            "p50_ms": 10961.0,
+            "p95_nearest_rank_ms": 12687.0,
+            "p95_linear_ms": 12698.7
+          }
+        },
+        "CWE-22": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 10,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 10,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 0,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 20,
+            "citation_matched": 20
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 10,
+              "precision": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 10,
+                "pct": 0.0,
+                "display": "0/10 (0.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 10,
+              "precision": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 10,
+                "pct": 0.0,
+                "display": "0/10 (0.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 216908.0,
+            "mean_ms": 10845.4,
+            "p50_ms": 11172.0,
+            "p95_nearest_rank_ms": 12921.0,
+            "p95_linear_ms": 12925.75
+          }
+        },
+        "CWE-89": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 10,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 10,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 0,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 20,
+            "citation_matched": 20
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 10,
+              "precision": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 10,
+                "pct": 0.0,
+                "display": "0/10 (0.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 10,
+              "precision": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 0,
+                "denominator": 10,
+                "pct": 0.0,
+                "display": "0/10 (0.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 204092.0,
+            "mean_ms": 10204.6,
+            "p50_ms": 10719.0,
+            "p95_nearest_rank_ms": 11734.0,
+            "p95_linear_ms": 11753.55
+          }
+        }
+      },
+      "Arm_D_LLM_Ablation": {
+        "ALL (CWE-22 + CWE-89)": {
+          "counts": {
+            "total_alerts": 40,
+            "labeled_tp": 20,
+            "labeled_fp": 20,
+            "tp_kept_supported": 17,
+            "tp_retained_with_review": 20,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 14,
+            "undetermined_total": 9,
+            "undetermined_on_tp": 3,
+            "undetermined_on_fp": 6,
+            "decided_total": 31,
+            "citation_matched": 31
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 17,
+              "denominator": 20,
+              "pct": 85.0,
+              "display": "17/20 (85.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 14,
+              "denominator": 20,
+              "pct": 70.0,
+              "display": "14/20 (70.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 9,
+              "denominator": 40,
+              "pct": 22.5,
+              "display": "9/40 (22.5%)"
+            },
+            "coverage": {
+              "numerator": 31,
+              "denominator": 40,
+              "pct": 77.5,
+              "display": "31/40 (77.5%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 17,
+              "denominator": 31,
+              "pct": 54.84,
+              "display": "17/31 (54.8%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 31,
+              "denominator": 40,
+              "pct": 77.5,
+              "display": "31/40 (77.5%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 40,
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 31,
+              "precision": {
+                "numerator": 17,
+                "denominator": 31,
+                "pct": 54.84,
+                "display": "17/31 (54.8%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 17,
+                "denominator": 20,
+                "pct": 85.0,
+                "display": "17/20 (85.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 14,
+                "denominator": 20,
+                "pct": 70.0,
+                "display": "14/20 (70.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 40,
+            "sum_ms": 301062.0,
+            "mean_ms": 7526.55,
+            "p50_ms": 6359.0,
+            "p95_nearest_rank_ms": 12109.0,
+            "p95_linear_ms": 12145.75
+          }
+        },
+        "CWE-22": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 7,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 6,
+            "undetermined_total": 7,
+            "undetermined_on_tp": 3,
+            "undetermined_on_fp": 4,
+            "decided_total": 13,
+            "citation_matched": 13
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 7,
+              "denominator": 10,
+              "pct": 70.0,
+              "display": "7/10 (70.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 6,
+              "denominator": 10,
+              "pct": 60.0,
+              "display": "6/10 (60.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 7,
+              "denominator": 20,
+              "pct": 35.0,
+              "display": "7/20 (35.0%)"
+            },
+            "coverage": {
+              "numerator": 13,
+              "denominator": 20,
+              "pct": 65.0,
+              "display": "13/20 (65.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 7,
+              "denominator": 13,
+              "pct": 53.85,
+              "display": "7/13 (53.8%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 13,
+              "denominator": 20,
+              "pct": 65.0,
+              "display": "13/20 (65.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 13,
+              "precision": {
+                "numerator": 7,
+                "denominator": 13,
+                "pct": 53.85,
+                "display": "7/13 (53.8%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 7,
+                "denominator": 10,
+                "pct": 70.0,
+                "display": "7/10 (70.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 6,
+                "denominator": 10,
+                "pct": 60.0,
+                "display": "6/10 (60.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 130858.0,
+            "mean_ms": 6542.9,
+            "p50_ms": 5874.5,
+            "p95_nearest_rank_ms": 8922.0,
+            "p95_linear_ms": 9056.4
+          }
+        },
+        "CWE-89": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 10,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 8,
+            "undetermined_total": 2,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 2,
+            "decided_total": 18,
+            "citation_matched": 18
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 8,
+              "denominator": 10,
+              "pct": 80.0,
+              "display": "8/10 (80.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 2,
+              "denominator": 20,
+              "pct": 10.0,
+              "display": "2/20 (10.0%)"
+            },
+            "coverage": {
+              "numerator": 18,
+              "denominator": 20,
+              "pct": 90.0,
+              "display": "18/20 (90.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 10,
+              "denominator": 18,
+              "pct": 55.56,
+              "display": "10/18 (55.6%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 18,
+              "denominator": 20,
+              "pct": 90.0,
+              "display": "18/20 (90.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 18,
+              "precision": {
+                "numerator": 10,
+                "denominator": 18,
+                "pct": 55.56,
+                "display": "10/18 (55.6%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 8,
+                "denominator": 10,
+                "pct": 80.0,
+                "display": "8/10 (80.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 170204.0,
+            "mean_ms": 8510.2,
+            "p50_ms": 7953.0,
+            "p95_nearest_rank_ms": 12844.0,
+            "p95_linear_ms": 12955.7
+          }
+        }
+      },
+      "Arm_D_LLM_Ablation_Raw_PreVerifier": {
+        "ALL (CWE-22 + CWE-89)": {
+          "counts": {
+            "total_alerts": 40,
+            "labeled_tp": 20,
+            "labeled_fp": 20,
+            "tp_kept_supported": 20,
+            "tp_retained_with_review": 20,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 20,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 40,
+            "citation_matched": 31
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 40,
+              "pct": 0.0,
+              "display": "0/40 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 40,
+              "denominator": 40,
+              "pct": 100.0,
+              "display": "40/40 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 20,
+              "denominator": 40,
+              "pct": 50.0,
+              "display": "20/40 (50.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 31,
+              "denominator": 40,
+              "pct": 77.5,
+              "display": "31/40 (77.5%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 40,
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 40,
+              "precision": {
+                "numerator": 20,
+                "denominator": 40,
+                "pct": 50.0,
+                "display": "20/40 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 20,
+                "denominator": 20,
+                "pct": 100.0,
+                "display": "20/20 (100.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 40,
+            "sum_ms": 301062.0,
+            "mean_ms": 7526.55,
+            "p50_ms": 6359.0,
+            "p95_nearest_rank_ms": 12109.0,
+            "p95_linear_ms": 12145.75
+          }
+        },
+        "CWE-22": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 10,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 10,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 20,
+            "citation_matched": 13
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 10,
+              "denominator": 20,
+              "pct": 50.0,
+              "display": "10/20 (50.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 13,
+              "denominator": 20,
+              "pct": 65.0,
+              "display": "13/20 (65.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 130858.0,
+            "mean_ms": 6542.9,
+            "p50_ms": 5874.5,
+            "p95_nearest_rank_ms": 8922.0,
+            "p95_linear_ms": 9056.4
+          }
+        },
+        "CWE-89": {
+          "counts": {
+            "total_alerts": 20,
+            "labeled_tp": 10,
+            "labeled_fp": 10,
+            "tp_kept_supported": 10,
+            "tp_retained_with_review": 10,
+            "fp_correctly_proposed_refuted": 0,
+            "tp_erroneously_proposed_refuted": 0,
+            "fp_erroneously_kept_supported": 10,
+            "undetermined_total": 0,
+            "undetermined_on_tp": 0,
+            "undetermined_on_fp": 0,
+            "decided_total": 20,
+            "citation_matched": 18
+          },
+          "rates": {
+            "tp_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "tp_retained_with_review": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "fp_correctly_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "tp_erroneously_proposed_refuted": {
+              "numerator": 0,
+              "denominator": 10,
+              "pct": 0.0,
+              "display": "0/10 (0.0%)"
+            },
+            "fp_erroneously_kept_supported": {
+              "numerator": 10,
+              "denominator": 10,
+              "pct": 100.0,
+              "display": "10/10 (100.0%)"
+            },
+            "undetermined_rate": {
+              "numerator": 0,
+              "denominator": 20,
+              "pct": 0.0,
+              "display": "0/20 (0.0%)"
+            },
+            "coverage": {
+              "numerator": 20,
+              "denominator": 20,
+              "pct": 100.0,
+              "display": "20/20 (100.0%)"
+            },
+            "accuracy_on_decided": {
+              "numerator": 10,
+              "denominator": 20,
+              "pct": 50.0,
+              "display": "10/20 (50.0%)"
+            },
+            "citation_verified_rate": {
+              "numerator": 18,
+              "denominator": 20,
+              "pct": 90.0,
+              "display": "18/20 (90.0%)"
+            }
+          },
+          "policies_alert_level": {
+            "baseline": {
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "drop_fp": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            },
+            "keep_tp_only": {
+              "retained_alerts": 20,
+              "precision": {
+                "numerator": 10,
+                "denominator": 20,
+                "pct": 50.0,
+                "display": "10/20 (50.0%)"
+              },
+              "tp_recall_alert_tpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              },
+              "alert_fpr": {
+                "numerator": 10,
+                "denominator": 10,
+                "pct": 100.0,
+                "display": "10/10 (100.0%)"
+              }
+            }
+          },
+          "latency_ms": {
+            "count": 20,
+            "sum_ms": 170204.0,
+            "mean_ms": 8510.2,
+            "p50_ms": 7953.0,
+            "p95_nearest_rank_ms": 12844.0,
+            "p95_linear_ms": 12955.7
+          }
+        }
+      }
+    }
+  },
+  "reported_table_comparison": {
+    "status": "PASS",
+    "verdict_label_vi": "số liệu tái tính khớp",
+    "scientific_caveat_vi": "Số liệu tái tính khớp với PAIRED_EVALUATION.csv và METRICS_BY_CWE.csv; tuy nhiên điều này KHÔNG chứng minh mô hình Qwen chính xác tuyệt đối do Arm C nhận sẵn `recommended_status` từ heuristic và raw `assessments.jsonl` trên ADMIN-PC chưa được nạp.",
+    "historical_checks": {
+      "heldout_40_20tp_20fp": true,
+      "heuristic_7_of_20_fp_0_of_20_tp_24_undetermined": true,
+      "full_pipeline_20_of_20_fp_0_of_20_tp_20_tp_kept": true,
+      "qwen_low_context_31_supported_9_undetermined_post_verifier": true
+    },
+    "cell_mismatches": [],
+    "minor_notes": [
+      {
+        "arm": "Arm_B_Heuristic",
+        "note": "METRICS_BY_CWE.csv records 0.0 ms for Arm B heuristic latency (PAIRED_EVALUATION.csv has no arm_b_latency_ms column), whereas PAIRED_EVALUATION.md states `< 15.0 ms`."
+      }
+    ]
+  },
+  "heuristic_steering_audit": {
+    "status": "FAIL",
+    "severity": "CRITICAL",
+    "owasp_ground_truth_passed_to_qwen_in_code": false,
+    "heuristic_pre_verdict_passed_to_qwen_in_arm_c": true,
+    "recommended_status_has_undetermined_branch": false,
+    "recommended_status_defaults_to_supported": true,
+    "prompt_instructs_copying_candidate_citations": true,
+    "arm_b_suppresses_signals_that_arm_c_exposes": true,
+    "live_40_raw_prompts_verification_status": "NOT_VERIFIED",
+    "empirical_recommended_status_match_on_benchmark": null,
+    "sanitizer_and_crossfile_bugs": {
+      "global_startsWith_anywhere_in_snippet_satisfies_canonical_guard": true,
+      "pre_sink_line_filter_misses_post_constructor_guards": true,
+      "unsound_crossfile_ThingFactory_assumed_supported": true,
+      "evidence_attaches_heuristic_signals_unconditionally": true
+    }
+  },
+  "documentation_and_lock_audit": {
+    "status": "FAIL",
+    "actual_rule_count": 9,
+    "rule_ids": [
+      "java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal",
+      "java.lang.security.audit.formatted-sql-string.formatted-sql-string",
+      "java.lang.security.audit.sqli.tainted-sql-from-http-request.tainted-sql-from-http-request",
+      "java.jax-rs.security.jax-rs-path-traversal.jax-rs-path-traversal",
+      "java.aws-lambda.security.tainted-sqli.tainted-sqli",
+      "java.spring.security.audit.spring-sqli.spring-sqli",
+      "java.spring.security.injection.tainted-sql-string.tainted-sql-string",
+      "java.aws-lambda.security.tainted-sql-string.tainted-sql-string",
+      "java.jboss.security.session_sqli.find-sql-string-concatenation"
+    ],
+    "lock_manifest_check": {
+      "config_locked": false,
+      "lf_checkout_matches_manifest": false,
+      "crlf_matches_manifest": true
+    },
+    "stage5_real_and_demo_20_breakdown": {
+      "total_rows": 20,
+      "webgoat_alerts": 11,
+      "java_sec_code_alerts": 4,
+      "synthetic_demo_userdao_alerts": 5,
+      "manual_tp_count": 16,
+      "manual_fp_count": 4,
+      "arm_c_supported_count": 20,
+      "arm_c_refuted_fp_removed_count": 0
+    },
+    "findings": [
+      {
+        "id": "DOC-01",
+        "severity": "MEDIUM",
+        "title": "Rule count mismatch (14 claimed in docs vs 9 actual rule IDs in YAML)",
+        "actual_rule_count": 9,
+        "rule_ids": [
+          "java.lang.security.httpservlet-path-traversal.httpservlet-path-traversal",
+          "java.lang.security.audit.formatted-sql-string.formatted-sql-string",
+          "java.lang.security.audit.sqli.tainted-sql-from-http-request.tainted-sql-from-http-request",
+          "java.jax-rs.security.jax-rs-path-traversal.jax-rs-path-traversal",
+          "java.aws-lambda.security.tainted-sqli.tainted-sqli",
+          "java.spring.security.audit.spring-sqli.spring-sqli",
+          "java.spring.security.injection.tainted-sql-string.tainted-sql-string",
+          "java.aws-lambda.security.tainted-sql-string.tainted-sql-string",
+          "java.jboss.security.session_sqli.find-sql-string-concatenation"
+        ]
+      },
+      {
+        "id": "DOC-02",
+        "severity": "HIGH",
+        "title": "dev_set_16 scan_sha256 mismatch between CHUONG_4 and DATASET_PROVENANCE.json",
+        "chuong_4_sha256": "c1be1d5e1be23a7ddba48fa7e0d61049234fd6003be057cf15893977c04d08c2",
+        "provenance_sha256": "ecc1fa4634bfc86266c43dd6790422546367293d1810712fddc7c0d15a6c015f"
+      },
+      {
+        "id": "DOC-03",
+        "severity": "HIGH",
+        "title": "expectedresults-1.2.csv SHA-256 mismatch in POST_REPORT_IMPLEMENTATION_HANDOVER.md",
+        "handover_sha256": "353762c72ef5bcd7fd2dc9ad3bc8dc1fa2fae1ade4cd4aa1dedf7ea42de2a040",
+        "official_owasp_lf_sha256": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1"
+      },
+      {
+        "id": "LOCK-01",
+        "severity": "HIGH",
+        "title": "heldout_strict_lock_manifest.json did not lock prompt/heuristic config (config_sha256 is null)"
+      },
+      {
+        "id": "LOCK-02",
+        "severity": "HIGH",
+        "title": "heldout_strict_lock_manifest.json fails byte-level SHA-256 verification on Git LF checkout (computed on CRLF before commit)",
+        "manifest_opengrep_sha256": "ba9967f3ae1dcbe940e8e7dea7df36ff873232fe5787f42c3fd2c84e066b1826",
+        "checkout_lf_opengrep_sha256": "3ea68283fdbece7425c6af9caf65cc0942031752c62eab6dc73820a31a920f7d",
+        "crlf_opengrep_sha256": "ba9967f3ae1dcbe940e8e7dea7df36ff873232fe5787f42c3fd2c84e066b1826",
+        "manifest_labels_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3",
+        "checkout_lf_labels_sha256": "1e7306127dbf5f91c62a7f143d047e4714aa6197624990a0c31c9dd3e9ddc1a4",
+        "crlf_labels_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3"
+      },
+      {
+        "id": "DOC-04",
+        "severity": "HIGH",
+        "title": "CASE_STUDIES_CWE22_CWE89.md fabricates mechanisms/lines for BenchmarkTest00949, 01110 (claims valuesList), and 01215 (claims HashMap)"
+      },
+      {
+        "id": "DOC-05",
+        "severity": "HIGH",
+        "title": "POST_REPORT_IMPLEMENTATION_HANDOVER.md cites BenchmarkTest00002 and 00033 as FP case studies, whereas both are TRUE_POSITIVE in OWASP v1.2"
+      },
+      {
+        "id": "DOC-06",
+        "severity": "MEDIUM",
+        "title": "UNDETERMINED_ANALYSIS.md contradicts DEVELOPMENT_EVALUATION.csv (cites held-out BenchmarkTest00018.java in dev_set_16 Exp 1 and wrong failure counts)"
+      },
+      {
+        "id": "DOC-07",
+        "severity": "MEDIUM",
+        "title": "20 'real-project' alerts mix 11 WebGoat + 4 java-sec-code + 5 synthetic demo/UserDao.java alerts (with manual labels and 0/4 FP removed)",
+        "breakdown": {
+          "total_rows": 20,
+          "webgoat_alerts": 11,
+          "java_sec_code_alerts": 4,
+          "synthetic_demo_userdao_alerts": 5,
+          "manual_tp_count": 16,
+          "manual_fp_count": 4,
+          "arm_c_supported_count": 20,
+          "arm_c_refuted_fp_removed_count": 0
+        }
+      }
+    ]
+  },
+  "server_raw_evidence_audit": {
+    "status": "NOT_VERIFIED",
+    "reason": "Raw ADMIN-PC server evidence directory is not mounted in this workspace; awaiting JavisOS execution receipt for the 10 assessments.jsonl artifacts.",
+    "verified_assessments_files": 0,
+    "expected_assessments_files": 10
+  }
+}

@@ -1,0 +1,1081 @@
+{
+  "schema_version": "ntk-audit-owasp-ref-1.0",
+  "benchmark": "OWASP BenchmarkJava v1.2",
+  "pinned_commit": "8b67a88d73b2594570fc21150705283de884620b",
+  "expectedresults_file": "expectedresults-1.2.csv",
+  "expectedresults_lf_sha256": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1",
+  "expectedresults_total_rows": 2740,
+  "corpus_cwe_totals": {
+    "CWE-22": {
+      "total": 268,
+      "tp": 133,
+      "fp": 135
+    },
+    "CWE-89": {
+      "total": 504,
+      "tp": 272,
+      "fp": 232
+    },
+    "CWE-22_plus_CWE-89": {
+      "total": 772,
+      "tp": 405,
+      "fp": 367
+    }
+  },
+  "helper_class_facts": {
+    "SeparateClassRequest.getTheValue": "Returns hardcoded constant string \"bar\" (lines 52-54 of SeparateClassRequest.java).",
+    "Thing1.doSomething": "Returns input parameter unchanged (`String r = i; return r;`, lines 23-27 of Thing1.java).",
+    "Thing2.doSomething": "Returns `new StringBuilder(i).toString()` preserving input (lines 23-27 of Thing2.java); thing.properties selects `thing=Thing2`."
+  },
+  "test_cases": {
+    "BenchmarkTest00001": {
+      "test_case": "BenchmarkTest00001",
+      "file_name": "BenchmarkTest00001.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "a83e78f8e9dd7b941c19eb2709429a2b7bec32b8921c193f3d02c4a04097a4b7",
+      "line_count": 106,
+      "verified_sink_start_line": 72,
+      "verified_sink_end_line": 72,
+      "verified_sink_statement": "fis = new java.io.FileInputStream(new java.io.File(fileName));",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00002": {
+      "test_case": "BenchmarkTest00002",
+      "file_name": "BenchmarkTest00002.java",
+      "split": "extra_reference_only",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "34ffca044de7a7c3d47e5b1a48d5b35c42fff120e82df6969c5719e25259f2ac",
+      "line_count": 93,
+      "verified_sink_start_line": null,
+      "verified_sink_end_line": null,
+      "verified_sink_statement": null,
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00008": {
+      "test_case": "BenchmarkTest00008",
+      "file_name": "BenchmarkTest00008.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "9bc49dbe491a39162c97b0c43b8ce5e42a4de5c0552c52117b1a51b0a541dfbe",
+      "line_count": 67,
+      "verified_sink_start_line": 57,
+      "verified_sink_end_line": 57,
+      "verified_sink_statement": "java.sql.CallableStatement statement = connection.prepareCall(sql);",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00011": {
+      "test_case": "BenchmarkTest00011",
+      "file_name": "BenchmarkTest00011.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "2f7d82f88b6c0d4f2220c1b4b3ae4108cb8d9d8c766393e2473ec7f78db9c116",
+      "line_count": 70,
+      "verified_sink_start_line": 54,
+      "verified_sink_end_line": 54,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(param, \"/Test.txt\");",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00018": {
+      "test_case": "BenchmarkTest00018",
+      "file_name": "BenchmarkTest00018.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "f050b4ae7057c0e3a8271eae86cdb92a0337fe7b61f05f4b9d8015ca9d707da7",
+      "line_count": 67,
+      "verified_sink_start_line": 57,
+      "verified_sink_end_line": 59,
+      "verified_sink_statement": "java.sql.Statement statement = org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement(); int count = statement.executeUpdate(sql);",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00024": {
+      "test_case": "BenchmarkTest00024",
+      "file_name": "BenchmarkTest00024.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "6886ac19a08825f801e4222341f2ba26685abf710203ac2ee85f7e2b46216fd4",
+      "line_count": 67,
+      "verified_sink_start_line": 52,
+      "verified_sink_end_line": 57,
+      "verified_sink_statement": "java.sql.PreparedStatement statement = connection.prepareStatement( sql, java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY, java.sql.ResultSet.CLOSE_CURSORS_AT_COMMIT);",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00025": {
+      "test_case": "BenchmarkTest00025",
+      "file_name": "BenchmarkTest00025.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "c136d4ea5dc4f7f5f210968d90c0803c575b7faeb5ab5e00511467ee6197812a",
+      "line_count": 66,
+      "verified_sink_start_line": 51,
+      "verified_sink_end_line": 53,
+      "verified_sink_statement": "Long results = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject( sql, Long.class);",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00033": {
+      "test_case": "BenchmarkTest00033",
+      "file_name": "BenchmarkTest00033.java",
+      "split": "extra_reference_only",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "f9513ba4b715043778361587b70ad56a583865cfad62956711b144ca7c3c25c8",
+      "line_count": 78,
+      "verified_sink_start_line": null,
+      "verified_sink_end_line": null,
+      "verified_sink_statement": null,
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00038": {
+      "test_case": "BenchmarkTest00038",
+      "file_name": "BenchmarkTest00038.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "cefc086af3dfc9af08f3f0aa6a5dcfeb4edafc3062930539910cfd756250c5e3",
+      "line_count": 97,
+      "verified_sink_start_line": 63,
+      "verified_sink_end_line": 79,
+      "verified_sink_statement": "java.util.List<String> results = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.query( sql, new org.springframework.jdbc.core.RowMapper<String>() { @Override public String mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException { try { return rs.getString(\"USERNAME\"); } catch (java.sql.SQLException e) { if (org.owasp.benchmark.helpers.DatabaseHelper .hideSQLErrors) { return \"Error processing query.\"; } else throw e; } } });",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00040": {
+      "test_case": "BenchmarkTest00040",
+      "file_name": "BenchmarkTest00040.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "d0c0a5ae358ae44c612d959104e0ffe3440db7ef1c6da8cb1a59c855d18bfffe",
+      "line_count": 65,
+      "verified_sink_start_line": 49,
+      "verified_sink_end_line": 49,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(param);",
+      "detected_code_mechanisms": [
+        "SeparateClassRequest.getTheParameter"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00062": {
+      "test_case": "BenchmarkTest00062",
+      "file_name": "BenchmarkTest00062.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "c44197ff092d91e57aad6e70b913ef1216b59af9d562f5c7ada9e3294e59b9f7",
+      "line_count": 112,
+      "verified_sink_start_line": 78,
+      "verified_sink_end_line": 78,
+      "verified_sink_statement": "fis = new java.io.FileInputStream(new java.io.File(fileName));",
+      "detected_code_mechanisms": [
+        "HashMap_same_keyB_propagates_param"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00102": {
+      "test_case": "BenchmarkTest00102",
+      "file_name": "BenchmarkTest00102.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "4ee3d85461784e6bba63b6342342db69991252b9d1260ce869fe3d408d372717",
+      "line_count": 90,
+      "verified_sink_start_line": 73,
+      "verified_sink_end_line": 74,
+      "verified_sink_statement": "java.util.Map<String, Object> results = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForMap(sql);",
+      "detected_code_mechanisms": [
+        "ThingFactory.createThing_preserves_input"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00103": {
+      "test_case": "BenchmarkTest00103",
+      "file_name": "BenchmarkTest00103.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "a2835ca20d356ed6fd3191c1ef6df5e2c9fa796add6ea5dae360e41202241e9d",
+      "line_count": 94,
+      "verified_sink_start_line": 76,
+      "verified_sink_end_line": 78,
+      "verified_sink_statement": "Object results = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject( sql, new Object[] {}, String.class);",
+      "detected_code_mechanisms": [
+        "ternary_(7*42)-106=188<=200_evaluates_false_assigns_param"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00108": {
+      "test_case": "BenchmarkTest00108",
+      "file_name": "BenchmarkTest00108.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "0d6d1a3a413aea99e79038035278dd6bf80214a14a630bcca0b1c0aa25e1a33f",
+      "line_count": 100,
+      "verified_sink_start_line": 92,
+      "verified_sink_end_line": 92,
+      "verified_sink_statement": "statement.execute(sql, new int[] {1, 2});",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_2_case_C_or_D_tainted"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00131": {
+      "test_case": "BenchmarkTest00131",
+      "file_name": "BenchmarkTest00131.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "7091b80b2b9f186efb922d80fea3c20042f2af29affb157b154e67789c0c889a",
+      "line_count": 88,
+      "verified_sink_start_line": 72,
+      "verified_sink_end_line": 72,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(bar);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest00132": {
+      "test_case": "BenchmarkTest00132",
+      "file_name": "BenchmarkTest00132.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "0b7b0d2ccc2cfd09114c7eb2048d9a2d3cbac6b3aa54ae23643dfc495fff2a6d",
+      "line_count": 111,
+      "verified_sink_start_line": 77,
+      "verified_sink_end_line": 77,
+      "verified_sink_statement": "fis = new java.io.FileInputStream(new java.io.File(fileName));",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest00134": {
+      "test_case": "BenchmarkTest00134",
+      "file_name": "BenchmarkTest00134.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "b740e58e539ebe493d573572c1ea20a6daae4fa81b4cd4590e8ed176bcc7df56",
+      "line_count": 85,
+      "verified_sink_start_line": 74,
+      "verified_sink_end_line": 75,
+      "verified_sink_statement": "java.io.FileOutputStream fos = new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",
+      "detected_code_mechanisms": [
+        "valuesList_remove0_get1_selects_constant_moresafe"
+      ],
+      "primary_fp_cause": "collection_index_selects_constant_element"
+    },
+    "BenchmarkTest00135": {
+      "test_case": "BenchmarkTest00135",
+      "file_name": "BenchmarkTest00135.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "c01963ab392a2ca74bacd452324e12515a272948558e1403f868fec2db734987",
+      "line_count": 94,
+      "verified_sink_start_line": 83,
+      "verified_sink_end_line": 84,
+      "verified_sink_statement": "java.io.FileOutputStream fos = new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest00190": {
+      "test_case": "BenchmarkTest00190",
+      "file_name": "BenchmarkTest00190.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "e9b906300fd16ae1738dd1b174e22b6baa00db262fecb4e9f43f80575f0572e0",
+      "line_count": 81,
+      "verified_sink_start_line": 68,
+      "verified_sink_end_line": 72,
+      "verified_sink_statement": "java.sql.CallableStatement statement = connection.prepareCall( sql, java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY);",
+      "detected_code_mechanisms": [
+        "valuesList_remove0_get1_selects_constant_moresafe"
+      ],
+      "primary_fp_cause": "collection_index_selects_constant_element"
+    },
+    "BenchmarkTest00191": {
+      "test_case": "BenchmarkTest00191",
+      "file_name": "BenchmarkTest00191.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "258434bdbb2c3b20f1e83824ac7a69bf430cbdcb3d85173bedb0c2a88ee403ce",
+      "line_count": 90,
+      "verified_sink_start_line": 77,
+      "verified_sink_end_line": 81,
+      "verified_sink_statement": "java.sql.CallableStatement statement = connection.prepareCall( sql, java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest00197": {
+      "test_case": "BenchmarkTest00197",
+      "file_name": "BenchmarkTest00197.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "7f87ad19c6c0517c136ec5d76aaf790d176ea1cbab7fb4a55a9001b40155c87a",
+      "line_count": 99,
+      "verified_sink_start_line": 65,
+      "verified_sink_end_line": 81,
+      "verified_sink_statement": "java.util.List<String> results = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.query( sql, new org.springframework.jdbc.core.RowMapper<String>() { @Override public String mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException { try { return rs.getString(\"USERNAME\"); } catch (java.sql.SQLException e) { if (org.owasp.benchmark.helpers.DatabaseHelper .hideSQLErrors) { return \"Error processing query.\"; } else throw e; } } });",
+      "detected_code_mechanisms": [
+        "valuesList_remove0_get1_selects_constant_moresafe"
+      ],
+      "primary_fp_cause": "collection_index_selects_constant_element"
+    },
+    "BenchmarkTest00205": {
+      "test_case": "BenchmarkTest00205",
+      "file_name": "BenchmarkTest00205.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "396d6ec97ed0fc306cc0e88560ec3750b68e3646e9a2b782fb9b8209a08110e3",
+      "line_count": 76,
+      "verified_sink_start_line": 66,
+      "verified_sink_end_line": 68,
+      "verified_sink_statement": "java.sql.Statement statement = org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement(); int count = statement.executeUpdate(sql, new String[] {\"USERNAME\", \"PASSWORD\"});",
+      "detected_code_mechanisms": [
+        "valuesList_remove0_get1_selects_constant_moresafe"
+      ],
+      "primary_fp_cause": "collection_index_selects_constant_element"
+    },
+    "BenchmarkTest00216": {
+      "test_case": "BenchmarkTest00216",
+      "file_name": "BenchmarkTest00216.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "8cfaacce6f3aea7b1ff71a1f3ad8228359e645d79405bed8800401933025466b",
+      "line_count": 85,
+      "verified_sink_start_line": 68,
+      "verified_sink_end_line": 69,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR, bar);",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00218": {
+      "test_case": "BenchmarkTest00218",
+      "file_name": "BenchmarkTest00218.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "a35197feae5ed8a7adb52c219160f7f42ee6c0c3001206512958acd4a37c06d6",
+      "line_count": 121,
+      "verified_sink_start_line": 102,
+      "verified_sink_end_line": 102,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(fileURI);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_2_case_C_or_D_tainted"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00264": {
+      "test_case": "BenchmarkTest00264",
+      "file_name": "BenchmarkTest00264.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "2c7371e6232d98484ad4ae42e2771c60d1258e5770172762c1aa39451323cd8a",
+      "line_count": 99,
+      "verified_sink_start_line": 65,
+      "verified_sink_end_line": 65,
+      "verified_sink_statement": "fis = new java.io.FileInputStream(new java.io.File(fileName));",
+      "detected_code_mechanisms": [],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00340": {
+      "test_case": "BenchmarkTest00340",
+      "file_name": "BenchmarkTest00340.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "cf6aa646d4a85e57d08dc53411837685c4c1526126f9f769757186c4f33255c0",
+      "line_count": 90,
+      "verified_sink_start_line": 77,
+      "verified_sink_end_line": 77,
+      "verified_sink_statement": "org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.batchUpdate(sql);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest00527": {
+      "test_case": "BenchmarkTest00527",
+      "file_name": "BenchmarkTest00527.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "3700b27707423bab0516531004f5d943de3d12e845af8ed96e50afb09bdc8430",
+      "line_count": 80,
+      "verified_sink_start_line": 64,
+      "verified_sink_end_line": 64,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(bar, \"/Test.txt\");",
+      "detected_code_mechanisms": [
+        "ThingFactory.createThing_preserves_input"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00620": {
+      "test_case": "BenchmarkTest00620",
+      "file_name": "BenchmarkTest00620.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "12bf356c39f6ba2aa91b2c60bb253f8558e91141c75510b5be32d296757c90ae",
+      "line_count": 78,
+      "verified_sink_start_line": 60,
+      "verified_sink_end_line": 62,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File( new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR), bar);",
+      "detected_code_mechanisms": [
+        "SeparateClassRequest.getTheParameter",
+        "valuesList_remove0_get1_selects_constant_moresafe"
+      ],
+      "primary_fp_cause": "collection_index_selects_constant_element"
+    },
+    "BenchmarkTest00763": {
+      "test_case": "BenchmarkTest00763",
+      "file_name": "BenchmarkTest00763.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "9fd2a74645c6dca2726ea064900dcc8799c3aa07ff0526a12d76230a8211f75e",
+      "line_count": 85,
+      "verified_sink_start_line": 74,
+      "verified_sink_end_line": 75,
+      "verified_sink_statement": "java.sql.PreparedStatement statement = connection.prepareStatement(sql, new int[] {1, 2});",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest00863": {
+      "test_case": "BenchmarkTest00863",
+      "file_name": "BenchmarkTest00863.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "69d31a8b396303a3b1908ad0c21d0b1d35edb944a11f7bb8a7d6326f63074a35",
+      "line_count": 67,
+      "verified_sink_start_line": 51,
+      "verified_sink_end_line": 51,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(bar, \"/Test.txt\");",
+      "detected_code_mechanisms": [
+        "SeparateClassRequest.getTheValue_constant_bar",
+        "ThingFactory.createThing_preserves_input"
+      ],
+      "primary_fp_cause": "safe_constant_source_SeparateClassRequest.getTheValue"
+    },
+    "BenchmarkTest00864": {
+      "test_case": "BenchmarkTest00864",
+      "file_name": "BenchmarkTest00864.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "402ffac5a02c4cf683961650c573b44a08917fec072f753fdbe5921e977ed2fd",
+      "line_count": 75,
+      "verified_sink_start_line": 59,
+      "verified_sink_end_line": 59,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(bar, \"/Test.txt\");",
+      "detected_code_mechanisms": [
+        "SeparateClassRequest.getTheValue_constant_bar",
+        "valuesList_remove0_get1_selects_constant_moresafe"
+      ],
+      "primary_fp_cause": "safe_constant_source_SeparateClassRequest.getTheValue"
+    },
+    "BenchmarkTest00949": {
+      "test_case": "BenchmarkTest00949",
+      "file_name": "BenchmarkTest00949.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "8f8b95414642bc4fcf31609acead6a64884fc3647510b0727316894daa60694a",
+      "line_count": 96,
+      "verified_sink_start_line": 68,
+      "verified_sink_end_line": 69,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR, bar);",
+      "detected_code_mechanisms": [
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00950": {
+      "test_case": "BenchmarkTest00950",
+      "file_name": "BenchmarkTest00950.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "a5729f499e742ab51e6fd12c1dfc5687fcb3971180a6a7d8d1004bfb1431acb9",
+      "line_count": 95,
+      "verified_sink_start_line": 68,
+      "verified_sink_end_line": 68,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(bar, \"/Test.txt\");",
+      "detected_code_mechanisms": [
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00952": {
+      "test_case": "BenchmarkTest00952",
+      "file_name": "BenchmarkTest00952.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "2d84e8b0a1979a8d1fd7e33fa34eb48d9a6128deb94327871dd2a68b615480bc",
+      "line_count": 137,
+      "verified_sink_start_line": 88,
+      "verified_sink_end_line": 88,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(fileURI);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_2_case_C_or_D_tainted",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00953": {
+      "test_case": "BenchmarkTest00953",
+      "file_name": "BenchmarkTest00953.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "2d482fabb5d2550cedb08c1928733e39ef1a1300b8ba11b077e45f3c7fcf4828",
+      "line_count": 111,
+      "verified_sink_start_line": 79,
+      "verified_sink_end_line": 80,
+      "verified_sink_statement": "java.io.FileOutputStream fos = new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",
+      "detected_code_mechanisms": [
+        "valuesList_remove0_get0_selects_param",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00956": {
+      "test_case": "BenchmarkTest00956",
+      "file_name": "BenchmarkTest00956.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "e129ef03fbfb10f7a5e524a43dbe19860eb98f1a9cb86426af38f7678a3a2290",
+      "line_count": 106,
+      "verified_sink_start_line": 79,
+      "verified_sink_end_line": 80,
+      "verified_sink_statement": "java.io.FileOutputStream fos = new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",
+      "detected_code_mechanisms": [
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00996": {
+      "test_case": "BenchmarkTest00996",
+      "file_name": "BenchmarkTest00996.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "5af30fbd350e93ecde2b93846730e42105b8409b638096bb88969d1a101a36c6",
+      "line_count": 102,
+      "verified_sink_start_line": 74,
+      "verified_sink_end_line": 74,
+      "verified_sink_statement": "java.sql.CallableStatement statement = connection.prepareCall(sql);",
+      "detected_code_mechanisms": [
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00997": {
+      "test_case": "BenchmarkTest00997",
+      "file_name": "BenchmarkTest00997.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "f40f07651b12d1da41ed130543d4b05cbe1410f09233ef76163db695e0d80e62",
+      "line_count": 108,
+      "verified_sink_start_line": 74,
+      "verified_sink_end_line": 78,
+      "verified_sink_statement": "java.sql.CallableStatement statement = connection.prepareCall( sql, java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY);",
+      "detected_code_mechanisms": [
+        "valuesList_remove0_get0_selects_param",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest00998": {
+      "test_case": "BenchmarkTest00998",
+      "file_name": "BenchmarkTest00998.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "c8151e0cd1f3bce72bf21bb9fabc48f563e315cba3137ca32def203323492bf4",
+      "line_count": 103,
+      "verified_sink_start_line": 74,
+      "verified_sink_end_line": 78,
+      "verified_sink_statement": "java.sql.CallableStatement statement = connection.prepareCall( sql, java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY);",
+      "detected_code_mechanisms": [
+        "ternary_(7*42)-106=188<=200_evaluates_false_assigns_param",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest01004": {
+      "test_case": "BenchmarkTest01004",
+      "file_name": "BenchmarkTest01004.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "63312fa0af7682ae57c947c2524acf889318bf3b2ffe94886a9b5d936a0106e9",
+      "line_count": 114,
+      "verified_sink_start_line": 73,
+      "verified_sink_end_line": 74,
+      "verified_sink_statement": "java.sql.PreparedStatement statement = connection.prepareStatement(sql, new String[] {\"Column1\", \"Column2\"});",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_2_case_C_or_D_tainted",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest01006": {
+      "test_case": "BenchmarkTest01006",
+      "file_name": "BenchmarkTest01006.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "a823a02ac4283b0f6021bb609122696b82f99e97170b6f8a3cebb694d7c7c794",
+      "line_count": 103,
+      "verified_sink_start_line": 72,
+      "verified_sink_end_line": 74,
+      "verified_sink_statement": "Long results = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject( sql, Long.class);",
+      "detected_code_mechanisms": [
+        "HashMap_same_keyB_propagates_param",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest01010": {
+      "test_case": "BenchmarkTest01010",
+      "file_name": "BenchmarkTest01010.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "9d89a8a68982822f01d9b1fcb272d8de27c32fd96edaad46ba6601788052f14a",
+      "line_count": 105,
+      "verified_sink_start_line": 71,
+      "verified_sink_end_line": 71,
+      "verified_sink_statement": "org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.batchUpdate(sql);",
+      "detected_code_mechanisms": [
+        "valuesList_flow",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "other_false_positive_mechanism"
+    },
+    "BenchmarkTest01011": {
+      "test_case": "BenchmarkTest01011",
+      "file_name": "BenchmarkTest01011.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "617fbdacf592a9cd53689cb122899cca1a3d7c9c980be08e0df5cec2046cf4a5",
+      "line_count": 98,
+      "verified_sink_start_line": 71,
+      "verified_sink_end_line": 74,
+      "verified_sink_statement": "java.sql.Statement statement = org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement(); statement.addBatch(sql); int[] counts = statement.executeBatch();",
+      "detected_code_mechanisms": [
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest01012": {
+      "test_case": "BenchmarkTest01012",
+      "file_name": "BenchmarkTest01012.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "0f805f0b449de79b62a7da8c3846cc29b791ca42e394dc5970ed6ec9cb6e4f0b",
+      "line_count": 102,
+      "verified_sink_start_line": 73,
+      "verified_sink_end_line": 73,
+      "verified_sink_statement": "statement.execute(sql, java.sql.Statement.RETURN_GENERATED_KEYS);",
+      "detected_code_mechanisms": [
+        "valuesList_flow",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "other_false_positive_mechanism"
+    },
+    "BenchmarkTest01028": {
+      "test_case": "BenchmarkTest01028",
+      "file_name": "BenchmarkTest01028.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "12177004ce7ceba88d3d010d16fdd2e11a990a218599db0f7034840ca14ebdd5",
+      "line_count": 110,
+      "verified_sink_start_line": 70,
+      "verified_sink_end_line": 70,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(fileURI);",
+      "detected_code_mechanisms": [
+        "valuesList_flow",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "other_false_positive_mechanism"
+    },
+    "BenchmarkTest01030": {
+      "test_case": "BenchmarkTest01030",
+      "file_name": "BenchmarkTest01030.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "4f1f5e85a4234befb6a1bec7f57aadb004cf5aabaa9f9a94e47b77a204ae7751",
+      "line_count": 122,
+      "verified_sink_start_line": 73,
+      "verified_sink_end_line": 73,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(fileURI);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest01031": {
+      "test_case": "BenchmarkTest01031",
+      "file_name": "BenchmarkTest01031.java",
+      "split": "dev_set_16",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "efb0bce0a68e68f8696ed667e7d686f13005e2a27041d2e0d80c3f0658561dc9",
+      "line_count": 103,
+      "verified_sink_start_line": 58,
+      "verified_sink_end_line": 58,
+      "verified_sink_statement": "fis = new java.io.FileInputStream(fileName);",
+      "detected_code_mechanisms": [
+        "valuesList_flow",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "other_false_positive_mechanism"
+    },
+    "BenchmarkTest01085": {
+      "test_case": "BenchmarkTest01085",
+      "file_name": "BenchmarkTest01085.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "47fce56105247369d3e0038d472713e9ae2ab73f28a36a1a93bfb8e5855dac5a",
+      "line_count": 91,
+      "verified_sink_start_line": 56,
+      "verified_sink_end_line": 56,
+      "verified_sink_statement": "org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.execute(sql);",
+      "detected_code_mechanisms": [
+        "valuesList_flow",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "other_false_positive_mechanism"
+    },
+    "BenchmarkTest01096": {
+      "test_case": "BenchmarkTest01096",
+      "file_name": "BenchmarkTest01096.java",
+      "split": "dev_set_16",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "62a893d3dbaf217e02fd5795b3d9945f9b3fc79712c07d697c4bb4dbcdddaf6e",
+      "line_count": 96,
+      "verified_sink_start_line": 56,
+      "verified_sink_end_line": 58,
+      "verified_sink_statement": "java.sql.Statement statement = org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement(); int count = statement.executeUpdate(sql);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest01110": {
+      "test_case": "BenchmarkTest01110",
+      "file_name": "BenchmarkTest01110.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "9bdaf8e09e3e73e5fabdda592d88541858af8cda475f38dc2ba07dfcf029ba00",
+      "line_count": 129,
+      "verified_sink_start_line": 80,
+      "verified_sink_end_line": 80,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(fileURI);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest01156": {
+      "test_case": "BenchmarkTest01156",
+      "file_name": "BenchmarkTest01156.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": true,
+      "ground_truth": "TRUE_POSITIVE",
+      "official_lf_source_sha256": "ae204f5ae3264983adf67f1bd32c9ab4ea8a4ca07cd16fedfb03b318bd964f80",
+      "line_count": 107,
+      "verified_sink_start_line": 72,
+      "verified_sink_end_line": 72,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(fileURI);",
+      "detected_code_mechanisms": [
+        "HashMap_same_keyB_propagates_param",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": null
+    },
+    "BenchmarkTest01212": {
+      "test_case": "BenchmarkTest01212",
+      "file_name": "BenchmarkTest01212.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "6121cac0d07b3ace9952b7650f890a8621b7747f54bec82f57bd0efc43ecd211",
+      "line_count": 92,
+      "verified_sink_start_line": 60,
+      "verified_sink_end_line": 61,
+      "verified_sink_statement": "java.sql.PreparedStatement statement = connection.prepareStatement(sql, new int[] {1, 2});",
+      "detected_code_mechanisms": [
+        "valuesList_flow",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "other_false_positive_mechanism"
+    },
+    "BenchmarkTest01215": {
+      "test_case": "BenchmarkTest01215",
+      "file_name": "BenchmarkTest01215.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "afa995514e4055661e63bcba3b1e167d8bdcf032453bb9061e56737fa7c57ec0",
+      "line_count": 104,
+      "verified_sink_start_line": 59,
+      "verified_sink_end_line": 61,
+      "verified_sink_statement": "Long results = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject( sql, Long.class);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest01233": {
+      "test_case": "BenchmarkTest01233",
+      "file_name": "BenchmarkTest01233.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "c896625d387667de0acc9593e64aeeb77ec5e62d7256c9a77817abdc945e0f3f",
+      "line_count": 96,
+      "verified_sink_start_line": 48,
+      "verified_sink_end_line": 50,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File( new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR), bar);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest01385": {
+      "test_case": "BenchmarkTest01385",
+      "file_name": "BenchmarkTest01385.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "62faeec88b757bf0a2e1c3f2d2d47365bc90696ca320388c16fc84dc78ebfcef",
+      "line_count": 98,
+      "verified_sink_start_line": 57,
+      "verified_sink_end_line": 58,
+      "verified_sink_statement": "java.sql.PreparedStatement statement = connection.prepareStatement(sql, new String[] {\"Column1\", \"Column2\"});",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest01389": {
+      "test_case": "BenchmarkTest01389",
+      "file_name": "BenchmarkTest01389.java",
+      "split": "heldout_set_40",
+      "category": "sqli",
+      "cwe": "CWE-89",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "259e1de65a3a1ad6a7b2943ab95bf3d3a9dc3c4609d451980f53667ac81ae7c3",
+      "line_count": 106,
+      "verified_sink_start_line": 55,
+      "verified_sink_end_line": 56,
+      "verified_sink_statement": "java.util.List<java.util.Map<String, Object>> list = org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForList(sql);",
+      "detected_code_mechanisms": [
+        "switch_guess_charAt_1_case_B_constant",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "dead_taint_switch_branch_case_B_constant"
+    },
+    "BenchmarkTest01746": {
+      "test_case": "BenchmarkTest01746",
+      "file_name": "BenchmarkTest01746.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "67d81ccf4b8144741748d4420d44075aa2705a867393a6629abe6d17d6acd69e",
+      "line_count": 101,
+      "verified_sink_start_line": 66,
+      "verified_sink_end_line": 66,
+      "verified_sink_statement": "java.io.File fileTarget = new java.io.File(fileURI);",
+      "detected_code_mechanisms": [
+        "SeparateClassRequest.getTheValue_constant_bar",
+        "ternary_(7*42)-106=188<=200_evaluates_false_assigns_param",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "safe_constant_source_SeparateClassRequest.getTheValue"
+    },
+    "BenchmarkTest01752": {
+      "test_case": "BenchmarkTest01752",
+      "file_name": "BenchmarkTest01752.java",
+      "split": "heldout_set_40",
+      "category": "pathtraver",
+      "cwe": "CWE-22",
+      "real_vulnerability": false,
+      "ground_truth": "FALSE_POSITIVE",
+      "official_lf_source_sha256": "c4c13f85e8839211002c7c7e7fca92774031ec59588b08e4fd4ebcf3ec1e74ea",
+      "line_count": 87,
+      "verified_sink_start_line": 60,
+      "verified_sink_end_line": 61,
+      "verified_sink_statement": "java.io.FileOutputStream fos = new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",
+      "detected_code_mechanisms": [
+        "SeparateClassRequest.getTheValue_constant_bar",
+        "HashMap_same_keyB_propagates_param",
+        "inner_class_Test.doSomething"
+      ],
+      "primary_fp_cause": "safe_constant_source_SeparateClassRequest.getTheValue"
+    }
+  }
+}
