@@ -1,5 +1,8 @@
 # Biên bản khắc phục điểm mù phân tích mã nguồn, chuẩn hóa cổng kiểm chứng và đính chính khóa dữ liệu
 
+> [!WARNING]
+> **Đính chính 13/11/2026 (Antigravity tự đính chính bảng mục 3):** đối chiếu lại với nguồn OWASP công khai tại `8b67a88d` (blob khớp): **01746** — dòng 66 là `java.io.File fileTarget = new java.io.File(fileURI);`, không phải `FileOutputStream`; **01752** — `put("keyB-11351", param)` ở d.80, `get("keyB-11351")` ở d.82, `Test.doSomething` d.74–85, sink d.60–61 (`new FileOutputStream(new FileInputStream(fileName).getFD())`), không phải d.80–93/86/90/56; **00863** — sink d.51 là `new java.io.File(bar, "/Test.txt")`; **00864** — giá trị khởi tạo là `bar = "alsosafe"` (không phải `""`), sink d.59 `new java.io.File(bar, "/Test.txt")`. Kết luận nhãn (FALSE_POSITIVE do `getTheValue` trả hằng ở d.45) không đổi. Chi tiết: `v2/evaluation/g0_final_review/G0_FINAL_INDEPENDENT_REVIEW.md`, mục 4.3.
+
 - **Kho mã nguồn**: `https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis`
 - **Nhánh kiểm toán**: `v2/antigravity-review`
 - **Commit thực nghiệm gốc được kiểm toán**: `86636b9de22e59efcca2d3786434727c6ae082e4`

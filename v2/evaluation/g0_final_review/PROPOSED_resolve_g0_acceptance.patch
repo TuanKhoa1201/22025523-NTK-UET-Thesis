@@ -1,0 +1,92 @@
+--- a/v2/crosscheck/resolve_g0.py
++++ b/v2/crosscheck/resolve_g0.py
+@@ -33,10 +33,17 @@
+                           'lf_sha256': sha(d.replace(b'\r\n', b'\n'))} for d in (a, b)]}
+ 
+ 
++DOC_ONLY_FAIL = {('document_consistency', 'manual.total_seconds'), ('document_consistency', 'manual.mean_seconds'),
++                 ('document_consistency', 'Arm D FP CWE-22'), ('document_consistency', 'Arm D FP CWE-89'),
++                 ('annotation_rationale', 'annotator_rationale / sanitizer_or_reason')}
++
++
+ def classify(row):
+     """Explicit disposition, not a replacement for original PASS/FAIL status."""
+     if row['status'] == 'FAIL':
+-        return 'ERRATA_ISSUED', 'Giữ FAIL lịch sử; công bố giá trị đúng trong errata', 'Antigravity/G3'
++        if (row.get('criterion'), row.get('field')) in DOC_ONLY_FAIL:
++            return 'ERRATA_ISSUED', 'Giữ FAIL lịch sử; công bố giá trị đúng trong errata', 'Antigravity/G3'
++        return 'UNRESOLVED_FAIL', 'FAIL không thuộc nhóm tài liệu có errata; chặn nghiệm thu', 'Codex'
+     if row['status'] == 'PASS':
+         return 'PASS', 'Giữ nguyên phạm vi kiểm tra đã ghi', 'Codex'
+     if row['criterion'] in ('heldout_aggregate_comparison', 'latency_measurements'):
+@@ -62,16 +69,23 @@
+     return 'INCOMPLETE', 'Giới hạn lịch sử chưa đóng; không yêu cầu chạy lại để thay thế', 'JavisOS/người hướng dẫn'
+ 
+ 
+-def acceptance(audit, comparison):
++def acceptance(audit, comparison, extra_register=()):
+     required=('transfer_integrity','scan_development','scan_heldout','scan_manual',
+-              'owasp_labels_and_sources','heldout_published_comparison','immutability')
+-    if any(audit.get('criteria',{}).get(k) != 'PASS' for k in required):
++              'owasp_labels_and_sources','heldout_published_comparison','immutability',
++              'run_stage4_heldout40_armB_heuristic','run_stage4_heldout40_armC_evidence_llm',
++              'run_stage4_heldout40_armD_llm_ablation')
++    criteria=audit.get('criteria',{})
++    if any(criteria.get(k) != 'PASS' for k in required):
++        return 'BLOCKED'
++    if criteria.get('heldout_aggregate_comparison') not in ('PASS','INCOMPLETE'):
+         return 'BLOCKED'
+     if not comparison['rows_columns_equal']:
+         return 'BLOCKED'
+-    for row in audit['register']:
+-        if row['status']=='FAIL' and not (row['criterion']=='document_consistency' and
+-                row['field'] in ('manual.total_seconds','manual.mean_seconds')):
++    for row in list(audit['register'])+list(extra_register):
++        if row['status']=='FAIL' and (row['criterion'],row['field']) not in DOC_ONLY_FAIL:
++            return 'BLOCKED'
++        if (row['criterion']=='heldout_aggregate_comparison' and row['status']=='INCOMPLETE'
++                and 'latency_ms not verifiable' not in row.get('actual','')):
+             return 'BLOCKED'
+     return 'CONDITIONAL'
+ 
+@@ -159,9 +173,13 @@
+                  'remaining_reason':'No bytes with peer-declared hash supplied; cannot identify its origin',
+                  'owner':'JavisOS/G3'})
+     after=dict(Counter(r['after'] for r in rows))
+-    verdict=acceptance(audit,comparison)
++    # Same rule on the raw register and on the merged historical register (must agree).
++    verdict=acceptance(audit,comparison,extra_register=prior)
++    unresolved=[r['check_id'] for r in rows if r['after'] in ('UNRESOLVED_FAIL',)]
++    open_items=sorted({r['criterion'] for r in rows if r['after'] not in ('PASS','ERRATA_ISSUED')})
+     report={'schema':'ntk-g0-resolution-1','date':'2026-11-13',
+-            'G0_AUDIT_COMPLETED':True,'G0_ACCEPTANCE':verdict,'READY_FOR_G1':'NO' if verdict=='BLOCKED' else 'CONDITIONAL',
++            'G0_AUDIT_COMPLETED':not unresolved,'G0_ACCEPTANCE':verdict,
++            'open_criteria_derived':open_items,'READY_FOR_G1':'NO' if verdict=='BLOCKED' else 'CONDITIONAL',
+             'axes':{'DATA_INTEGRITY':'PASS for delivered artifacts; historical runtime unattested',
+                     'METRIC_RECOMPUTATION':'PASS for measured C/D and classification A/B/C/D; A/B latency NOT_MEASURED',
+                     'GROUND_TRUTH_ATTESTATION':'56 OWASP verified; manual 20 not independently attested; #10 review required',
+--- a/v2/crosscheck/test_resolution.py
++++ b/v2/crosscheck/test_resolution.py
+@@ -26,8 +26,21 @@
+         with self.assertRaises(ValueError):r.compare_csv(b'alert_id,x\na,1\na,1\n',b'alert_id,x\na,1\n')
+ 
+     def test_errata_does_not_turn_failure_into_pass(self):
+-        row={'status':'FAIL'}
++        row={'status':'FAIL','criterion':'document_consistency','field':'manual.total_seconds'}
+         self.assertEqual(r.classify(row)[0],'ERRATA_ISSUED');self.assertEqual(row['status'],'FAIL')
++
++    def test_non_documentation_fail_is_not_errata(self):
++        row={'status':'FAIL','criterion':'owasp_labels_and_sources','field':'label.ground_truth'}
++        self.assertEqual(r.classify(row)[0],'UNRESOLVED_FAIL');self.assertEqual(row['status'],'FAIL')
++
++    def test_heldout_arm_run_is_required(self):
++        keys=('transfer_integrity','scan_development','scan_heldout','scan_manual','owasp_labels_and_sources',
++              'heldout_published_comparison','immutability','run_stage4_heldout40_armB_heuristic',
++              'run_stage4_heldout40_armC_evidence_llm','run_stage4_heldout40_armD_llm_ablation')
++        a={'criteria':dict(dict.fromkeys(keys,'PASS'),heldout_aggregate_comparison='INCOMPLETE'),'register':[]}
++        self.assertEqual(r.acceptance(a,{'rows_columns_equal':True}),'CONDITIONAL')
++        a['criteria']['run_stage4_heldout40_armC_evidence_llm']='INCOMPLETE'
++        self.assertEqual(r.acceptance(a,{'rows_columns_equal':True}),'BLOCKED')
+ 
+     def test_missing_timing_checkpoint_and_prompt_not_excused(self):
+         row={'status':'INCOMPLETE','criterion':'heldout_aggregate_comparison','field':'missing_evidence','actual':''}

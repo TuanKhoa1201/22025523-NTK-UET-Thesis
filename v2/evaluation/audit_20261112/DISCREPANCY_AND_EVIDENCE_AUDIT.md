@@ -1,5 +1,8 @@
 # BIÊN BẢN KIỂM TOÁN TRÍCH DẪN, SANITIZER, TÍNH NHẤT QUÁN TÀI LIỆU VÀ DANH MỤC SAI LỆCH
 
+> [!WARNING]
+> **Đính chính 13/11/2026 (Antigravity tự đính chính):** Mục 2.3 (dòng 44) mô tả sai mã `demo/UserDao.java`: tệp thật không có `Path target = baseDir.resolve(...)`. Mã thật (`UserDao.java:17,61-68`, SHA-256 `6c890fc8…`) là `BASE_DIR = "/var/app/files/"`, `File f = new File(BASE_DIR + fileName)` (d.63) và `if (!f.getCanonicalPath().startsWith(BASE_DIR)) throw` (d.64). Mục 3.5 (dòng 74) gọi tệp này là "tự viết nội bộ"; thực tế nó lấy từ `examples/demo` của gói `opengrep-triage.zip` do giảng viên cung cấp. Kết luận về điểm mù "chốt kiểm tra sau dòng sink" vẫn đúng. Xem `v2/evaluation/g0_final_review/G0_FINAL_INDEPENDENT_REVIEW.md`, mục 4.3.
+
 - **Mã kiểm toán**: `AUDIT-20261112-EVIDENCE-DISCREPANCIES`
 - **Nhánh đối tượng**: `v2/post-report-cwe22-cwe89-20261112` @ `86636b9de22e59efcca2d3786434727c6ae082e4`
 - **Bộ kiểm thử phản chứng đi kèm**: `v2/evaluation/audit_20261112/test_independent_audit.py` (`16/16` test `OK`)

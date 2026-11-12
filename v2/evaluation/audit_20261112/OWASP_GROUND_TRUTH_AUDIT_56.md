@@ -1,5 +1,8 @@
 # Biên Bản Kiểm Toán Độc Lập 56 Nhãn OWASP BenchmarkJava v1.2 và Phân Loại 20 Cảnh Báo Dự Án Thực Tế
 
+> [!WARNING]
+> **Đính chính 13/11/2026 (Antigravity tự đính chính):** Dòng 83 gọi phương thức chứa cảnh báo `UserDao.java:63` là `readSafe`; tên thật là `open` (`UserDao.java:61`). Kết luận về 56 nhãn OWASP không đổi và đã được tái kiểm từ nguồn công khai (`v2/evaluation/g0_final_review/verify_owasp_public.py`, 56/56 khớp).
+
 - **Nhánh thực nghiệm được kiểm toán:** `v2/post-report-cwe22-cwe89-20261112` @ `86636b9de22e59efcca2d3786434727c6ae082e4`
 - **Nhánh kiểm toán độc lập:** `kiem-toan/du-lieu-va-ket-qua-20261112`
 - **Nguồn Ground Truth chuẩn đối chiếu:** `OWASP-Benchmark/BenchmarkJava` v1.2 tại commit ghim cứng `8b67a88d73b2594570fc21150705283de884620b`
