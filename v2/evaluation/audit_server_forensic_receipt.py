@@ -26,6 +26,14 @@ if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 
 from v2.evaluation import score_pilot, validate_pilot_lock
+from v2.evaluation.server_forensic_gates import (
+    EXIT_FAIL,
+    EXIT_INCOMPLETE,
+    EXIT_PASS,
+    audit_guided_llm_confounder,
+    audit_paired_evaluation_table,
+    evaluate_acceptance_gates,
+)
 from v2.evaluation.server_forensic_helpers import (
     compute_contract_alert_id,
     inspect_sqlite_readonly_copy,
@@ -37,8 +45,11 @@ from v2.evaluation.server_forensic_helpers import (
     sha256_file,
     sha256_lf_text,
     summarize_latencies_ms,
+    verify_sarif_against_opengrep_json,
+    verify_sqlite_review_lifecycle_on_temp_copy,
 )
 from v2.triage import ollama as triage_ollama
+from v2.triage.evidence import EvidenceError
 from v2.triage.scan_receipt import verify_receipt
 
 EXPECTED_SCAN_SHAS = {
@@ -47,11 +58,87 @@ EXPECTED_SCAN_SHAS = {
     "stage5_real_projects_scan": "99d2445c218030fb10082176c299bc328eeb62c6b23c7ab745cffd824f31f041",
 }
 
+EXPECTED_RULESET_SHA = "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9"
+EXPECTED_STRICT_LOCK_SHA = "4fb556371eb9eb520aec6df96e4a151685df261025b2893eb7bae51c435bca09"
 EXPECTED_BENCHMARK_COMMIT = "8b67a88d73b2594570fc21150705283de884620b"
 EXPECTED_WEBGOAT_COMMIT = "5357a65e054976cd7d79b81ef3906ded050ed921"
 EXPECTED_JAVASECCODE_COMMIT = "4711f4e186258c6e0dd5c3863e7c9592e7e9026a"
 EXPECTED_OWASP_CSV_SHA = "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1"
 EXPECTED_ADVISOR_ZIP_SHA = "5f39d2fb84bbc50e63b0b2b0c4618f84d7878bab1458cc99377223ee9c31b1cd"
+
+MANDATORY_ASSESSMENT_RUNS: dict[str, int] = {
+    "stage2_dev16_baseline_v1_0": 16,
+    "stage3_dev16_armB_heuristic": 16,
+    "stage3_dev16_armC_evidence_llm": 16,
+    "stage3_dev16_armC_v2_1_evidence_llm": 16,
+    "stage3_dev16_armD_llm_ablation": 16,
+    "stage4_heldout40_armB_heuristic": 40,
+    "stage4_heldout40_armC_evidence_llm": 40,
+    "stage4_heldout40_armD_llm_ablation": 40,
+    "stage5_real_projects_armB_heuristic": 20,
+    "stage5_real_projects_armC_evidence_llm": 20,
+}
+
+FROZEN_V2_1_LLM_RUNS: set[str] = {
+    "stage3_dev16_armC_v2_1_evidence_llm",
+    "stage4_heldout40_armC_evidence_llm",
+    "stage4_heldout40_armD_llm_ablation",
+    "stage5_real_projects_armC_evidence_llm",
+}
+
+
+def load_expected_hashes(override_path: Path | None = None) -> dict[str, Any]:
+    defaults: dict[str, Any] = {
+        "scan_shas": dict(EXPECTED_SCAN_SHAS),
+        "ruleset_sha256": EXPECTED_RULESET_SHA,
+        "owasp_csv_sha256": EXPECTED_OWASP_CSV_SHA,
+        "strict_lock_sha256": EXPECTED_STRICT_LOCK_SHA,
+    }
+    if override_path is not None and override_path.is_file():
+        custom = json.loads(override_path.read_text(encoding="utf-8"))
+        if isinstance(custom.get("scan_shas"), dict):
+            defaults["scan_shas"].update(custom["scan_shas"])
+        for k in ("ruleset_sha256", "owasp_csv_sha256", "strict_lock_sha256"):
+            if k in custom:
+                defaults[k] = custom[k]
+    return defaults
+
+
+def check_mandatory_inputs(evidence_root: Path, worktree_root: Path) -> list[str]:
+    """Return missing mandatory files/directories so missing inputs fail closed with INCOMPLETE (exit 2)."""
+    missing: list[str] = []
+    req_dirs = [
+        evidence_root,
+        evidence_root / "sources" / "dev_set_16",
+        evidence_root / "sources" / "heldout_set_40",
+        evidence_root / "sources" / "real_projects",
+        worktree_root,
+    ]
+    for d in req_dirs:
+        if not d.is_dir():
+            missing.append(str(d))
+
+    req_files = [
+        evidence_root / "sources" / "expectedresults-1.2.csv",
+        worktree_root / "v2" / "evaluation" / "post_report" / "rules" / "p_java_cwe22_cwe89.yml",
+        worktree_root / "v2" / "evaluation" / "post_report" / "labels_development.json",
+        worktree_root / "v2" / "evaluation" / "post_report" / "labels_heldout.json",
+        worktree_root / "v2" / "evaluation" / "post_report" / "heldout_alerts.json",
+        worktree_root / "v2" / "evaluation" / "post_report" / "heldout_strict_lock_manifest.json",
+        worktree_root / "v2" / "evaluation" / "post_report" / "PAIRED_EVALUATION.csv",
+    ]
+    for sname in EXPECTED_SCAN_SHAS:
+        sdir = evidence_root / "runs" / sname
+        req_files.extend([sdir / "opengrep.json", sdir / "scan-manifest.json", sdir / "opengrep.sarif"])
+
+    for rname in MANDATORY_ASSESSMENT_RUNS:
+        rdir = evidence_root / "runs" / rname
+        req_files.extend([rdir / "assessments.jsonl", rdir / "input.opengrep.json", rdir / "review.sqlite"])
+
+    for f in req_files:
+        if not f.is_file():
+            missing.append(str(f))
+    return missing
 
 REAL_PROJECT_MANUAL_LABELS: dict[int, dict[str, Any]] = {
     0: {"label": "TRUE_POSITIVE", "locus": "WebGoat/Assignment5.java:login_sql", "confidence": "HIGH"},
@@ -277,7 +364,12 @@ def audit_opengrep_scans(
     worktree_root: Path,
     advisor_zip_path: Path | None,
     wsl_info: dict[str, Any],
+    expected_hashes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    exp_hashes = expected_hashes or load_expected_hashes()
+    exp_scan_shas = exp_hashes["scan_shas"]
+    exp_ruleset_sha = exp_hashes["ruleset_sha256"]
+
     rules_path = worktree_root / "v2" / "evaluation" / "post_report" / "rules" / "p_java_cwe22_cwe89.yml"
     rules_sha = sha256_file(rules_path)
     rules_doc = yaml.safe_load(rules_path.read_text(encoding="utf-8"))
@@ -308,8 +400,13 @@ def audit_opengrep_scans(
         og_path = run_dir / "opengrep.json"
         raw_bytes = og_path.read_bytes()
         actual_sha = sha256_bytes(raw_bytes)
-        expected_sha = EXPECTED_SCAN_SHAS[run_name]
+        expected_sha = exp_scan_shas[run_name]
         og_doc = json.loads(raw_bytes.decode("utf-8"))
+
+        sarif_path = run_dir / "opengrep.sarif"
+        sarif_sha = sha256_file(sarif_path) if sarif_path.is_file() else None
+        sarif_doc = json.loads(sarif_path.read_text(encoding="utf-8")) if sarif_path.is_file() else {}
+        sarif_crosscheck = verify_sarif_against_opengrep_json(og_doc, sarif_doc)
 
         results = og_doc.get("results", [])
         errors = og_doc.get("errors", [])
@@ -370,6 +467,9 @@ def audit_opengrep_scans(
                 "expected_sha256": expected_sha,
                 "actual_sha256": actual_sha,
                 "sha256_matched": actual_sha == expected_sha,
+                "opengrep_sarif_path": str(sarif_path),
+                "opengrep_sarif_sha256": sarif_sha,
+                "sarif_crosscheck": sarif_crosscheck,
                 "opengrep_version_in_json": og_doc.get("version"),
                 "version_stdout": ver_stdout,
                 "findings_count": len(results),
@@ -396,7 +496,7 @@ def audit_opengrep_scans(
                 "rules_after_sha256": rules_after_sha,
                 "rules_unchanged_before_after": (
                     rules_before_sha is not None
-                    and rules_before_sha == rules_after_sha == rules_sha
+                    and rules_before_sha == rules_after_sha == rules_sha == exp_ruleset_sha
                 ),
                 "rules_snapshot_sha256": rules_snapshot_sha,
                 "rules_snapshot_matches_repo_yaml": rules_snapshot_sha == rules_sha,
@@ -415,13 +515,24 @@ def audit_opengrep_scans(
                     "sha256": sha256_file(fp),
                 }
 
+    win_og_bin = Path(r"C:\Users\Admin\ntk-thesis-v2\tools\opengrep\v1.25.0\opengrep.exe")
     return {
         "generated_at": now_iso(),
         "pinned_ruleset": {
             "path": str(rules_path),
             "sha256": rules_sha,
+            "expected_sha256": exp_ruleset_sha,
+            "sha256_matched": rules_sha == exp_ruleset_sha,
             "rule_count": len(rules_list),
             "rule_ids": rule_ids,
+        },
+        "windows_vs_wsl_opengrep_binary_distinction": {
+            "windows_binary_path": str(win_og_bin),
+            "windows_binary_present": win_og_bin.is_file(),
+            "windows_binary_sha256": sha256_file(win_og_bin) if win_og_bin.is_file() else None,
+            "wsl_usr_local_bin_opengrep_sha256": wsl_info.get("wsl_opengrep_usr_local_sha256"),
+            "wsl_cli_latest_bridge_exists": wsl_info.get("wsl_opengrep_cli_latest_exists"),
+            "actual_invocation_mode_for_three_primary_scans": "Windows native PE binary opengrep.exe v1.25.0",
         },
         "upstream_provenance": {
             "wsl_verification": wsl_info,
@@ -473,6 +584,7 @@ def _load_ground_truth_for_run(run_name: str, worktree_root: Path, scan_sha: str
 def audit_all_10_assessments(
     evidence_root: Path,
     worktree_root: Path,
+    skip_lifecycle_check: bool = False,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     runs_dir = evidence_root / "runs"
     ckpt_dir = evidence_root / "checkpoints"
@@ -543,6 +655,7 @@ def audit_all_10_assessments(
         transport_counts: dict[str, int] = {}
         model_counts: dict[str, int] = {}
         raw_response_present = 0
+        http_status_200_count = 0
         substantive_raw_content = 0
         done_true_count = 0
         done_reasons: dict[str, int] = {}
@@ -567,10 +680,24 @@ def audit_all_10_assessments(
         latencies_ms: list[float] = []
         eval_counts: list[int] = []
         anomalies: list[str] = []
+        seen_ids: set[str] = set()
+        records_by_id: dict[str, dict[str, Any]] = {}
+
+        expected_run_count = MANDATORY_ASSESSMENT_RUNS.get(run_name)
+        if expected_run_count is not None and len(records) != expected_run_count:
+            anomalies.append(
+                f"Run {run_name}: record_count={len(records)} != expected={expected_run_count}"
+            )
+        if malformed_lines > 0:
+            anomalies.append(f"Run {run_name}: malformed_jsonl_lines={malformed_lines}")
 
         for idx, rec in enumerate(records):
             expected_aid = compute_contract_alert_id(input_scan_sha, idx)
             rec_id = str(rec.get("id") or rec.get("alert_id") or "")
+            if rec_id in seen_ids:
+                anomalies.append(f"Row {idx}: duplicate alert_id {rec_id}")
+            seen_ids.add(rec_id)
+            records_by_id[rec_id] = rec
             if rec_id == expected_aid and rec.get("alert_id") == expected_aid:
                 alert_id_matches += 1
             else:
@@ -624,14 +751,26 @@ def audit_all_10_assessments(
             raw_qwen_status = "NO_LLM_CALL"
             raw_qwen_cites_count = 0
             raw_parse_error = None
-            if isinstance(raw_resp, dict):
+            if raw_resp is not None and not isinstance(raw_resp, dict):
+                anomalies.append(f"Row {idx}: raw_response is not a dict ({type(raw_resp).__name__})")
+            elif isinstance(raw_resp, dict):
                 raw_response_present += 1
+                http_st = rt.get("http_status")
+                if http_st == 200:
+                    http_status_200_count += 1
+                else:
+                    anomalies.append(f"Row {idx}: http_status={http_st} != 200")
                 if raw_resp.get("done") is True:
                     done_true_count += 1
+                else:
+                    anomalies.append(f"Row {idx}: raw_response.done={raw_resp.get('done')} is not True")
                 dr = str(raw_resp.get("done_reason") or "UNKNOWN")
                 done_reasons[dr] = done_reasons.get(dr, 0) + 1
-                if isinstance(raw_resp.get("eval_count"), int):
-                    eval_counts.append(int(raw_resp["eval_count"]))
+                ev_cnt = raw_resp.get("eval_count")
+                if isinstance(ev_cnt, int) and ev_cnt > 0:
+                    eval_counts.append(int(ev_cnt))
+                else:
+                    anomalies.append(f"Row {idx}: invalid eval_count={ev_cnt}")
 
                 # Verify response_json_sha256
                 recomputed_resp_sha = sha256_bytes(
@@ -647,11 +786,21 @@ def audit_all_10_assessments(
                     substantive_raw_content += 1
                     try:
                         parsed_ans = json.loads(msg_content)
+                        if not isinstance(parsed_ans, dict):
+                            raise ValueError("LLM JSON content is not a JSON object")
                         raw_qwen_status = str(parsed_ans.get("status") or "MISSING_STATUS")
                         raw_qwen_cites_count = len(parsed_ans.get("citations") or [])
+                        if raw_qwen_status not in ("SUPPORTED", "REFUTED", "UNDETERMINED"):
+                            anomalies.append(f"Row {idx}: invalid raw_qwen_status='{raw_qwen_status}'")
                     except Exception as exc:
                         raw_qwen_status = "RAW_JSON_PARSE_ERROR"
                         raw_parse_error = str(exc)
+                        if run_name != "stage2_dev16_baseline_v1_0" or dr != "length":
+                            anomalies.append(f"Row {idx}: unexpected raw JSON parse error: {raw_parse_error}")
+                else:
+                    anomalies.append(f"Row {idx}: empty or missing raw_response.message.content")
+            elif transport == "ollama-http" and run_name != "stage2_dev16_baseline_v1_0":
+                anomalies.append(f"Row {idx}: missing raw_response in post-v1.0 LLM run {run_name}")
 
             if rt.get("request_payload_sha256"):
                 request_payload_sha_present += 1
@@ -704,11 +853,18 @@ def audit_all_10_assessments(
                     for lno, text_ln in enumerate(disk_bytes.decode("utf-8").splitlines())
                 }
                 snaps = ev.get("snapshots") or {}
-                snap_entry = snaps.get(rel_path) or {}
+                snap_entry = (
+                    snaps.get(rel_path)
+                    or snaps.get(rel_path.replace("\\", "/"))
+                    or snaps.get(rel_path.replace("/", "\\"))
+                    or {}
+                )
                 if snap_entry.get("sha256") == disk_sha:
                     source_snapshot_sha_verified += 1
                 else:
                     anomalies.append(f"Row {idx}: snapshot sha256 != disk sha256 for {rel_path}")
+            else:
+                anomalies.append(f"Row {idx}: missing disk source file {rel_path}")
 
             # Verify OpenGrep raw finding source/sink line numbers exist in disk file
             raw_alert = og_results[idx] if idx < len(og_results) else {}
@@ -795,7 +951,19 @@ def audit_all_10_assessments(
                 }
             )
 
-        sqlite_info = inspect_sqlite_readonly_copy(sq_path)
+        if run_name in FROZEN_V2_1_LLM_RUNS and request_payload_matches_current_v2_1_code != len(records):
+            anomalies.append(
+                f"Run {run_name}: request_payload_sha256 matched {request_payload_matches_current_v2_1_code}/{len(records)}"
+            )
+
+        sqlite_info = inspect_sqlite_readonly_copy(
+            sq_path,
+            source_root=src_root,
+            expected_scan_sha256=input_scan_sha,
+            expected_records_by_id=records_by_id,
+        )
+        if not sqlite_info.get("valid"):
+            anomalies.extend(f"sqlite:{iss}" for iss in sqlite_info.get("issues", []))
 
         runs_audit.append(
             {
@@ -812,6 +980,7 @@ def audit_all_10_assessments(
                 "transport_counts": transport_counts,
                 "model_counts": model_counts,
                 "raw_response_present_count": raw_response_present,
+                "http_status_200_count": http_status_200_count,
                 "substantive_raw_content_count": substantive_raw_content,
                 "done_true_count": done_true_count,
                 "done_reasons": done_reasons,
@@ -853,6 +1022,14 @@ def audit_all_10_assessments(
     stage6_demo_db = inspect_sqlite_readonly_copy(
         runs_dir / "stage6_human_review_demo" / "review_demo.sqlite"
     )
+    lifecycle_proof = (
+        {"skipped": True, "passed": None}
+        if skip_lifecycle_check
+        else verify_sqlite_review_lifecycle_on_temp_copy(
+            runs_dir / "stage4_heldout40_armC_evidence_llm" / "review.sqlite",
+            evidence_root / "sources" / "heldout_set_40",
+        )
+    )
 
     return (
         {
@@ -861,6 +1038,7 @@ def audit_all_10_assessments(
             "total_assessment_records_audited": sum(r["record_count"] for r in runs_audit),
             "checkpoint_files_audited": checkpoint_summaries,
             "stage6_human_review_demo_sqlite": stage6_demo_db,
+            "heldout_arm_c_temp_lifecycle_verification": lifecycle_proof,
             "runs": runs_audit,
         },
         comparison_rows,
@@ -870,6 +1048,7 @@ def audit_all_10_assessments(
 def audit_historical_ground_truth_verifier(
     ntk_root: Path,
     brain_root: Path,
+    skip_subprocs: bool = False,
 ) -> dict[str, Any]:
     worktree_checks: list[dict[str, Any]] = []
     for name in (
@@ -891,7 +1070,7 @@ def audit_historical_ground_truth_verifier(
 
     brain_script = brain_root / "scripts" / "ground_truth_verifier.py"
     brain_receipt = brain_root / "scratch" / "ground_truth_receipts" / "receipt_20261112_124648.json"
-    javis_os_root = brain_root.parents[1]
+    javis_os_root = brain_root.parents[1] if len(brain_root.parents) >= 2 else brain_root
 
     script_info: dict[str, Any] = {"exists": brain_script.is_file(), "path": str(brain_script)}
     if brain_script.is_file():
@@ -908,27 +1087,36 @@ def audit_historical_ground_truth_verifier(
             }
         )
 
-    git_check = subprocess.run(
-        ["git", "-C", str(javis_os_root), "check-ignore", "-v", "brains-canhan/Brain Default/scripts/ground_truth_verifier.py"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-    ls_files = subprocess.run(
-        ["git", "-C", str(javis_os_root), "ls-files", "brains-canhan/Brain Default/scripts/ground_truth_verifier.py"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
-
-    help_run = subprocess.run(
-        [sys.executable, str(brain_script), "--help"],
-        cwd=str(brain_root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=15,
-    )
+    if not skip_subprocs and brain_script.is_file() and (javis_os_root / ".git").exists():
+        git_check = subprocess.run(
+            ["git", "-C", str(javis_os_root), "check-ignore", "-v", "brains-canhan/Brain Default/scripts/ground_truth_verifier.py"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        ls_files = subprocess.run(
+            ["git", "-C", str(javis_os_root), "ls-files", "brains-canhan/Brain Default/scripts/ground_truth_verifier.py"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        help_run = subprocess.run(
+            [sys.executable, str(brain_script), "--help"],
+            cwd=str(brain_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=15,
+        )
+        tracked_out = ls_files.stdout.strip()
+        ignore_out = git_check.stdout.strip()
+        help_rc = help_run.returncode
+        help_stdout = help_run.stdout.strip()
+    else:
+        tracked_out = ""
+        ignore_out = "skipped_or_untracked_under_junction_brains_canhan"
+        help_rc = 0 if brain_script.is_file() else None
+        help_stdout = "skipped_in_fast_test_mode"
 
     receipt_analysis: dict[str, Any] = {"exists": brain_receipt.is_file(), "path": str(brain_receipt)}
     if brain_receipt.is_file():
@@ -1009,15 +1197,15 @@ def audit_historical_ground_truth_verifier(
         "located_script": script_info,
         "git_tracking_in_javis_os": {
             "javis_os_repo_root": str(javis_os_root),
-            "tracked_files_output": ls_files.stdout.strip(),
-            "is_tracked_in_git": bool(ls_files.stdout.strip()),
-            "gitignore_match": git_check.stdout.strip() or "untracked_under_junction_brains_canhan",
+            "tracked_files_output": tracked_out,
+            "is_tracked_in_git": bool(tracked_out),
+            "gitignore_match": ignore_out or "untracked_under_junction_brains_canhan",
         },
         "historical_interpreter": sys.executable,
         "safe_help_invocation": {
             "command": [sys.executable, str(brain_script), "--help"],
-            "returncode": help_run.returncode,
-            "stdout": help_run.stdout.strip(),
+            "returncode": help_rc,
+            "stdout": help_stdout,
         },
         "why_full_rerun_skipped": (
             "Running `ground_truth_verifier.py` without arguments writes/overwrites Javis Brain state files "
@@ -1032,7 +1220,13 @@ def audit_historical_ground_truth_verifier(
 def audit_ground_truth_labels(
     evidence_root: Path,
     worktree_root: Path,
+    expected_hashes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    exp_hashes = expected_hashes or load_expected_hashes()
+    exp_owasp_csv_sha = exp_hashes["owasp_csv_sha256"]
+    exp_strict_lock_sha = exp_hashes["strict_lock_sha256"]
+    exp_real_scan_sha = exp_hashes["scan_shas"]["stage5_real_projects_scan"]
+
     post_dir = worktree_root / "v2" / "evaluation" / "post_report"
     owasp_csv_path = evidence_root / "sources" / "expectedresults-1.2.csv"
     owasp_csv_sha = sha256_file(owasp_csv_path)
@@ -1196,7 +1390,7 @@ def audit_ground_truth_labels(
 
     # Audit Real Projects 20 manual labels independently of Qwen
     real_src_root = evidence_root / "sources" / "real_projects"
-    real_scan_sha = EXPECTED_SCAN_SHAS["stage5_real_projects_scan"]
+    real_scan_sha = exp_real_scan_sha
     real_items: list[dict[str, Any]] = []
     distinct_loci = set()
     for idx, r in enumerate(real_og):
@@ -1233,7 +1427,8 @@ def audit_ground_truth_labels(
         "owasp_expectedresults_csv": {
             "path": str(owasp_csv_path),
             "sha256": owasp_csv_sha,
-            "matches_benchmark_v1_2_sha256": owasp_csv_sha == EXPECTED_OWASP_CSV_SHA,
+            "expected_sha256": exp_owasp_csv_sha,
+            "matches_benchmark_v1_2_sha256": owasp_csv_sha == exp_owasp_csv_sha,
             "total_owasp_testcases_parsed": len(owasp_map),
         },
         "testcase_vs_finding_distinction": {
@@ -1266,7 +1461,12 @@ def audit_ground_truth_labels(
             "m4_acceptance_ready": strict_lock_report.get("m4_acceptance_ready"),
             "recomputed_combined_lock_sha256": recomputed_lock.get("combined_lock_sha256"),
             "saved_manifest_combined_lock_sha256": saved_lock_manifest.get("combined_lock_sha256"),
-            "lock_hash_matches": lock_ok,
+            "expected_combined_lock_sha256": exp_strict_lock_sha,
+            "lock_hash_matches": (
+                lock_ok
+                and recomputed_lock.get("combined_lock_sha256") == exp_strict_lock_sha
+                and saved_lock_manifest.get("combined_lock_sha256") == exp_strict_lock_sha
+            ),
             "lock_verify_errors": lock_errs,
             "errors": strict_lock_report.get("errors"),
             "warnings": strict_lock_report.get("warnings"),
@@ -1345,7 +1545,9 @@ def recompute_metrics_and_consistency(
     evidence_root: Path,
     worktree_root: Path,
     comparison_rows: list[dict[str, Any]],
+    expected_hashes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    exp_hashes = expected_hashes or load_expected_hashes()
     post_dir = worktree_root / "v2" / "evaluation" / "post_report"
 
     # Group comparison_rows by run_name
@@ -1397,7 +1599,7 @@ def recompute_metrics_and_consistency(
             labels_data=held_lbl,
             triage_data=triage_txt,
             source_root=evidence_root / "sources" / "heldout_set_40",
-            expected_scan_sha256=EXPECTED_SCAN_SHAS["stage1_heldout_set_40_scan"],
+            expected_scan_sha256=exp_hashes["scan_shas"]["stage1_heldout_set_40_scan"],
         )
         ov_dict = (rep.get("summary") or {}).get("overall") or {}
         ov = ov_dict.get("counts", {})
@@ -1533,6 +1735,24 @@ def recompute_metrics_and_consistency(
                 "whereas `extract_evidence_signals` in Arm C ALREADY resolved them deterministically into `recommended_status` before calling Qwen."
             ),
         },
+        {
+            "check": "Correction of Earlier Prose Summary Transcription Errors vs Raw JSONL/CSV",
+            "status": "CORRECTED_FROM_RAW_EVIDENCE",
+            "ground_truth_on_disk": (
+                "Verified directly from `labels_heldout.json`, `PAIRED_EVALUATION.csv`, and `runs/stage4_heldout40_*/assessments.jsonl`: "
+                "(1) `heldout_set_40` has `20 CWE-22` + `20 CWE-89` (`20 TRUE_POSITIVE` + `20 FALSE_POSITIVE`). "
+                "(2) Arm B (`heuristic`) has `9 SUPPORTED` (`9/20` TP), `7 REFUTED` (`7/20` FP), `24 UNDETERMINED` (`11 TP + 13 FP`), "
+                "`0/20` TP erroneously refuted, `drop_fp` precision `20/33 (60.6%)`, `keep_tp_only` precision `9/9 (100.0%)` / recall `9/20 (45.0%)`. "
+                "(3) Arm C (`evidence+llm`) total latency is `421,000.0 ms` (`421.00 s`), mean `10,525.0 ms/alert`. "
+                "(4) Arm D (`llm` ablation) total latency is `301,062.0 ms` (`301.06 s`), mean `7,526.55 ms/alert`, and post-LLM citation validator "
+                "downgraded `9/40` total alerts (`3/20` TPs + `6/20` FPs) from raw `SUPPORTED` (`40/40`) to `UNDETERMINED` (`9/40`), leaving `17/20` TP and `14/20` FP as `SUPPORTED`."
+            ),
+            "inconsistent_docs": (
+                "An earlier narrative summary (`SERVER_FORENSIC_AUDIT_SUMMARY_20261112.md` v1) had transcription typos (`18/22` CWE, `8/20` TP, `8/20` FP, `20/32`, `449.53s`, `336.08s`), "
+                "whereas `07_independent_metrics_recomputation.csv/.md/.json` and `PAIRED_EVALUATION.csv` always held the exact raw figures above. "
+                "Also clarifies `9/40` vs `6/40` on Arm D: `9/40` is total alerts downgraded by the citation validator (`3 TP + 6 FP`), while `6/40` (`6/20` FPs) is the FP subset of those 9 downgrades."
+            ),
+        },
     ]
 
     return {
@@ -1604,6 +1824,274 @@ def verify_evidence_root_immutability(pre_snapshot_path: Path, evidence_root: Pa
     }
 
 
+def build_criteria_map(
+    inv: dict[str, Any],
+    immutability: dict[str, Any],
+    scans: dict[str, Any],
+    ollama_audit: dict[str, Any],
+    paired_table_audit: dict[str, Any],
+    gt_labels_audit: dict[str, Any],
+    guided_llm_audit: dict[str, Any],
+    metrics_audit: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    # C01: Historical immutability
+    c01_issues: list[str] = []
+    zm = immutability.get("zero_mutation_verified")
+    if zm is None:
+        c01_status = "INCOMPLETE"
+        c01_issues.append("Pre-audit snapshot missing; zero_mutation_verified is None")
+    elif zm is not True:
+        c01_status = "FAIL"
+        c01_issues.append(
+            f"Historical evidence mutated: added={len(immutability.get('added_files', []))}, "
+            f"removed={len(immutability.get('removed_files', []))}, "
+            f"modified={len(immutability.get('modified_files', []))}"
+        )
+    else:
+        c01_status = "PASS"
+
+    # C02: OpenGrep 3 scans + 9 rules + SARIF 1-to-1 + receipt schema
+    c02_issues: list[str] = []
+    pr = scans["pinned_ruleset"]
+    if pr["rule_count"] != 9:
+        c02_issues.append(f"Ruleset rule_count={pr['rule_count']} != 9")
+    if not pr.get("sha256_matched", False):
+        c02_issues.append(f"Ruleset SHA-256 mismatch: {pr['sha256']} != {pr.get('expected_sha256')}")
+    for s in scans["three_primary_scans"]:
+        rn = s["run_name"]
+        if not s["sha256_matched"]:
+            c02_issues.append(f"{rn}: opengrep.json SHA-256 mismatch ({s['actual_sha256']} != {s['expected_sha256']})")
+        if s["manifest_schema"] != "ntk-scan-capture-1":
+            c02_issues.append(f"{rn}: invalid manifest_schema={s['manifest_schema']}")
+        if s["verify_receipt_issues"]:
+            c02_issues.append(f"{rn}: verify_receipt_issues={s['verify_receipt_issues']}")
+        if not s["sources_unchanged_before_after"]:
+            c02_issues.append(f"{rn}: sources_unchanged_before_after is False")
+        if not s["disk_sources_match_manifest"]:
+            c02_issues.append(f"{rn}: disk_sources_match_manifest is False")
+        if not s["rules_unchanged_before_after"]:
+            c02_issues.append(f"{rn}: rules_unchanged_before_after is False")
+        if s["scan_errors_count"] != 0 or s["paths_skipped_count"] != 0:
+            c02_issues.append(f"{rn}: errors={s['scan_errors_count']}, skipped={s['paths_skipped_count']}")
+        if s["findings_count"] != s["findings_with_complete_dataflow_trace"]:
+            c02_issues.append(f"{rn}: findings_with_complete_dataflow_trace != findings_count")
+        if not (s.get("sarif_crosscheck") or {}).get("passed", False):
+            c02_issues.append(f"{rn}: SARIF cross-check failed: {(s.get('sarif_crosscheck') or {}).get('mismatches')}")
+
+    # C03: 10 assessments.jsonl + 6 checkpoints + Ollama runtime integrity
+    c03_issues: list[str] = []
+    if ollama_audit["total_assessments_jsonl_files"] != 10:
+        c03_issues.append(f"Expected 10 assessments.jsonl files, found {ollama_audit['total_assessments_jsonl_files']}")
+    if ollama_audit["total_assessment_records_audited"] != 240:
+        c03_issues.append(f"Expected 240 total records across 10 runs, found {ollama_audit['total_assessment_records_audited']}")
+    if len(ollama_audit["checkpoint_files_audited"]) != 6:
+        c03_issues.append(f"Expected 6 checkpoint files, found {len(ollama_audit['checkpoint_files_audited'])}")
+    for ck in ollama_audit["checkpoint_files_audited"]:
+        if ck["malformed_lines"] > 0:
+            c03_issues.append(f"Checkpoint {ck['checkpoint_file']} has {ck['malformed_lines']} malformed lines")
+    for r in ollama_audit["runs"]:
+        rn = r["run_name"]
+        for anom in r["anomalies"]:
+            if not anom.startswith("sqlite:") and "citation verification failed" not in anom and "snapshot sha256 != disk" not in anom:
+                c03_issues.append(f"{rn}: {anom}")
+
+    # C04: Citations and source snapshot SHA integrity against disk
+    c04_issues: list[str] = []
+    for r in ollama_audit["runs"]:
+        rn = r["run_name"]
+        if r["source_snapshot_sha256_verified_count"] != r["record_count"]:
+            c04_issues.append(
+                f"{rn}: source_snapshot_sha256_verified_count={r['source_snapshot_sha256_verified_count']}/{r['record_count']}"
+            )
+        if r["citations_verified_against_disk_count"] != r["record_count"]:
+            c04_issues.append(
+                f"{rn}: citations_verified_against_disk_count={r['citations_verified_against_disk_count']}/{r['record_count']}"
+            )
+        for anom in r["anomalies"]:
+            if "citation verification failed" in anom or "snapshot sha256 != disk" in anom:
+                c04_issues.append(f"{rn}: {anom}")
+
+    # C05: Per-alert PAIRED_EVALUATION.csv table
+    c05_status = str(paired_table_audit.get("status") or "INCOMPLETE")
+    c05_issues = [
+        f"{d['alert_id']}.{d['field']}: expected={d['expected']} actual={d['actual']}"
+        for d in paired_table_audit.get("discrepancies", [])
+    ]
+    if c05_status == "INCOMPLETE":
+        c05_issues.extend(f"missing:{m}" for m in paired_table_audit.get("missing_inputs", []))
+
+    # C06: Ground Truth 56 OWASP + 20 real projects
+    c06_issues: list[str] = []
+    if not gt_labels_audit["owasp_expectedresults_csv"]["matches_benchmark_v1_2_sha256"]:
+        c06_issues.append("expectedresults-1.2.csv SHA-256 mismatch")
+    for split_key, exp_n in (("dev_set_16_audit", 16), ("heldout_set_40_audit", 40)):
+        sp = gt_labels_audit[split_key]
+        if sp["owasp_label_matches"] != exp_n or sp["owasp_cwe_matches"] != exp_n or sp["sink_code_verified_count"] != exp_n:
+            c06_issues.append(
+                f"{split_key}: label={sp['owasp_label_matches']}/{exp_n}, cwe={sp['owasp_cwe_matches']}/{exp_n}, sink={sp['sink_code_verified_count']}/{exp_n}"
+            )
+        if sp["mismatches"]:
+            c06_issues.append(f"{split_key} mismatches: {sp['mismatches'][:3]}")
+    if not gt_labels_audit["overlap_verification"]["is_strictly_disjoint"]:
+        c06_issues.append("dev_set_16 and heldout_set_40 are not strictly disjoint")
+    if not gt_labels_audit["strict_lock_verification"]["lock_hash_matches"]:
+        c06_issues.append(
+            f"STRICT_LOCK hash mismatch or errors: {gt_labels_audit['strict_lock_verification']['lock_verify_errors']}"
+        )
+    rp = gt_labels_audit["real_projects_20_manual_audit"]
+    if rp["total_alerts"] != 20 or rp["distinct_code_loci"] != 12 or rp["alert_level_tp"] != 16 or rp["alert_level_fp"] != 4:
+        c06_issues.append("Real projects manual label summary mismatch")
+
+    # C07: SQLite read-only inspection & temp-copy STALE_SOURCE lifecycle
+    c07_issues: list[str] = []
+    for r in ollama_audit["runs"]:
+        sq = r["sqlite_readonly_audit"]
+        if not sq.get("valid", False) or not sq.get("original_untouched", False):
+            c07_issues.extend(f"{r['run_name']}: {iss}" for iss in sq.get("issues", ["invalid sqlite"]))
+    lc = ollama_audit.get("heldout_arm_c_temp_lifecycle_verification") or {}
+    if lc.get("skipped") is True or lc.get("passed") is None:
+        c07_status = "INCOMPLETE"
+        c07_issues.append("Temp-copy SQLite lifecycle & STALE_SOURCE verification was skipped")
+    else:
+        if not lc.get("passed", False) or not lc.get("originals_unchanged_verified", False):
+            c07_issues.extend(lc.get("issues") or ["Temp-copy SQLite lifecycle test failed"])
+        c07_status = "PASS" if len(c07_issues) == 0 else "FAIL"
+
+    # C08: Guided LLM confounder & zero label leakage
+    c08_status = str(guided_llm_audit.get("status") or "INCOMPLETE")
+    c08_issues: list[str] = []
+    for r in ollama_audit["runs"]:
+        if r["forbidden_ground_truth_leak_hits"]:
+            c08_status = "FAIL"
+            c08_issues.extend(f"{r['run_name']}:{h}" for h in r["forbidden_ground_truth_leak_hits"])
+    if guided_llm_audit.get("forbidden_ground_truth_keys_in_rebuilt_prompts"):
+        c08_status = "FAIL"
+        c08_issues.extend(guided_llm_audit["forbidden_ground_truth_keys_in_rebuilt_prompts"])
+    if c08_status == "FAIL" and not c08_issues:
+        c08_issues.append("Guided LLM confounder check failed")
+
+    # C09: Independent metric recomputation & score_pilot cross-check
+    c09_issues: list[str] = []
+    if metrics_audit["paired_evaluation_csv_cell_mismatches"]:
+        c09_issues.extend(metrics_audit["paired_evaluation_csv_cell_mismatches"])
+    for rname, sp_res in metrics_audit["score_pilot_official_crosscheck"].items():
+        if sp_res.get("anomalies_total", 0) != 0:
+            c09_issues.append(f"{rname}: score_pilot anomalies_total={sp_res.get('anomalies_total')}")
+    hb_all = metrics_audit["heldout_40_recomputed"]["Arm_B_Heuristic"]["ALL"]
+    hc_all = metrics_audit["heldout_40_recomputed"]["Arm_C_Evidence_Plus_Qwen"]["ALL"]
+    hd_all = metrics_audit["heldout_40_recomputed"]["Arm_D_Qwen_Ablation"]["ALL"]
+    if hb_all["tp_kept_supported"] != "9/20" or hb_all["fp_proposed_refuted"] != "7/20" or hb_all["policy_drop_fp_precision"] != "20/33":
+        c09_issues.append(f"Arm B heldout metrics mismatch: {hb_all}")
+    if hc_all["tp_kept_supported"] != "20/20" or hc_all["fp_proposed_refuted"] != "20/20":
+        c09_issues.append(f"Arm C heldout metrics mismatch: {hc_all}")
+    if hd_all["tp_kept_supported"] != "17/20" or hd_all["undetermined_display"] != "9/40":
+        c09_issues.append(f"Arm D heldout metrics mismatch: {hd_all}")
+
+    return {
+        "C01_historical_immutability": {
+            "status": c01_status,
+            "issues": c01_issues,
+            "evidence": {
+                "evidence_file_count": inv["evidence_file_count"],
+                "zero_mutation_verified": zm,
+                "added_count": len(immutability.get("added_files", [])),
+                "removed_count": len(immutability.get("removed_files", [])),
+                "modified_count": len(immutability.get("modified_files", [])),
+            },
+        },
+        "C02_opengrep_three_scans_and_9_rules": {
+            "status": "PASS" if len(c02_issues) == 0 else "FAIL",
+            "issues": c02_issues,
+            "evidence": {
+                "ruleset_sha256": pr["sha256"],
+                "rule_count": pr["rule_count"],
+                "scans_sha_matched": {s["run_name"]: s["sha256_matched"] for s in scans["three_primary_scans"]},
+                "sarif_passed": {s["run_name"]: s["sarif_crosscheck"]["passed"] for s in scans["three_primary_scans"]},
+            },
+        },
+        "C03_ollama_10_assessments_and_6_checkpoints": {
+            "status": "PASS" if len(c03_issues) == 0 else "FAIL",
+            "issues": c03_issues,
+            "evidence": {
+                "assessments_files": ollama_audit["total_assessments_jsonl_files"],
+                "total_records": ollama_audit["total_assessment_records_audited"],
+                "checkpoints_count": len(ollama_audit["checkpoint_files_audited"]),
+            },
+        },
+        "C04_citations_and_post_validator_integrity": {
+            "status": "PASS" if len(c04_issues) == 0 else "FAIL",
+            "issues": c04_issues,
+            "evidence": {
+                "verified_citations_by_run": {
+                    r["run_name"]: f"{r['citations_verified_against_disk_count']}/{r['record_count']}"
+                    for r in ollama_audit["runs"]
+                }
+            },
+        },
+        "C05_paired_evaluation_per_alert_table": {
+            "status": c05_status,
+            "issues": c05_issues,
+            "evidence": {
+                "csv_sha256": paired_table_audit.get("csv_sha256"),
+                "rows_verified": len(paired_table_audit.get("per_alert_verified_rows", [])),
+                "columns_verified_count": paired_table_audit.get("columns_verified_count"),
+                "discrepancy_count": paired_table_audit.get("discrepancy_count"),
+            },
+        },
+        "C06_ground_truth_56_owasp_and_20_real_projects": {
+            "status": "PASS" if len(c06_issues) == 0 else "FAIL",
+            "issues": c06_issues,
+            "evidence": {
+                "owasp_csv_sha256": gt_labels_audit["owasp_expectedresults_csv"]["sha256"],
+                "dev_16_matches": gt_labels_audit["dev_set_16_audit"]["owasp_label_matches"],
+                "heldout_40_matches": gt_labels_audit["heldout_set_40_audit"]["owasp_label_matches"],
+                "strict_lock_sha256": gt_labels_audit["strict_lock_verification"]["recomputed_combined_lock_sha256"],
+                "real_projects_distinct_loci": rp["distinct_code_loci"],
+            },
+        },
+        "C07_sqlite_readonly_and_stale_source_lifecycle": {
+            "status": c07_status,
+            "issues": c07_issues,
+            "evidence": {
+                "sqlite_files_valid": {
+                    r["run_name"]: r["sqlite_readonly_audit"]["valid"] for r in ollama_audit["runs"]
+                },
+                "temp_lifecycle_passed": lc.get("passed"),
+                "originals_unchanged_verified": lc.get("originals_unchanged_verified"),
+            },
+        },
+        "C08_guided_llm_confounder_and_zero_label_leakage": {
+            "status": c08_status,
+            "issues": c08_issues,
+            "evidence": {
+                "concordance_display": guided_llm_audit.get("concordance_display"),
+                "prompt_leak_hits_count": len(guided_llm_audit.get("forbidden_ground_truth_keys_in_rebuilt_prompts", [])),
+            },
+        },
+        "C09_metrics_recomputation_alignment": {
+            "status": "PASS" if len(c09_issues) == 0 else "FAIL",
+            "issues": c09_issues,
+            "evidence": {
+                "arm_b_tp_fp_dropfp": [
+                    hb_all["tp_kept_supported"],
+                    hb_all["fp_proposed_refuted"],
+                    hb_all["policy_drop_fp_precision"],
+                ],
+                "arm_c_tp_fp_total_ms": [
+                    hc_all["tp_kept_supported"],
+                    hc_all["fp_proposed_refuted"],
+                    hc_all["latency_ms"]["total_ms"],
+                ],
+                "arm_d_tp_undet_total_ms": [
+                    hd_all["tp_kept_supported"],
+                    hd_all["undetermined_display"],
+                    hd_all["latency_ms"]["total_ms"],
+                ],
+            },
+        },
+    }
+
+
 def write_markdown_deliverables(
     out_dir: Path,
     inv: dict[str, Any],
@@ -1613,6 +2101,9 @@ def write_markdown_deliverables(
     gt_script_audit: dict[str, Any],
     gt_labels_audit: dict[str, Any],
     metrics_audit: dict[str, Any],
+    paired_table_audit: dict[str, Any] | None = None,
+    guided_llm_audit: dict[str, Any] | None = None,
+    verdict_doc: dict[str, Any] | None = None,
 ) -> None:
     # 1. Inventory CSV + MD
     with (out_dir / "01_file_inventory_sha256.csv").open("w", encoding="utf-8", newline="") as fh:
@@ -1667,15 +2158,16 @@ def write_markdown_deliverables(
         f"- **Thời điểm kiểm toán:** `{scans['generated_at']}`",
         f"- **Bộ quy tắc thực tế (`p_java_cwe22_cwe89.yml`):** `{scans['pinned_ruleset']['rule_count']}` quy tắc, SHA-256 = `{scans['pinned_ruleset']['sha256']}`",
         "",
-        "| Bản quét | Số tệp quét / bỏ qua | Số cảnh báo (có trace) | Lỗi quét (`errors`) | Mã thoát | `sources_before == after` | `rules_before == after` | SHA-256 thực tế (`opengrep.json`) | Khớp kỳ vọng |",
-        "|---|---:|---:|---:|---:|---|---|---|---|",
+        "| Bản quét | Số tệp quét / bỏ qua | Số cảnh báo (có trace) | SARIF khớp 1-1 | Lỗi quét (`errors`) | Mã thoát | `sources_before == after` | `rules_before == after` | SHA-256 thực tế (`opengrep.json`) | Khớp kỳ vọng |",
+        "|---|---:|---:|---|---:|---:|---|---|---|---|",
     ]
     for s in scans["three_primary_scans"]:
         cmd_rec = s.get("command_record")
         rc = cmd_rec.get("returncode") if isinstance(cmd_rec, dict) else s["verify_receipt_meta"].get("recorded_engine_exit")
+        sarif_ok = (s.get("sarif_crosscheck") or {}).get("passed")
         lines2.append(
             f"| `{s['run_name']}` | `{s['paths_scanned_count']} / {s['paths_skipped_count']}` | "
-            f"`{s['findings_count']} ({s['findings_with_complete_dataflow_trace']})` | `{s['scan_errors_count']}` | "
+            f"`{s['findings_count']} ({s['findings_with_complete_dataflow_trace']})` | `{sarif_ok}` | `{s['scan_errors_count']}` | "
             f"`{rc}` | `{s['sources_unchanged_before_after']}` | `{s['rules_unchanged_before_after']}` | "
             f"`{s['actual_sha256']}` | `{s['sha256_matched']}` |"
         )
@@ -1683,7 +2175,7 @@ def write_markdown_deliverables(
 
     # 3. 10 Ollama JSONL Receipt MD
     lines3 = [
-        "# 03. Biên Nhận Kiểm Toán Toàn Bộ 10 Tệp `assessments.jsonl` (`Task B`)",
+        "# 03. Biên Nhận Kiểm Toán Toàn Bộ 10 Tệp `assessments.jsonl` & SQLite (`Task B`)",
         "",
         "| Lượt chạy (`runs/`) | Số bản ghi | Lỗi JSONL | Transport | `raw_response` có nội dung | `done=true` | `response_json_sha256` khớp | `request_payload_sha256` khớp code `v2.1` | Prompt thô được lưu | `heuristic_signals` lưu JSONL / truyền vào LLM | SQLite `OPEN` / Events |",
         "|---|---:|---:|---|---:|---:|---:|---:|---|---|---|",
@@ -1698,6 +2190,17 @@ def write_markdown_deliverables(
             f"`{r['request_payload_matches_current_v2_1_code_count']}/{r['request_payload_sha256_present_count']}` | "
             f"`{r['prompt_attestation_status']}` | `{r['heuristic_recommended_status_present_count']}/{r['record_count']} (LLM: {r['evidence_signals_passed_to_llm_count']}/{r['record_count']})` | `{st_str}` |"
         )
+    lc = ollama_audit.get("heldout_arm_c_temp_lifecycle_verification") or {}
+    lines3.extend(
+        [
+            "",
+            "## Kiểm Thử Vòng Đời Duyệt Cảnh Báo & Chốt Chặn `STALE_SOURCE` Trên Bản Sao Tạm",
+            "",
+            f"- **Kết quả tổng thể (`passed`):** `{lc.get('passed')}` (`originals_unchanged_verified = {lc.get('originals_unchanged_verified')}`)",
+            f"- **Cảnh báo kiểm thử:** `{lc.get('tested_alert_id')}` trên tệp `{lc.get('tested_source_rel_path')}`",
+            f"- **Chi tiết 5 bước (`confirm-true`, `confirm-false`, `reopen`, từ chối trạng thái/actor rỗng, `STALE_SOURCE` chặn `confirm-false` sau khi mã nguồn thay đổi):** `{json.dumps(lc.get('steps', {}), ensure_ascii=False)}`",
+        ]
+    )
     (out_dir / "03_ollama_10_assessments_receipt.md").write_text("\n".join(lines3) + "\n", encoding="utf-8")
 
     # 4. Raw vs Post-Validator CSV + MD
@@ -1719,7 +2222,7 @@ def write_markdown_deliverables(
         "# 04. Đối Chiếu Phán Quyết Thô Của Qwen Với Kết Quả Sau Bộ Kiểm Chứng (`Task B.5`)",
         "",
         f"- Tổng số bản ghi trên 10 tệp JSONL: **`{len(comp_rows)}`** (`{llm_mode_count}` bản ghi ở 7 lượt gọi LLM, `{heur_only_count}` bản ghi ở 3 lượt `--mode heuristic`).",
-        f"- Số bản ghi bị chặn trước khi gọi LLM hoặc bị bộ kiểm chứng hạ xuống `UNDETERMINED`: **`{len(downgraded)}`** (`{pre_llm_cnt}` bản ghi bị chặn pre-LLM do `CliCall`, `{parse_err_cnt}` bản ghi lỗi JSON parse ở `stage2_dev16_baseline_v1_0`, và `{val_down_cnt}` bản ghi bị bộ kiểm chứng trích dẫn hạ từ `SUPPORTED` xuống `UNDETERMINED`).",
+        f"- Số bản ghi bị chặn trước khi gọi LLM hoặc bị bộ kiểm chứng hạ xuống `UNDETERMINED`: **`{len(downgraded)}`** (`{pre_llm_cnt}` bản ghi bị chặn pre-LLM do `CliCall`, `{parse_err_cnt}` bản ghi lỗi JSON parse ở `stage2_dev16_baseline_v1_0`, và `{val_down_cnt}` bản ghi bị bộ kiểm chứng trích dẫn hạ từ `SUPPORTED` xuống `UNDETERMINED`, trong đó `stage4_heldout40_armD_llm_ablation` có `9/40` bản ghi gồm `3 TP + 6 FP`).",
         "",
         "| Run | `#` | File | CWE | Ground Truth | Heuristic `recommended_status` | Handling Path | Raw Qwen | Post-Validator | Lý do hạ cấp / Fallback |",
         "|---|---:|---|---|---|---|---|---|---|---|",
@@ -1827,15 +2330,80 @@ def write_markdown_deliverables(
         )
     lines7.extend(["", "## Phát Hiện Kiểm Toán Nhất Quán Lịch Sử (`Task F`)", ""])
     for item in metrics_audit["historical_consistency_audit"]:
-        lines7.append(f"### {item['check']} — `{item['status']}`")
+        lines7.append(f"### {item['check']} - `{item['status']}`")
         lines7.append(f"- **Sự thật trên đĩa:** {item['ground_truth_on_disk']}")
         lines7.append(f"- **Đối chiếu tài liệu:** {item['inconsistent_docs']}")
         lines7.append("")
     (out_dir / "07_independent_metrics_recomputation.md").write_text("\n".join(lines7) + "\n", encoding="utf-8")
 
+    # 8. Per-Alert PAIRED_EVALUATION Audit CSV + MD
+    if paired_table_audit is not None:
+        pa_rows = paired_table_audit.get("per_alert_verified_rows") or []
+        if pa_rows:
+            with (out_dir / "08_paired_evaluation_per_alert_audit.csv").open("w", encoding="utf-8", newline="") as fh:
+                w = csv.DictWriter(fh, fieldnames=list(pa_rows[0].keys()))
+                w.writeheader()
+                w.writerows(pa_rows)
+        lines8_pa = [
+            "# 08. Đối Chiếu Bảng Metric Từng Cảnh Báo (`PAIRED_EVALUATION.csv` - 40 Alerts x 27 Columns)",
+            "",
+            f"- **Trạng thái kiểm toán:** `{paired_table_audit.get('status')}`",
+            f"- **SHA-256 `PAIRED_EVALUATION.csv`:** `{paired_table_audit.get('csv_sha256')}`",
+            f"- **Số dòng kiểm tra:** `{paired_table_audit.get('csv_row_count')} / {paired_table_audit.get('expected_alert_count')}`",
+            f"- **Số cột bắt buộc kiểm tra trên mỗi dòng:** `{paired_table_audit.get('columns_verified_count')}`",
+            f"- **Tổng số sai lệch phát hiện (`discrepancy_count`):** **`{paired_table_audit.get('discrepancy_count')}`**",
+            "",
+        ]
+        if paired_table_audit.get("discrepancies"):
+            lines8_pa.extend(
+                [
+                    "## Danh Sách Sai Lệch Phát Hiện",
+                    "",
+                    "| `alert_id` | Trường (`field`) | Kỳ vọng (`expected`) | Thực tế (`actual`) | Tệp nguồn | Mức độ |",
+                    "|---|---|---|---|---|---|",
+                ]
+            )
+            for d in paired_table_audit["discrepancies"]:
+                lines8_pa.append(
+                    f"| `{d['alert_id']}` | `{d['field']}` | `{d['expected']}` | `{d['actual']}` | `{d['source_file']}` | `{d['severity']}` |"
+                )
+        (out_dir / "08_paired_evaluation_per_alert_audit.md").write_text("\n".join(lines8_pa) + "\n", encoding="utf-8")
+
+    # 10. Guided LLM Confounder MD
+    if guided_llm_audit is not None:
+        lines10 = [
+            "# 10. Kiểm Toán Biến Nhiễu Dẫn Dắt LLM Ở Nhánh Kết Hợp (`Section XII`)",
+            "",
+            f"- **Trạng thái:** `{guided_llm_audit.get('status')}`",
+            f"- **Các trường `heuristic_signals` truyền vào prompt Nhánh C (`evidence_signals`):** `{guided_llm_audit.get('critical_guiding_fields')}`",
+            f"- **Tỷ lệ phán quyết thô Qwen trùng khớp `heuristic_signals.recommended_status` trên 3 tập `v2.1`:** **`{guided_llm_audit.get('concordance_display')}`** (`100%`)",
+            f"- **Số khóa nhãn chuẩn (`ground_truth`) bị rò rỉ vào prompt:** **`{len(guided_llm_audit.get('forbidden_ground_truth_keys_in_rebuilt_prompts', []))}`**",
+            f"- **Quy tắc diễn giải khoa học bắt buộc:** {guided_llm_audit.get('scientific_attribution_rule')}",
+        ]
+        (out_dir / "10_guided_llm_confounder_audit.md").write_text("\n".join(lines10) + "\n", encoding="utf-8")
+
+    # 11. Fail-Closed Gate Verdict MD
+    if verdict_doc is not None:
+        lines11 = [
+            "# 11. Phán Quyết Cổng Nghiệm Thu Cơ Chế Fail-Closed (`Section VI`)",
+            "",
+            f"- **Phán quyết tổng hợp (`overall_verdict`):** **`{verdict_doc.get('overall_verdict')}`**",
+            f"- **Mã thoát (`exit_code`):** **`{verdict_doc.get('exit_code')}`** (`0 = PASS`, `1 = FAIL`, `2 = INCOMPLETE`)",
+            f"- **Chặn ép buộc PASS (`force_pass_attempt_blocked`):** `{verdict_doc.get('force_pass_attempt_blocked')}`",
+            f"- **Tổng số tiêu chí bắt buộc:** `{verdict_doc.get('passed_count')}/{verdict_doc.get('mandatory_criteria_total')} PASS` (`FAIL={verdict_doc.get('failed_count')}`, `INCOMPLETE={verdict_doc.get('incomplete_count')}`)",
+            "",
+            "| Mã tiêu chí | Trạng thái | Vấn đề phát hiện (`issues`) | Bằng chứng tóm tắt |",
+            "|---|---|---|---|",
+        ]
+        for c in verdict_doc.get("criteria", []):
+            lines11.append(
+                f"| `{c['criterion_id']}` | **`{c['status']}`** | `{c['issues']}` | `{json.dumps(c['evidence'], ensure_ascii=False)}` |"
+            )
+        (out_dir / "11_fail_closed_gate_verdict.md").write_text("\n".join(lines11) + "\n", encoding="utf-8")
+
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run read-only server forensic audit on post-report evidence.")
+    parser = argparse.ArgumentParser(description="Run fail-closed read-only server forensic audit on post-report evidence.")
     parser.add_argument(
         "--ntk-root",
         type=Path,
@@ -1865,16 +2433,98 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=Path(r"C:\Users\Admin\ntk-thesis-v2\evidence\server_forensic_audit_20261112"),
+        default=Path(r"C:\Users\Admin\ntk-thesis-v2\evidence\server_forensic_audit_failclosed_20261112"),
+    )
+    parser.add_argument(
+        "--pre-snapshot",
+        type=Path,
+        default=None,
+        help="Optional pre-audit SHA-256 snapshot JSON path to verify historical immutability against.",
+    )
+    parser.add_argument(
+        "--expected-hashes-json",
+        type=Path,
+        default=None,
+        help="Optional JSON file overriding expected SHA-256 constants (used in counter-factual tests).",
     )
     parser.add_argument(
         "--skip-wsl",
         action="store_true",
         help="Skip WSL upstream git check (useful in unit tests).",
     )
+    parser.add_argument(
+        "--skip-lifecycle-check",
+        action="store_true",
+        help="Skip temp-copy SQLite lifecycle test (marks C07 INCOMPLETE -> exit 2).",
+    )
+    parser.add_argument(
+        "--attempt-force-pass",
+        action="store_true",
+        help="Counter-factual test flag: attempt to coerce FAIL/INCOMPLETE to PASS (must be blocked).",
+    )
     args = parser.parse_args(argv)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    expected_hashes = load_expected_hashes(args.expected_hashes_json)
+
+    # Step 0: Check mandatory inputs before running; fail closed with INCOMPLETE (exit 2) if any missing
+    missing_inputs = check_mandatory_inputs(args.evidence_root, args.worktree_root)
+    if missing_inputs:
+        verdict_doc = evaluate_acceptance_gates(
+            {
+                "C01_historical_immutability": {
+                    "status": "INCOMPLETE",
+                    "issues": [f"Missing mandatory input: {m}" for m in missing_inputs],
+                    "evidence": {},
+                }
+            },
+            attempt_force_pass=args.attempt_force_pass,
+        )
+        (args.out_dir / "11_fail_closed_gate_verdict.json").write_text(
+            json.dumps(verdict_doc, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        print(
+            json.dumps(
+                {
+                    "status": verdict_doc["overall_verdict"],
+                    "exit_code": verdict_doc["exit_code"],
+                    "force_pass_attempt_blocked": verdict_doc["force_pass_attempt_blocked"],
+                    "missing_mandatory_inputs": missing_inputs,
+                },
+                indent=2,
+            )
+        )
+        return int(verdict_doc["exit_code"])
+
+    # Step 1: Capture or load pre-audit SHA-256 snapshot before reading artifacts
+    pre_snap = args.pre_snapshot or (args.out_dir / "00_pre_audit_sha256_snapshot.json")
+    if not pre_snap.is_file():
+        pre_files = []
+        for p in sorted(args.evidence_root.rglob("*")):
+            if p.is_file():
+                st = p.stat()
+                pre_files.append(
+                    {
+                        "rel_path": p.relative_to(args.evidence_root).as_posix(),
+                        "size_bytes": st.st_size,
+                        "mtime_ns": st.st_mtime_ns,
+                        "sha256": sha256_file(p),
+                    }
+                )
+        pre_snap.write_text(
+            json.dumps(
+                {
+                    "schema": "ntk.pre_audit_sha256_snapshot.v2",
+                    "captured_at": now_iso(),
+                    "evidence_root": str(args.evidence_root),
+                    "evidence_file_count": len(pre_files),
+                    "files": pre_files,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
 
     inv = build_file_inventory(args.evidence_root, args.worktree_root)
     (args.out_dir / "01_file_inventory_sha256.json").write_text(
@@ -1882,29 +2532,82 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     wsl_info = {"skipped": True} if args.skip_wsl else query_wsl_upstream_hashes(args.evidence_root)
-    scans = audit_opengrep_scans(args.evidence_root, args.worktree_root, args.advisor_zip, wsl_info)
+    scans = audit_opengrep_scans(
+        args.evidence_root, args.worktree_root, args.advisor_zip, wsl_info, expected_hashes=expected_hashes
+    )
     (args.out_dir / "02_raw_opengrep_scans_receipt.json").write_text(
         json.dumps(scans, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    ollama_audit, comp_rows = audit_all_10_assessments(args.evidence_root, args.worktree_root)
+    ollama_audit, comp_rows = audit_all_10_assessments(
+        args.evidence_root, args.worktree_root, skip_lifecycle_check=args.skip_lifecycle_check
+    )
     (args.out_dir / "03_ollama_10_assessments_receipt.json").write_text(
         json.dumps(ollama_audit, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    gt_script_audit = audit_historical_ground_truth_verifier(args.ntk_root, args.brain_root)
+    gt_script_audit = audit_historical_ground_truth_verifier(
+        args.ntk_root, args.brain_root, skip_subprocs=args.skip_wsl
+    )
     (args.out_dir / "05_historical_ground_truth_verifier_audit.json").write_text(
         json.dumps(gt_script_audit, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    gt_labels_audit = audit_ground_truth_labels(args.evidence_root, args.worktree_root)
+    gt_labels_audit = audit_ground_truth_labels(
+        args.evidence_root, args.worktree_root, expected_hashes=expected_hashes
+    )
     (args.out_dir / "06_owasp_and_manual_ground_truth_audit.json").write_text(
         json.dumps(gt_labels_audit, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
-    metrics_audit = recompute_metrics_and_consistency(args.evidence_root, args.worktree_root, comp_rows)
+    arm_c_sqlite_summary = next(
+        (
+            r["sqlite_readonly_audit"]
+            for r in ollama_audit["runs"]
+            if r["run_name"] == "stage4_heldout40_armC_evidence_llm"
+        ),
+        None,
+    )
+    paired_table_audit = audit_paired_evaluation_table(
+        args.evidence_root,
+        args.worktree_root,
+        expected_heldout_scan_sha=expected_hashes["scan_shas"]["stage1_heldout_set_40_scan"],
+        sqlite_arm_c_summary=arm_c_sqlite_summary,
+    )
+    (args.out_dir / "08_paired_evaluation_per_alert_audit.json").write_text(
+        json.dumps(paired_table_audit, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    guided_llm_audit = audit_guided_llm_confounder(args.evidence_root)
+    (args.out_dir / "10_guided_llm_confounder_audit.json").write_text(
+        json.dumps(guided_llm_audit, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    metrics_audit = recompute_metrics_and_consistency(
+        args.evidence_root, args.worktree_root, comp_rows, expected_hashes=expected_hashes
+    )
     (args.out_dir / "07_independent_metrics_recomputation.json").write_text(
         json.dumps(metrics_audit, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    immutability = verify_evidence_root_immutability(pre_snap, args.evidence_root)
+    (args.out_dir / "immutability_verification.json").write_text(
+        json.dumps(immutability, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    criteria_map = build_criteria_map(
+        inv=inv,
+        immutability=immutability,
+        scans=scans,
+        ollama_audit=ollama_audit,
+        paired_table_audit=paired_table_audit,
+        gt_labels_audit=gt_labels_audit,
+        guided_llm_audit=guided_llm_audit,
+        metrics_audit=metrics_audit,
+    )
+    verdict_doc = evaluate_acceptance_gates(criteria_map, attempt_force_pass=args.attempt_force_pass)
+    (args.out_dir / "11_fail_closed_gate_verdict.json").write_text(
+        json.dumps(verdict_doc, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
     write_markdown_deliverables(
@@ -1916,35 +2619,36 @@ def main(argv: list[str] | None = None) -> int:
         gt_script_audit,
         gt_labels_audit,
         metrics_audit,
-    )
-
-    pre_snap = args.out_dir / "_pre_audit_evidence_snapshot.json"
-    immutability = (
-        verify_evidence_root_immutability(pre_snap, args.evidence_root)
-        if pre_snap.is_file()
-        else {"zero_mutation_verified": None, "note": "No pre-snapshot file present"}
-    )
-    (args.out_dir / "immutability_verification.json").write_text(
-        json.dumps(immutability, indent=2, ensure_ascii=False), encoding="utf-8"
+        paired_table_audit=paired_table_audit,
+        guided_llm_audit=guided_llm_audit,
+        verdict_doc=verdict_doc,
     )
 
     print(
         json.dumps(
             {
-                "status": "AUDIT_COMPLETED",
+                "status": verdict_doc["overall_verdict"],
+                "exit_code": verdict_doc["exit_code"],
+                "force_pass_attempt_blocked": verdict_doc["force_pass_attempt_blocked"],
                 "out_dir": str(args.out_dir),
                 "evidence_files_inventoried": inv["evidence_file_count"],
                 "three_scans_sha_matched": [s["sha256_matched"] for s in scans["three_primary_scans"]],
+                "three_scans_sarif_passed": [s["sarif_crosscheck"]["passed"] for s in scans["three_primary_scans"]],
                 "assessments_files_audited": ollama_audit["total_assessments_jsonl_files"],
                 "total_assessment_records": ollama_audit["total_assessment_records_audited"],
-                "paired_csv_mismatches": len(metrics_audit["paired_evaluation_csv_cell_mismatches"]),
+                "paired_csv_discrepancies": paired_table_audit["discrepancy_count"],
+                "temp_sqlite_lifecycle_passed": ollama_audit["heldout_arm_c_temp_lifecycle_verification"].get("passed"),
+                "guided_llm_concordance": guided_llm_audit.get("concordance_display"),
                 "thesis_ground_truth_script_status": gt_script_audit["thesis_gate_reproduction_status"],
                 "zero_mutation_verified": immutability.get("zero_mutation_verified"),
+                "passed_criteria_count": verdict_doc["passed_count"],
+                "failed_criteria": verdict_doc["failed_criteria"],
+                "incomplete_criteria": verdict_doc["incomplete_criteria"],
             },
             indent=2,
         )
     )
-    return 0
+    return int(verdict_doc["exit_code"])
 
 
 if __name__ == "__main__":
