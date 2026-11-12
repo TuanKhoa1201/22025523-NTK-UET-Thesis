@@ -1,0 +1,2 @@
+# Unified-diff context lines legitimately start with a single space; keep patch bytes exact.
+*.patch -text -whitespace
