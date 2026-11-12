@@ -1,0 +1,144 @@
+split,alert_id,case,cwe,gt,sink_line,sink_text,source_sha256,flow_semantics,label_source
+development,10764728975922ca8731e972b0d1c2b821956bdaf16e43405b931eae51442cd3,BenchmarkTest00001,CWE-22,TRUE_POSITIVE,72,            fis = new java.io.FileInputStream(new java.io.File(fileName));,a83e78f8e9dd7b941c19eb2709429a2b7bec32b8921c193f3d02c4a04097a4b7,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,81c5ca177e6a4347e4536a5327085979f44ee0e8202efb961a98944dbd9b3f54,BenchmarkTest00008,CWE-89,TRUE_POSITIVE,57,            java.sql.CallableStatement statement = connection.prepareCall(sql);,9bc49dbe491a39162c97b0c43b8ce5e42a4de5c0552c52117b1a51b0a541dfbe,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,e48f7f8251c4bbcf96f2911ac9a718120d63c931ada4b59e406e018d3ecf89b9,BenchmarkTest00102,CWE-89,TRUE_POSITIVE,73,"            java.util.Map<String, Object> results =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForMap(sql);",4ee3d85461784e6bba63b6342342db69991252b9d1260ce869fe3d408d372717,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,0d87edbd8846f3add7de44f8772bde014310e181a4eeadde7947feb2a394694b,BenchmarkTest00103,CWE-89,TRUE_POSITIVE,76,"            Object results =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject(
+                            sql, new Object[] {}, String.class);",a2835ca20d356ed6fd3191c1ef6df5e2c9fa796add6ea5dae360e41202241e9d,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,0a26cd70e57f9944a61685ac1359c70c0c2ed3caa74a27955434416fdc0209d1,BenchmarkTest00131,CWE-22,FALSE_POSITIVE,72,        java.io.File fileTarget = new java.io.File(bar);,7091b80b2b9f186efb922d80fea3c20042f2af29affb157b154e67789c0c889a,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,de4d654cfc4d71b51d47b72a6504186be31e17f055e5c8f897e3590958a9d211,BenchmarkTest00190,CWE-89,FALSE_POSITIVE,68,"            java.sql.CallableStatement statement =
+                    connection.prepareCall(
+                            sql,
+                            java.sql.ResultSet.TYPE_FORWARD_ONLY,
+                            java.sql.ResultSet.CONCUR_READ_ONLY);",e9b906300fd16ae1738dd1b174e22b6baa00db262fecb4e9f43f80575f0572e0,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,0b3135089efde602b7a13676f2039711516796e9095c7e41a8978f2a992f2026,BenchmarkTest00191,CWE-89,FALSE_POSITIVE,77,"            java.sql.CallableStatement statement =
+                    connection.prepareCall(
+                            sql,
+                            java.sql.ResultSet.TYPE_FORWARD_ONLY,
+                            java.sql.ResultSet.CONCUR_READ_ONLY);",258434bdbb2c3b20f1e83824ac7a69bf430cbdcb3d85173bedb0c2a88ee403ce,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,6b01dc857ebfd29ec5442e4fb163f0def2c4400e001e9a087216a9168ebbbc97,BenchmarkTest00216,CWE-22,TRUE_POSITIVE,68,"        java.io.File fileTarget =
+                new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR, bar);",8cfaacce6f3aea7b1ff71a1f3ad8228359e645d79405bed8800401933025466b,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,3db21430f4800cc0e913cb0496086ca09d4523a512f1ba151ca99c887b1138a6,BenchmarkTest00527,CWE-22,TRUE_POSITIVE,64,"        java.io.File fileTarget = new java.io.File(bar, ""/Test.txt"");",3700b27707423bab0516531004f5d943de3d12e845af8ed96e50afb09bdc8430,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,adda1efd53e2711bc939e1f3ea2206b62ba66f6d49c67fc521facad1c51c1125,BenchmarkTest00620,CWE-22,FALSE_POSITIVE,60,"        java.io.File fileTarget =
+                new java.io.File(
+                        new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR), bar);",12bf356c39f6ba2aa91b2c60bb253f8558e91141c75510b5be32d296757c90ae,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,008d4e65556a0fa6837193af88914fb201e03a79cef27f22519a5e2a6e42be8e,BenchmarkTest00863,CWE-22,FALSE_POSITIVE,51,"        java.io.File fileTarget = new java.io.File(bar, ""/Test.txt"");",69d31a8b396303a3b1908ad0c21d0b1d35edb944a11f7bb8a7d6326f63074a35,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,45cfdd7df6e674c32d7716bef159bc6373a6c96bf1008f1fea34cc54074d0d32,BenchmarkTest00950,CWE-22,TRUE_POSITIVE,68,"        java.io.File fileTarget = new java.io.File(bar, ""/Test.txt"");",a5729f499e742ab51e6fd12c1dfc5687fcb3971180a6a7d8d1004bfb1431acb9,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,5ff4fe183aa4268b6f380281fea253a15130215adb0c3a290fdc6ac32c15aef1,BenchmarkTest00998,CWE-89,TRUE_POSITIVE,74,"            java.sql.CallableStatement statement =
+                    connection.prepareCall(
+                            sql,
+                            java.sql.ResultSet.TYPE_FORWARD_ONLY,
+                            java.sql.ResultSet.CONCUR_READ_ONLY);",c8151e0cd1f3bce72bf21bb9fabc48f563e315cba3137ca32def203323492bf4,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,be8b8eda376d1ffae9f95b8b3daf8037574c621bc566f58289da951479150a54,BenchmarkTest01010,CWE-89,FALSE_POSITIVE,71,            org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.batchUpdate(sql);,9d89a8a68982822f01d9b1fcb272d8de27c32fd96edaad46ba6601788052f14a,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,f9e551b9afd84e333fc8be5400657c1a506d247fa91d237502fe0d48ae45661f,BenchmarkTest01031,CWE-22,FALSE_POSITIVE,58,            fis = new java.io.FileInputStream(fileName);,efb0bce0a68e68f8696ed667e7d686f13005e2a27041d2e0d80c3f0658561dc9,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+development,8a09630643f253c680445a2e03968b00a5c5b74d1678ce4f8d23018e6ae951ce,BenchmarkTest01096,CWE-89,FALSE_POSITIVE,56,"            java.sql.Statement statement =
+                    org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement();
+            int count = statement.executeUpdate(sql);",62a893d3dbaf217e02fd5795b3d9945f9b3fc79712c07d697c4bb4dbcdddaf6e,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,2270eee06f11868593f76ab670e031279e15b85f6877b2c3d65a8cf8f1b1ec1d,BenchmarkTest00011,CWE-22,TRUE_POSITIVE,54,"        java.io.File fileTarget = new java.io.File(param, ""/Test.txt"");",2f7d82f88b6c0d4f2220c1b4b3ae4108cb8d9d8c766393e2473ec7f78db9c116,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,1d0b8450fd01148310eb75d70903aa3c88b7191d9935a3e611b864e530e4a5be,BenchmarkTest00018,CWE-89,TRUE_POSITIVE,57,"            java.sql.Statement statement =
+                    org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement();
+            int count = statement.executeUpdate(sql);",f050b4ae7057c0e3a8271eae86cdb92a0337fe7b61f05f4b9d8015ca9d707da7,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,7ed9426a9e63dccd3deff2258fb920b8cdb6fa57e0b32ba9074de0b155596dbe,BenchmarkTest00024,CWE-89,TRUE_POSITIVE,52,"            java.sql.PreparedStatement statement =
+                    connection.prepareStatement(
+                            sql,
+                            java.sql.ResultSet.TYPE_FORWARD_ONLY,
+                            java.sql.ResultSet.CONCUR_READ_ONLY,
+                            java.sql.ResultSet.CLOSE_CURSORS_AT_COMMIT);",6886ac19a08825f801e4222341f2ba26685abf710203ac2ee85f7e2b46216fd4,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,82319c89f8f5902c3cfab362940ce99384a9656177f1c4424f291317c15d80f4,BenchmarkTest00025,CWE-89,TRUE_POSITIVE,51,"            Long results =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject(
+                            sql, Long.class);",c136d4ea5dc4f7f5f210968d90c0803c575b7faeb5ab5e00511467ee6197812a,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,8be8928bcdc7b21fdee4f24c78252928920ddb5cac079b18577a3104ef023cfe,BenchmarkTest00038,CWE-89,TRUE_POSITIVE,63,"            java.util.List<String> results =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.query(
+                            sql,
+                            new org.springframework.jdbc.core.RowMapper<String>() {
+                                @Override
+                                public String mapRow(java.sql.ResultSet rs, int rowNum)
+                                        throws java.sql.SQLException {
+                                    try {
+                                        return rs.getString(""USERNAME"");
+                                    } catch (java.sql.SQLException e) {
+                                        if (org.owasp.benchmark.helpers.DatabaseHelper
+                                                .hideSQLErrors) {
+                                            return ""Error processing query."";
+                                        } else throw e;
+                                    }
+                                }
+                            });",cefc086af3dfc9af08f3f0aa6a5dcfeb4edafc3062930539910cfd756250c5e3,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,0087514f08783ab075832bc9af31754cd20e5a670163acb16e9b75f87a4c1b1a,BenchmarkTest00040,CWE-22,TRUE_POSITIVE,49,        java.io.File fileTarget = new java.io.File(param);,d0c0a5ae358ae44c612d959104e0ffe3440db7ef1c6da8cb1a59c855d18bfffe,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,68aead5b27fa910714b0c22c37282edac22028ec45b4f60ff2bbf373ae74e8a7,BenchmarkTest00062,CWE-22,TRUE_POSITIVE,78,            fis = new java.io.FileInputStream(new java.io.File(fileName));,c44197ff092d91e57aad6e70b913ef1216b59af9d562f5c7ada9e3294e59b9f7,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,e2b908ee857d586829450fd94d3bf56a911751814932393802eac34f83784066,BenchmarkTest00108,CWE-89,TRUE_POSITIVE,92,"            statement.execute(sql, new int[] {1, 2});",0d6d1a3a413aea99e79038035278dd6bf80214a14a630bcca0b1c0aa25e1a33f,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,39e3ac2349bbd04b522ab520d6fa7f90d4423dee1d360d37036cd6b4a55bacd0,BenchmarkTest00132,CWE-22,FALSE_POSITIVE,77,            fis = new java.io.FileInputStream(new java.io.File(fileName));,0b7b0d2ccc2cfd09114c7eb2048d9a2d3cbac6b3aa54ae23643dfc495fff2a6d,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,b6ac4bae34f5a99f4197ac13d04567f75581e96cca4cd0fb73f85dd02eb0b303,BenchmarkTest00134,CWE-22,FALSE_POSITIVE,74,"        java.io.FileOutputStream fos =
+                new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",b740e58e539ebe493d573572c1ea20a6daae4fa81b4cd4590e8ed176bcc7df56,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,e197a657cd9771f42066f1ade48f43125cf4d56fb80478d171630377cf30a4e3,BenchmarkTest00135,CWE-22,FALSE_POSITIVE,83,"        java.io.FileOutputStream fos =
+                new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",c01963ab392a2ca74bacd452324e12515a272948558e1403f868fec2db734987,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,514513ac3ff599927cc368a70b4ff61bc8535d23dc264e8cf5fcd1f8b1f9a017,BenchmarkTest00197,CWE-89,FALSE_POSITIVE,65,"            java.util.List<String> results =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.query(
+                            sql,
+                            new org.springframework.jdbc.core.RowMapper<String>() {
+                                @Override
+                                public String mapRow(java.sql.ResultSet rs, int rowNum)
+                                        throws java.sql.SQLException {
+                                    try {
+                                        return rs.getString(""USERNAME"");
+                                    } catch (java.sql.SQLException e) {
+                                        if (org.owasp.benchmark.helpers.DatabaseHelper
+                                                .hideSQLErrors) {
+                                            return ""Error processing query."";
+                                        } else throw e;
+                                    }
+                                }
+                            });",7f87ad19c6c0517c136ec5d76aaf790d176ea1cbab7fb4a55a9001b40155c87a,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,8508d6d3b51d187dcf4ef05bdb95a0d479b53e88e2c3157c766310a05a037b97,BenchmarkTest00205,CWE-89,FALSE_POSITIVE,66,"            java.sql.Statement statement =
+                    org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement();
+            int count = statement.executeUpdate(sql, new String[] {""USERNAME"", ""PASSWORD""});",396d6ec97ed0fc306cc0e88560ec3750b68e3646e9a2b782fb9b8209a08110e3,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,1518315231b7ef198055998d9bdf9a5e8f71d75074361dc4862842321dfde316,BenchmarkTest00218,CWE-22,TRUE_POSITIVE,102,            java.io.File fileTarget = new java.io.File(fileURI);,a35197feae5ed8a7adb52c219160f7f42ee6c0c3001206512958acd4a37c06d6,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,b0548ed692c38b7cf1830a08a1526d0068b2af51fb3b3cd678f6cc890f689597,BenchmarkTest00264,CWE-22,TRUE_POSITIVE,65,            fis = new java.io.FileInputStream(new java.io.File(fileName));,2c7371e6232d98484ad4ae42e2771c60d1258e5770172762c1aa39451323cd8a,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,c5a3c93b933df539247b2385a29a58c73dbfa12e468d5c42e6036fa9e4fadf73,BenchmarkTest00340,CWE-89,FALSE_POSITIVE,77,            org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.batchUpdate(sql);,cf6aa646d4a85e57d08dc53411837685c4c1526126f9f769757186c4f33255c0,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,ff267a5069e11ff3c5a7112f8ee63e1f1fca0e92d99a5fd8ec96e52f01273a25,BenchmarkTest00763,CWE-89,FALSE_POSITIVE,74,"            java.sql.PreparedStatement statement =
+                    connection.prepareStatement(sql, new int[] {1, 2});",9fd2a74645c6dca2726ea064900dcc8799c3aa07ff0526a12d76230a8211f75e,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,ce1ab49f5158511a983a4a6682dc56659d3924692d4e18a3258ac8eb98361f01,BenchmarkTest00864,CWE-22,FALSE_POSITIVE,59,"        java.io.File fileTarget = new java.io.File(bar, ""/Test.txt"");",402ffac5a02c4cf683961650c573b44a08917fec072f753fdbe5921e977ed2fd,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,0b1c14f42f01160ee7055f7bf3dbf98f0ae38eb65576d29d66c575dcc1759fa1,BenchmarkTest00949,CWE-22,TRUE_POSITIVE,68,"        java.io.File fileTarget =
+                new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR, bar);",8f8b95414642bc4fcf31609acead6a64884fc3647510b0727316894daa60694a,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,78335d89636f4fa4066b248bfa17dcd3be36b616934c04bccff2631299a0196c,BenchmarkTest00952,CWE-22,TRUE_POSITIVE,88,            java.io.File fileTarget = new java.io.File(fileURI);,2d84e8b0a1979a8d1fd7e33fa34eb48d9a6128deb94327871dd2a68b615480bc,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,dc49c503cf414124dc8719975be7af701793d61d35c3cc5dfb315e05ed52e308,BenchmarkTest00953,CWE-22,TRUE_POSITIVE,79,"        java.io.FileOutputStream fos =
+                new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",2d482fabb5d2550cedb08c1928733e39ef1a1300b8ba11b077e45f3c7fcf4828,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,1c748ea1d401e25f257119a01131fe2ceae19f553b8e7b7ea53db7cb1db4f040,BenchmarkTest00956,CWE-22,TRUE_POSITIVE,79,"        java.io.FileOutputStream fos =
+                new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",e129ef03fbfb10f7a5e524a43dbe19860eb98f1a9cb86426af38f7678a3a2290,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,2de0a3453be3d18de60f547786f52cbac59267eee98e66c78be4cf1501660756,BenchmarkTest00996,CWE-89,TRUE_POSITIVE,74,            java.sql.CallableStatement statement = connection.prepareCall(sql);,5af30fbd350e93ecde2b93846730e42105b8409b638096bb88969d1a101a36c6,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,b4a91a85f13412dc8e6258cccc88f3a3daab812693356451dfcf66e323c65b9c,BenchmarkTest00997,CWE-89,TRUE_POSITIVE,74,"            java.sql.CallableStatement statement =
+                    connection.prepareCall(
+                            sql,
+                            java.sql.ResultSet.TYPE_FORWARD_ONLY,
+                            java.sql.ResultSet.CONCUR_READ_ONLY);",f40f07651b12d1da41ed130543d4b05cbe1410f09233ef76163db695e0d80e62,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,7d7adb3d38571a7dde6d1edc1d426f00272eed6513f67b988896b03520513c68,BenchmarkTest01004,CWE-89,TRUE_POSITIVE,73,"            java.sql.PreparedStatement statement =
+                    connection.prepareStatement(sql, new String[] {""Column1"", ""Column2""});",63312fa0af7682ae57c947c2524acf889318bf3b2ffe94886a9b5d936a0106e9,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,fca6e3bbc96d9133661ae2d94e479c297d0f8725ea76e910a1ffc2e2ab76ec1d,BenchmarkTest01006,CWE-89,TRUE_POSITIVE,72,"            Long results =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject(
+                            sql, Long.class);",a823a02ac4283b0f6021bb609122696b82f99e97170b6f8a3cebb694d7c7c794,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,4be5c0c464927d40841dc1aca4ae8e7a610242366a4b3d4acca4987440184b02,BenchmarkTest01011,CWE-89,TRUE_POSITIVE,71,"            java.sql.Statement statement =
+                    org.owasp.benchmark.helpers.DatabaseHelper.getSqlStatement();
+            statement.addBatch(sql);
+            int[] counts = statement.executeBatch();",617fbdacf592a9cd53689cb122899cca1a3d7c9c980be08e0df5cec2046cf4a5,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,4a1e861d01f23cd49d503c4dbc0ae3bbdce3e368868fcc608510dafd2e0392d4,BenchmarkTest01012,CWE-89,FALSE_POSITIVE,73,"            statement.execute(sql, java.sql.Statement.RETURN_GENERATED_KEYS);",0f805f0b449de79b62a7da8c3846cc29b791ca42e394dc5970ed6ec9cb6e4f0b,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,783253de48f562b336c212e5a5280c9f6ca20313a26f4836ac5ad60ffa19a740,BenchmarkTest01028,CWE-22,FALSE_POSITIVE,70,            java.io.File fileTarget = new java.io.File(fileURI);,12177004ce7ceba88d3d010d16fdd2e11a990a218599db0f7034840ca14ebdd5,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,3f970f7b166464e5edb54e3ef514ba57cd25682c790351017625f571b3fb2a80,BenchmarkTest01030,CWE-22,FALSE_POSITIVE,73,            java.io.File fileTarget = new java.io.File(fileURI);,4f1f5e85a4234befb6a1bec7f57aadb004cf5aabaa9f9a94e47b77a204ae7751,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,9c28cf5cbd300cc9f6c0f6c1fec2915bd97753775b4d73630f866ab3609b7c69,BenchmarkTest01085,CWE-89,FALSE_POSITIVE,56,            org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.execute(sql);,47fce56105247369d3e0038d472713e9ae2ab73f28a36a1a93bfb8e5855dac5a,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,10a608f64c51ce2d8e74bcad8d7c5a3f367b195e4315890b4061fd5fc8c9afea,BenchmarkTest01110,CWE-22,FALSE_POSITIVE,80,            java.io.File fileTarget = new java.io.File(fileURI);,9bdaf8e09e3e73e5fabdda592d88541858af8cda475f38dc2ba07dfcf029ba00,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,d25c3ad4983d4d50821525826850ba9f3498c10858174efb8a9e5d70d68b78f6,BenchmarkTest01156,CWE-22,TRUE_POSITIVE,72,            java.io.File fileTarget = new java.io.File(fileURI);,ae204f5ae3264983adf67f1bd32c9ab4ea8a4ca07cd16fedfb03b318bd964f80,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,c81a7f3d12a543a8106f014f7af6cccdf0a2b33250faece3215a9ee047884ba9,BenchmarkTest01212,CWE-89,FALSE_POSITIVE,60,"            java.sql.PreparedStatement statement =
+                    connection.prepareStatement(sql, new int[] {1, 2});",6121cac0d07b3ace9952b7650f890a8621b7747f54bec82f57bd0efc43ecd211,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,d8dbd11032a246eac6c9794eef7326542f8c2680a9b18daed0c8b24ffb58d0e8,BenchmarkTest01215,CWE-89,FALSE_POSITIVE,59,"            Long results =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForObject(
+                            sql, Long.class);",afa995514e4055661e63bcba3b1e167d8bdcf032453bb9061e56737fa7c57ec0,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,07b9d6d3ccac118a1cf164fb82be72532018889a041e6963d4e1681c36b2c0c3,BenchmarkTest01233,CWE-22,FALSE_POSITIVE,48,"        java.io.File fileTarget =
+                new java.io.File(
+                        new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR), bar);",c896625d387667de0acc9593e64aeeb77ec5e62d7256c9a77817abdc945e0f3f,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,c554325ad8296fe73860cbad86d4c1c4e6defc25202eec945de3dbc6f67f55b3,BenchmarkTest01385,CWE-89,FALSE_POSITIVE,57,"            java.sql.PreparedStatement statement =
+                    connection.prepareStatement(sql, new String[] {""Column1"", ""Column2""});",62faeec88b757bf0a2e1c3f2d2d47365bc90696ca320388c16fc84dc78ebfcef,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,76c8d80a5b7b73bb21b892c383d77afd0052ef603fa367c8a37b508f8d572541,BenchmarkTest01389,CWE-89,FALSE_POSITIVE,55,"            java.util.List<java.util.Map<String, Object>> list =
+                    org.owasp.benchmark.helpers.DatabaseHelper.JDBCtemplate.queryForList(sql);",259e1de65a3a1ad6a7b2943ab95bf3d3a9dc3c4609d451980f53667ac81ae7c3,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,bb5a6a2cee5cf796b32c04c7e553b6ea275b8c8a843875285dea1338d9798ad7,BenchmarkTest01746,CWE-22,FALSE_POSITIVE,66,            java.io.File fileTarget = new java.io.File(fileURI);,67d81ccf4b8144741748d4420d44075aa2705a867393a6629abe6d17d6acd69e,MANUAL_REVIEW_REQUIRED,OWASP case; not model
+heldout,f905aaf22f022c1ed4c90d47547aa47f6d1e883bed4d766fcccf2c3e12f237d7,BenchmarkTest01752,CWE-22,FALSE_POSITIVE,60,"        java.io.FileOutputStream fos =
+                new java.io.FileOutputStream(new java.io.FileInputStream(fileName).getFD()); ) {",c4c13f85e8839211002c7c7e7fca92774031ec59588b08e4fd4ebcf3ec1e74ea,MANUAL_REVIEW_REQUIRED,OWASP case; not model

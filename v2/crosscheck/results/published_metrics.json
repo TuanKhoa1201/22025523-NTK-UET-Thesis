@@ -1,0 +1,2189 @@
+{
+  "public_input_hashes": {
+    "PAIRED_EVALUATION.csv": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347",
+    "METRICS_BY_CWE.csv": "aa6df48e4ccff3a8f2e302c2e2046e03f1a6572a7c62a1117aa2e992cbeec9ef",
+    "labels_heldout.json": "1e7306127dbf5f91c62a7f143d047e4714aa6197624990a0c31c9dd3e9ddc1a4",
+    "labels_development.json": "8e059b2d2cc9a49611d5f78672018829416af1d60f6490d9f9a4ad2bbed6881a"
+  },
+  "official_csv_sha256": "1809f6a690c6cf7dd6685df6ebe2eef8fe3ca93d19a7ca0ce45987ca4f5d78e1",
+  "status": "INCOMPLETE",
+  "missing": [
+    "Published CSV only: no independent raw assessments/scan/manifest/runtime verification",
+    "A/ALL: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/ALL: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/ALL: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/CWE-22: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/CWE-22: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/CWE-22: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/CWE-89: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/CWE-89: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "A/CWE-89: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/ALL: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/ALL: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/ALL: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/CWE-22: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/CWE-22: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/CWE-22: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/CWE-89: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/CWE-89: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+    "B/CWE-89: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement"
+  ],
+  "checked_fields": {
+    "duplicate_id": 136,
+    "csv_id_set": 1,
+    "scan_sha256": 40,
+    "source_sha256": 40,
+    "cwe": 40,
+    "rule_id": 40,
+    "finding_index": 40,
+    "path": 40,
+    "verified_ground_truth": 40,
+    "sink_line_range": 40,
+    "A.decision": 40,
+    "A.valid_post_status": 40,
+    "B.valid_post_status": 40,
+    "B.decision": 40,
+    "B.valid_citation_state": 40,
+    "C.valid_post_status": 40,
+    "C.decision": 40,
+    "C.valid_citation_state": 40,
+    "D.valid_post_status": 40,
+    "D.valid_citation_state": 40,
+    "aggregate.duplicate": 12,
+    "aggregate.total_alerts": 12,
+    "aggregate.labeled_tp": 12,
+    "aggregate.labeled_fp": 12,
+    "aggregate.tp_kept_supported.fraction": 12,
+    "aggregate.tp_kept_supported.percent": 12,
+    "aggregate.tp_retained_total_with_review.fraction": 12,
+    "aggregate.tp_retained_total_with_review.percent": 12,
+    "aggregate.fp_correctly_proposed_refuted.fraction": 12,
+    "aggregate.fp_correctly_proposed_refuted.percent": 12,
+    "aggregate.tp_erroneously_proposed_fp.fraction": 12,
+    "aggregate.tp_erroneously_proposed_fp.percent": 12,
+    "aggregate.undetermined_review_rate.fraction": 12,
+    "aggregate.undetermined_review_rate.percent": 12,
+    "aggregate.citation_verified_rate": 3,
+    "aggregate.policy_drop_fp_precision.fraction": 12,
+    "aggregate.policy_drop_fp_precision.percent": 12,
+    "aggregate.policy_drop_fp_tp_recall.fraction": 12,
+    "aggregate.policy_drop_fp_tp_recall.percent": 12,
+    "aggregate.policy_keep_tp_only_precision.fraction": 12,
+    "aggregate.policy_keep_tp_only_precision.percent": 12,
+    "aggregate.policy_keep_tp_only_tp_recall.fraction": 12,
+    "aggregate.policy_keep_tp_only_tp_recall.percent": 12,
+    "aggregate.citation_verified_rate.fraction": 9,
+    "aggregate.citation_verified_rate.percent": 9,
+    "aggregate.mean_latency_ms": 6,
+    "aggregate.p50_latency_ms": 6,
+    "aggregate.p95_latency_ms": 6,
+    "aggregate.group_set": 1,
+    "official_cwe": 56,
+    "official_label": 56,
+    "contract_id": 56,
+    "source_hash": 56,
+    "sink_range_exists": 56,
+    "split_overlap": 1
+  },
+  "discrepancies": [],
+  "schema_version": "ntk-crosscheck-2",
+  "evidence_class": "PUBLIC_DERIVED",
+  "raw_runtime_verified": false,
+  "reference_commit": "86636b9de22e59efcca2d3786434727c6ae082e4",
+  "scope": "No inference execution; no inferred human confirmations; runtime attestation unsupported",
+  "metrics": {
+    "A": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 20,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 40
+        },
+        "raw_unavailable": 40,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 20
+          },
+          "FALSE_POSITIVE": {
+            "None": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 20,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_CHECKED": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 40,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 10,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_CHECKED": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 10,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_CHECKED": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      }
+    },
+    "B": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 9,
+        "fp_proposed": 7,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 9,
+            "REFUTED": 0,
+            "UNDETERMINED": 11
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 7,
+            "UNDETERMINED": 13
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "raw_statuses": {
+          "None": 40
+        },
+        "raw_unavailable": 40,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 20
+          },
+          "FALSE_POSITIVE": {
+            "None": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 24,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "citation_matched_conclusive": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "accuracy_all": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "selective_accuracy": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "human_states": {
+          "NOT_CHECKED": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 33,
+              "value": 0.6060606060606061
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 13,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 7,
+              "denominator": 20,
+              "value": 0.35
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 9,
+              "denominator": 9,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 9,
+              "denominator": 20,
+              "value": 0.45
+            },
+            "tp_retained": 9,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 11,
+              "denominator": 20,
+              "value": 0.55
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 40,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 4,
+        "fp_proposed": 5,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 4,
+            "REFUTED": 0,
+            "UNDETERMINED": 6
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 5,
+            "UNDETERMINED": 5
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 5,
+          "denominator": 10,
+          "value": 0.5
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 4,
+          "denominator": 10,
+          "value": 0.4
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 11,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "citation_matched_conclusive": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "accuracy_all": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "selective_accuracy": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "human_states": {
+          "NOT_CHECKED": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 15,
+              "value": 0.6666666666666666
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 5,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 4,
+              "denominator": 4,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 4,
+              "denominator": 10,
+              "value": 0.4
+            },
+            "tp_retained": 4,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 6,
+              "denominator": 10,
+              "value": 0.6
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 5,
+        "fp_proposed": 2,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 5,
+            "REFUTED": 0,
+            "UNDETERMINED": 5
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 2,
+            "UNDETERMINED": 8
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 2,
+          "denominator": 10,
+          "value": 0.2
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 5,
+          "denominator": 10,
+          "value": 0.5
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 13,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "citation_matched_conclusive": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "accuracy_all": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "selective_accuracy": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "human_states": {
+          "NOT_CHECKED": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 18,
+              "value": 0.5555555555555556
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 8,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 2,
+              "denominator": 10,
+              "value": 0.2
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 5,
+              "denominator": 5,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            },
+            "tp_retained": 5,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      }
+    },
+    "C": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 20,
+        "fp_proposed": 20,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 20,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20,
+          "REFUTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 20,
+          "SUPPORTED->SUPPORTED": 20
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 40,
+          "expected": 40,
+          "observed_total_ms": "421000.0",
+          "observed_mean_ms": "10525.0",
+          "total_ms": "421000.0",
+          "mean_ms": "10525.0",
+          "median_ms": "10961.0",
+          "p95_nearest_rank_ms": "12687.0",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 10,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 10,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 10,
+          "REFUTED": 10
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 10,
+          "SUPPORTED->SUPPORTED": 10
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "216908.0",
+          "observed_mean_ms": "10845.4",
+          "total_ms": "216908.0",
+          "mean_ms": "10845.4",
+          "median_ms": "11172.0",
+          "p95_nearest_rank_ms": "12921.0",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 10,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 10,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 10,
+          "REFUTED": 10
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 10,
+          "SUPPORTED->SUPPORTED": 10
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "204092.0",
+          "observed_mean_ms": "10204.6",
+          "total_ms": "204092.0",
+          "mean_ms": "10204.6",
+          "median_ms": "10719.0",
+          "p95_nearest_rank_ms": "11734.0",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      }
+    },
+    "D": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 17,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 17,
+            "REFUTED": 0,
+            "UNDETERMINED": 3
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 14,
+            "REFUTED": 0,
+            "UNDETERMINED": 6
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 17,
+          "denominator": 31,
+          "value": 0.5483870967741935
+        },
+        "supported_tp_recall": {
+          "numerator": 17,
+          "denominator": 20,
+          "value": 0.85
+        },
+        "raw_statuses": {
+          "SUPPORTED": 40
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 31,
+          "SUPPORTED->UNDETERMINED": 9
+        },
+        "raw_post_changes": 9,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 14,
+        "undetermined": 9,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 31,
+          "denominator": 40,
+          "value": 0.775
+        },
+        "citation_matched_conclusive": {
+          "numerator": 31,
+          "denominator": 31,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 31,
+          "denominator": 40,
+          "value": 0.775
+        },
+        "accuracy_all": {
+          "numerator": 17,
+          "denominator": 40,
+          "value": 0.425
+        },
+        "selective_accuracy": {
+          "numerator": 17,
+          "denominator": 31,
+          "value": 0.5483870967741935
+        },
+        "human_states": {
+          "NOT_CHECKED": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 17,
+              "denominator": 31,
+              "value": 0.5483870967741935
+            },
+            "tp_retention_recall": {
+              "numerator": 17,
+              "denominator": 20,
+              "value": 0.85
+            },
+            "tp_retained": 17,
+            "fp_retained": 14,
+            "tp_excluded": {
+              "numerator": 3,
+              "denominator": 20,
+              "value": 0.15
+            },
+            "fp_excluded": {
+              "numerator": 6,
+              "denominator": 20,
+              "value": 0.3
+            }
+          }
+        },
+        "latency": {
+          "observed": 40,
+          "expected": 40,
+          "observed_total_ms": "301062.0",
+          "observed_mean_ms": "7526.55",
+          "total_ms": "301062.0",
+          "mean_ms": "7526.55",
+          "median_ms": "6359.0",
+          "p95_nearest_rank_ms": "12109.0",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 7,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 7,
+            "REFUTED": 0,
+            "UNDETERMINED": 3
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 6,
+            "REFUTED": 0,
+            "UNDETERMINED": 4
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 7,
+          "denominator": 13,
+          "value": 0.5384615384615384
+        },
+        "supported_tp_recall": {
+          "numerator": 7,
+          "denominator": 10,
+          "value": 0.7
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 13,
+          "SUPPORTED->UNDETERMINED": 7
+        },
+        "raw_post_changes": 7,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 6,
+        "undetermined": 7,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 13,
+          "denominator": 20,
+          "value": 0.65
+        },
+        "citation_matched_conclusive": {
+          "numerator": 13,
+          "denominator": 13,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 13,
+          "denominator": 20,
+          "value": 0.65
+        },
+        "accuracy_all": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "selective_accuracy": {
+          "numerator": 7,
+          "denominator": 13,
+          "value": 0.5384615384615384
+        },
+        "human_states": {
+          "NOT_CHECKED": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 7,
+              "denominator": 13,
+              "value": 0.5384615384615384
+            },
+            "tp_retention_recall": {
+              "numerator": 7,
+              "denominator": 10,
+              "value": 0.7
+            },
+            "tp_retained": 7,
+            "fp_retained": 6,
+            "tp_excluded": {
+              "numerator": 3,
+              "denominator": 10,
+              "value": 0.3
+            },
+            "fp_excluded": {
+              "numerator": 4,
+              "denominator": 10,
+              "value": 0.4
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "130858.0",
+          "observed_mean_ms": "6542.9",
+          "total_ms": "130858.0",
+          "mean_ms": "6542.9",
+          "median_ms": "5874.5",
+          "p95_nearest_rank_ms": "8922.0",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 8,
+            "REFUTED": 0,
+            "UNDETERMINED": 2
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 18,
+          "value": 0.5555555555555556
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 18,
+          "SUPPORTED->UNDETERMINED": 2
+        },
+        "raw_post_changes": 2,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 8,
+        "undetermined": 2,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 18,
+          "denominator": 20,
+          "value": 0.9
+        },
+        "citation_matched_conclusive": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 18,
+          "denominator": 20,
+          "value": 0.9
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 18,
+          "value": 0.5555555555555556
+        },
+        "human_states": {
+          "NOT_CHECKED": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 18,
+              "value": 0.5555555555555556
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 8,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 2,
+              "denominator": 10,
+              "value": 0.2
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "170204.0",
+          "observed_mean_ms": "8510.2",
+          "total_ms": "170204.0",
+          "mean_ms": "8510.2",
+          "median_ms": "7953.0",
+          "p95_nearest_rank_ms": "12844.0",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      }
+    }
+  }
+}

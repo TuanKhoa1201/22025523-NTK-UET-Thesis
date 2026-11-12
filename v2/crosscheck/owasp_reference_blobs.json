@@ -1,0 +1,313 @@
+{
+  "repository": "OWASP-Benchmark/BenchmarkJava",
+  "commit": "8b67a88d73b2594570fc21150705283de884620b",
+  "origin": "GitHub git tree read 2026-11-13; blob identities, not copied source",
+  "truncated": false,
+  "files": [
+    {
+      "path": "expectedresults-1.2.csv",
+      "sha": "f23eeced4626da5597a1e182942d43e874c3a53f",
+      "size": 95328
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/helpers/SeparateClassRequest.java",
+      "sha": "16cc8b738b7e698ec6f43197a73d97abec9be13c",
+      "size": 1649
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/helpers/Thing1.java",
+      "sha": "56d061813783030fdd6a84c7008730301737ad68",
+      "size": 992
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/helpers/Thing2.java",
+      "sha": "3a6c98694f49281a34a7c12736420df4fa46172b",
+      "size": 1011
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/helpers/ThingFactory.java",
+      "sha": "79f18b78a47c3956e3bf5d829830a26d65238ca9",
+      "size": 1905
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00001.java",
+      "sha": "e73f446962e42a2d2fd081f53666adc0914f1dbd",
+      "size": 4395
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00008.java",
+      "sha": "ec11e1db1d5b757f74b04a75cf1816b8f52153e8",
+      "size": 2615
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00011.java",
+      "sha": "cfda6fb0fa0f96d9e5586709122f15abfe0f8f94",
+      "size": 2740
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00018.java",
+      "sha": "570da1f4b258fda800c95e2ff1149cbfa52d51b6",
+      "size": 2675
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00024.java",
+      "sha": "69dd9495566aa59d57222aad4508fb436d2aad00",
+      "size": 2724
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00025.java",
+      "sha": "051a1c7ba6fabd10c3158513afb2fb6135faa790",
+      "size": 2786
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00038.java",
+      "sha": "afd267f13c7200efbe08c9df16c2bcadce23f751",
+      "size": 4221
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00040.java",
+      "sha": "71bc125e2c9ca66cc4399f25199eda74a81459c7",
+      "size": 2556
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00062.java",
+      "sha": "5b5635ef84c9653d8f9f6e6aad089e7cba33e081",
+      "size": 4810
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00102.java",
+      "sha": "1f8c43448bc8c4a7cc0f06445284dbc072d1a2a9",
+      "size": 3926
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00103.java",
+      "sha": "475722d2d0fb6c975d34359071ea67fb864d88ec",
+      "size": 3983
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00108.java",
+      "sha": "dae1e4387826e91a13b8f6d45ba5605ddf1a3d5e",
+      "size": 3909
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00131.java",
+      "sha": "1ff9951b9dad1eb812472107985a5494770029bb",
+      "size": 3204
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00132.java",
+      "sha": "1137f02bcfede421f4ef02ef9acda277426674ed",
+      "size": 4185
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00134.java",
+      "sha": "f6ef36539ebb05fcaa0fa2ee39d32b2776322a1c",
+      "size": 3443
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00135.java",
+      "sha": "706d601c62c39e9ba186eb603c3e42931f682d1d",
+      "size": 3636
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00190.java",
+      "sha": "30e5bb644514b729b9aaf0adeaf68ba22c8b1a4c",
+      "size": 3177
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00191.java",
+      "sha": "ab07adda2901693dd5f6b41cdca68f60d201be47",
+      "size": 3370
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00197.java",
+      "sha": "f4275e752a30f6bb9ac0902a9103cfc3651a9afb",
+      "size": 4274
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00205.java",
+      "sha": "49f62bf973645e91828b9a2226f52cfc1a61237a",
+      "size": 2998
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00216.java",
+      "sha": "a0376bad2dacbb0ff66f78593472f47941270a74",
+      "size": 3336
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00218.java",
+      "sha": "690cb4259ecdc65e0ee8d28e5a139a515abfae2f",
+      "size": 4769
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00264.java",
+      "sha": "bd031aeaaa579654a4c1c1f94f3e3823531ac3b3",
+      "size": 3909
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00340.java",
+      "sha": "53ff72bcb007d9bd795519b3b1ebb88b0dc91912",
+      "size": 3464
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00527.java",
+      "sha": "1a18a4b73e123d79afc97ab7c8e5f603266f6e22",
+      "size": 3135
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00620.java",
+      "sha": "2c997486e87a714f02bba065592cbef5f594216e",
+      "size": 3047
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00763.java",
+      "sha": "25df60cb445cd5593ce8e787172ce9e74848c9fd",
+      "size": 3171
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00863.java",
+      "sha": "a2b25d823602d0766d7fbe0e6a5c0ca1e417ab3f",
+      "size": 2690
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00864.java",
+      "sha": "ec41b845c03c1920c9d6c44fe77456596cf13dd2",
+      "size": 2909
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00949.java",
+      "sha": "401699151f811f40942120e83aa467455f18b4b6",
+      "size": 3825
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00950.java",
+      "sha": "fd50b82f435970fd5b5019ebd538da266d98a935",
+      "size": 3773
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00952.java",
+      "sha": "694a1f67c0045925309abcee59dec9f26ab44010",
+      "size": 5517
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00953.java",
+      "sha": "4c11f04537bad4599b0a6bc83fc64c4d60c67772",
+      "size": 4579
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00956.java",
+      "sha": "f4e788b397fd580ebcc0779e43c6c3bbbe28c284",
+      "size": 4395
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00996.java",
+      "sha": "4f5f2a5e139b2dc955f58cb6516f4fb517c52378",
+      "size": 4152
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00997.java",
+      "sha": "b6fd32cc53aff17509db30f2c13eef1e3c02c495",
+      "size": 4369
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00998.java",
+      "sha": "f218e47e1423b763433c08a0c87ca8b8963c1a74",
+      "size": 4159
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01004.java",
+      "sha": "3ce2110c12b81961fe610dad179eef44a99557db",
+      "size": 4476
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01006.java",
+      "sha": "f67b16c8b7181c64218afe687393f743ecd9e137",
+      "size": 4541
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01010.java",
+      "sha": "4147e74f5dcc75d369d9fcd25e83847cc44c74ad",
+      "size": 4311
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01011.java",
+      "sha": "336e3f8b46632b88a5d711f550854bd561571f83",
+      "size": 3936
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01012.java",
+      "sha": "33295bc6469f97b7c9f355eb7e159d6ec2b593ca",
+      "size": 4125
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01028.java",
+      "sha": "321b4efdd17e9d0b15fdbc8f521dab4654e8d798",
+      "size": 4404
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01030.java",
+      "sha": "b19d1b78391ca3b7bb6f424551bbec216ed58dff",
+      "size": 4752
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01031.java",
+      "sha": "2eace60d0fcae41fa73c4875062e43ab55deceb8",
+      "size": 3870
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01085.java",
+      "sha": "45313dc2d8aceb187898de3c977264a5410aac2b",
+      "size": 3529
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01096.java",
+      "sha": "8d608f8e7ed472cfe9b674b13db396a40cd16866",
+      "size": 3556
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01110.java",
+      "sha": "e13828e1fb96e949453077f5d4c3ace5fc867070",
+      "size": 5079
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01156.java",
+      "sha": "fa51554c958592d81fe43d65e001b072c282b658",
+      "size": 4523
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01212.java",
+      "sha": "d408ea2879b9f8211acb3bfdce77c0fd3b181230",
+      "size": 3569
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01215.java",
+      "sha": "2e39a83935b641b7041fe5343c2d5a7e2c87ef86",
+      "size": 4078
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01233.java",
+      "sha": "3f7c67eaebc68c8010bd9463efa1bda84a0c3efc",
+      "size": 3503
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01385.java",
+      "sha": "7f84e32b72009ef1c9e9452ada1eaa6bc1614bfe",
+      "size": 3655
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01389.java",
+      "sha": "e47aa1e448d2f2754265d908295d21813826efe4",
+      "size": 4026
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01746.java",
+      "sha": "09176a01142636cd3532758e17a7ac308ee5df6f",
+      "size": 4065
+    },
+    {
+      "path": "src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01752.java",
+      "sha": "524866aa463370ee524de40a573458f522e01e19",
+      "size": 3712
+    }
+  ]
+}

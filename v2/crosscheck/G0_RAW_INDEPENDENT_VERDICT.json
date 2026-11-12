@@ -1,0 +1,4872 @@
+{
+  "schema": "ntk-g0-independent-verdict-1",
+  "review_date": "2026-11-13",
+  "overall_verdict": "FAIL",
+  "automated_audit_exit_code": 2,
+  "automated_failure_count": 2,
+  "raw_identity_trace_assessment_sqlite_checks": "PASS within recorded checks; historical authenticity not attested",
+  "owasp_case_labels_and_pinned_source_blobs": "PASS",
+  "manual_ground_truth": "INCOMPLETE",
+  "g0_acceptance": "INCOMPLETE",
+  "scope": "Read transferred raw artifacts; no inference, scanner, production scorer or server auditor executed",
+  "raw_runtime_independently_attested": false,
+  "server_receipts_used_as_metric_answers": false,
+  "code_head": "8db7dafae6c4abc99ca8a78e9b2e83a0e0b9f204",
+  "new_commit": null,
+  "code_sha256": {
+    "audit_raw_bundle.py": "2e23fd50abaa8621fe5a1e549da40ceb798d46f06fe136258b7ebcedb9bed201",
+    "recompute.py": "15ededf2ff8b695f0b36bb232c2947c013c1a11b60f3cce6bdd8a7caade52921",
+    "test_raw_bundle.py": "3086407f80311e3e4ea07501c822d0777b2a7bda45180342153c74814c303261",
+    "test_recompute.py": "986422f1ed37533bb3785e9487b84a0edb7475bc2625ab40871851b9515a4a00"
+  },
+  "automated_evidence": {
+    "file": "<PRIVATE_PATH>",
+    "sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91"
+  },
+  "transfer": {
+    "files": 289,
+    "manifest_entries": 289,
+    "archive_sha256": "4664dcdbfc50620cc713cde20095d6fe3051335ec6c47cc39cd9c6d8bac1c6ba",
+    "transfer_manifest_sha256": "71633d4e4975df17efa3741cace8e6ba0555fd36d71d5f7b088a1adb584ea34d"
+  },
+  "reference": {
+    "commit": "8b67a88d73b2594570fc21150705283de884620b",
+    "file_sha256": "c08c68aaa764807b5f2d79f737a17388ba97d28528ab71c32dcaa1859b637633"
+  },
+  "checks": 71276,
+  "checked_fields": {
+    "duplicate_id": 1045,
+    "transfer.path_set": 1,
+    "transfer.sha256": 289,
+    "transfer.bytes": 289,
+    "archive.sha256": 1,
+    "manifest.schema": 3,
+    "manifest.success": 3,
+    "artifact.json.command.json": 3,
+    "artifact.json.exit.txt": 3,
+    "artifact.json.stderr.txt": 3,
+    "artifact.json.stdout.txt": 3,
+    "artifact.opengrep.json": 3,
+    "artifact.opengrep.sarif": 3,
+    "artifact.rules.snapshot.yml": 3,
+    "artifact.sarif.command.json": 3,
+    "artifact.sarif.exit.txt": 3,
+    "artifact.sarif.stderr.txt": 3,
+    "artifact.sarif.stdout.txt": 3,
+    "artifact.version.command.json": 3,
+    "artifact.version.exit.txt": 3,
+    "artifact.version.stderr.txt": 3,
+    "artifact.version.stdout.txt": 3,
+    "scan.raw_hash": 3,
+    "sources.before_after": 3,
+    "rules.before_after": 3,
+    "rules.snapshot": 3,
+    "version.exit_integer": 3,
+    "version.exit": 3,
+    "version.exit_artifact": 3,
+    "version.argv": 3,
+    "json.exit_integer": 3,
+    "json.exit": 3,
+    "json.exit_artifact": 3,
+    "json.argv": 3,
+    "sarif.exit_integer": 3,
+    "sarif.exit": 3,
+    "sarif.exit_artifact": 3,
+    "sarif.argv": 3,
+    "captured_source.BenchmarkTest00001.java": 1,
+    "captured_source.BenchmarkTest00008.java": 1,
+    "captured_source.BenchmarkTest00102.java": 1,
+    "captured_source.BenchmarkTest00103.java": 1,
+    "captured_source.BenchmarkTest00131.java": 1,
+    "captured_source.BenchmarkTest00190.java": 1,
+    "captured_source.BenchmarkTest00191.java": 1,
+    "captured_source.BenchmarkTest00216.java": 1,
+    "captured_source.BenchmarkTest00527.java": 1,
+    "captured_source.BenchmarkTest00620.java": 1,
+    "captured_source.BenchmarkTest00863.java": 1,
+    "captured_source.BenchmarkTest00950.java": 1,
+    "captured_source.BenchmarkTest00998.java": 1,
+    "captured_source.BenchmarkTest01010.java": 1,
+    "captured_source.BenchmarkTest01031.java": 1,
+    "captured_source.BenchmarkTest01096.java": 1,
+    "rules.unique_ids": 3,
+    "engine.errors": 3,
+    "manifest.issues": 3,
+    "sarif.version": 3,
+    "sarif.finding_multiset": 3,
+    "raw.duplicate_identity": 3,
+    "rules.finding_id_match": 76,
+    "location.start.range": 634,
+    "location.start.offset": 634,
+    "location.end.range": 634,
+    "location.end.offset": 634,
+    "location.ordered": 634,
+    "location.content_sha256": 558,
+    "cwe.scope": 76,
+    "sarif.cwe": 76,
+    "sarif.trace_multiset": 76,
+    "captured_source.BenchmarkTest00011.java": 1,
+    "captured_source.BenchmarkTest00018.java": 1,
+    "captured_source.BenchmarkTest00024.java": 1,
+    "captured_source.BenchmarkTest00025.java": 1,
+    "captured_source.BenchmarkTest00038.java": 1,
+    "captured_source.BenchmarkTest00040.java": 1,
+    "captured_source.BenchmarkTest00062.java": 1,
+    "captured_source.BenchmarkTest00108.java": 1,
+    "captured_source.BenchmarkTest00132.java": 1,
+    "captured_source.BenchmarkTest00134.java": 1,
+    "captured_source.BenchmarkTest00135.java": 1,
+    "captured_source.BenchmarkTest00197.java": 1,
+    "captured_source.BenchmarkTest00205.java": 1,
+    "captured_source.BenchmarkTest00218.java": 1,
+    "captured_source.BenchmarkTest00264.java": 1,
+    "captured_source.BenchmarkTest00340.java": 1,
+    "captured_source.BenchmarkTest00763.java": 1,
+    "captured_source.BenchmarkTest00864.java": 1,
+    "captured_source.BenchmarkTest00949.java": 1,
+    "captured_source.BenchmarkTest00952.java": 1,
+    "captured_source.BenchmarkTest00953.java": 1,
+    "captured_source.BenchmarkTest00956.java": 1,
+    "captured_source.BenchmarkTest00996.java": 1,
+    "captured_source.BenchmarkTest00997.java": 1,
+    "captured_source.BenchmarkTest01004.java": 1,
+    "captured_source.BenchmarkTest01006.java": 1,
+    "captured_source.BenchmarkTest01011.java": 1,
+    "captured_source.BenchmarkTest01012.java": 1,
+    "captured_source.BenchmarkTest01028.java": 1,
+    "captured_source.BenchmarkTest01030.java": 1,
+    "captured_source.BenchmarkTest01085.java": 1,
+    "captured_source.BenchmarkTest01110.java": 1,
+    "captured_source.BenchmarkTest01156.java": 1,
+    "captured_source.BenchmarkTest01212.java": 1,
+    "captured_source.BenchmarkTest01215.java": 1,
+    "captured_source.BenchmarkTest01233.java": 1,
+    "captured_source.BenchmarkTest01385.java": 1,
+    "captured_source.BenchmarkTest01389.java": 1,
+    "captured_source.BenchmarkTest01746.java": 1,
+    "captured_source.BenchmarkTest01752.java": 1,
+    "captured_source.demo/UserDao.java": 1,
+    "captured_source.java-sec-code/SQLI.java": 1,
+    "captured_source.WebGoat/Assignment5.java": 1,
+    "captured_source.WebGoat/ProfileUploadRetrieval.java": 1,
+    "captured_source.WebGoat/Servers.java": 1,
+    "captured_source.WebGoat/SqlInjectionLesson5a.java": 1,
+    "captured_source.WebGoat/SqlInjectionLesson8.java": 1,
+    "captured_source.WebGoat/UserService.java": 1,
+    "reference.commit": 2,
+    "official.csv_git_blob": 2,
+    "labels.id_set": 2,
+    "label.finding_index": 56,
+    "label.scan_sha256": 56,
+    "label.rule_id": 56,
+    "label.file_path": 56,
+    "label.start_line": 56,
+    "label.end_line": 56,
+    "label.source_sha256": 56,
+    "label.cwe": 56,
+    "label.ground_truth": 56,
+    "label.raw_cwe": 56,
+    "source.pinned_git_blob": 56,
+    "split.file_path": 1,
+    "split.source_sha256": 1,
+    "manual.unique_finding_match": 20,
+    "manual.duplicate_label": 20,
+    "manual.cwe": 20,
+    "manual.label_id_set": 1,
+    "run.id_set": 10,
+    "run.input_hash": 10,
+    "bundle.raw_document": 10,
+    "bundle.scan_hash": 10,
+    "bundle.id_set": 10,
+    "evidence.captured_root": 240,
+    "provenance.manifest_sha256": 240,
+    "provenance.recorded_exit": 240,
+    "row.id": 240,
+    "evidence.id": 240,
+    "row.alert_id": 240,
+    "evidence.alert_id": 240,
+    "row.scan_sha256": 240,
+    "evidence.scan_sha256": 240,
+    "row.finding_index": 240,
+    "evidence.finding_index": 240,
+    "evidence.rule_id": 240,
+    "bundle.rule_id": 240,
+    "evidence.path": 240,
+    "bundle.path": 240,
+    "evidence.start": 240,
+    "bundle.start": 240,
+    "evidence.end": 240,
+    "bundle.end": 240,
+    "evidence.raw_finding": 240,
+    "bundle.raw_finding": 240,
+    "evidence.raw_trace": 240,
+    "bundle.raw_trace": 240,
+    "evidence.cwe": 240,
+    "bundle.cwe": 240,
+    "snapshot.finding_exists": 240,
+    "snapshot.sha256": 240,
+    "snapshot.bytes": 240,
+    "snippet.sha256": 2040,
+    "snippet.line_range": 24675,
+    "snippet.text_sha256": 24675,
+    "post.valid": 240,
+    "security.not_certified": 240,
+    "human.review_required": 240,
+    "run.transport": 240,
+    "run.mode": 240,
+    "replay.post": 164,
+    "replay.citation": 164,
+    "response.json_sha256": 158,
+    "response.finding_id": 158,
+    "response.http_status": 158,
+    "response.received": 158,
+    "response.mock": 158,
+    "sqlite.integrity": 11,
+    "sqlite.foreign_keys": 11,
+    "sqlite.id_set": 11,
+    "sqlite.full_scan_bundle": 10,
+    "sqlite.evidence": 256,
+    "sqlite.assessment": 256,
+    "sqlite.scan_id": 256,
+    "sqlite.scan_exists": 256,
+    "sqlite.bundle_scan": 256,
+    "sqlite.event_state": 256,
+    "sqlite.export_state": 256,
+    "sqlite.unchanged": 11,
+    "mapping.target": 184,
+    "mapping.source": 184,
+    "heuristic.raw_model_response": 76,
+    "heuristic.no_http_request": 76,
+    "heuristic.citation": 43,
+    "checkpoint.id_set": 6,
+    "checkpoint.assessment": 148,
+    "manual.total_seconds": 1,
+    "manual.mean_seconds": 1,
+    "demo.final_queue_ids": 1,
+    "sqlite.event_target": 3,
+    "sqlite.actor_reason": 3,
+    "sqlite.action_valid": 3,
+    "sqlite.event_evidence_hash": 3,
+    "sqlite.event_source": 3,
+    "sqlite.false_source_fresh": 1,
+    "demo.exit_success": 13,
+    "demo.hidden_only_confirmed_false": 1,
+    "demo.all_preserved": 1,
+    "demo.lifecycle_actions": 1,
+    "paired.id_set": 1,
+    "csv.scan_sha256": 120,
+    "csv.source_sha256": 120,
+    "csv.rule_id": 120,
+    "csv.cwe": 120,
+    "csv.finding_index": 120,
+    "csv.path": 120,
+    "csv.verified_ground_truth": 120,
+    "B.csv.decision": 40,
+    "B.csv.citation": 40,
+    "B.csv.post": 40,
+    "C.csv.decision": 40,
+    "C.csv.citation": 40,
+    "C.csv.raw": 40,
+    "C.csv.post": 40,
+    "C.csv.human": 40,
+    "C.csv.latency_ms_3dp": 40,
+    "D.csv.decision": 40,
+    "D.csv.citation": 40,
+    "D.csv.raw": 40,
+    "D.csv.latency_ms_3dp": 40,
+    "aggregate.duplicate": 12,
+    "aggregate.total_alerts": 12,
+    "aggregate.labeled_tp": 12,
+    "aggregate.labeled_fp": 12,
+    "aggregate.tp_kept_supported.fraction": 12,
+    "aggregate.tp_kept_supported.percent": 12,
+    "aggregate.tp_retained_total_with_review.fraction": 12,
+    "aggregate.tp_retained_total_with_review.percent": 12,
+    "aggregate.fp_correctly_proposed_refuted.fraction": 12,
+    "aggregate.fp_correctly_proposed_refuted.percent": 12,
+    "aggregate.tp_erroneously_proposed_fp.fraction": 12,
+    "aggregate.tp_erroneously_proposed_fp.percent": 12,
+    "aggregate.undetermined_review_rate.fraction": 12,
+    "aggregate.undetermined_review_rate.percent": 12,
+    "aggregate.citation_verified_rate": 3,
+    "aggregate.policy_drop_fp_precision.fraction": 12,
+    "aggregate.policy_drop_fp_precision.percent": 12,
+    "aggregate.policy_drop_fp_tp_recall.fraction": 12,
+    "aggregate.policy_drop_fp_tp_recall.percent": 12,
+    "aggregate.policy_keep_tp_only_precision.fraction": 12,
+    "aggregate.policy_keep_tp_only_precision.percent": 12,
+    "aggregate.policy_keep_tp_only_tp_recall.fraction": 12,
+    "aggregate.policy_keep_tp_only_tp_recall.percent": 12,
+    "aggregate.citation_verified_rate.fraction": 9,
+    "aggregate.citation_verified_rate.percent": 9,
+    "aggregate.mean_latency_ms": 6,
+    "aggregate.p50_latency_ms": 6,
+    "aggregate.p95_latency_ms": 6,
+    "aggregate.group_set": 1,
+    "public.semantic_json": 4,
+    "public.lf_bytes_hash": 4,
+    "lock.opengrep_sha256": 1,
+    "lock.labels_sha256": 1,
+    "lock.combined_sha256": 1,
+    "all_input_hashes_unchanged": 1
+  },
+  "criteria": {
+    "transfer_integrity": "PASS",
+    "scan_development": "PASS",
+    "scan_heldout": "PASS",
+    "scan_manual": "PASS",
+    "owasp_labels_and_sources": "PASS",
+    "manual_label_catalog": "PASS",
+    "run_stage2_dev16_baseline_v1_0": "INCOMPLETE",
+    "run_stage3_dev16_armB_heuristic": "PASS",
+    "run_stage3_dev16_armC_evidence_llm": "PASS",
+    "run_stage3_dev16_armC_v2_1_evidence_llm": "PASS",
+    "run_stage3_dev16_armD_llm_ablation": "PASS",
+    "run_stage4_heldout40_armB_heuristic": "PASS",
+    "run_stage4_heldout40_armC_evidence_llm": "PASS",
+    "run_stage4_heldout40_armD_llm_ablation": "PASS",
+    "run_stage5_real_projects_armB_heuristic": "PASS",
+    "run_stage5_real_projects_armC_evidence_llm": "PASS",
+    "document_consistency": "FAIL",
+    "human_review_history": "INCOMPLETE",
+    "heldout_published_comparison": "PASS",
+    "heldout_aggregate_comparison": "INCOMPLETE",
+    "public_lock_raw_lf": "PASS",
+    "immutability": "PASS",
+    "historical_configuration": "INCOMPLETE",
+    "manual_ground_truth": "INCOMPLETE",
+    "latency_measurements": "INCOMPLETE"
+  },
+  "scans": {
+    "development": {
+      "findings": 16,
+      "sarif_findings": 16,
+      "sources": 16,
+      "scan_sha256": "ecc1fa4634bfc86266c43dd6790422546367293d1810712fddc7c0d15a6c015f",
+      "rules_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+      "engine_version": "1.25.0",
+      "rules_count": 9,
+      "unique_start_lines": 16,
+      "declaration_groups": [],
+      "declaration_grouping_note": "Not computed for OWASP cases; only applied to the eight project/demo files",
+      "unique_ranges_without_rule": 16
+    },
+    "heldout": {
+      "findings": 40,
+      "sarif_findings": 40,
+      "sources": 40,
+      "scan_sha256": "67c3b04903e75f4bd7294cb17452d0dcb2b6d56244330cec485c4422efabfa8b",
+      "rules_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+      "engine_version": "1.25.0",
+      "rules_count": 9,
+      "unique_start_lines": 40,
+      "declaration_groups": [],
+      "declaration_grouping_note": "Not computed for OWASP cases; only applied to the eight project/demo files",
+      "unique_ranges_without_rule": 40
+    },
+    "manual": {
+      "findings": 20,
+      "sarif_findings": 20,
+      "sources": 8,
+      "scan_sha256": "99d2445c218030fb10082176c299bc328eeb62c6b23c7ab745cffd824f31f041",
+      "rules_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+      "engine_version": "1.25.0",
+      "rules_count": 9,
+      "unique_start_lines": 18,
+      "declaration_groups": [
+        [
+          "WebGoat/Assignment5.java",
+          49,
+          "login"
+        ],
+        [
+          "WebGoat/ProfileUploadRetrieval.java",
+          83,
+          "getProfilePicture"
+        ],
+        [
+          "WebGoat/Servers.java",
+          67,
+          "sort"
+        ],
+        [
+          "WebGoat/SqlInjectionLesson5a.java",
+          59,
+          "injectableQuery"
+        ],
+        [
+          "WebGoat/SqlInjectionLesson8.java",
+          63,
+          "injectableQueryConfidentiality"
+        ],
+        [
+          "WebGoat/SqlInjectionLesson8.java",
+          147,
+          "log"
+        ],
+        [
+          "WebGoat/UserService.java",
+          51,
+          "createLessonsForUser"
+        ],
+        [
+          "demo/UserDao.java",
+          20,
+          "findUnsafe"
+        ],
+        [
+          "demo/UserDao.java",
+          40,
+          "runQuery"
+        ],
+        [
+          "demo/UserDao.java",
+          61,
+          "open"
+        ],
+        [
+          "java-sec-code/SQLI.java",
+          52,
+          "jdbc_sqli_vul"
+        ],
+        [
+          "java-sec-code/SQLI.java",
+          139,
+          "jdbc_ps_vuln"
+        ]
+      ],
+      "declaration_grouping_note": "Nearest preceding method declaration, manually checked on these 8 files; not distinct vulnerability identity",
+      "unique_ranges_without_rule": 20
+    }
+  },
+  "ground_truth": {
+    "development": {
+      "CWE-22:TRUE_POSITIVE": 4,
+      "CWE-89:TRUE_POSITIVE": 4,
+      "CWE-22:FALSE_POSITIVE": 4,
+      "CWE-89:FALSE_POSITIVE": 4
+    },
+    "heldout": {
+      "CWE-22:TRUE_POSITIVE": 10,
+      "CWE-89:TRUE_POSITIVE": 10,
+      "CWE-22:FALSE_POSITIVE": 10,
+      "CWE-89:FALSE_POSITIVE": 10
+    }
+  },
+  "heldout_metrics": {
+    "B": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 9,
+        "fp_proposed": 7,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 9,
+            "REFUTED": 0,
+            "UNDETERMINED": 11
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 7,
+            "UNDETERMINED": 13
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "raw_statuses": {
+          "None": 40
+        },
+        "raw_unavailable": 40,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 20
+          },
+          "FALSE_POSITIVE": {
+            "None": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 24,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "citation_matched_conclusive": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "accuracy_all": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "selective_accuracy": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 33,
+              "value": 0.6060606060606061
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 13,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 7,
+              "denominator": 20,
+              "value": 0.35
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 9,
+              "denominator": 9,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 9,
+              "denominator": 20,
+              "value": 0.45
+            },
+            "tp_retained": 9,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 11,
+              "denominator": 20,
+              "value": 0.55
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 40,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 4,
+        "fp_proposed": 5,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 4,
+            "REFUTED": 0,
+            "UNDETERMINED": 6
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 5,
+            "UNDETERMINED": 5
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 5,
+          "denominator": 10,
+          "value": 0.5
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 4,
+          "denominator": 10,
+          "value": 0.4
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 11,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "citation_matched_conclusive": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "accuracy_all": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "selective_accuracy": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 15,
+              "value": 0.6666666666666666
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 5,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 4,
+              "denominator": 4,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 4,
+              "denominator": 10,
+              "value": 0.4
+            },
+            "tp_retained": 4,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 6,
+              "denominator": 10,
+              "value": 0.6
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 5,
+        "fp_proposed": 2,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 5,
+            "REFUTED": 0,
+            "UNDETERMINED": 5
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 2,
+            "UNDETERMINED": 8
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 2,
+          "denominator": 10,
+          "value": 0.2
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 5,
+          "denominator": 10,
+          "value": 0.5
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 13,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "citation_matched_conclusive": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "accuracy_all": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "selective_accuracy": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 18,
+              "value": 0.5555555555555556
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 8,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 2,
+              "denominator": 10,
+              "value": 0.2
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 5,
+              "denominator": 5,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            },
+            "tp_retained": 5,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      }
+    },
+    "C": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 20,
+        "fp_proposed": 20,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 20,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20,
+          "REFUTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 20,
+          "SUPPORTED->SUPPORTED": 20
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 40,
+          "expected": 40,
+          "observed_total_ms": "421000.000000000002000",
+          "observed_mean_ms": "10525.000000000000050",
+          "total_ms": "421000.000000000002000",
+          "mean_ms": "10525.000000000000050",
+          "median_ms": "10960.999999999331000",
+          "p95_nearest_rank_ms": "12686.99999999808000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 10,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 10,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 10,
+          "REFUTED": 10
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 10,
+          "SUPPORTED->SUPPORTED": 10
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "216907.999999995810000",
+          "observed_mean_ms": "10845.399999999790500",
+          "total_ms": "216907.999999995810000",
+          "mean_ms": "10845.399999999790500",
+          "median_ms": "11172.000000002299000",
+          "p95_nearest_rank_ms": "12921.000000002095000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 10,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 10,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 10,
+          "REFUTED": 10
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 10,
+          "SUPPORTED->SUPPORTED": 10
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "204092.000000004192000",
+          "observed_mean_ms": "10204.600000000209600",
+          "total_ms": "204092.000000004192000",
+          "mean_ms": "10204.600000000209600",
+          "median_ms": "10719.000000000960500",
+          "p95_nearest_rank_ms": "11733.99999999674000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      }
+    },
+    "D": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 17,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 17,
+            "REFUTED": 0,
+            "UNDETERMINED": 3
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 14,
+            "REFUTED": 0,
+            "UNDETERMINED": 6
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 17,
+          "denominator": 31,
+          "value": 0.5483870967741935
+        },
+        "supported_tp_recall": {
+          "numerator": 17,
+          "denominator": 20,
+          "value": 0.85
+        },
+        "raw_statuses": {
+          "SUPPORTED": 40
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 31,
+          "SUPPORTED->UNDETERMINED": 9
+        },
+        "raw_post_changes": 9,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 14,
+        "undetermined": 9,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 31,
+          "denominator": 40,
+          "value": 0.775
+        },
+        "citation_matched_conclusive": {
+          "numerator": 31,
+          "denominator": 31,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 31,
+          "denominator": 40,
+          "value": 0.775
+        },
+        "accuracy_all": {
+          "numerator": 17,
+          "denominator": 40,
+          "value": 0.425
+        },
+        "selective_accuracy": {
+          "numerator": 17,
+          "denominator": 31,
+          "value": 0.5483870967741935
+        },
+        "human_states": {
+          "OPEN": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 17,
+              "denominator": 31,
+              "value": 0.5483870967741935
+            },
+            "tp_retention_recall": {
+              "numerator": 17,
+              "denominator": 20,
+              "value": 0.85
+            },
+            "tp_retained": 17,
+            "fp_retained": 14,
+            "tp_excluded": {
+              "numerator": 3,
+              "denominator": 20,
+              "value": 0.15
+            },
+            "fp_excluded": {
+              "numerator": 6,
+              "denominator": 20,
+              "value": 0.3
+            }
+          }
+        },
+        "latency": {
+          "observed": 40,
+          "expected": 40,
+          "observed_total_ms": "301061.9999999980769000",
+          "observed_mean_ms": "7526.5499999999519225",
+          "total_ms": "301061.9999999980769000",
+          "mean_ms": "7526.5499999999519225",
+          "median_ms": "6359.000000000378500",
+          "p95_nearest_rank_ms": "12108.99999999674000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 7,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 7,
+            "REFUTED": 0,
+            "UNDETERMINED": 3
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 6,
+            "REFUTED": 0,
+            "UNDETERMINED": 4
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 7,
+          "denominator": 13,
+          "value": 0.5384615384615384
+        },
+        "supported_tp_recall": {
+          "numerator": 7,
+          "denominator": 10,
+          "value": 0.7
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 13,
+          "SUPPORTED->UNDETERMINED": 7
+        },
+        "raw_post_changes": 7,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 6,
+        "undetermined": 7,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 13,
+          "denominator": 20,
+          "value": 0.65
+        },
+        "citation_matched_conclusive": {
+          "numerator": 13,
+          "denominator": 13,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 13,
+          "denominator": 20,
+          "value": 0.65
+        },
+        "accuracy_all": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "selective_accuracy": {
+          "numerator": 7,
+          "denominator": 13,
+          "value": 0.5384615384615384
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 7,
+              "denominator": 13,
+              "value": 0.5384615384615384
+            },
+            "tp_retention_recall": {
+              "numerator": 7,
+              "denominator": 10,
+              "value": 0.7
+            },
+            "tp_retained": 7,
+            "fp_retained": 6,
+            "tp_excluded": {
+              "numerator": 3,
+              "denominator": 10,
+              "value": 0.3
+            },
+            "fp_excluded": {
+              "numerator": 4,
+              "denominator": 10,
+              "value": 0.4
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "130858.0000000001749000",
+          "observed_mean_ms": "6542.9000000000087450",
+          "total_ms": "130858.0000000001749000",
+          "mean_ms": "6542.9000000000087450",
+          "median_ms": "5874.500000001717000",
+          "p95_nearest_rank_ms": "8921.999999998661000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 8,
+            "REFUTED": 0,
+            "UNDETERMINED": 2
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 18,
+          "value": 0.5555555555555556
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 18,
+          "SUPPORTED->UNDETERMINED": 2
+        },
+        "raw_post_changes": 2,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 8,
+        "undetermined": 2,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 18,
+          "denominator": 20,
+          "value": 0.9
+        },
+        "citation_matched_conclusive": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 18,
+          "denominator": 20,
+          "value": 0.9
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 18,
+          "value": 0.5555555555555556
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 18,
+              "value": 0.5555555555555556
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 8,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 2,
+              "denominator": 10,
+              "value": 0.2
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "170203.999999997902000",
+          "observed_mean_ms": "8510.199999999895100",
+          "total_ms": "170203.999999997902000",
+          "mean_ms": "8510.199999999895100",
+          "median_ms": "7953.000000001338500",
+          "p95_nearest_rank_ms": "12843.999999997322000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      }
+    },
+    "A": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 20,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 40
+        },
+        "raw_unavailable": 40,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 20
+          },
+          "FALSE_POSITIVE": {
+            "None": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 20,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_APPLICABLE": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 40,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 10,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_APPLICABLE": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 10,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_APPLICABLE": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      }
+    }
+  },
+  "runs": {
+    "stage2_dev16_baseline_v1_0": {
+      "records": 16,
+      "post": {
+        "SUPPORTED": 6,
+        "UNDETERMINED": 10
+      },
+      "raw": {
+        "SUPPORTED": 8,
+        "None": 8
+      },
+      "response_records": 10,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "checkpoint_records": null,
+      "sql": {
+        "warnings": 16,
+        "events": 0,
+        "states": {
+          "OPEN": 16
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 16,
+      "latency_total_ms": "135186.9999999980776000",
+      "latency_mean_ms": "8449.1874999998798500"
+    },
+    "stage3_dev16_armB_heuristic": {
+      "records": 16,
+      "post": {
+        "SUPPORTED": 4,
+        "UNDETERMINED": 9,
+        "REFUTED": 3
+      },
+      "raw": {},
+      "response_records": 0,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "checkpoint_records": null,
+      "sql": {
+        "warnings": 16,
+        "events": 0,
+        "states": {
+          "OPEN": 16
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 0,
+      "latency_total_ms": null,
+      "latency_mean_ms": null
+    },
+    "stage3_dev16_armC_evidence_llm": {
+      "records": 16,
+      "post": {
+        "SUPPORTED": 7,
+        "REFUTED": 8,
+        "UNDETERMINED": 1
+      },
+      "raw": {
+        "SUPPORTED": 8,
+        "REFUTED": 8
+      },
+      "response_records": 16,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 16,
+        "denominator": 16,
+        "value": 1.0
+      },
+      "checkpoint_records": 16,
+      "sql": {
+        "warnings": 16,
+        "events": 0,
+        "states": {
+          "OPEN": 16
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 16,
+      "latency_total_ms": "164139.999999999418000",
+      "latency_mean_ms": "10258.749999999963625"
+    },
+    "stage3_dev16_armC_v2_1_evidence_llm": {
+      "records": 16,
+      "post": {
+        "SUPPORTED": 8,
+        "REFUTED": 8
+      },
+      "raw": {
+        "SUPPORTED": 8,
+        "REFUTED": 8
+      },
+      "response_records": 16,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 16,
+        "denominator": 16,
+        "value": 1.0
+      },
+      "checkpoint_records": 16,
+      "sql": {
+        "warnings": 16,
+        "events": 0,
+        "states": {
+          "OPEN": 16
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 16,
+      "latency_total_ms": "158109.000000004017000",
+      "latency_mean_ms": "9881.8125000002510625"
+    },
+    "stage3_dev16_armD_llm_ablation": {
+      "records": 16,
+      "post": {
+        "SUPPORTED": 15,
+        "UNDETERMINED": 1
+      },
+      "raw": {
+        "SUPPORTED": 16
+      },
+      "response_records": 16,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 8,
+        "denominator": 16,
+        "value": 0.5
+      },
+      "checkpoint_records": 16,
+      "sql": {
+        "warnings": 16,
+        "events": 0,
+        "states": {
+          "OPEN": 16
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 16,
+      "latency_total_ms": "142389.9999999994184000",
+      "latency_mean_ms": "8899.3749999999636500"
+    },
+    "stage4_heldout40_armB_heuristic": {
+      "records": 40,
+      "post": {
+        "SUPPORTED": 9,
+        "UNDETERMINED": 24,
+        "REFUTED": 7
+      },
+      "raw": {},
+      "response_records": 0,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "checkpoint_records": null,
+      "sql": {
+        "warnings": 40,
+        "events": 0,
+        "states": {
+          "OPEN": 40
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 0,
+      "latency_total_ms": null,
+      "latency_mean_ms": null
+    },
+    "stage4_heldout40_armC_evidence_llm": {
+      "records": 40,
+      "post": {
+        "SUPPORTED": 20,
+        "REFUTED": 20
+      },
+      "raw": {
+        "SUPPORTED": 20,
+        "REFUTED": 20
+      },
+      "response_records": 40,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 40,
+        "denominator": 40,
+        "value": 1.0
+      },
+      "checkpoint_records": 40,
+      "sql": {
+        "warnings": 40,
+        "events": 0,
+        "states": {
+          "OPEN": 40
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 40,
+      "latency_total_ms": "421000.000000000002000",
+      "latency_mean_ms": "10525.000000000000050"
+    },
+    "stage4_heldout40_armD_llm_ablation": {
+      "records": 40,
+      "post": {
+        "SUPPORTED": 31,
+        "UNDETERMINED": 9
+      },
+      "raw": {
+        "SUPPORTED": 40
+      },
+      "response_records": 40,
+      "ground_truth_basis": "OWASP_CASE_LABELS_AND_SOURCE_BLOBS",
+      "heuristic_raw_agreement": {
+        "numerator": 20,
+        "denominator": 40,
+        "value": 0.5
+      },
+      "checkpoint_records": 40,
+      "sql": {
+        "warnings": 40,
+        "events": 0,
+        "states": {
+          "OPEN": 40
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 40,
+      "latency_total_ms": "301061.9999999980769000",
+      "latency_mean_ms": "7526.5499999999519225"
+    },
+    "stage5_real_projects_armB_heuristic": {
+      "records": 20,
+      "post": {
+        "SUPPORTED": 20
+      },
+      "raw": {},
+      "response_records": 0,
+      "ground_truth_basis": "AUTHOR_ASSIGNED_UNVERIFIED",
+      "heuristic_raw_agreement": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      },
+      "checkpoint_records": null,
+      "sql": {
+        "warnings": 20,
+        "events": 0,
+        "states": {
+          "OPEN": 20
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 0,
+      "latency_total_ms": null,
+      "latency_mean_ms": null
+    },
+    "stage5_real_projects_armC_evidence_llm": {
+      "records": 20,
+      "post": {
+        "SUPPORTED": 20
+      },
+      "raw": {
+        "SUPPORTED": 20
+      },
+      "response_records": 20,
+      "ground_truth_basis": "AUTHOR_ASSIGNED_UNVERIFIED",
+      "heuristic_raw_agreement": {
+        "numerator": 20,
+        "denominator": 20,
+        "value": 1.0
+      },
+      "checkpoint_records": 20,
+      "sql": {
+        "warnings": 20,
+        "events": 0,
+        "states": {
+          "OPEN": 20
+        },
+        "event_actions": [],
+        "actors": []
+      },
+      "latency_observed": 20,
+      "latency_total_ms": "181703.0000000013406000",
+      "latency_mean_ms": "9085.1500000000670300"
+    }
+  },
+  "manual_conditional_metrics_NOT_VERIFIED_GT": {
+    "stage5_real_projects_armB_heuristic": {
+      "ALL": {
+        "n": 20,
+        "tp": 16,
+        "fp": 4,
+        "tp_supported": 16,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 16,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 4,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 4,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 16,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 16,
+          "denominator": 20,
+          "value": 0.8
+        },
+        "supported_tp_recall": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 16
+          },
+          "FALSE_POSITIVE": {
+            "None": 4
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 4,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 16,
+          "denominator": 20,
+          "value": 0.8
+        },
+        "selective_accuracy": {
+          "numerator": 16,
+          "denominator": 20,
+          "value": 0.8
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 16,
+              "denominator": 20,
+              "value": 0.8
+            },
+            "tp_retention_recall": {
+              "numerator": 16,
+              "denominator": 16,
+              "value": 1.0
+            },
+            "tp_retained": 16,
+            "fp_retained": 4,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 16,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 4,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 16,
+              "denominator": 20,
+              "value": 0.8
+            },
+            "tp_retention_recall": {
+              "numerator": 16,
+              "denominator": 16,
+              "value": 1.0
+            },
+            "tp_retained": 16,
+            "fp_retained": 4,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 16,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 4,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 16,
+              "denominator": 20,
+              "value": 0.8
+            },
+            "tp_retention_recall": {
+              "numerator": 16,
+              "denominator": 16,
+              "value": 1.0
+            },
+            "tp_retained": 16,
+            "fp_retained": 4,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 16,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 4,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-22": {
+        "n": 2,
+        "tp": 1,
+        "fp": 1,
+        "tp_supported": 1,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 1,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 1,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 1,
+          "denominator": 2,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 2
+        },
+        "raw_unavailable": 2,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 1
+          },
+          "FALSE_POSITIVE": {
+            "None": 1
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 1,
+        "undetermined": 0,
+        "citation_observed": 2,
+        "citation_matched": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 1,
+          "denominator": 2,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 1,
+          "denominator": 2,
+          "value": 0.5
+        },
+        "human_states": {
+          "OPEN": 2
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 1,
+              "denominator": 2,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 1,
+              "denominator": 1,
+              "value": 1.0
+            },
+            "tp_retained": 1,
+            "fp_retained": 1,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 1,
+              "denominator": 2,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 1,
+              "denominator": 1,
+              "value": 1.0
+            },
+            "tp_retained": 1,
+            "fp_retained": 1,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 1,
+              "denominator": 2,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 1,
+              "denominator": 1,
+              "value": 1.0
+            },
+            "tp_retained": 1,
+            "fp_retained": 1,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 2,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-89": {
+        "n": 18,
+        "tp": 15,
+        "fp": 3,
+        "tp_supported": 15,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 15,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 3,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 3,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 15,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "supported_tp_recall": {
+          "numerator": 15,
+          "denominator": 15,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 18
+        },
+        "raw_unavailable": 18,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 15
+          },
+          "FALSE_POSITIVE": {
+            "None": 3
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 3,
+        "undetermined": 0,
+        "citation_observed": 18,
+        "citation_matched": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "selective_accuracy": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "human_states": {
+          "OPEN": 18
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 15,
+              "denominator": 18,
+              "value": 0.8333333333333334
+            },
+            "tp_retention_recall": {
+              "numerator": 15,
+              "denominator": 15,
+              "value": 1.0
+            },
+            "tp_retained": 15,
+            "fp_retained": 3,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 15,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 3,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 15,
+              "denominator": 18,
+              "value": 0.8333333333333334
+            },
+            "tp_retention_recall": {
+              "numerator": 15,
+              "denominator": 15,
+              "value": 1.0
+            },
+            "tp_retained": 15,
+            "fp_retained": 3,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 15,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 3,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 15,
+              "denominator": 18,
+              "value": 0.8333333333333334
+            },
+            "tp_retention_recall": {
+              "numerator": 15,
+              "denominator": 15,
+              "value": 1.0
+            },
+            "tp_retained": 15,
+            "fp_retained": 3,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 15,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 3,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 18,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      }
+    },
+    "stage5_real_projects_armC_evidence_llm": {
+      "ALL": {
+        "n": 20,
+        "tp": 16,
+        "fp": 4,
+        "tp_supported": 16,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 16,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 4,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 4,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 16,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 16,
+          "denominator": 20,
+          "value": 0.8
+        },
+        "supported_tp_recall": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 20
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 16
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 4
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 4,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 16,
+          "denominator": 20,
+          "value": 0.8
+        },
+        "selective_accuracy": {
+          "numerator": 16,
+          "denominator": 20,
+          "value": 0.8
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 16,
+              "denominator": 20,
+              "value": 0.8
+            },
+            "tp_retention_recall": {
+              "numerator": 16,
+              "denominator": 16,
+              "value": 1.0
+            },
+            "tp_retained": 16,
+            "fp_retained": 4,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 16,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 4,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 16,
+              "denominator": 20,
+              "value": 0.8
+            },
+            "tp_retention_recall": {
+              "numerator": 16,
+              "denominator": 16,
+              "value": 1.0
+            },
+            "tp_retained": 16,
+            "fp_retained": 4,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 16,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 4,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 16,
+              "denominator": 20,
+              "value": 0.8
+            },
+            "tp_retention_recall": {
+              "numerator": 16,
+              "denominator": 16,
+              "value": 1.0
+            },
+            "tp_retained": 16,
+            "fp_retained": 4,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 16,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 4,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "181703.0000000013406000",
+          "observed_mean_ms": "9085.1500000000670300",
+          "total_ms": "181703.0000000013406000",
+          "mean_ms": "9085.1500000000670300",
+          "median_ms": "8890.499999997701000",
+          "p95_nearest_rank_ms": "11093.000000000757000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-22": {
+        "n": 2,
+        "tp": 1,
+        "fp": 1,
+        "tp_supported": 1,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 1,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 1,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 1,
+          "denominator": 2,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 2
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 2
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 1
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 1
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 1,
+        "undetermined": 0,
+        "citation_observed": 2,
+        "citation_matched": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 1,
+          "denominator": 2,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 1,
+          "denominator": 2,
+          "value": 0.5
+        },
+        "human_states": {
+          "OPEN": 2
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 1,
+              "denominator": 2,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 1,
+              "denominator": 1,
+              "value": 1.0
+            },
+            "tp_retained": 1,
+            "fp_retained": 1,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 1,
+              "denominator": 2,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 1,
+              "denominator": 1,
+              "value": 1.0
+            },
+            "tp_retained": 1,
+            "fp_retained": 1,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 1,
+              "denominator": 2,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 1,
+              "denominator": 1,
+              "value": 1.0
+            },
+            "tp_retained": 1,
+            "fp_retained": 1,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 1,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 2,
+          "expected": 2,
+          "observed_total_ms": "17827.999999994062000",
+          "observed_mean_ms": "8913.999999997031000",
+          "total_ms": "17827.999999994062000",
+          "mean_ms": "8913.999999997031000",
+          "median_ms": "8913.999999997031000",
+          "p95_nearest_rank_ms": "8983.99999999674000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-89": {
+        "n": 18,
+        "tp": 15,
+        "fp": 3,
+        "tp_supported": 15,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 15,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 3,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 3,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 15,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "supported_tp_recall": {
+          "numerator": 15,
+          "denominator": 15,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 18
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 18
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 15
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 3
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 3,
+        "undetermined": 0,
+        "citation_observed": 18,
+        "citation_matched": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "selective_accuracy": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "human_states": {
+          "OPEN": 18
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 15,
+              "denominator": 18,
+              "value": 0.8333333333333334
+            },
+            "tp_retention_recall": {
+              "numerator": 15,
+              "denominator": 15,
+              "value": 1.0
+            },
+            "tp_retained": 15,
+            "fp_retained": 3,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 15,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 3,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 15,
+              "denominator": 18,
+              "value": 0.8333333333333334
+            },
+            "tp_retention_recall": {
+              "numerator": 15,
+              "denominator": 15,
+              "value": 1.0
+            },
+            "tp_retained": 15,
+            "fp_retained": 3,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 15,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 3,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 15,
+              "denominator": 18,
+              "value": 0.8333333333333334
+            },
+            "tp_retention_recall": {
+              "numerator": 15,
+              "denominator": 15,
+              "value": 1.0
+            },
+            "tp_retained": 15,
+            "fp_retained": 3,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 15,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 3,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 18,
+          "expected": 18,
+          "observed_total_ms": "163875.0000000072786000",
+          "observed_mean_ms": "9104.166666667071033333333333",
+          "total_ms": "163875.0000000072786000",
+          "mean_ms": "9104.166666667071033333333333",
+          "median_ms": "8796.999999998661500",
+          "p95_nearest_rank_ms": "13016.00000000326000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      }
+    }
+  },
+  "guided_pipeline_agreement": {
+    "numerator": 76,
+    "denominator": 76,
+    "value": 1.0
+  },
+  "arm_d_raw_post_transitions": [
+    {
+      "alert_id": "b6ac4bae34f5a99f4197ac13d04567f75581e96cca4cd0fb73f85dd02eb0b303",
+      "path": "BenchmarkTest00134.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 1
+    },
+    {
+      "alert_id": "e197a657cd9771f42066f1ade48f43125cf4d56fb80478d171630377cf30a4e3",
+      "path": "BenchmarkTest00135.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 2
+    },
+    {
+      "alert_id": "0b1c14f42f01160ee7055f7bf3dbf98f0ae38eb65576d29d66c575dcc1759fa1",
+      "path": "BenchmarkTest00949.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 1
+    },
+    {
+      "alert_id": "dc49c503cf414124dc8719975be7af701793d61d35c3cc5dfb315e05ed52e308",
+      "path": "BenchmarkTest00953.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 1
+    },
+    {
+      "alert_id": "1c748ea1d401e25f257119a01131fe2ceae19f553b8e7b7ea53db7cb1db4f040",
+      "path": "BenchmarkTest00956.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 2
+    },
+    {
+      "alert_id": "d8dbd11032a246eac6c9794eef7326542f8c2680a9b18daed0c8b24ffb58d0e8",
+      "path": "BenchmarkTest01215.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 1
+    },
+    {
+      "alert_id": "07b9d6d3ccac118a1cf164fb82be72532018889a041e6963d4e1681c36b2c0c3",
+      "path": "BenchmarkTest01233.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 1
+    },
+    {
+      "alert_id": "76c8d80a5b7b73bb21b892c383d77afd0052ef603fa367c8a37b508f8d572541",
+      "path": "BenchmarkTest01389.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 1
+    },
+    {
+      "alert_id": "f905aaf22f022c1ed4c90d47547aa47f6d1e883bed4d766fcccf2c3e12f237d7",
+      "path": "BenchmarkTest01752.java",
+      "raw": "SUPPORTED",
+      "post": "UNDETERMINED",
+      "reason": "citation does not match source/snapshot",
+      "raw_citation_count": 1
+    }
+  ],
+  "review_demo": {
+    "warnings": 16,
+    "events": 3,
+    "states": {
+      "CONFIRMED_TRUE": 1,
+      "OPEN": 15
+    },
+    "event_actions": [
+      "confirm-false",
+      "reopen",
+      "confirm-true"
+    ],
+    "actors": [
+      "ntk-auditor"
+    ],
+    "actor_identity_attested": false
+  },
+  "public_lock": {
+    "labels_development.json": {
+      "raw_sha256": "b9ca1d79929bd52da046bedcdb29b8c13032f869d77377c6b4dc58d702e17d62",
+      "lf_sha256": "8e059b2d2cc9a49611d5f78672018829416af1d60f6490d9f9a4ad2bbed6881a",
+      "public_sha256": "8e059b2d2cc9a49611d5f78672018829416af1d60f6490d9f9a4ad2bbed6881a"
+    },
+    "labels_heldout.json": {
+      "raw_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3",
+      "lf_sha256": "1e7306127dbf5f91c62a7f143d047e4714aa6197624990a0c31c9dd3e9ddc1a4",
+      "public_sha256": "1e7306127dbf5f91c62a7f143d047e4714aa6197624990a0c31c9dd3e9ddc1a4"
+    },
+    "dev_alerts.json": {
+      "raw_sha256": "a2c1bd0d6767a05caa9b7da97004cd6ee469bf25f83be98ba1faecd0613cd38e",
+      "lf_sha256": "36d65134d7359549a41e8b9ba011804ea453640266470c2f6633f946407e7ab9",
+      "public_sha256": "36d65134d7359549a41e8b9ba011804ea453640266470c2f6633f946407e7ab9"
+    },
+    "heldout_alerts.json": {
+      "raw_sha256": "ba9967f3ae1dcbe940e8e7dea7df36ff873232fe5787f42c3fd2c84e066b1826",
+      "lf_sha256": "3ea68283fdbece7425c6af9caf65cc0942031752c62eab6dc73820a31a920f7d",
+      "public_sha256": "3ea68283fdbece7425c6af9caf65cc0942031752c62eab6dc73820a31a920f7d"
+    },
+    "combined_lock_sha256": "4fb556371eb9eb520aec6df96e4a151685df261025b2893eb7bae51c435bca09",
+    "config_sha256": null
+  },
+  "manual_fp_reviews": [
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "0c2c286dd645ee062763467deafd1ada3a306c014d41b4227c6ad477861b61dc",
+      "field": "manual FP #08",
+      "expected": "Cấu hình SQL dialect/version, nguồn Connection và mọi caller phù hợp ngữ cảnh chuỗi SQL",
+      "actual": "Thay dấu nháy đơn trước concat (148 -> 154 -> 158); có cơ sở an toàn trong dialect phù hợp, chưa có cấu hình DB để kết luận FP chắc chắn",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/WebGoat/SqlInjectionLesson8.java",
+      "source_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc SqlInjectionLesson8.java:63-78,147-158; bổ sung datasource/dialect và dependency lock; không suy luận bảo vệ mọi SQL dialect",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "5d276f7db9d1ff5f31d6bd675849dde156d078324ea4f63ab5bb64e2ecdd17b5",
+      "field": "manual FP #09",
+      "expected": "Cấu hình SQL dialect/version, nguồn Connection và mọi caller phù hợp ngữ cảnh chuỗi SQL",
+      "actual": "Thay dấu nháy đơn trước concat (148 -> 154 -> 158); có cơ sở an toàn trong dialect phù hợp, chưa có cấu hình DB để kết luận FP chắc chắn",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/WebGoat/SqlInjectionLesson8.java",
+      "source_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc SqlInjectionLesson8.java:63-78,147-158; bổ sung datasource/dialect và dependency lock; không suy luận bảo vệ mọi SQL dialect",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "6e84c2221db67ce41e93a5d0f7c84aac2d4c838f58ae94ff54db8fb7694a817d",
+      "field": "manual FP #10",
+      "expected": "DTO, đăng ký người dùng, @Valid/validator và mọi caller tại cùng commit",
+      "actual": "UserService.java nhận username qua addUser rồi dùng trong CREATE SCHEMA; gói không có UserForm/WebGoatUser/controller để chứng minh validation",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/WebGoat/UserService.java",
+      "source_sha256": "736d13a9bdea1cca24eb7cd49f2d669e1877834ab4c7cf3571a65a09b5f56587",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc UserService.java:29-52; truy vết addUser và createLessonsForUser trong full checkout đúng commit",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "736d13a9bdea1cca24eb7cd49f2d669e1877834ab4c7cf3571a65a09b5f56587"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "e6712b79421efa1d8afe3718ffabf3d7e3eceea18eb6b714141368207ea144bb",
+      "field": "manual FP #15",
+      "expected": "Chứng minh guard, ranh giới thư mục, caller sử dụng File và điều kiện filesystem",
+      "actual": "BASE_DIR có dấu phân cách cuối; kiểm tra canonical path trước return, không có lỗi prefix-sibling đơn giản. File trả về chưa canonical; thiếu caller/filesystem để chứng minh an toàn toàn luồng",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/demo/UserDao.java",
+      "source_sha256": "6c890fc869f74cdceb6bd8f73e04be4fc7ffb4defdab008c098642e146be1d24",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc UserDao.java:17,61-67; kiểm tra caller, symlink/quyền ghi, thời điểm mở file và nền tảng. New File không tự thực hiện I/O",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "6c890fc869f74cdceb6bd8f73e04be4fc7ffb4defdab008c098642e146be1d24"
+    }
+  ],
+  "peer_receipt_read_after_independent_calculation": {
+    "file": "evidence/server_forensic_audit_failclosed_20261112/11_fail_closed_gate_verdict.json",
+    "sha256": "48830bb6f45fcb229b1508a6b457ac31b28df8ec9acd51ae2e57594212d21a59",
+    "reported_status": "PASS",
+    "reported_exit_code": 0,
+    "scope_note": "Peer PASS is not adopted for manual FP labels, historical request membership or pre-run lock timing; its 12 loci correspond to method groups, not 12 distinct source-line positions"
+  },
+  "tests": {
+    "total": 36,
+    "passed": 36,
+    "exit_code": 0,
+    "data_kind": "synthetic protocol/counterexample fixtures; not model inference"
+  },
+  "register": [
+    {
+      "criterion": "run_stage2_dev16_baseline_v1_0",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "checkpoint_absent",
+      "expected": "verifiable historical input",
+      "actual": "Historical checkpoint absent for stage2_dev16_baseline_v1_0",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/runs/stage2_dev16_baseline_v1_0/assessments.jsonl",
+      "source_sha256": "88f42d31be0939e3b9a2cfe1ec2e9f89d7c46ce8f7b55d9eaa36d03686a8950c",
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "alert_id": "*",
+      "field": "manual.total_seconds",
+      "expected": "181.70",
+      "actual": "182.00",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/cases/REAL_PROJECT_EVALUATION.md",
+      "source_sha256": "b75fb8a42d085b14fd77d337b907addfcfbf1f2fcf24c5d2b2391fc7cd676883",
+      "criterion": "document_consistency",
+      "status": "FAIL",
+      "impact": "Tài liệu: số thời gian không khớp raw; không thay đổi phân loại",
+      "reproduce": "Run audit_raw_bundle.py with the same inputs; field=manual.total_seconds",
+      "review_method": "automated independent check"
+    },
+    {
+      "alert_id": "*",
+      "field": "manual.mean_seconds",
+      "expected": "9.09",
+      "actual": "9.10",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/cases/REAL_PROJECT_EVALUATION.md",
+      "source_sha256": "b75fb8a42d085b14fd77d337b907addfcfbf1f2fcf24c5d2b2391fc7cd676883",
+      "criterion": "document_consistency",
+      "status": "FAIL",
+      "impact": "Tài liệu: số thời gian không khớp raw; không thay đổi phân loại",
+      "reproduce": "Run audit_raw_bundle.py with the same inputs; field=manual.mean_seconds",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "human_review_history",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "historical_stale_source_demo",
+      "expected": "verifiable historical input",
+      "actual": "No stale-source attempt appears in the received 13-step lifecycle transcript; unit-test logs are not that historical CLI attempt",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/runs/stage6_human_review_demo/cli_lifecycle_transcript.json",
+      "source_sha256": "3fc096d632f0c81250bdef3a1e9cde5239518f6ca8fe8515ef034ff4e05ac4b0",
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/ALL: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/ALL: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/ALL: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/CWE-22: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/CWE-22: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/CWE-22: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/CWE-89: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/CWE-89: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "A/CWE-89: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/ALL: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/ALL: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/ALL: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/CWE-22: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/CWE-22: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/CWE-22: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/CWE-89: mean_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/CWE-89: p50_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_aggregate_comparison",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "B/CWE-89: p95_latency_ms not verifiable; aggregate value is not a per-alert measurement",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "historical_configuration",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "lock_config_null",
+      "expected": "verifiable historical input",
+      "actual": "Public lock hashes match delivered CRLF inputs, but config_file/config_sha256 are null; this is not a full historical configuration lock",
+      "source_file": "heldout_strict_lock_manifest.json",
+      "source_sha256": "b8beb22ee9d562bb5357cff20445cc5a1ef7afd2244f16763f0ff704ef20bdc4",
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "historical_configuration",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "pre_run_lock_time",
+      "expected": "verifiable historical input",
+      "actual": "Git-published lock/prompt manifest is available as a reference, not proof that the split/configuration was frozen before execution",
+      "source_file": "heldout_strict_lock_manifest.json",
+      "source_sha256": "b8beb22ee9d562bb5357cff20445cc5a1ef7afd2244f16763f0ff704ef20bdc4",
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "historical_configuration",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "heldout_strict_lock_manifest.json",
+      "expected": "verifiable historical input",
+      "actual": "Not present in transferred experimental inputs: heldout_strict_lock_manifest.json",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "historical_configuration",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "PROMPT_VERSION_MANIFEST.json",
+      "expected": "verifiable historical input",
+      "actual": "Not present in transferred experimental inputs: PROMPT_VERSION_MANIFEST.json",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "historical_configuration",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "Original request payload/body files and full historical model/options/code lock are not supplied; client JSON receipt is not independent runtime attestation",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "20 project/demo alerts have author labels, not independently proven case ground truth; see #08/#09/#10/#15 review",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/cases/REAL_PROJECT_EVALUATION.md",
+      "source_sha256": "b75fb8a42d085b14fd77d337b907addfcfbf1f2fcf24c5d2b2391fc7cd676883",
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "latency_measurements",
+      "status": "INCOMPLETE",
+      "alert_id": "*",
+      "field": "missing_evidence",
+      "expected": "verifiable historical input",
+      "actual": "Arm B records a hard-coded 0.0 placeholder; no per-alert stopwatch. Arm A has scan-capture timestamps, not equivalent per-alert triage timings",
+      "source_file": "",
+      "source_sha256": null,
+      "impact": "Chưa đủ căn cứ nghiệm thu tiêu chí này",
+      "reproduce": "Provide the named historical input; do not reconstruct a past run",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "annotation_rationale",
+      "alert_id": "008d4e65556a0fa6837193af88914fb201e03a79cef27f22519a5e2a6e42be8e",
+      "field": "annotator_rationale / sanitizer_or_reason",
+      "expected": "Nguồn getTheValue là hằng; Thing1/Thing2 bảo toàn đối số",
+      "actual": "Nhãn giải thích external_thing_interface_constant_return",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/labels/labels_development.json",
+      "source_sha256": "b9ca1d79929bd52da046bedcdb29b8c13032f869d77377c6b4dc58d702e17d62",
+      "status": "FAIL",
+      "impact": "Cần sửa lời giải thích; giữ nhãn OWASP FALSE_POSITIVE",
+      "reproduce": "source 45; call 47-49; sink 51; helpers SeparateClassRequest 53-56, Thing2 23-26",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "69d31a8b396303a3b1908ad0c21d0b1d35edb944a11f7bb8a7d6326f63074a35"
+    },
+    {
+      "criterion": "annotation_rationale",
+      "alert_id": "bb5a6a2cee5cf796b32c04c7e553b6ea275b8c8a843875285dea1338d9798ad7",
+      "field": "annotator_rationale / sanitizer_or_reason",
+      "expected": "(7*42)-106 = 188 <= 200: chọn param đã hằng từ source",
+      "actual": "Rationale dùng (7*18)+106 và nói nhánh true trả hằng",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/labels/labels_heldout.json",
+      "source_sha256": "7f7fdff1be650f1f6335b61c312bde133a41f42974017eaaaea19bde069b65d3",
+      "status": "FAIL",
+      "impact": "Cần sửa lời giải thích; giữ nhãn OWASP FALSE_POSITIVE",
+      "reproduce": "source 45; helper 94-96; sink 66",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "67d81ccf4b8144741748d4420d44075aa2705a867393a6629abe6d17d6acd69e"
+    },
+    {
+      "criterion": "reviewed_owasp_flow",
+      "alert_id": "f905aaf22f022c1ed4c90d47547aa47f6d1e883bed4d766fcccf2c3e12f237d7",
+      "field": "source_to_sink",
+      "expected": "Đối chiếu luồng và giữ nhãn OWASP",
+      "actual": "Lấy lại keyB chứa param; param đã hằng từ getTheValue. Nhãn nhận được giải thích chung, không đủ căn cứ gán lời giải thích keyA cho nhãn này.",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/heldout_set_40/BenchmarkTest01752.java",
+      "source_sha256": "c4c13f85e8839211002c7c7e7fca92774031ec59588b08e4fd4ebcf3ec1e74ea",
+      "status": "PASS",
+      "impact": "Rà soát tĩnh riêng ca này; không là kết quả chạy Java",
+      "reproduce": "source 45; map put 80/get 82; sink 60-61",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "c4c13f85e8839211002c7c7e7fca92774031ec59588b08e4fd4ebcf3ec1e74ea"
+    },
+    {
+      "criterion": "reviewed_owasp_flow",
+      "alert_id": "ce1ab49f5158511a983a4a6682dc56659d3924692d4e18a3258ac8eb98361f01",
+      "field": "source_to_sink",
+      "expected": "Đối chiếu luồng và giữ nhãn OWASP",
+      "actual": "Sau remove(0), get(1) lấy phần tử hằng; đồng thời source getTheValue cũng là hằng.",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/heldout_set_40/BenchmarkTest00864.java",
+      "source_sha256": "402ffac5a02c4cf683961650c573b44a08917fec072f753fdbe5921e977ed2fd",
+      "status": "PASS",
+      "impact": "Rà soát tĩnh riêng ca này; không là kết quả chạy Java",
+      "reproduce": "source 45; list 50-56; sink 59",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "402ffac5a02c4cf683961650c573b44a08917fec072f753fdbe5921e977ed2fd"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "0c2c286dd645ee062763467deafd1ada3a306c014d41b4227c6ad477861b61dc",
+      "field": "manual FP #08",
+      "expected": "Cấu hình SQL dialect/version, nguồn Connection và mọi caller phù hợp ngữ cảnh chuỗi SQL",
+      "actual": "Thay dấu nháy đơn trước concat (148 -> 154 -> 158); có cơ sở an toàn trong dialect phù hợp, chưa có cấu hình DB để kết luận FP chắc chắn",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/WebGoat/SqlInjectionLesson8.java",
+      "source_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc SqlInjectionLesson8.java:63-78,147-158; bổ sung datasource/dialect và dependency lock; không suy luận bảo vệ mọi SQL dialect",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "5d276f7db9d1ff5f31d6bd675849dde156d078324ea4f63ab5bb64e2ecdd17b5",
+      "field": "manual FP #09",
+      "expected": "Cấu hình SQL dialect/version, nguồn Connection và mọi caller phù hợp ngữ cảnh chuỗi SQL",
+      "actual": "Thay dấu nháy đơn trước concat (148 -> 154 -> 158); có cơ sở an toàn trong dialect phù hợp, chưa có cấu hình DB để kết luận FP chắc chắn",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/WebGoat/SqlInjectionLesson8.java",
+      "source_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc SqlInjectionLesson8.java:63-78,147-158; bổ sung datasource/dialect và dependency lock; không suy luận bảo vệ mọi SQL dialect",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "6e158ffbf3d9278d788280550e450ce982491a3a361aa7c80041a853193f6bd5"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "6e84c2221db67ce41e93a5d0f7c84aac2d4c838f58ae94ff54db8fb7694a817d",
+      "field": "manual FP #10",
+      "expected": "DTO, đăng ký người dùng, @Valid/validator và mọi caller tại cùng commit",
+      "actual": "UserService.java nhận username qua addUser rồi dùng trong CREATE SCHEMA; gói không có UserForm/WebGoatUser/controller để chứng minh validation",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/WebGoat/UserService.java",
+      "source_sha256": "736d13a9bdea1cca24eb7cd49f2d669e1877834ab4c7cf3571a65a09b5f56587",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc UserService.java:29-52; truy vết addUser và createLessonsForUser trong full checkout đúng commit",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "736d13a9bdea1cca24eb7cd49f2d669e1877834ab4c7cf3571a65a09b5f56587"
+    },
+    {
+      "criterion": "manual_ground_truth",
+      "alert_id": "e6712b79421efa1d8afe3718ffabf3d7e3eceea18eb6b714141368207ea144bb",
+      "field": "manual FP #15",
+      "expected": "Chứng minh guard, ranh giới thư mục, caller sử dụng File và điều kiện filesystem",
+      "actual": "BASE_DIR có dấu phân cách cuối; kiểm tra canonical path trước return, không có lỗi prefix-sibling đơn giản. File trả về chưa canonical; thiếu caller/filesystem để chứng minh an toàn toàn luồng",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/sources/real_projects/demo/UserDao.java",
+      "source_sha256": "6c890fc869f74cdceb6bd8f73e04be4fc7ffb4defdab008c098642e146be1d24",
+      "status": "INCOMPLETE",
+      "impact": "Không đổi nhãn gốc; không coi là Ground Truth được kiểm chứng độc lập",
+      "reproduce": "Đọc UserDao.java:17,61-67; kiểm tra caller, symlink/quyền ghi, thời điểm mở file và nền tảng. New File không tự thực hiện I/O",
+      "review_method": "manual source review, 2026-11-13",
+      "code_sha256": "6c890fc869f74cdceb6bd8f73e04be4fc7ffb4defdab008c098642e146be1d24"
+    },
+    {
+      "criterion": "document_consistency",
+      "alert_id": "*",
+      "field": "Arm D FP CWE-22",
+      "expected": {
+        "SUPPORTED": 6,
+        "REFUTED": 0,
+        "UNDETERMINED": 4
+      },
+      "actual": "Tài liệu dòng 51 ghi 4 SUPPORTED / 6 UNDETERMINED",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/metrics/PAIRED_EVALUATION.md",
+      "source_sha256": "1bc07400b36953ec5d1b6d276a435b94afadfb3183202f7fe5d3fb976f6c06fe",
+      "status": "FAIL",
+      "impact": "Tài liệu dùng sai số post-validator; CSV và raw nhất quán",
+      "reproduce": "So từng alert trong assessments Arm D với đoạn phân tích theo CWE của PAIRED_EVALUATION.md",
+      "review_method": "manual source review, 2026-11-13"
+    },
+    {
+      "criterion": "document_consistency",
+      "alert_id": "*",
+      "field": "Arm D FP CWE-89",
+      "expected": {
+        "SUPPORTED": 8,
+        "REFUTED": 0,
+        "UNDETERMINED": 2
+      },
+      "actual": "Tài liệu dòng 57 ghi cả 10 FP SUPPORTED",
+      "source_file": "evidence/post_report_cwe22_cwe89_20261112/metrics/PAIRED_EVALUATION.md",
+      "source_sha256": "1bc07400b36953ec5d1b6d276a435b94afadfb3183202f7fe5d3fb976f6c06fe",
+      "status": "FAIL",
+      "impact": "Tài liệu dùng sai số post-validator; CSV và raw nhất quán",
+      "reproduce": "So từng alert trong assessments Arm D với đoạn phân tích theo CWE của PAIRED_EVALUATION.md",
+      "review_method": "manual source review, 2026-11-13"
+    },
+    {
+      "criterion": "transfer_integrity",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 869,
+      "actual": 869,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "scan_development",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 949,
+      "actual": 949,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "scan_heldout",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 2569,
+      "actual": 2569,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "scan_manual",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 695,
+      "actual": 695,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "owasp_labels_and_sources",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 680,
+      "actual": 680,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "manual_label_catalog",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 61,
+      "actual": 61,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage3_dev16_armB_heuristic",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 4252,
+      "actual": 4252,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage3_dev16_armC_evidence_llm",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 4358,
+      "actual": 4358,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage3_dev16_armC_v2_1_evidence_llm",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 4358,
+      "actual": 4358,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage3_dev16_armD_llm_ablation",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 4358,
+      "actual": 4358,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage4_heldout40_armB_heuristic",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 11991,
+      "actual": 11991,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage4_heldout40_armC_evidence_llm",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 12256,
+      "actual": 12256,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage4_heldout40_armD_llm_ablation",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 12256,
+      "actual": 12256,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage5_real_projects_armB_heuristic",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 3670,
+      "actual": 3670,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "run_stage5_real_projects_armC_evidence_llm",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 3791,
+      "actual": 3791,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "heldout_published_comparison",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 1401,
+      "actual": 1401,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "public_lock_raw_lf",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 11,
+      "actual": 11,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    },
+    {
+      "criterion": "immutability",
+      "alert_id": "*",
+      "field": "scoped_checks",
+      "expected": 1,
+      "actual": 1,
+      "source_file": "audit.private.json",
+      "source_sha256": "40e945a5468f92c70bcf5b3b723f7de7ca1c7d8352e19aac919461d41a1e5f91",
+      "status": "PASS",
+      "impact": "Chỉ áp dụng các trường thực sự được kiểm tra",
+      "reproduce": "Chạy audit_raw_bundle.py với cùng gói và reference; xem checked_fields",
+      "review_method": "automated independent check"
+    }
+  ],
+  "register_counts": {
+    "PASS": 20,
+    "FAIL": 6,
+    "INCOMPLETE": 31
+  },
+  "git_handoff": {
+    "branch": "v2/advisor-m1-proof-20261111",
+    "head": "8db7dafae6c4abc99ca8a78e9b2e83a0e0b9f204",
+    "target_branch": "v2/codex-core",
+    "switch_exit_code": 128,
+    "error": "Permission denied creating integration/.git/worktrees/codex/index.lock",
+    "untracked_files": 18,
+    "committed": false,
+    "pushed": false,
+    "manual_commands": "G0_RAW_INDEPENDENT_VERDICT.md#7-bàn-giao-và-điều-kiện-còn-thiếu"
+  },
+  "validation": {
+    "compile_modules": 4,
+    "compile_exit_code": 0,
+    "git_diff_check_exit_code": 0,
+    "untracked_whitespace_check": "PASS",
+    "safe_report_consistency": "PASS",
+    "relative_links": "PASS",
+    "raw_artifact_extensions_in_handoff": 0
+  },
+  "publication_note": "Historical raw FAIL/INCOMPLETE is retained; current disposition is G0_FINAL_RESOLUTION.json. Paths redacted for publication; original private receipt hash is retained."
+}

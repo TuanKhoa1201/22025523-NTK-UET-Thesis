@@ -1,0 +1,10 @@
+# Only these small public-derived tables are eligible for Git.
+# Raw scans, responses, SQLite, checkpoints and audit.json remain excluded.
+!results/
+results/*
+!results/published_metrics.json
+!results/published_per_alert.csv
+!results/ground_truth_56.csv
+!results/discrepancies.csv
+!results/interpretation_discrepancies.csv
+!results/status_transitions.csv

@@ -1,0 +1,2451 @@
+{
+  "schema": "ntk-g0-resolution-1",
+  "date": "2026-11-13",
+  "G0_ACCEPTANCE": "CONDITIONAL",
+  "READY_FOR_G1": "CONDITIONAL",
+  "axes": {
+    "DATA_INTEGRITY": "PASS for delivered artifacts; historical runtime unattested",
+    "METRIC_RECOMPUTATION": "PASS for measured C/D and classification A/B/C/D; A/B latency NOT_MEASURED",
+    "GROUND_TRUTH_ATTESTATION": "56 OWASP verified; manual 20 not independently attested; #10 review required",
+    "LLM_CONTRIBUTION": "CONFOUNDED",
+    "G1_READINESS": "CONDITIONAL; advisor approval of scope and exclusions"
+  },
+  "historical_register_sha256": "be5805484279375a66f8a0dcd6ff66fae8be75bf4a1b19b8eba32597da4bd679",
+  "before": {
+    "INCOMPLETE": 31,
+    "FAIL": 6,
+    "PASS": 20
+  },
+  "after": {
+    "INCOMPLETE": 5,
+    "ERRATA_ISSUED": 14,
+    "NOT_MEASURED": 19,
+    "REFERENCE_AVAILABLE_LIMITED": 2,
+    "PROMPT_NOT_ATTESTED": 1,
+    "PASS": 20,
+    "CONDITIONAL": 3,
+    "LABEL_REVIEW_REQUIRED": 1
+  },
+  "additional_review_rows": 8,
+  "raw_audit_exit_code": 2,
+  "raw_audit_sha256": "a7679b372e9336b352aa2d886a8964d4e86481332943c992779651a667042337",
+  "raw_audit_failure_count": 2,
+  "raw_audit_incomplete_count": 27,
+  "transfer": {
+    "files": 289,
+    "manifest_entries": 289,
+    "archive_sha256": "4664dcdbfc50620cc713cde20095d6fe3051335ec6c47cc39cd9c6d8bac1c6ba",
+    "transfer_manifest_sha256": "71633d4e4975df17efa3741cace8e6ba0555fd36d71d5f7b088a1adb584ea34d"
+  },
+  "inputs_aliases": {
+    "E": "extracted/evidence/post_report_cwe22_cwe89_20261112",
+    "F": "extracted/evidence/server_forensic_audit_failclosed_20261112",
+    "PUBLIC": "Git 86636b9:v2/evaluation/post_report"
+  },
+  "scans": {
+    "development": {
+      "findings": 16,
+      "sarif_findings": 16,
+      "sources": 16,
+      "scan_sha256": "ecc1fa4634bfc86266c43dd6790422546367293d1810712fddc7c0d15a6c015f",
+      "rules_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+      "engine_version": "1.25.0",
+      "rules_count": 9,
+      "unique_start_lines": 16,
+      "declaration_groups": [],
+      "declaration_grouping_note": "Nearest preceding method declaration, manually checked on these 8 files; not distinct vulnerability identity",
+      "unique_ranges_without_rule": 16
+    },
+    "heldout": {
+      "findings": 40,
+      "sarif_findings": 40,
+      "sources": 40,
+      "scan_sha256": "67c3b04903e75f4bd7294cb17452d0dcb2b6d56244330cec485c4422efabfa8b",
+      "rules_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+      "engine_version": "1.25.0",
+      "rules_count": 9,
+      "unique_start_lines": 40,
+      "declaration_groups": [],
+      "declaration_grouping_note": "Nearest preceding method declaration, manually checked on these 8 files; not distinct vulnerability identity",
+      "unique_ranges_without_rule": 40
+    },
+    "manual": {
+      "findings": 20,
+      "sarif_findings": 20,
+      "sources": 8,
+      "scan_sha256": "99d2445c218030fb10082176c299bc328eeb62c6b23c7ab745cffd824f31f041",
+      "rules_sha256": "4d12f6deabee1bcf17f1bcce845f05eaf84b312ee13aa6a9cd9721ea879695f9",
+      "engine_version": "1.25.0",
+      "rules_count": 9,
+      "unique_start_lines": 18,
+      "declaration_groups": [
+        [
+          "WebGoat/Assignment5.java",
+          49,
+          "login"
+        ],
+        [
+          "WebGoat/ProfileUploadRetrieval.java",
+          83,
+          "getProfilePicture"
+        ],
+        [
+          "WebGoat/Servers.java",
+          67,
+          "sort"
+        ],
+        [
+          "WebGoat/SqlInjectionLesson5a.java",
+          59,
+          "injectableQuery"
+        ],
+        [
+          "WebGoat/SqlInjectionLesson8.java",
+          63,
+          "injectableQueryConfidentiality"
+        ],
+        [
+          "WebGoat/SqlInjectionLesson8.java",
+          147,
+          "log"
+        ],
+        [
+          "WebGoat/UserService.java",
+          51,
+          "createLessonsForUser"
+        ],
+        [
+          "demo/UserDao.java",
+          20,
+          "findUnsafe"
+        ],
+        [
+          "demo/UserDao.java",
+          40,
+          "runQuery"
+        ],
+        [
+          "demo/UserDao.java",
+          61,
+          "open"
+        ],
+        [
+          "java-sec-code/SQLI.java",
+          52,
+          "jdbc_sqli_vul"
+        ],
+        [
+          "java-sec-code/SQLI.java",
+          139,
+          "jdbc_ps_vuln"
+        ]
+      ],
+      "declaration_grouping_note": "Nearest preceding method declaration, manually checked on these 8 files; not distinct vulnerability identity",
+      "unique_ranges_without_rule": 20
+    }
+  },
+  "ground_truth": {
+    "development": {
+      "CWE-22:TRUE_POSITIVE": 4,
+      "CWE-89:TRUE_POSITIVE": 4,
+      "CWE-22:FALSE_POSITIVE": 4,
+      "CWE-89:FALSE_POSITIVE": 4
+    },
+    "heldout": {
+      "CWE-22:TRUE_POSITIVE": 10,
+      "CWE-89:TRUE_POSITIVE": 10,
+      "CWE-22:FALSE_POSITIVE": 10,
+      "CWE-89:FALSE_POSITIVE": 10
+    }
+  },
+  "heldout_metrics": {
+    "B": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 9,
+        "fp_proposed": 7,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 9,
+            "REFUTED": 0,
+            "UNDETERMINED": 11
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 7,
+            "UNDETERMINED": 13
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "raw_statuses": {
+          "None": 40
+        },
+        "raw_unavailable": 40,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 20
+          },
+          "FALSE_POSITIVE": {
+            "None": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 24,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "citation_matched_conclusive": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "accuracy_all": {
+          "numerator": 16,
+          "denominator": 40,
+          "value": 0.4
+        },
+        "selective_accuracy": {
+          "numerator": 16,
+          "denominator": 16,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 33,
+              "value": 0.6060606060606061
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 13,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 7,
+              "denominator": 20,
+              "value": 0.35
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 9,
+              "denominator": 9,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 9,
+              "denominator": 20,
+              "value": 0.45
+            },
+            "tp_retained": 9,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 11,
+              "denominator": 20,
+              "value": 0.55
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 40,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 4,
+        "fp_proposed": 5,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 4,
+            "REFUTED": 0,
+            "UNDETERMINED": 6
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 5,
+            "UNDETERMINED": 5
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 5,
+          "denominator": 10,
+          "value": 0.5
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 4,
+          "denominator": 10,
+          "value": 0.4
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 11,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "citation_matched_conclusive": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "accuracy_all": {
+          "numerator": 9,
+          "denominator": 20,
+          "value": 0.45
+        },
+        "selective_accuracy": {
+          "numerator": 9,
+          "denominator": 9,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 15,
+              "value": 0.6666666666666666
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 5,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 4,
+              "denominator": 4,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 4,
+              "denominator": 10,
+              "value": 0.4
+            },
+            "tp_retained": 4,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 6,
+              "denominator": 10,
+              "value": 0.6
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 5,
+        "fp_proposed": 2,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 5,
+            "REFUTED": 0,
+            "UNDETERMINED": 5
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 2,
+            "UNDETERMINED": 8
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 2,
+          "denominator": 10,
+          "value": 0.2
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 5,
+          "denominator": 5,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 5,
+          "denominator": 10,
+          "value": 0.5
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 13,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "citation_matched_conclusive": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "accuracy_all": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "selective_accuracy": {
+          "numerator": 7,
+          "denominator": 7,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 18,
+              "value": 0.5555555555555556
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 8,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 2,
+              "denominator": 10,
+              "value": 0.2
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 5,
+              "denominator": 5,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            },
+            "tp_retained": 5,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 5,
+              "denominator": 10,
+              "value": 0.5
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "heuristic_post"
+      }
+    },
+    "C": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 20,
+        "fp_proposed": 20,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 20,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20,
+          "REFUTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 20,
+          "SUPPORTED->SUPPORTED": 20
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 40,
+          "expected": 40,
+          "observed_total_ms": "421000.000000000002000",
+          "observed_mean_ms": "10525.000000000000050",
+          "total_ms": "421000.000000000002000",
+          "mean_ms": "10525.000000000000050",
+          "median_ms": "10960.999999999331000",
+          "p95_nearest_rank_ms": "12686.99999999808000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 10,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 10,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 10,
+          "REFUTED": 10
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 10,
+          "SUPPORTED->SUPPORTED": 10
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "216907.999999995810000",
+          "observed_mean_ms": "10845.399999999790500",
+          "total_ms": "216907.999999995810000",
+          "mean_ms": "10845.399999999790500",
+          "median_ms": "11172.000000002299000",
+          "p95_nearest_rank_ms": "12921.000000002095000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 10,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 0,
+            "REFUTED": 10,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 10,
+          "REFUTED": 10
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "REFUTED->REFUTED": 10,
+          "SUPPORTED->SUPPORTED": 10
+        },
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "REFUTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 0,
+        "undetermined": 0,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "citation_matched_conclusive": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 0,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "204092.000000004192000",
+          "observed_mean_ms": "10204.600000000209600",
+          "total_ms": "204092.000000004192000",
+          "mean_ms": "10204.600000000209600",
+          "median_ms": "10719.000000000960500",
+          "p95_nearest_rank_ms": "11733.99999999674000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      }
+    },
+    "D": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 17,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 17,
+            "REFUTED": 0,
+            "UNDETERMINED": 3
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 14,
+            "REFUTED": 0,
+            "UNDETERMINED": 6
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 17,
+          "denominator": 31,
+          "value": 0.5483870967741935
+        },
+        "supported_tp_recall": {
+          "numerator": 17,
+          "denominator": 20,
+          "value": 0.85
+        },
+        "raw_statuses": {
+          "SUPPORTED": 40
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 31,
+          "SUPPORTED->UNDETERMINED": 9
+        },
+        "raw_post_changes": 9,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 14,
+        "undetermined": 9,
+        "citation_observed": 40,
+        "citation_matched": {
+          "numerator": 31,
+          "denominator": 40,
+          "value": 0.775
+        },
+        "citation_matched_conclusive": {
+          "numerator": 31,
+          "denominator": 31,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 31,
+          "denominator": 40,
+          "value": 0.775
+        },
+        "accuracy_all": {
+          "numerator": 17,
+          "denominator": 40,
+          "value": 0.425
+        },
+        "selective_accuracy": {
+          "numerator": 17,
+          "denominator": 31,
+          "value": 0.5483870967741935
+        },
+        "human_states": {
+          "OPEN": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 17,
+              "denominator": 31,
+              "value": 0.5483870967741935
+            },
+            "tp_retention_recall": {
+              "numerator": 17,
+              "denominator": 20,
+              "value": 0.85
+            },
+            "tp_retained": 17,
+            "fp_retained": 14,
+            "tp_excluded": {
+              "numerator": 3,
+              "denominator": 20,
+              "value": 0.15
+            },
+            "fp_excluded": {
+              "numerator": 6,
+              "denominator": 20,
+              "value": 0.3
+            }
+          }
+        },
+        "latency": {
+          "observed": 40,
+          "expected": 40,
+          "observed_total_ms": "301061.9999999980769000",
+          "observed_mean_ms": "7526.5499999999519225",
+          "total_ms": "301061.9999999980769000",
+          "mean_ms": "7526.5499999999519225",
+          "median_ms": "6359.000000000378500",
+          "p95_nearest_rank_ms": "12108.99999999674000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 7,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 7,
+            "REFUTED": 0,
+            "UNDETERMINED": 3
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 6,
+            "REFUTED": 0,
+            "UNDETERMINED": 4
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 7,
+          "denominator": 13,
+          "value": 0.5384615384615384
+        },
+        "supported_tp_recall": {
+          "numerator": 7,
+          "denominator": 10,
+          "value": 0.7
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 13,
+          "SUPPORTED->UNDETERMINED": 7
+        },
+        "raw_post_changes": 7,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 6,
+        "undetermined": 7,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 13,
+          "denominator": 20,
+          "value": 0.65
+        },
+        "citation_matched_conclusive": {
+          "numerator": 13,
+          "denominator": 13,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 13,
+          "denominator": 20,
+          "value": 0.65
+        },
+        "accuracy_all": {
+          "numerator": 7,
+          "denominator": 20,
+          "value": 0.35
+        },
+        "selective_accuracy": {
+          "numerator": 7,
+          "denominator": 13,
+          "value": 0.5384615384615384
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 7,
+              "denominator": 13,
+              "value": 0.5384615384615384
+            },
+            "tp_retention_recall": {
+              "numerator": 7,
+              "denominator": 10,
+              "value": 0.7
+            },
+            "tp_retained": 7,
+            "fp_retained": 6,
+            "tp_excluded": {
+              "numerator": 3,
+              "denominator": 10,
+              "value": 0.3
+            },
+            "fp_excluded": {
+              "numerator": 4,
+              "denominator": 10,
+              "value": 0.4
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "130858.0000000001749000",
+          "observed_mean_ms": "6542.9000000000087450",
+          "total_ms": "130858.0000000001749000",
+          "mean_ms": "6542.9000000000087450",
+          "median_ms": "5874.500000001717000",
+          "p95_nearest_rank_ms": "8921.999999998661000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 8,
+            "REFUTED": 0,
+            "UNDETERMINED": 2
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 18,
+          "value": 0.5555555555555556
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "SUPPORTED": 20
+        },
+        "raw_unavailable": 0,
+        "raw_to_post": {
+          "SUPPORTED->SUPPORTED": 18,
+          "SUPPORTED->UNDETERMINED": 2
+        },
+        "raw_post_changes": 2,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 8,
+        "undetermined": 2,
+        "citation_observed": 20,
+        "citation_matched": {
+          "numerator": 18,
+          "denominator": 20,
+          "value": 0.9
+        },
+        "citation_matched_conclusive": {
+          "numerator": 18,
+          "denominator": 18,
+          "value": 1.0
+        },
+        "conclusive_coverage": {
+          "numerator": 18,
+          "denominator": 20,
+          "value": 0.9
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 18,
+          "value": 0.5555555555555556
+        },
+        "human_states": {
+          "OPEN": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 18,
+              "value": 0.5555555555555556
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 8,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 2,
+              "denominator": 10,
+              "value": 0.2
+            }
+          }
+        },
+        "latency": {
+          "observed": 20,
+          "expected": 20,
+          "observed_total_ms": "170203.999999997902000",
+          "observed_mean_ms": "8510.199999999895100",
+          "total_ms": "170203.999999997902000",
+          "mean_ms": "8510.199999999895100",
+          "median_ms": "7953.000000001338500",
+          "p95_nearest_rank_ms": "12843.999999997322000",
+          "complete": true,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "model_post_validator"
+      }
+    },
+    "A": {
+      "ALL": {
+        "n": 40,
+        "tp": 20,
+        "fp": 20,
+        "tp_supported": 20,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 20,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 20,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 40
+        },
+        "raw_unavailable": 40,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 20
+          },
+          "FALSE_POSITIVE": {
+            "None": 20
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 20,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 40,
+          "denominator": 40,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 20,
+          "denominator": 40,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_APPLICABLE": 40
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 20,
+              "denominator": 40,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 20,
+              "denominator": 20,
+              "value": 1.0
+            },
+            "tp_retained": 20,
+            "fp_retained": 20,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 20,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 40,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      },
+      "CWE-22": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 10,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_APPLICABLE": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      },
+      "CWE-89": {
+        "n": 20,
+        "tp": 10,
+        "fp": 10,
+        "tp_supported": 10,
+        "fp_proposed": 0,
+        "post_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          },
+          "FALSE_POSITIVE": {
+            "SUPPORTED": 10,
+            "REFUTED": 0,
+            "UNDETERMINED": 0
+          }
+        },
+        "fp_correctly_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "tp_erroneously_proposed_rate": {
+          "numerator": 0,
+          "denominator": 10,
+          "value": 0.0
+        },
+        "supported_precision": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "supported_tp_recall": {
+          "numerator": 10,
+          "denominator": 10,
+          "value": 1.0
+        },
+        "raw_statuses": {
+          "None": 20
+        },
+        "raw_unavailable": 20,
+        "raw_to_post": {},
+        "raw_post_changes": 0,
+        "raw_gt_matrix": {
+          "TRUE_POSITIVE": {
+            "None": 10
+          },
+          "FALSE_POSITIVE": {
+            "None": 10
+          }
+        },
+        "tp_erroneously_proposed": 0,
+        "fp_supported": 10,
+        "undetermined": 0,
+        "citation_observed": 0,
+        "citation_matched": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "citation_matched_conclusive": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "conclusive_coverage": {
+          "numerator": 20,
+          "denominator": 20,
+          "value": 1.0
+        },
+        "accuracy_all": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "selective_accuracy": {
+          "numerator": 10,
+          "denominator": 20,
+          "value": 0.5
+        },
+        "human_states": {
+          "NOT_APPLICABLE": 20
+        },
+        "policies": {
+          "baseline": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "drop_fp": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          },
+          "keep_tp_only": {
+            "precision": {
+              "numerator": 10,
+              "denominator": 20,
+              "value": 0.5
+            },
+            "tp_retention_recall": {
+              "numerator": 10,
+              "denominator": 10,
+              "value": 1.0
+            },
+            "tp_retained": 10,
+            "fp_retained": 10,
+            "tp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            },
+            "fp_excluded": {
+              "numerator": 0,
+              "denominator": 10,
+              "value": 0.0
+            }
+          }
+        },
+        "latency": {
+          "observed": 0,
+          "expected": 20,
+          "observed_total_ms": null,
+          "observed_mean_ms": null,
+          "total_ms": null,
+          "mean_ms": null,
+          "median_ms": null,
+          "p95_nearest_rank_ms": null,
+          "complete": false,
+          "meaning": "sum/mean of per-alert observations; not wall-clock duration"
+        },
+        "status_basis": "baseline_keep_placeholder_not_model"
+      }
+    }
+  },
+  "paired_comparison": {
+    "byte_equal": true,
+    "rows_columns_equal": true,
+    "rows": 40,
+    "columns": 28,
+    "versions": [
+      {
+        "sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347",
+        "bytes": 34388,
+        "crlf": 0,
+        "bom": false,
+        "lf_sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347"
+      },
+      {
+        "sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347",
+        "bytes": 34388,
+        "crlf": 0,
+        "bom": false,
+        "lf_sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347"
+      }
+    ],
+    "peer_declared_sha256": "e19fc514e04d786ab3465d83eb66494955e6507d8b5b2a04b8ca29c469062ae5",
+    "peer_declared_hash_matches_raw": false,
+    "peer_source_commit": "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+    "peer_text_utf8_sha256": "31b5de67dacaf9af4eceabd54f2097079cd1c6106356f7c731c612474e170799",
+    "peer_git_blob": "9cb4e96e67e235cd828070cc7596e6ceb5ac16ad",
+    "peer_git_csv": {
+      "byte_equal": true,
+      "rows_columns_equal": true,
+      "rows": 40,
+      "columns": 28,
+      "versions": [
+        {
+          "sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347",
+          "bytes": 34388,
+          "crlf": 0,
+          "bom": false,
+          "lf_sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347"
+        },
+        {
+          "sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347",
+          "bytes": 34388,
+          "crlf": 0,
+          "bom": false,
+          "lf_sha256": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347"
+        }
+      ]
+    },
+    "codex_prior_input_hashes": {
+      "PAIRED_EVALUATION.csv": "e19fc5140be6548eca8d62cb7c01f02baa96f4a493753015a7596c9616453347",
+      "METRICS_BY_CWE.csv": "aa6df48e4ccff3a8f2e302c2e2046e03f1a6572a7c62a1117aa2e992cbeec9ef",
+      "labels_heldout.json": "1e7306127dbf5f91c62a7f143d047e4714aa6197624990a0c31c9dd3e9ddc1a4",
+      "labels_development.json": "8e059b2d2cc9a49611d5f78672018829416af1d60f6490d9f9a4ad2bbed6881a"
+    }
+  },
+  "java_reviews": [
+    {
+      "case": "00863",
+      "kind": "Sai cơ chế",
+      "flow": "45 source hằng getTheValue; Thing1/Thing2 truyền đối số; sink 51",
+      "label": "FALSE_POSITIVE",
+      "alert_id": "008d4e65556a0fa6837193af88914fb201e03a79cef27f22519a5e2a6e42be8e",
+      "source_sha256": "69d31a8b396303a3b1908ad0c21d0b1d35edb944a11f7bb8a7d6326f63074a35",
+      "source_file": "sources/dev_set_16/BenchmarkTest00863.java",
+      "old_rationale": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). Line 47 (`org.owasp.benchmark.helpers.ThingInterface thing =`) delegates `param` to `ThingInterface.doSomething` (external helper class), which in this OWASP Benchmark v1.2 test case returns a non-tainted value before sink line 51."
+    },
+    {
+      "case": "01746",
+      "kind": "Sai phép toán/nhánh",
+      "flow": "45 source hằng; 94-96: (7*42)-106=188, nhánh false chọn param; sink 66",
+      "label": "FALSE_POSITIVE",
+      "alert_id": "bb5a6a2cee5cf796b32c04c7e553b6ea275b8c8a843875285dea1338d9798ad7",
+      "source_sha256": "67d81ccf4b8144741748d4420d44075aa2705a867393a6629abe6d17d6acd69e",
+      "source_file": "sources/heldout_set_40/BenchmarkTest01746.java",
+      "old_rationale": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). Line 96 (`bar = (7 * 42) - num > 200 ? \"This should never happen\" : param;`) uses a deterministic arithmetic condition `(7 * 18) + num > 200` (with `num = 106`) that always evaluates to true and assigns a constant string to `bar` before sink line 66."
+    },
+    {
+      "case": "01752",
+      "kind": "Diễn giải quá chung",
+      "flow": "45 source hằng; put keyB 80/get keyB 82 giữ param; sink 60-61. Nhãn nhận không nói keyA",
+      "label": "FALSE_POSITIVE",
+      "alert_id": "f905aaf22f022c1ed4c90d47547aa47f6d1e883bed4d766fcccf2c3e12f237d7",
+      "source_sha256": "c4c13f85e8839211002c7c7e7fca92774031ec59588b08e4fd4ebcf3ec1e74ea",
+      "source_file": "sources/heldout_set_40/BenchmarkTest01752.java",
+      "old_rationale": "Verified against OWASP Benchmark v1.2 expectedresults-1.2.csv and servlet source code: value reaching sink line 60 is overwritten or neutralized before execution."
+    },
+    {
+      "case": "00864",
+      "kind": "Thiếu một cơ chế",
+      "flow": "45 source hằng; 50-56 list remove(0)/get(1) lấy hằng; sink 59",
+      "label": "FALSE_POSITIVE",
+      "alert_id": "ce1ab49f5158511a983a4a6682dc56659d3924692d4e18a3258ac8eb98361f01",
+      "source_sha256": "402ffac5a02c4cf683961650c573b44a08917fec072f753fdbe5921e977ed2fd",
+      "source_file": "sources/heldout_set_40/BenchmarkTest00864.java",
+      "old_rationale": "HTTP input read at line 44 (`new org.owasp.benchmark.helpers.SeparateClassRequest(request);`). After `valuesList.remove(0)`, index 0 holds `param` while index 1 holds constant `\"moresafe\"`; line 56 (`bar = valuesList.get(1); // get the last 'safe' value`) retrieves the safe constant element rather than `param` before line 59."
+    },
+    {
+      "case": "00062",
+      "kind": "Thiếu bước trung gian",
+      "flow": "54-60 cookie; map keyB put 69/get 71; sink 78",
+      "label": "TRUE_POSITIVE",
+      "alert_id": "68aead5b27fa910714b0c22c37282edac22028ec45b4f60ff2bbf373ae74e8a7",
+      "source_sha256": "c44197ff092d91e57aad6e70b913ef1216b59af9d562f5c7ada9e3294e59b9f7",
+      "source_file": "sources/heldout_set_40/BenchmarkTest00062.java",
+      "old_rationale": "Untrusted HTTP input read at line 54 (`javax.servlet.http.Cookie[] theCookies = request.getCookies();`) flows directly into the CWE-22 sink at line 78 without path normalization, allowlist validation, or SQL parameterization."
+    },
+    {
+      "case": "01006",
+      "kind": "Thiếu bước trung gian",
+      "flow": "54-60 cookie; helper 96/98 map keyB giữ param; SQL 68, sink 73-74",
+      "label": "TRUE_POSITIVE",
+      "alert_id": "fca6e3bbc96d9133661ae2d94e479c297d0f8725ea76e910a1ffc2e2ab76ec1d",
+      "source_sha256": "a823a02ac4283b0f6021bb609122696b82f99e97170b6f8a3cebb694d7c7c794",
+      "source_file": "sources/heldout_set_40/BenchmarkTest01006.java",
+      "old_rationale": "Untrusted HTTP input read at line 54 (`javax.servlet.http.Cookie[] theCookies = request.getCookies();`) flows directly into the CWE-89 sink at line 72 without path normalization, allowlist validation, or SQL parameterization."
+    },
+    {
+      "case": "01156",
+      "kind": "Thiếu bước trung gian",
+      "flow": "44-51 header; helper 100/102 map keyB giữ param; URI 64-71/File 72",
+      "label": "TRUE_POSITIVE",
+      "alert_id": "d25c3ad4983d4d50821525826850ba9f3498c10858174efb8a9e5d70d68b78f6",
+      "source_sha256": "ae204f5ae3264983adf67f1bd32c9ab4ea8a4ca07cd16fedfb03b318bd964f80",
+      "source_file": "sources/heldout_set_40/BenchmarkTest01156.java",
+      "old_rationale": "Untrusted HTTP input read at line 44 (`java.util.Enumeration<String> headers = request.getHeaders(\"BenchmarkTest01156\");`) flows directly into the CWE-22 sink at line 72 without path normalization, allowlist validation, or SQL parameterization."
+    },
+    {
+      "case": "00949",
+      "kind": "Peer mô tả sai nhánh",
+      "flow": "54-60 cookie; helper 91/93 gán bar=param rồi return; sink 68-69. Không có toán tử ba ngôi",
+      "label": "TRUE_POSITIVE",
+      "alert_id": "0b1c14f42f01160ee7055f7bf3dbf98f0ae38eb65576d29d66c575dcc1759fa1",
+      "source_sha256": "8f8b95414642bc4fcf31609acead6a64884fc3647510b0727316894daa60694a",
+      "source_file": "sources/heldout_set_40/BenchmarkTest00949.java",
+      "old_rationale": "Untrusted HTTP input read at line 54 (`javax.servlet.http.Cookie[] theCookies = request.getCookies();`) flows directly into the CWE-22 sink at line 68 without path normalization, allowlist validation, or SQL parameterization."
+    },
+    {
+      "case": "00950",
+      "kind": "Peer mô tả sai nhánh",
+      "flow": "54-60 cookie; helper 90/92 gán bar=param rồi return; sink 68. Không có toán tử ba ngôi",
+      "label": "TRUE_POSITIVE",
+      "alert_id": "45cfdd7df6e674c32d7716bef159bc6373a6c96bf1008f1fea34cc54074d0d32",
+      "source_sha256": "a5729f499e742ab51e6fd12c1dfc5687fcb3971180a6a7d8d1004bfb1431acb9",
+      "source_file": "sources/dev_set_16/BenchmarkTest00950.java",
+      "old_rationale": "Untrusted HTTP input read at line 54 (`javax.servlet.http.Cookie[] theCookies = request.getCookies();`) flows directly into the CWE-22 sink at line 68 without path normalization, allowlist validation, or SQL parameterization."
+    }
+  ],
+  "guided_agreement": {
+    "numerator": 76,
+    "denominator": 76,
+    "value": 1.0
+  },
+  "git": {
+    "branch": "v2/codex-core",
+    "base_head": "8db7dafae6c4abc99ca8a78e9b2e83a0e0b9f204",
+    "commit_reference": "G0_PUBLICATION_AND_G1_HANDOFF.md"
+  },
+  "conditions": [
+    "Approve errata without modifying locked inputs",
+    "Exclude manual labels from verified GT claims",
+    "Retain PROMPT_NOT_ATTESTED and CONFOUNDED; no standalone Qwen accuracy claim",
+    "Checkpoint history, pre-run locking and stale-source historical attempt remain unverified"
+  ],
+  "additional_peer_errata": 3,
+  "validation": {
+    "unit_tests": 43,
+    "test_exit_code": 0,
+    "compile_modules": 6,
+    "compile_exit_code": 0,
+    "git_diff_check": 0,
+    "git_cached_check": 0,
+    "cached_index": "EMPTY; no staged-change verification claimed",
+    "backup_files_unchanged": 18,
+    "untracked_whitespace": "PASS"
+  },
+  "code_sha256": {
+    "audit_raw_bundle.py": "2e23fd50abaa8621fe5a1e549da40ceb798d46f06fe136258b7ebcedb9bed201",
+    "recompute.py": "15ededf2ff8b695f0b36bb232c2947c013c1a11b60f3cce6bdd8a7caade52921",
+    "resolve_g0.py": "265c36e2e2d07ea7f6bfd9422e077da0b9a1aca9f19530908da10aa1dc016f86",
+    "test_raw_bundle.py": "3086407f80311e3e4ea07501c822d0777b2a7bda45180342153c74814c303261",
+    "test_recompute.py": "986422f1ed37533bb3785e9487b84a0edb7475bc2625ab40871851b9515a4a00",
+    "test_resolution.py": "9b68bb06e6aa559971d96b1e7ee15bcbc4b473132ac1d98e32d1a8c7c5c667fb"
+  },
+  "private_output_reference": "ntk-g0-resolution-z6yiedy7/raw/audit.private.json",
+  "tests_log_sha256": "d6112cad76bef3a30d662bd9b1fa5f1a7accdc3ab356dd65fcd785a7ec948362",
+  "AUDIT_EXECUTION_COMPLETED": true,
+  "verdict_contract": {
+    "PASS": "All mandatory conditions attested; no pending exceptions",
+    "BLOCKED": "Mandatory failure or absent mandatory core check",
+    "INCOMPLETE": "Execution receipt or mandatory evidence insufficient",
+    "CONDITIONAL": "Core checks pass; historical limitations and pending exceptions disclosed; advisor approval required"
+  },
+  "reproduction_command": "python -X utf8 -B v2/crosscheck/finalize_public.py",
+  "publication_receipt": "G0_RAW_INDEPENDENT_VERDICT.json; original raw recomputation requires private package",
+  "approval_status": "PENDING; no advisor acceptance asserted"
+}
