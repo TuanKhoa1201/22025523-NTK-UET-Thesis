@@ -1,0 +1,306 @@
+{
+  "schema": "ntk-g1-independent-verdict-1",
+  "repository": "https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis",
+  "branch": "v2/antigravity-review",
+  "candidate_id": "G1-C1",
+  "candidate_available": false,
+  "tested_sha": null,
+  "reference_tested_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "reference_is_candidate": false,
+  "started_at": "2026-11-12T20:48:25.192182+00:00",
+  "finished_at": "2026-11-12T20:49:47.367044+00:00",
+  "timestamp_scope": "Final recorded verification window; earlier preparation was not timed.",
+  "environment": {
+    "python": "3.13.3",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "verdict": "INCOMPLETE",
+  "reason": "CANDIDATE_NOT_AVAILABLE",
+  "remote_heads_at_start_and_final": {
+    "v2/codex-core": "30b0bac464ade5c5f32287917eb877a575308a06",
+    "v2/antigravity-review": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+    "v2/javis-benchmark": "bf19b5e1392645baba55e5039ebc0d71a1af9aaa"
+  },
+  "remote_verification": "Two successful git ls-remote observations during session; same heads. Initial sandbox network failure was retried with approved escalation.",
+  "commands": [
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "<audit-repo>\\v2\\g1_audit",
+        "-p",
+        "test_candidate.py",
+        "-v"
+      ],
+      "cwd": "<audit-repo>/v2/g1_audit/.local/reference",
+      "exit_code": 0,
+      "counts": {
+        "PASS": 19,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "elapsed_seconds": 0.9584632999976748,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "2c499feb443018e125282bce7f306d800b869c706c5df7bad7d27772eb70267f",
+      "test_file_sha256": "3838ea6a08d3da0f1d5623c0d3b8db74c32b2373540cb407d2e00abf44014564"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "<audit-repo>\\v2\\g1_audit",
+        "-p",
+        "test_auditor.py",
+        "-v"
+      ],
+      "cwd": "<audit-repo>/v2/g1_audit/.local/reference",
+      "exit_code": 0,
+      "counts": {
+        "PASS": 8,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "elapsed_seconds": 0.22235250000085216,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "3c43b84f0553257c68a83e719b493cafe6fac7ead5b909d7318b444ac46d2f67",
+      "test_file_sha256": "d265bfa48686bf3c0992ab167fa53a74215870cf3d824e525d684ad7b7f9cd37"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "-p",
+        "test_g0_v22_payload_contract.py",
+        "-v"
+      ],
+      "cwd": "<audit-repo>/v2/g1_audit/.local/reference",
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "elapsed_seconds": 0.7736225000044215,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "c2837da3fcc2da173ce329ecc043b97b8b958ac1c21788493a04c06065a3796a",
+      "test_file_sha256": "761ffa8ac283aecfd269ab24ddfad370e1856b631de888e7a325578ecdc8fa6c"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "-p",
+        "test_human_review_negative_suite.py",
+        "-v"
+      ],
+      "cwd": "<audit-repo>/v2/g1_audit/.local/reference",
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "SKIP": 0
+      },
+      "elapsed_seconds": 1.1641095000013593,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "fc966c936f7c92744bc531e21ab4bd9c3df5cd2a24f07e03cac61deb907ccafa",
+      "test_file_sha256": "9de7cd0df7820213bbc947e6d78b90b38b0546b10006f1b3cd71ad9bc0c2d878"
+    },
+    {
+      "argv": [
+        "git",
+        "-c",
+        "safe.directory=<audit-repo>",
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "457183f9e17892fe284da04b57ef6c5c24b008e0",
+        "v2/g1_integration"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "v2/g1_audit/audit.py",
+        "--checkout",
+        "v2/g1_audit/.local/reference",
+        "--evidence",
+        "v2/g1_audit/.local/runtime-not-provided",
+        "--output",
+        "v2/g1_audit/.local/missing-runtime-recorded-02"
+      ],
+      "exit_code": 2,
+      "stdout": "INCOMPLETE",
+      "stderr": "",
+      "stdout_sha256": "ddadacf173fa621d3e39b06ef43d735fc0bcdd861446368bdfd7d697d9fd8af2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "tests": {
+    "PASS": 59,
+    "FAIL": 0,
+    "SKIP": 0
+  },
+  "test_kind": "SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN",
+  "conditions": [
+    {
+      "condition": "CLI fork kế thừa",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Scanner OpenGrep thực",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Không cần Semgrep trong đường bắt buộc",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Bảo toàn raw scan",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Qwen cục bộ",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Validator và ba nhóm",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Kiểm duyệt độc lập với Qwen",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Source hash trước confirm-false",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Demo và lệnh tái lập",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    },
+    {
+      "condition": "Commit và thực nghiệm G1",
+      "status": "INCOMPLETE",
+      "reason": "No ready G1 candidate or contemporaneous runtime bundle"
+    }
+  ],
+  "evidence": {
+    "private_test_receipt": ".local/checks-final/checks.json",
+    "private_test_receipt_sha256": "734a9ca64607015f3653c778884f11748dcbc513eb5cd2e3002824c41fb3a7b2",
+    "missing_runtime_report_sha256": "d0e4d43740a6d3f28f8d60af663a73cc87a088c219226648182e3f2e094c9b15"
+  },
+  "audit_code_sha256": {
+    "audit.py": "0e7445cba78cec2722e5b5518a15fa044ed2f14262ac69a310061c1bf129125b",
+    "run_checks.py": "635f469bd4fe8d465cb74dc12155d8c91fc8ebcb13035f5d4097d8a3e1cb2a47",
+    "test_candidate.py": "3838ea6a08d3da0f1d5623c0d3b8db74c32b2373540cb407d2e00abf44014564",
+    "test_auditor.py": "d265bfa48686bf3c0992ab167fa53a74215870cf3d824e525d684ad7b7f9cd37",
+    "README.md": "02d95c62f9e3c41df07360a6671f4f696c265c8cd3b3638c9cd5fce1fc42480d",
+    ".gitignore": "5fe496a917a6009e370a0368f1f3bf898b3972513ffa0ba7bb8d4ff69c67fdf5"
+  },
+  "reference_contract_sha256": {
+    "v2/baseline/ADVISOR_M1_ORIGINAL_CLI_PROOF.md": {
+      "sha256": "e4bacedb745d34166f62a4a54d9384a4f548167e6fd193e499475d95c4ca8467",
+      "origin_sha": "30b0bac464ade5c5f32287917eb877a575308a06"
+    },
+    "v2/baseline/ADVISOR_REPORT1_ACCEPTANCE_CHECKLIST.md": {
+      "sha256": "a9b001ed1818639e5d8ea8156bd28bb9d67abfc14b3272d787d228b9bb8984b5",
+      "origin_sha": "30b0bac464ade5c5f32287917eb877a575308a06"
+    },
+    "v2/baseline/prepare_upstream_local.py": {
+      "sha256": "a18d4e2c8c23e1aeb8b135d48605568e2f6c4e5870e84e90a0aab8fc8fdac364",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    },
+    "v2/triage/README.md": {
+      "sha256": "ae49321cc219b13ee47451fd011a299c921b80fec3a8d445ab5a943d6f0c76e4",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    },
+    "v2/triage/SCHEMA_CONTRACT.md": {
+      "sha256": "d9d4ec3d5125d60c3fea83a1d71dac5ff4167ab0a63ae618f6cecaece0adcd32",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    },
+    "v2/triage/cli.py": {
+      "sha256": "e1677bbdd1ec197c315571bb81da5852448f1e641b24ab5006acf2e34137342e",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    },
+    "v2/triage/evidence.py": {
+      "sha256": "56acafcc47e35c58fef95118840939e046a769738d7f50491de672e1b557b706",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    },
+    "v2/triage/ollama.py": {
+      "sha256": "8457f3a2b1dda6aaede4b5d95d88f66538025616573846e052e9fc4772ac5895",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    },
+    "v2/triage/store.py": {
+      "sha256": "8fb67199ed25c8d2edc1dc80b29e373e7638756e83e124d1156b634463502f19",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    },
+    "v2/triage/scan_receipt.py": {
+      "sha256": "8012e529e2a89e09cc791ea9fa5a697d61c5e4db2de3c2d179ab89ccb6c232a5",
+      "origin_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0"
+    }
+  },
+  "issues": [
+    {
+      "id": "G1-EVIDENCE-01",
+      "severity": "ACCEPTANCE_BLOCKER",
+      "type": "MISSING_EVIDENCE",
+      "location": "v2/g1_integration/CANDIDATE.json",
+      "line": null,
+      "description": "Marker absent at remote HEAD; no READY_FOR_INDEPENDENT_TEST candidate. Not a confirmed production defect.",
+      "reproduce": "git ls-tree -r --name-only 457183f9e17892fe284da04b57ef6c5c24b008e0 v2/g1_integration"
+    }
+  ],
+  "limitations": [
+    "No G1 candidate executed; no real scanner/Qwen runtime in this audit.",
+    "59 synthetic tests passing does not establish G1 acceptance or TP/FP accuracy.",
+    "Runtime observer, CLI/handoff/no-rescan, digest/prompt provenance and demo gates require candidate-specific evidence.",
+    "SARIF checker currently compares rule/path/lines; column/severity/CWE SARIF mapping requires review.",
+    "Source-tree concurrency is not isolated; SQLite actors and artifact provenance are unsigned.",
+    "No G1-C2 published at final observed HEAD; no second candidate tested."
+  ],
+  "commit_sha": null,
+  "commit_reference": "Commit containing this receipt; resolve with git log -1 --format=%H -- v2/g1_audit/G1-C1/VERDICT.json"
+}
