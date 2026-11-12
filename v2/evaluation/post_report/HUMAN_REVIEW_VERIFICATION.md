@@ -2,7 +2,7 @@
 
 - **Giai đoạn:** Stage 6 — Kiểm thử Workflow Duyệt Thủ Công & Negative Tests
 - **Nhánh thực thi:** `v2/post-report-cwe22-cwe89-20261112`
-- **Tệp kiểm thử tự động:** `v2/triage/tests/test_human_review_negative_suite.py` (`11/11 PASSED`)
+- **Tệp kiểm thử tự động:** `v2/triage/tests/test_human_review_negative_suite.py` (`16/16 PASSED`)
 - **Bằng chứng chạy thực tế CLI:** `C:\Users\Admin\ntk-thesis-v2\evidence\post_report_cwe22_cwe89_20261112\runs\stage6_human_review_demo\cli_lifecycle_transcript.json`
 
 ---
@@ -23,7 +23,7 @@
 
 ---
 
-## 2. Kết quả 11 ca kiểm thử trong `v2/triage/tests/test_human_review_negative_suite.py`
+## 2. Kết quả 16 ca kiểm thử trong `v2/triage/tests/test_human_review_negative_suite.py`
 
 | STT | Tên ca kiểm thử (`test_human_review_negative_suite.py`) | Kỳ vọng | Kết quả thực tế |
 |---:|---|---|---|
@@ -38,6 +38,11 @@
 | 9 | `test_09_confirm_true_transitions_state_and_keeps_warning_in_default_queue` | Chuyển `CONFIRMED_TRUE`, vẫn hiển thị trong `queue` mặc định, ghi `history` | `PASS` |
 | 10 | `test_10_reopen_restores_open_state_and_preserves_full_audit_history` | Chuyển lại `OPEN`, hiển thị lại trong `queue`, giữ đủ 2 sự kiện trong `history` | `PASS` |
 | 11 | `test_11_duplicate_import_does_not_overwrite_human_review_decision` | Ném `sqlite3.IntegrityError`, bảo toàn quyết định `CONFIRMED_FALSE` đã lưu | `PASS` |
+| 12 | `test_12_wrong_scan_hash_or_tampered_source_hash_blocks_confirm_false` | Phát hiện lệch `scan-manifest.json` (`opengrep.json` SHA-256) và `snapshots` SHA-256, từ chối `confirm-false` | `PASS` |
+| 13 | `test_13_wrong_alert_id_and_invalid_state_action_are_refused` | Từ chối `alert_id` không tồn tại (`unknown warning`) và hành động trạng thái không hợp lệ | `PASS` |
+| 14 | `test_14_wrong_citation_downgrades_to_undetermined` | Sai quote, sai dòng hoặc sai SHA-256 tệp đều ném `EvidenceError` và hạ về `UNDETERMINED` | `PASS` |
+| 15 | `test_15_ollama_service_error_and_timeout_downgrade_to_undetermined` | Lỗi kết nối/timeout Ollama hạ về `UNDETERMINED` và giữ `state = OPEN` | `PASS` |
+| 16 | `test_16_malformed_json_from_llm_or_scan_is_handled_fail_closed` | JSON sai định dạng từ LLM hoặc raw scan được xử lý fail-closed (`UNDETERMINED` / `issues`) | `PASS` |
 
 ---
 

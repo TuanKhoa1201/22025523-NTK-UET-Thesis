@@ -1,6 +1,6 @@
 """Comprehensive positive and negative test suite for the Human Review Workflow (Stage 6).
 
-Verifies all 11 mandatory governance & fail-closed invariants:
+Verifies all 16 mandatory governance & fail-closed invariants (Prompt 13 Section XII):
 1. Model REFUTED (PROPOSED_FP) never auto-dismisses; warning remains OPEN in default queue.
 2. Valid `confirm-false` with actor, reason, matching source hash, and verified scan provenance
    transitions to CONFIRMED_FALSE, hides from default queue, appears in `queue --all`, and records audit history.
@@ -13,6 +13,11 @@ Verifies all 11 mandatory governance & fail-closed invariants:
 9. `confirm-true` transitions to CONFIRMED_TRUE, remains visible in default queue, and records audit trail.
 10. `reopen` transitions CONFIRMED_FALSE back to OPEN, restores visibility in default queue, and preserves full history.
 11. Duplicate import of the same scan/warning never overwrites an existing human decision.
+12. Wrong scan hash (`scan-manifest.json` mismatch) or wrong source hash (`snapshots` SHA-256 mismatch) refuses `confirm-false`.
+13. Wrong alert ID (`unknown warning`) or missing/invalid state action is refused.
+14. Wrong citation (line out of range, mismatched quote, or wrong file SHA-256) downgrades assessment to `UNDETERMINED`.
+15. Ollama service error (`URLError` / `TimeoutError`) downgrades assessment to `UNDETERMINED` and keeps warning `OPEN`.
+16. Malformed JSON from LLM response or raw scan is handled fail-closed (`UNDETERMINED` / scan issue preserved).
 """
 from __future__ import annotations
 
@@ -22,12 +27,15 @@ import sqlite3
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
+from urllib.error import URLError
 
 from capture_fixture import make_capture
 from test_triage import Fixture
 from v2.triage.cli import main
-from v2.triage.evidence import EvidenceError
-from v2.triage.ollama import undecided, validate_answer
+from v2.triage.evidence import EvidenceError, collect
+from v2.triage.ollama import OllamaClient, undecided, validate_answer
+from v2.triage.scan_receipt import verify_receipt
 from v2.triage.store import ReviewStore
 
 
@@ -253,6 +261,84 @@ class HumanReviewNegativeAndGovernanceSuite(Fixture):
         # State and history must remain intact
         self.assertEqual(store.get(wid)["state"], "CONFIRMED_FALSE")
         self.assertEqual(len(store.history(wid)), 1)
+
+    def test_12_wrong_scan_hash_or_tampered_source_hash_blocks_confirm_false(self):
+        # Case A: Wrong scan hash in scan-manifest receipt
+        raw_bytes = json.dumps(self.doc).encode("utf-8")
+        manifest_path = make_capture(self.root, raw_bytes, Path(self.tmp.name) / "bad-scan-hash-cap")
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_data["artifacts"]["opengrep.json"] = "f" * 64
+        manifest_path.write_text(json.dumps(manifest_data), encoding="utf-8")
+        prov, issues = verify_receipt(manifest_path, raw_bytes, self.root)
+        self.assertFalse(prov["source_capture_verified"])
+        self.assertTrue(any("capture artifact hash mismatch: opengrep.json" in issue for issue in issues))
+
+        # Case B: Tampered source hash in stored evidence snapshot
+        self.bundle["records"][0]["snapshots"]["Demo.java"]["sha256"] = "0" * 64
+        store = self.store()
+        with self.assertRaises(EvidenceError):
+            store.decide(self.record["id"], "confirm-false", "ntk-auditor", "tampered source hash")
+        self.assertEqual(store.get(self.record["id"])["state"], "OPEN")
+
+    def test_13_wrong_alert_id_and_invalid_state_action_are_refused(self):
+        store = self.store()
+        db = str(Path(self.tmp.name) / "review.sqlite")
+        # Wrong alert ID via CLI
+        err_msg = self._cli(
+            ["decide", "--db", db, "nonexistent-alert-id-000", "confirm-false", "--actor", "ntk-auditor", "--reason", "wrong id"],
+            expected_exit=2,
+        )
+        self.assertIn("unknown warning", err_msg)
+
+        # Missing / invalid state action via store API
+        for bad_action in ("", "invalid-state", "auto-close"):
+            with self.assertRaises(EvidenceError):
+                store.decide(self.record["id"], bad_action, "ntk-auditor", "invalid state test")
+        self.assertEqual(store.get(self.record["id"])["state"], "OPEN")
+
+    def test_14_wrong_citation_downgrades_to_undetermined(self):
+        # Wrong quote text, wrong line range, and wrong file sha256 all raise EvidenceError in validate_answer
+        # and downgrade to UNDETERMINED via OllamaClient.analyze()
+        bad_quote = self.answer("REFUTED")
+        bad_quote["citations"][0]["quote"] = "stmt.executeQuery(nonexistent_var);"
+
+        bad_line = self.answer("SUPPORTED")
+        bad_line["citations"][0]["start_line"] = 99
+        bad_line["citations"][0]["end_line"] = 99
+
+        bad_hash = self.answer("REFUTED")
+        bad_hash["citations"][0]["sha256"] = "a" * 64
+
+        for bad_payload in (bad_quote, bad_line, bad_hash):
+            with self.assertRaises(EvidenceError):
+                validate_answer(json.dumps(bad_payload), self.record)
+            mock_resp = {"done": True, "model": "qwen3.5:9b-q4_K_M", "message": {"content": json.dumps(bad_payload)}}
+            with patch.object(OllamaClient, "request", return_value=mock_resp):
+                res = OllamaClient().analyze(self.record)
+                self.assertEqual(res["status"], "UNDETERMINED")
+
+    def test_15_ollama_service_error_and_timeout_downgrade_to_undetermined(self):
+        for exc in (URLError("MOCK connection refused"), TimeoutError("MOCK request timed out")):
+            with patch.object(OllamaClient, "request", side_effect=exc):
+                assessment = OllamaClient().analyze(self.record)
+                self.assertEqual(assessment["status"], "UNDETERMINED")
+        store = self.store(assessment)
+        self.assertEqual(store.get(self.record["id"])["state"], "OPEN")
+
+    def test_16_malformed_json_from_llm_or_scan_is_handled_fail_closed(self):
+        # Malformed LLM JSON raises EvidenceError in validate_answer and downgrades to UNDETERMINED in analyze()
+        for raw_llm in ("not json at all", '{"status": "REFUTED"', '{"status": "UNKNOWN_ENUM"}'):
+            with self.assertRaises(EvidenceError):
+                validate_answer(raw_llm, self.record)
+            mock_resp = {"done": True, "model": "qwen3.5:9b-q4_K_M", "message": {"content": raw_llm}}
+            with patch.object(OllamaClient, "request", return_value=mock_resp):
+                res = OllamaClient().analyze(self.record)
+                self.assertEqual(res["status"], "UNDETERMINED")
+
+        # Malformed raw scan JSON
+        bad_scan = collect("{malformed_scan_json", self.root)
+        self.assertTrue(bad_scan["issues"])
+        self.assertEqual(bad_scan["records"], [])
 
 
 if __name__ == "__main__":
