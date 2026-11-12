@@ -1,7 +1,7 @@
 # G0 publication and G1 handoff
 
 Branch: `v2/codex-core`. Base: `8db7dafae6c4abc99ca8a78e9b2e83a0e0b9f204`.
-Implementation commit: recorded in the subsequent handoff receipt commit (a commit cannot contain its own SHA).
+Implementation commit: `92c1d4aac5d642b0311505061f9c5c2d8b890edd`. This handoff receipt is a subsequent documentation commit; its SHA is available from Git history.
 
 AUDIT_EXECUTION_COMPLETED=true, based on positive required-section receipts, nonempty check counts, recorded exit and limitations. This attests execution within the recorded scope, not independent historical runtime authenticity.
 G0_ACCEPTANCE=CONDITIONAL. READY_FOR_G1=CONDITIONAL. UNRESOLVED_BLOCKERS=none in the recorded core checks; advisor approval of exclusions/errata remains pending before unconditional acceptance.
