@@ -1,7 +1,45 @@
 """Check captured scan integrity; declared exit codes are not recorded process evidence."""
 import json
+from collections import Counter
 from pathlib import Path
+from urllib.parse import unquote
 from .evidence import EvidenceError, SourceTree, digest, strict_json
+
+
+def _norm_finding_path(value):
+    if not isinstance(value, str) or not value:
+        raise EvidenceError("finding without path")
+    value = unquote(value).replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:]
+    return value
+
+
+def json_sarif_disagreement(json_doc, sarif_doc):
+    """Return a short description when the JSON and SARIF captures of one scan report different findings.
+
+    Compared key per finding: (rule id, normalized path, start line). Verified against a real
+    OpenGrep OSS 1.25.0 JSON/SARIF pair (v2/demo/smoke_v2_taint_raw.opengrep.{json,sarif}).
+    Any structural surprise is reported as disagreement (fail closed), never silently accepted.
+    """
+    try:
+        if not isinstance(json_doc, dict) or not isinstance(json_doc.get("results"), list):
+            return "JSON capture has no results list"
+        j = Counter()
+        for r in json_doc["results"]:
+            j[(r["check_id"], _norm_finding_path(r["path"]), int(r["start"]["line"]))] += 1
+        s = Counter()
+        for run in sarif_doc["runs"]:
+            for r in run.get("results") or []:
+                loc = r["locations"][0]["physicalLocation"]
+                s[(r["ruleId"], _norm_finding_path(loc["artifactLocation"]["uri"]), int(loc["region"]["startLine"]))] += 1
+    except (KeyError, IndexError, TypeError, ValueError, EvidenceError) as exc:
+        return "unparseable finding structure (" + type(exc).__name__ + ")"
+    if j == s:
+        return None
+    only_json, only_sarif = j - s, s - j
+    return (f"{sum(j.values())} JSON vs {sum(s.values())} SARIF findings; "
+            f"{sum(only_json.values())} only in JSON, {sum(only_sarif.values())} only in SARIF")
 
 
 def verify_receipt(manifest_path, raw, root, declared_exit=None):
@@ -93,6 +131,9 @@ def verify_receipt(manifest_path, raw, root, declared_exit=None):
         sarif = strict_json(artifact("opengrep.sarif").decode("utf-8"))
         if not isinstance(sarif, dict) or not isinstance(sarif.get("runs"), list):
             raise EvidenceError("invalid captured SARIF")
+        disagreement = json_sarif_disagreement(strict_json(raw.decode("utf-8")), sarif)
+        if disagreement:
+            raise EvidenceError("captured JSON and SARIF findings disagree: " + disagreement)
         metadata.update(origin="recorded_capture_unsigned", source_capture_verified=True,
                         source_hashes=before, producer=document.get("producer"))
     except (OSError, ValueError, KeyError, TypeError, UnicodeError, RuntimeError) as exc:

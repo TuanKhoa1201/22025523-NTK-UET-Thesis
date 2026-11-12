@@ -25,10 +25,12 @@ SCHEMA = {
                            "quote": {"type": "string", "minLength": 1},
                            "sha256": {"type": "string"}}}}}}
 
-PROMPT_VERSION = "v2.2-cwe22-cwe89-neutral"
+PROMPT_VERSION = "v2.2.1-cwe22-cwe89-whitelist"
+PREVIOUS_NEUTRAL_PROMPT_VERSION = "v2.2-cwe22-cwe89-neutral"
 LEGACY_STEERED_PROMPT_VERSION = "v2.1-cwe22-cwe89-grounded"
 
-# Pre-baked conclusion fields that MUST NOT be injected into neutral LLM prompts
+# Pre-baked conclusion fields that MUST NOT be injected into neutral LLM prompts.
+# Kept as a documentation/guard list; prompt construction itself uses the explicit whitelist below.
 STEERING_SIGNAL_KEYS = frozenset({
     "recommended_status",
     "recommendation_reason",
@@ -38,6 +40,45 @@ STEERING_SIGNAL_KEYS = frozenset({
     "sanitizers_found",
     "intra_procedural_decisive",
 })
+
+# Heuristic analysis products that are not verdict fields by name but still encode the heuristic's
+# reasoning outcome (e.g. dead_branch_lines reveals which branch is constant-folded away, the
+# non-sanitizer list is a classification judgement, uses_* flags are benchmark-name regexes).
+DERIVED_ANALYSIS_KEYS = frozenset({
+    "dead_branch_lines",
+    "non_sanitizers_found",
+    "uses_inner_helper",
+    "uses_thing_factory",
+    "unresolved_calls",
+    "heuristic_version",
+    "primary_cwe",
+})
+
+# Prompt input contracts (payload audit, not an experiment result):
+# - blind: source snippets, alert location, OpenGrep trace steps and structural Java context only.
+# - neutral_hints: blind + an explicit whitelist of structural facts (no heuristic conclusion).
+PROMPT_CONTRACT_BLIND = "blind"
+PROMPT_CONTRACT_NEUTRAL_HINTS = "neutral_hints"
+PROMPT_CONTRACTS = (PROMPT_CONTRACT_BLIND, PROMPT_CONTRACT_NEUTRAL_HINTS)
+DEFAULT_PROMPT_CONTRACT = PROMPT_CONTRACT_NEUTRAL_HINTS
+
+NEUTRAL_HINT_WHITELIST = ("source_line", "sink_line", "source_kind", "unresolved_external_calls")
+SOURCE_KIND_VALUES = frozenset({"HTTP_SERVLET_INPUT", "METHOD_OR_EXTERNAL_INPUT"})
+# Only "implementation absent from evidence" is a structural fact; entries recorded because a
+# tainted identifier reached an unknown call are taint-conditioned and therefore excluded.
+NEUTRAL_UNRESOLVED_REASONS = frozenset({"missing_helper_implementation"})
+_JAVA_QUALIFIED_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]{0,127}$")
+_METHOD_SUMMARY_FIELDS = (
+    "name", "owner_class", "signature", "return_type", "parameters", "annotations",
+    "header_line", "start_line", "end_line", "is_entrypoint",
+)
+_PROMPT_SOURCE_TEXT_KEYS = frozenset({
+    # verbatim source-derived strings (the model already sees the same code in snippets)
+    "text", "matched", "signature", "parameters", "annotations", "return_type", "name",
+    "owner_class", "enclosing_class", "qualifier", "method", "path", "raw_path", "rule_id",
+})
+_FORBIDDEN_PROMPT_KEYS = STEERING_SIGNAL_KEYS | DERIVED_ANALYSIS_KEYS
+_VERDICT_TOKEN_RE = re.compile(r"\b(?:SUPPORTED|REFUTED|UNDETERMINED|SAFE_CONST(?:ANT)?|TAINTED|SANITIZED_CWE\d+)\b")
 
 
 def undecided(reason, **provenance):
@@ -344,18 +385,26 @@ def validate_answer(content, record):
     if answer["status"] != "UNDETERMINED" and not prov["any_in_relevant_scope"]:
         raise EvidenceError("citation lies outside enclosing method and dataflow trace scope")
 
-    sig = record.get("heuristic_signals") if isinstance(record.get("heuristic_signals"), dict) else {}
-    if (
-        answer["status"] == "REFUTED"
-        and sig.get("recommended_status") == "UNDETERMINED"
-        and any(
-            isinstance(u, dict) and u.get("reason") == "missing_helper_implementation"
-            for u in (sig.get("unresolved_calls") or [])
-        )
-    ):
-        raise EvidenceError(
-            "cannot verify REFUTED when flow depends on an external helper absent from evidence snapshots"
-        )
+    raw_sig = record.get("heuristic_signals")
+    sig = raw_sig if isinstance(raw_sig, dict) else {}
+    if answer["status"] == "REFUTED":
+        # A safety (REFUTED) claim is only verifiable when the evidence package is known to contain the
+        # code the flow depends on. Missing completeness analysis or any unresolved call on an undecided
+        # flow (absent helper, call chain beyond the analysed hop depth, unknown call wrapping input)
+        # means the snippets cannot prove the code safe -> fail closed to UNDETERMINED.
+        if not isinstance(raw_sig, dict):
+            raise EvidenceError(
+                "cannot verify REFUTED: flow-completeness analysis (heuristic_signals) unavailable for this record"
+            )
+        unresolved = [u for u in (sig.get("unresolved_calls") or []) if isinstance(u, dict)]
+        if sig.get("recommended_status") == "UNDETERMINED" and unresolved:
+            if any(u.get("reason") == "missing_helper_implementation" for u in unresolved):
+                raise EvidenceError(
+                    "cannot verify REFUTED when flow depends on an external helper absent from evidence snapshots"
+                )
+            raise EvidenceError(
+                "cannot verify REFUTED when the call path is unresolved (hop depth exceeded or unknown call on input)"
+            )
 
     if record["issues"]:
         raise EvidenceError("insufficient evidence: " + "; ".join(record["issues"]))
@@ -377,18 +426,110 @@ def validate_answer(content, record):
 
 
 def neutralize_evidence_signals(signals):
-    """Strip pre-computed heuristic conclusions/citations so Qwen evaluates code without steering."""
+    """Whitelist projection of heuristic signals for the `neutral_hints` prompt contract.
+
+    Only structural facts listed in NEUTRAL_HINT_WHITELIST survive, each type/enum-checked and rebuilt
+    from scratch, so nested or unexpected fields (verdicts, reasons, citations, dead-branch results,
+    sanitizer classifications) can never pass through by accident.
+    """
     if not isinstance(signals, dict):
         return None
+    out = {}
+    for key in ("source_line", "sink_line"):
+        value = signals.get(key)
+        if type(value) is int and value >= 1:
+            out[key] = value
+    kind = signals.get("source_kind")
+    if isinstance(kind, str) and kind in SOURCE_KIND_VALUES:
+        out["source_kind"] = kind
+    calls = []
+    for item in signals.get("unresolved_calls") or []:
+        if not isinstance(item, dict) or item.get("reason") not in NEUTRAL_UNRESOLVED_REASONS:
+            continue
+        method, line, qualifier = item.get("method"), item.get("line"), item.get("qualifier")
+        if not (isinstance(method, str) and _JAVA_QUALIFIED_IDENT_RE.match(method)) or type(line) is not int:
+            continue
+        call = {"method": method, "line": line}
+        if isinstance(qualifier, str) and _JAVA_QUALIFIED_IDENT_RE.match(qualifier):
+            call["qualifier"] = qualifier
+        if call not in calls:
+            calls.append(call)
+    if calls:
+        out["unresolved_external_calls"] = calls[:16]
+    return out
+
+
+def _project_method_summary(method):
+    if not isinstance(method, dict):
+        return None
+    out = {}
+    for field in _METHOD_SUMMARY_FIELDS:
+        value = method.get(field)
+        if field in ("header_line", "start_line", "end_line"):
+            if type(value) is int:
+                out[field] = value
+        elif field == "is_entrypoint":
+            if isinstance(value, bool):
+                out[field] = value
+        elif field in ("parameters", "annotations"):
+            if isinstance(value, list) and all(isinstance(v, str) for v in value):
+                out[field] = list(value)
+        elif isinstance(value, str):
+            out[field] = value
+    return out
+
+
+def _java_context_summary(jctx):
+    if not isinstance(jctx, dict):
+        return None
+    enc_cls = jctx.get("enclosing_class")
     return {
-        k: v
-        for k, v in signals.items()
-        if k not in STEERING_SIGNAL_KEYS
+        "enclosing_class": enc_cls if isinstance(enc_cls, str) else None,
+        "enclosing_method": _project_method_summary(jctx.get("enclosing_method")),
+        "same_file_callees": [
+            p for p in (_project_method_summary(c) for c in (jctx.get("same_file_callees") or [])) if p is not None
+        ],
     }
+
+
+def assert_prompt_contract(evidence, contract):
+    """Fail closed if the final user payload carries heuristic conclusions for the given contract."""
+    if contract not in PROMPT_CONTRACTS:
+        raise EvidenceError("unknown prompt contract: " + repr(contract))
+    if contract == PROMPT_CONTRACT_BLIND and "evidence_signals" in evidence:
+        raise EvidenceError("blind prompt contract must not carry evidence_signals")
+    signals = evidence.get("evidence_signals")
+    if signals is not None:
+        if not isinstance(signals, dict) or set(signals) - set(NEUTRAL_HINT_WHITELIST):
+            raise EvidenceError("evidence_signals contains fields outside the neutral whitelist")
+
+    def walk(node, parent_key=None):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in _FORBIDDEN_PROMPT_KEYS:
+                    raise EvidenceError("prompt payload carries heuristic analysis field: " + str(key))
+                walk(value, key)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, parent_key)
+        elif isinstance(node, str) and parent_key not in _PROMPT_SOURCE_TEXT_KEYS:
+            if _VERDICT_TOKEN_RE.search(node):
+                raise EvidenceError("prompt payload carries a verdict-like token outside source text")
+
+    walk(evidence)
+    return True
+
+
+def _prompt_contract_for(record):
+    contract = record.get("prompt_contract", DEFAULT_PROMPT_CONTRACT) if isinstance(record, dict) else None
+    if contract not in PROMPT_CONTRACTS:
+        raise EvidenceError("unknown prompt contract: " + repr(contract))
+    return contract
 
 
 def prompt(record):
     mode = record.get("triage_mode", "evidence+llm") if isinstance(record, dict) else "evidence+llm"
+    contract = _prompt_contract_for(record)
     evidence = {
         "rule_id": record.get("rule_id"),
         "cwe": record.get("cwe"),
@@ -413,16 +554,12 @@ def prompt(record):
                 )
         evidence["trace_steps"] = trace_steps[:16]
         if record.get("java_context"):
-            jctx = record["java_context"]
-            evidence["java_context_summary"] = {
-                "enclosing_class": jctx.get("enclosing_class"),
-                "enclosing_method": jctx.get("enclosing_method"),
-                "same_file_callees": jctx.get("same_file_callees"),
-            }
-        if record.get("heuristic_signals"):
+            evidence["java_context_summary"] = _java_context_summary(record["java_context"])
+        if contract == PROMPT_CONTRACT_NEUTRAL_HINTS and record.get("heuristic_signals"):
             evidence["evidence_signals"] = neutralize_evidence_signals(record["heuristic_signals"])
+    assert_prompt_contract(evidence, contract)
 
-    # Only validated snippets and neutral structural context go to the model; heuristic verdicts are stripped.
+    # Only validated snippets and whitelisted structural context go to the model; heuristic verdicts are never sent.
     return [
         {"role": "system", "content":
          "You review Java OpenGrep warnings, prioritizing CWE-22 (Path Traversal) and CWE-89 (SQL Injection). "
@@ -440,6 +577,9 @@ def prompt(record):
          "implementation is absent from snippets). "
          "Note: HTML encoding (encodeForHTML / escapeHtml) and URLDecoder.decode do NOT sanitize CWE-22 or CWE-89, "
          "and String.startsWith without a directory separator boundary does NOT prevent sibling-prefix path traversal. "
+         "If evidence_signals is present it only lists neutral structural positions (source_line, sink_line, "
+         "source_kind) and calls whose implementation is absent from snippets (unresolved_external_calls); "
+         "it never contains a verdict. "
          "CRITICAL CITATION RULE: Cite 1 to 3 executable Java lines directly from snippets (using each snippet's exact "
          "path, sha256, start_line, end_line, and verbatim character-for-character quote). Never cite comments or blank lines. "
          "Write explanation and fix_suggestion concisely in Vietnamese (1-2 sentences each) for human review."},
@@ -579,7 +719,9 @@ class OllamaClient:
         self.runtime = execution(self.runtime_origin)
         self.runtime["finding_id"] = record["id"]
         provenance = {"transport": "ollama-http", "model": self.model, "endpoint": self.endpoint,
-                      "raw_response": None, "runtime": self.runtime}
+                      "raw_response": None, "runtime": self.runtime,
+                      "prompt_contract": record.get("prompt_contract", DEFAULT_PROMPT_CONTRACT)
+                      if isinstance(record, dict) else None}
         started = time.monotonic()
         try:
             if record["issues"]:

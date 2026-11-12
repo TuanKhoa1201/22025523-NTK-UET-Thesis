@@ -522,7 +522,7 @@ class CitationProvenanceAndPromptNeutralityRegressions(unittest.TestCase):
         recommendation_reason, candidate_citations, and OWASP SeparateClassRequest hints while preserving
         forensic replay via legacy_v2_1_request_payload.
         """
-        self.assertEqual(PROMPT_VERSION, "v2.2-cwe22-cwe89-neutral")
+        self.assertEqual(PROMPT_VERSION, "v2.2.1-cwe22-cwe89-whitelist")
         self.assertEqual(LEGACY_STEERED_PROMPT_VERSION, "v2.1-cwe22-cwe89-grounded")
 
         active_req = request_payload(self.rec, "qwen3.5:9b-q4_K_M")
