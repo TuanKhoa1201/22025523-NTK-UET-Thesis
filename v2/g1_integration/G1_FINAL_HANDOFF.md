@@ -2,7 +2,7 @@
 
 **Kết luận kỹ thuật G1 hiện tại:** **`G1_INCOMPLETE`**
 
-**Lý do trung thực:** Toàn bộ mã tích hợp sản xuất G1, 163 bài kiểm thử tự động, kiểm chứng tương thích ngược M1 (`--scan-only`) và kịch bản demo thực tế 4 phần qua CLI kế thừa `python -m semgrepai` đã chạy thành công và được công bố tại ứng viên `G1-C1` (`ab4af37d8f3fc4060c0fb31fc85ca09d1172367b`). Tuy nhiên, tại thời điểm kết thúc cửa sổ chờ có giới hạn, hai nhánh độc lập `v2/codex-core` và `v2/javis-benchmark` vẫn đang giữ biên nhận tiền ứng viên (`tested_sha: null`, đối chiếu trên commit nền `457183f9e17892fe284da04b57ef6c5c24b008e0`), chưa công bố biên nhận `VERDICT.json` mới ghim đúng SHA ứng viên `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b` cùng lượt chạy `qwen3.5:9b-q4_K_M` trên máy chủ `ADMIN-PC`. Theo nguyên tắc nghiêm ngặt của đồ án, không tự nâng kết luận lên `G1_TECHNICAL_PASS` khi chưa có đủ hai biên nhận độc lập khớp SHA.
+**Lý do trung thực:** Ứng viên **`G1-C2`** khắc phục triệt để lỗi chuyển giao đường dẫn lai Windows ↔ WSL2 từng phát sinh trên `G1-C1` (`ab4af37d8f3fc4060c0fb31fc85ca09d1172367b`) khi chạy OpenGrep 1.25.0 qua WSL2 trên `ADMIN-PC` (11 lỗi `POSIX/WSL source path requires an explicit --path-map`), đồng thời siết chặt so sánh đường dẫn tương đối đã được Evidence xác minh trong `v2/triage/ollama.py` và `v2/triage/heuristics.py`. Toàn bộ 173 bài kiểm thử tự động (`12/12` G1 integration, `133/134` triage với `1 SKIP`, `27/27` baseline M1) và kiểm chứng tương thích M1 `--scan-only` đều đạt PASS. Tuy nhiên, vì Antigravity chưa trực tiếp chạy lại `G1-C2` với `qwen3.5:9b-q4_K_M` trên máy chủ `ADMIN-PC` và đang chờ hai biên nhận độc lập mới (`v2/g1_audit/G1-C2/VERDICT.json` từ Codex và `v2/g1_runtime/G1-C2/VERDICT.json` từ JavisOS), trạng thái runtime Qwen trên máy chủ được giữ trung thực ở mức **`PENDING`** và kết luận tổng hợp giữ ở mức **`G1_INCOMPLETE`**.
 
 > [!IMPORTANT]
 > **Các kết quả G0 đã khóa được giữ nguyên tuyệt đối (không diễn giải lại, không chỉnh sửa dữ liệu lịch sử):**
@@ -25,10 +25,11 @@
 
 ## 2. Commit Tích Hợp
 
-- **Candidate ID:** `G1-C1`
-- **Commit ứng viên tích hợp (`G1-C1`):** `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b` (`Kết nối OpenGrep và Qwen cục bộ vào luồng kiểm duyệt của công cụ kế thừa`)
-- **Marker ứng viên:** `v2/g1_integration/CANDIDATE.json` (SHA-256: `13863bbca9ef548170ac1b0ec7358e0846b0fc0262a6001116c165188d6a5b3f`, trạng thái `READY_FOR_INDEPENDENT_TEST`, không tự ghi SHA vào bên trong tệp).
-- **Ghi chú về commit bàn giao:** Commit bổ sung hai tệp báo cáo `v2/g1_integration/G1_FINAL_HANDOFF.md` và `v2/g1_integration/G1_FINAL_STATUS.json` nằm ngay trên `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b` và không thay đổi bất kỳ tệp mã nguồn sản xuất hay bài kiểm thử nào; SHA thực của đầu nhánh luôn được xác định trực tiếp bằng `git rev-parse v2/antigravity-review`.
+- **Candidate ID hiện tại:** `G1-C2`
+- **Ứng viên tiền nhiệm (`G1-C1` — giữ nguyên trong lịch sử Git):** `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b` (`Kết nối OpenGrep và Qwen cục bộ vào luồng kiểm duyệt của công cụ kế thừa`)
+- **Commit tham chiếu trước `G1-C2`:** `05b9e118d828837f3d915dceb7ef1314745a3540`
+- **Marker ứng viên:** `v2/g1_integration/CANDIDATE.json` (SHA-256: `0566f3adfc6b16e56f9f5b0f5e7be7cfbf0f26180b61607bba7fb1dc1490487b`, trạng thái `READY_FOR_INDEPENDENT_TEST`, `qwen_server_runtime_status: "PENDING"`, không tự ghi SHA vào bên trong tệp).
+- **Cách xác định SHA ứng viên `G1-C2`:** Luôn phân giải trực tiếp từ đầu nhánh bằng `git rev-parse v2/antigravity-review` (hoặc `origin/v2/antigravity-review`).
 
 ## 3. Upstream Commit
 
@@ -54,10 +55,14 @@ Tại commit ứng viên `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b` so với `45
   - Bridge CLI kế thừa → `v2.triage`: `__init__.py`, `bridge.py`, `finding_identity.py`.
   - Tập luật Java CWE-22 & CWE-89 và bộ mẫu demo: `rules/java_g1_cwe22_cwe89.yml`, `demo_fixtures/Demo1TruePositive.java`, `demo_fixtures/Demo2ProtectedFalsePositive.java`, `demo_fixtures/Demo3ExternalHelperUndetermined.java`, `run_g1_demo.py`.
   - Kiểm thử tích hợp và hồ sơ ứng viên: `tests/__init__.py`, `tests/test_g1_integration.py`, `README.md`, `CANDIDATE.json`.
-- **Mã băm diff thực tế sinh bởi `prepare_g1_fork.py`:**
+- **Mã băm diff thực tế sinh bởi `prepare_g1_fork.py` trên `G1-C2`:**
   - Bản vá tham khảo của giảng viên (`advisor_patch_sha256`): `17ac840af6db0b293e8ac7626abfd0c9ee2469eb82f0e96d8aff56869e6d58c1`
-  - Bản vá overlay tích hợp G1 trên nền patch giảng viên (`g1-integration-overlay.patch`): `70615781f31ca1be0d5fbbf790b04d16b2c978755ce12834fa2a8de328dcd117`
-  - Bản vá overlay tích hợp G1 chế độ phòng sạch (`--scanner-layer ntk-cleanroom`): `e1039cb2b5d725884c0fda37be78b4e5de033d4374a50476108f1a3899aebe2b`
+  - Bản vá overlay tích hợp G1 trên nền patch giảng viên (`g1-integration-overlay.patch`): `2c0e6380b2d13a92292ae5b5032b90f6bf636c8e67c604ba21f5a3e2d9f39d7d`
+  - Bản vá overlay tích hợp G1 chế độ phòng sạch (`--scanner-layer ntk-cleanroom`): `3604532cc4a731d495080901e835d14a7f8f98bd45be2a137a3faabe3b3a31ae`
+- **Bổ sung của `G1-C2` so với `G1-C1`:**
+  - `v2/g1_integration/bridge.py` & `v2/g1_integration/prepare_g1_fork.py`: tự động suy xuất ánh xạ đường dẫn tin cậy `/mnt/<drive>/<rel_source_root>=<source_root>` từ đúng thư mục nguồn đã xác minh trên Windows (kèm tùy chọn `--path-map` được kiểm tra nằm gọn trong `source_root`), giữ nguyên 100% dữ liệu gốc của `opengrep.json`, `opengrep.sarif` và `dataflow_trace`.
+  - `v2/triage/ollama.py` & `v2/triage/heuristics.py`: ràng buộc kiểm tra phạm vi phương thức/helper, nhánh chết (`dead_branch_lines`) và các bộ lọc sanitizer không hợp lệ (`encodeForHTML`, `escapeHtml`, `URLDecoder.decode`, `startsWith` thiếu biên phân cách, `replace` danh sách đen) theo đường dẫn tương đối đã được Evidence xác minh trong `snapshots`.
+  - `v2/triage/tests/test_wsl_path_map_and_validator_regressions.py` & `v2/g1_integration/tests/test_g1_integration.py`: bổ sung 10 bài kiểm thử hồi quy và bảo mật mới cho `G1-C2`.
 
 ## 5. Nguồn Gốc Từng Thành Phần
 
@@ -128,8 +133,8 @@ python -B -m v2.g1_integration.run_g1_demo `
   - Ollama: `0.34.2` chạy cục bộ trong WSL2 `Ubuntu-22.04`, truy cập qua loopback `http://127.0.0.1:11434` (tắt hoàn toàn proxy môi trường `ProxyHandler({})` và chặn mọi HTTP redirect)
   - Model thực tế đã xác minh qua `/api/tags` và chạy suy luận thật: `qwen2.5-coder:1.5b` (digest: `d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668`, dung lượng `986,062,089` bytes).
   - Kiểm chứng fail-closed với tag `qwen3.5:9b-q4_K_M` chưa cài trên laptop (do giới hạn 4GB VRAM / ~21 GiB ổ trống): Ollama trả HTTP `404`, hệ thống ghi nhận rõ `failure_kind = "MODEL_UNAVAILABLE"`, hạ về `validated_status = "UNDETERMINED"`, giữ nguyên mọi cảnh báo ở trạng thái `OPEN` và đánh dấu `all_stages_succeeded = false`.
-- **Trên máy chủ chuẩn `ADMIN-PC` (theo biên nhận tiền ứng viên công bố trên `v2/javis-benchmark`):**
-  - OpenGrep `1.25.0`, Ollama `0.40.7`, model tham chiếu `qwen3.5:9b-q4_K_M` (digest: `56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90`) — đang chờ JavisOS chạy lại trên commit ứng viên `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b`.
+- **Trên máy chủ chuẩn `ADMIN-PC` (theo kết quả chạy `G1-C1` và biên nhận công bố trên `v2/javis-benchmark`):**
+  - OpenGrep `1.25.0`, Ollama `0.40.7`, model tham chiếu `qwen3.5:9b-q4_K_M` (digest: `56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90`). Ở lượt chạy `G1-C1` (`ab4af37d8f3fc4060c0fb31fc85ca09d1172367b`), OpenGrep `1.25.0` đạt `scanner_status = OK`, JSON/SARIF `MATCHED`, provenance & handoff `VERIFIED` (2 cảnh báo CWE-89 và CWE-22), nhưng Qwen bị bỏ qua vì 11 lỗi `POSIX/WSL source path requires an explicit --path-map` (phép replay chỉ đọc `PATH_MAP_REPLAY` xác nhận `PASS` với `0` lỗi bằng chứng). Ứng viên **`G1-C2`** đã khắc phục lỗi này và đang ở trạng thái **`PENDING`** chờ JavisOS chạy lại thực tế trên `ADMIN-PC`.
 
 ## 8. Phiên Bản và Mã Băm Tập Luật (Rules)
 
@@ -199,26 +204,24 @@ Báo cáo trung thực kết quả thực tế từ model nhỏ `qwen2.5-coder:1
 
 | Bộ kiểm thử / Công cụ xác minh | Lệnh thực thi | Kết quả |
 |---|---|---|
-| Integration tests G1 (`v2/g1_integration/tests`) | `python -B -m unittest discover -s v2/g1_integration/tests -p "test_*.py" -q` | **10/10 PASS** |
-| Regression & contract tests (`v2/triage/tests`) | `python -B -m unittest discover -s v2/triage/tests -p "test_*.py" -q` | **126 chạy: 125 PASS, 1 SKIP, 0 FAIL** |
+| Integration tests G1 (`v2/g1_integration/tests`) | `python -B -m unittest discover -s v2/g1_integration/tests -p "test_*.py" -v` | **12/12 PASS** |
+| Regression & contract tests (`v2/triage/tests`) | `python -B -m unittest discover -s v2/triage/tests -p "test_*.py" -q` | **134 chạy: 133 PASS, 1 SKIP, 0 FAIL** |
 | Baseline M1 tests (`v2/baseline/tests`) | `python -B -m unittest discover -s v2/baseline/tests -p "test_*.py" -q` | **27/27 PASS** |
 | Kiểm chứng bản vá M1 (`verify_patch.py`) | `python -B v2/baseline/verify_patch.py` | **PASS** (khớp 6 blob upstream & 4 tệp fork) |
 | Kiểm chứng vệ sinh kho mã (`verify-repository.py`) | `python -B scripts/verify-repository.py` | **PASS** (không có hiện vật riêng trong Git index) |
-| Đối chiếu sáu chốt dữ liệu công khai của `audit.py` | Kiểm tra ngoại tuyến trên hiện vật thực của Demo 1, Demo 2, Demo 3a | **6/6 PASS** (`manifest`, `identity`, `sarif`, `sources`, `database`, `runtime`) |
-| Kịch bản E2E 4 phần (`run_g1_demo.py`) | Chạy với OpenGrep `1.20.0` + Ollama `qwen2.5-coder:1.5b` | **PASS** (exit code `0`) |
+| Đối chiếu các chốt dữ liệu công khai của `audit.py` | Kiểm tra ngoại tuyến trên hiện vật thực và hiện vật ánh xạ WSL2 | **PASS** (`identity`, `sarif`, `sources`, `database`, `runtime`) |
+| Tương thích ngược M1 `--scan-only` trên fork 96 tệp `G1-C2` | Chạy với OpenGrep `1.20.0` qua `semgrepai scan --scan-only` | **PASS** (exit code `0`, `forbidden_imports: []`) |
 
-## 15. Trạng Thái Biên Nhận Độc Lập Của Codex và JavisOS (Đối Chiếu Candidate SHA)
+## 15. Trạng Thái Biên Nhận Độc Lập Của Codex và JavisOS Cho `G1-C2`
 
-| Agent độc lập | Nhánh công bố | HEAD quan sát cuối | Tệp biên nhận | `tested_sha` trong biên nhận | Khớp SHA `G1-C1` (`ab4af37d...`)? | Phán quyết hiện có |
-|---|---|---|---|---|---|---|
-| **Codex** | `v2/codex-core` | `a099ac670bc3c18996d47063dfee266fcde6a9d0` | `v2/g1_audit/G1-C1/VERDICT.json` | `null` (tham chiếu `457183f9...`) | **CHƯA KHỚP** | `INCOMPLETE` (`CANDIDATE_NOT_AVAILABLE`, `0` lỗi mã sản xuất) |
-| **JavisOS** | `v2/javis-benchmark` | `4de45981cd83dcada56186d707fe9f11609ed006` | `v2/g1_runtime/G1-C1/VERDICT.json` | `null` (tham chiếu `457183f9...`) | **CHƯA KHỚP** | `INCOMPLETE` (`CANDIDATE_NOT_AVAILABLE`, `0` lỗi mã sản xuất) |
-
-- Cả hai agent đã công bố bộ kiểm tra sẵn sàng trước thời điểm `G1-C1` được push lên `origin/v2/antigravity-review` và chưa phát sinh commit mới trong 3 chu kỳ chờ giới hạn sau khi `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b` được công bố. Khi Codex và JavisOS được kích hoạt chạy lại trên đầu nhánh `v2/antigravity-review`, hai biên nhận mới sẽ ghim trực tiếp SHA ứng viên đã công bố.
+| Agent độc lập | Nhánh công bố | Tệp biên nhận dự kiến cho `G1-C2` | Trạng thái hiện tại cho `G1-C2` | Ghi chú lịch sử từ `G1-C1` (`ab4af37d...`) |
+|---|---|---|---|---|
+| **Codex** | `v2/codex-core` | `v2/g1_audit/G1-C2/VERDICT.json` | **`PENDING`** | Chờ kiểm toán độc lập trên commit `G1-C2` (`git rev-parse origin/v2/antigravity-review`) |
+| **JavisOS** | `v2/javis-benchmark` | `v2/g1_runtime/G1-C2/VERDICT.json` | **`PENDING`** | Ở `G1-C1` trên `ADMIN-PC`: OpenGrep 1.25.0 `OK`, JSON/SARIF `MATCHED`, handoff `VERIFIED`, dừng trước Qwen do 11 lỗi thiếu `--path-map` (`PATH_MAP_REPLAY: PASS`) |
 
 ## 16. Các Vấn Đề Còn Tồn Tại và Giới Hạn Kỹ Thuật Trung Thực
 
-1. **Chờ hai biên nhận độc lập ghim đúng SHA ứng viên:** Chưa có `VERDICT.json` hậu công bố từ Codex và JavisOS cho commit `ab4af37d8f3fc4060c0fb31fc85ca09d1172367b`; đây là lý do duy nhất khiến kết luận tổng hợp phải giữ ở mức `G1_INCOMPLETE`.
+1. **Chờ kiểm chứng runtime `G1-C2` trên `ADMIN-PC` và kiểm toán độc lập của Codex:** Antigravity chưa chạy lại `G1-C2` với `qwen3.5:9b-q4_K_M` trên `ADMIN-PC`, nên trạng thái runtime Qwen được giữ nguyên là **`PENDING`** (không ghi `PASS`) cho đến khi JavisOS công bố `v2/g1_runtime/G1-C2/VERDICT.json` và Codex công bố `v2/g1_audit/G1-C2/VERDICT.json`.
 2. **Khác biệt model giữa laptop phát triển và máy chủ GPU:** Laptop chỉ đủ tài nguyên chạy `qwen2.5-coder:1.5b` (dẫn tới các phản hồi thô `SUPPORTED` bị validator hạ về `UNDETERMINED` do sai trích dẫn/schema); việc chứng thực suy luận thực của `qwen3.5:9b-q4_K_M` qua CLI đã tích hợp thuộc lượt chạy kiểm chứng máy chủ của JavisOS trên `ADMIN-PC`.
 3. **Phạm vi phân tích ngữ cảnh Java:** `java_context.py` chỉ trích xuất phương thức bao quanh và các helper nội bộ cùng tệp trong giới hạn `<= 150` dòng; các lời gọi sang lớp/tệp khác được giữ nguyên là lời gọi ngoài chưa xác minh và bị chặn tự động xác nhận an toàn (`UNDETERMINED`).
 4. **Giới hạn xác thực người duyệt và bảo vệ tệp cơ sở dữ liệu:** Tham số `--actor` trên CLI là chuỗi định danh vận hành cục bộ (không có hệ thống xác thực danh tính tập trung), và SQLite bảo đảm tính toàn vẹn lịch sử ở tầng ứng dụng chứ không tuyên bố chống chỉnh sửa ở cấp quản trị hệ điều hành.

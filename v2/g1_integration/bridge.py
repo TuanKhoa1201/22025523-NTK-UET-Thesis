@@ -13,10 +13,13 @@ Guarantees:
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import contextmanager, redirect_stdout
 import io
 import json
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
+import re
 import subprocess
 from types import SimpleNamespace
 from typing import Any
@@ -76,8 +79,12 @@ def _forbid_implicit_scanner_rescan():
 
 
 def _source_inventory(target_path: Path) -> tuple[Path, dict[str, str]]:
-    resolved_target = Path(target_path).resolve(strict=True)
+    raw_target = Path(target_path).expanduser()
+    lexical_parent = raw_target.absolute().parent.resolve(strict=True)
+    resolved_target = raw_target.resolve(strict=True)
     if resolved_target.is_file():
+        if not resolved_target.is_relative_to(lexical_parent):
+            raise EvidenceError("single-file scan target symlink escapes parent directory")
         if resolved_target.suffix.lower() != ".java":
             raise EvidenceError("single-file target must be a .java file")
         source_root = resolved_target.parent
@@ -86,12 +93,51 @@ def _source_inventory(target_path: Path) -> tuple[Path, dict[str, str]]:
         return source_root, {rel: digest(data)}
     if not resolved_target.is_dir():
         raise EvidenceError("scan target must be an existing Java file or directory")
+    if raw_target.is_symlink() or (hasattr(raw_target, "is_junction") and raw_target.is_junction()):
+        if not resolved_target.is_relative_to(lexical_parent):
+            raise EvidenceError("directory scan target symlink/junction escapes parent directory")
     tree = SourceTree(resolved_target)
     inv: dict[str, str] = {}
     for java_file in sorted(tree.root.rglob("*.java")):
         rel, data, _ = tree.read(str(java_file))
         inv[rel] = digest(data)
     return resolved_target, inv
+
+
+def derive_trusted_path_maps(
+    source_root: Path,
+    extra_path_maps: Sequence[str] | None = None,
+    *,
+    os_name: str | None = None,
+) -> list[str]:
+    """Derive verified POSIX/WSL2 -> Windows path mappings strictly from trusted `source_root`.
+
+    Security invariants:
+    - Never inspects or trusts arbitrary paths emitted in `opengrep.json` / `opengrep.sarif`.
+    - Only maps local single-letter Windows drive subdirectories (`/mnt/<drive>/<rel_source_root>=<source_root>`);
+      refuses UNC network shares, bare drive roots (`C:\\`), cross-drive targets, `..` traversal, and symlinks
+      escaping `source_root`.
+    - On pure POSIX/Linux (`os_name != 'nt'`), synthesizes zero automatic mappings and preserves native flow.
+    """
+    root = Path(source_root).resolve(strict=True)
+    if not root.is_dir():
+        raise EvidenceError("source root must be a directory")
+
+    explicit_entries = [str(entry) for entry in (extra_path_maps or ()) if entry is not None]
+    explicit_tree = SourceTree(root, path_maps=explicit_entries)
+    explicit_by_prefix = {m["from"]: Path(m["to"]).resolve(strict=True) for m in explicit_tree.path_maps}
+
+    combined: list[str] = list(explicit_entries)
+    active_os = os.name if os_name is None else os_name
+    if active_os == "nt" and re.fullmatch(r"[A-Za-z]:", root.drive):
+        rel_posix = root.relative_to(root.anchor).as_posix().strip("/")
+        if rel_posix and ".." not in PurePosixPath(rel_posix).parts and "\\" not in rel_posix and ":" not in rel_posix:
+            wsl_prefix = str(PurePosixPath(f"/mnt/{root.drive[0].lower()}/{rel_posix}"))
+            if wsl_prefix not in explicit_by_prefix:
+                combined.insert(0, f"{wsl_prefix}={root}")
+
+    verified_tree = SourceTree(root, path_maps=combined)
+    return [f"{m['from']}={m['to']}" for m in verified_tree.path_maps]
 
 
 def _verify_handoff_records(raw_json_bytes: bytes, evidence_bundle: dict[str, Any], queue_rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -205,6 +251,7 @@ def run_local_triage_from_cli(
     timeout: float = 120.0,
     no_llm: bool = False,
     runtime_origin: str = "unverified",
+    path_map: Sequence[str] | None = None,
     argv: list[str] | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Execute the full G1 pipeline starting from the inherited simple_semgrepAI CLI."""
@@ -222,8 +269,9 @@ def run_local_triage_from_cli(
     if not resolved_rules.is_file():
         raise EvidenceError(f"local rules file does not exist: {resolved_rules}")
 
-    resolved_target = Path(target_path).resolve(strict=True)
-    source_root, pre_scan_sources = _source_inventory(resolved_target)
+    source_root, pre_scan_sources = _source_inventory(Path(target_path))
+    resolved_target = Path(target_path).expanduser().resolve(strict=True)
+    trusted_path_maps = derive_trusted_path_maps(source_root, extra_path_maps=path_map)
 
     # Validate local loopback Ollama configuration BEFORE creating directories or running OpenGrep.
     if not no_llm:
@@ -289,7 +337,7 @@ def run_local_triage_from_cli(
         json=str(raw_json_path),
         scan_manifest=manifest_path if manifest_path.is_file() else None,
         path_base=None,
-        path_map=[],
+        path_map=list(trusted_path_maps),
         engine_exit=None,
         rules=str(resolved_rules),
         executable=executable or "opengrep",
@@ -436,6 +484,7 @@ def run_local_triage_from_cli(
         "cli_argv": list(argv) if argv is not None else None,
         "target_path": str(Path(target_path).resolve()),
         "source_root": str(source_root),
+        "trusted_path_maps": list(trusted_path_maps),
         "rules_path": str(resolved_rules),
         "rules_sha256": digest(resolved_rules.read_bytes()),
         "opengrep_version": version_txt,

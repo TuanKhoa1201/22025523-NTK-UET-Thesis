@@ -304,6 +304,35 @@ def _compact_snippets_for_prompt(record, mode="evidence+llm"):
     return out
 
 
+def _verified_primary_path(record):
+    """Return the Evidence-verified canonical relative path of the primary finding.
+
+    Raw `record['path']` is preserved lossless (e.g. `/mnt/c/...` or `C:\\...`) for provenance,
+    so citation scope, dead-branch, and sanitizer checks must compare against the verified
+    relative path bound to `record['snapshots']`, never an unverified raw scanner path.
+    """
+    if not isinstance(record, dict):
+        return None
+    snapshots = record.get("snapshots")
+    if not isinstance(snapshots, dict) or not snapshots:
+        return None
+    snippets = record.get("snippets") if isinstance(record.get("snippets"), list) else []
+    for snip in snippets:
+        if isinstance(snip, dict) and snip.get("role") == "finding":
+            cand = snip.get("path")
+            if isinstance(cand, str) and cand in snapshots and isinstance(snapshots[cand], dict):
+                return cand
+            return None
+    raw_path = record.get("path")
+    if isinstance(raw_path, str) and raw_path in snapshots and isinstance(snapshots[raw_path], dict):
+        return raw_path
+    if snippets and isinstance(snippets[0], dict) and snippets[0].get("role") is None:
+        cand = snippets[0].get("path")
+        if isinstance(cand, str) and cand in snapshots and isinstance(snapshots[cand], dict):
+            return cand
+    return None
+
+
 def inspect_citations_provenance(citations, record):
     """Distinguish the three non-equivalent citation criteria required by audit protocol:
     1. `citation_in_source`: Citation exists verbatim in SHA-256-verified source snapshot.
@@ -331,18 +360,18 @@ def inspect_citations_provenance(citations, record):
 
     jctx = record.get("java_context") if isinstance(record.get("java_context"), dict) else {}
     enc = jctx.get("enclosing_method") if isinstance(jctx.get("enclosing_method"), dict) else None
-    primary_path = record.get("path")
+    primary_path = _verified_primary_path(record)
     relevant_ranges = []
-    if enc and isinstance(enc.get("start_line"), int) and isinstance(enc.get("end_line"), int):
+    if primary_path is not None and enc and isinstance(enc.get("start_line"), int) and isinstance(enc.get("end_line"), int):
         relevant_ranges.append((primary_path, enc["start_line"], enc["end_line"]))
         for callee in jctx.get("same_file_callees") or []:
-            if isinstance(callee, dict) and isinstance(callee.get("start_line"), int):
+            if isinstance(callee, dict) and isinstance(callee.get("start_line"), int) and isinstance(callee.get("end_line"), int):
                 relevant_ranges.append((primary_path, callee["start_line"], callee["end_line"]))
         for s in record.get("snippets") or []:
             if s.get("role") != "finding" and isinstance(s.get("start"), dict):
                 sl_s = s["start"].get("line")
                 el_s = (s.get("end") or {}).get("line", sl_s)
-                if isinstance(sl_s, int) and isinstance(el_s, int):
+                if isinstance(s.get("path"), str) and s.get("path") in snapshots and isinstance(sl_s, int) and isinstance(el_s, int):
                     relevant_ranges.append((s.get("path"), sl_s, el_s))
 
     sig = record.get("heuristic_signals") if isinstance(record.get("heuristic_signals"), dict) else {}
@@ -392,7 +421,11 @@ def inspect_citations_provenance(citations, record):
         span_lines = [source_available[(path, i)] for i in range(sl, el + 1)] if in_src_lines else []
         is_exec = _is_executable_java_span(span_lines) if in_source else False
         in_dead = bool(
-            in_source and path == primary_path and dead_lines and all(i in dead_lines for i in range(sl, el + 1))
+            in_source
+            and primary_path is not None
+            and path == primary_path
+            and dead_lines
+            and all(i in dead_lines for i in range(sl, el + 1))
         )
         if relevant_ranges:
             in_scope = any(
@@ -471,6 +504,51 @@ def validate_answer(content, record):
             raise EvidenceError(
                 "cannot verify REFUTED: flow-completeness analysis (heuristic_signals) unavailable for this record"
             )
+        primary_path = _verified_primary_path(record)
+        if primary_path is None:
+            raise EvidenceError(
+                "cannot verify REFUTED: primary finding path is not bound to verified evidence snapshots"
+            )
+        if sig.get("recommended_status") != "REFUTED":
+            cited_line_nos = {
+                ln
+                for c in answer["citations"]
+                if c.get("path") == primary_path
+                for ln in range(c["start_line"], c["end_line"] + 1)
+            }
+            non_san_lines = {
+                ns.get("line")
+                for ns in (sig.get("non_sanitizers_found") or [])
+                if isinstance(ns, dict) and type(ns.get("line")) is int
+            }
+            cited_or_explained_wrong_api = bool(non_san_lines) and any(
+                tok in (answer.get("explanation") or "")
+                or any(tok in (c.get("quote") or "") for c in answer["citations"])
+                for tok in ("encodeForHTML", "escapeHtml", "URLDecoder")
+            )
+            if (cited_line_nos & non_san_lines) or cited_or_explained_wrong_api:
+                raise EvidenceError(
+                    "cannot verify REFUTED: cited API is a wrong-context encoder/decoder, not an effective sanitizer"
+                )
+            valid_canon_guards = {
+                sf.get("line")
+                for sf in (sig.get("sanitizers_found") or [])
+                if isinstance(sf, dict) and sf.get("name") == "getCanonicalPath_startsWith" and type(sf.get("line")) is int
+            }
+            for c in answer["citations"]:
+                if ".startsWith(" in c.get("quote", ""):
+                    c_lines = set(range(c["start_line"], c["end_line"] + 1))
+                    if c.get("path") != primary_path or not (c_lines & valid_canon_guards):
+                        raise EvidenceError(
+                            "cannot verify REFUTED: cited startsWith guard lacks verified canonical path and directory separator boundary"
+                        )
+            if any("CWE-22" in str(x) for x in (record.get("cwe") or [])):
+                for c in answer["citations"]:
+                    quote_txt = c.get("quote", "")
+                    if ".replace(" in quote_txt or ".replaceAll(" in quote_txt:
+                        raise EvidenceError(
+                            "cannot verify REFUTED: string replace blacklist is not a valid CWE-22 canonical path sanitizer"
+                        )
         unresolved = [u for u in (sig.get("unresolved_calls") or []) if isinstance(u, dict)]
         if sig.get("recommended_status") == "UNDETERMINED":
             if any(u.get("reason") == "missing_helper_implementation" for u in unresolved):
@@ -484,34 +562,6 @@ def validate_answer(content, record):
             raise EvidenceError(
                 "cannot verify REFUTED when flow or sanitizer boundary is undetermined in provided evidence"
             )
-        if sig.get("recommended_status") != "REFUTED":
-            cited_line_nos = {
-                ln
-                for c in answer["citations"]
-                if c.get("path") == record.get("path")
-                for ln in range(c["start_line"], c["end_line"] + 1)
-            }
-            non_san_lines = {
-                ns.get("line")
-                for ns in (sig.get("non_sanitizers_found") or [])
-                if isinstance(ns, dict) and type(ns.get("line")) is int
-            }
-            if cited_line_nos & non_san_lines:
-                raise EvidenceError(
-                    "cannot verify REFUTED: cited API is a wrong-context encoder/decoder, not an effective sanitizer"
-                )
-            valid_canon_guards = {
-                sf.get("line")
-                for sf in (sig.get("sanitizers_found") or [])
-                if isinstance(sf, dict) and sf.get("name") == "getCanonicalPath_startsWith"
-            }
-            for c in answer["citations"]:
-                if ".startsWith(" in c.get("quote", "") and not (
-                    set(range(c["start_line"], c["end_line"] + 1)) & valid_canon_guards
-                ):
-                    raise EvidenceError(
-                        "cannot verify REFUTED: cited startsWith guard lacks verified canonical path and directory separator boundary"
-                    )
 
     if record["issues"]:
         raise EvidenceError("insufficient evidence: " + "; ".join(record["issues"]))

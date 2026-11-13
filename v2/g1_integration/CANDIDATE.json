@@ -1,6 +1,9 @@
 {
-  "candidate_id": "G1-C1",
+  "candidate_id": "G1-C2",
+  "previous_candidate_id": "G1-C1",
+  "previous_candidate_commit": "ab4af37d8f3fc4060c0fb31fc85ca09d1172367b",
   "status": "READY_FOR_INDEPENDENT_TEST",
+  "qwen_server_runtime_status": "PENDING",
   "integration_branch": "v2/antigravity-review",
   "base_commit": "457183f9e17892fe284da04b57ef6c5c24b008e0",
   "upstream_repo": "hardw00t/simple_semgrepAI",
@@ -13,6 +16,11 @@
   "default_rules_path": "v2/g1_integration/rules/java_g1_cwe22_cwe89.yml",
   "reference_model": "qwen3.5:9b-q4_K_M",
   "reference_endpoint": "http://127.0.0.1:11434",
+  "changes_in_g1_c2": [
+    "Derived verified Windows <-> WSL2 `/mnt/<drive>/<rel_source_root>=<source_root>` path mappings strictly from trusted `source_root` in `v2/g1_integration/bridge.py` (plus optional `--path-map` CLI passthrough validated inside `source_root`), eliminating the 11 `POSIX/WSL source path requires an explicit --path-map` failures observed on ADMIN-PC in G1-C1 while preserving `opengrep.json`, `opengrep.sarif`, and `dataflow_trace` 100% lossless.",
+    "Hardened `v2/triage/ollama.py` and `v2/triage/heuristics.py` to compare citations, enclosing-method/callee scopes, unreachable dead-branch lines, and wrong-context/invalid sanitizer checks against the Evidence-verified canonical relative path bound to `snapshots` rather than raw `record['path']`.",
+    "Added regression and security boundary tests covering valid WSL2 mapping, native Windows paths, pure POSIX mode, arbitrary POSIX paths, cross-drive paths, forged sibling prefixes, `..` traversal, escaping directory junctions/symlinks, SHA-256 mismatches, out-of-scope/dead-branch citations, and invalid-sanitizer `REFUTED` rejections."
+  ],
   "setup_instructions": [
     "1. Checkout detached HEAD at the exact resolved commit of origin/v2/antigravity-review in an isolated workspace.",
     "2. Verify or clone clean upstream `https://github.com/hardw00t/simple_semgrepAI.git` checked out at `2c79a58a16d11e9dea3723e30d2a7faffba7bdc9`.",
@@ -34,18 +42,18 @@
   ],
   "required_environment": {
     "python": ">=3.11 with typer, rich, PyYAML",
-    "opengrep": "Local OpenGrep CLI binary (>=1.20.0); Semgrep is rejected by design",
+    "opengrep": "Local OpenGrep CLI binary (>=1.20.0, native or WSL2 wrapper); Semgrep is rejected by design",
     "ollama": "Local loopback HTTP Ollama at http://127.0.0.1:11434 (verify installed model tags via /api/tags; server reference model is qwen3.5:9b-q4_K_M; on Windows+WSL2 keep a WSL session active during HTTP calls so WSL2 does not auto-suspend)"
   },
   "expected_independent_verdict_paths": {
-    "codex_audit": "v2/g1_audit/G1-C1/VERDICT.json",
-    "javis_runtime": "v2/g1_runtime/G1-C1/VERDICT.json"
+    "codex_audit": "v2/g1_audit/G1-C2/VERDICT.json",
+    "javis_runtime": "v2/g1_runtime/G1-C2/VERDICT.json"
   },
   "private_evidence_excluded": true,
   "known_limitations": [
+    "Independent server runtime verification of `G1-C2` with `qwen3.5:9b-q4_K_M` on `ADMIN-PC` is PENDING and must be executed by JavisOS before claiming Qwen server runtime PASS.",
     "Java context extraction is bounded to the enclosing method and same-file helper callees (<=150 lines); cross-file callees are treated as unresolved external calls and fail closed to UNDETERMINED when safety is claimed.",
-    "On the development laptop (4GB VRAM / 21 GiB free disk), `qwen2.5-coder:1.5b` is installed in local WSL2 Ollama whereas `qwen3.5:9b-q4_K_M` resides on the GPU server (`ADMIN-PC`); requesting an uninstalled tag fails closed with `MODEL_UNAVAILABLE` -> `UNDETERMINED` while keeping all alerts `OPEN` in SQLite. Independent `qwen3.5:9b-q4_K_M` execution is expected from JavisOS on `ADMIN-PC`.",
     "CLI `--actor` is an unauthenticated operator string for local audit trail, and SQLite does not claim OS-level tamper resistance against privileged local users.",
-    "Historical G0 findings and 14 pending errata remain untouched and locked (`G0_ACCEPTANCE=CONDITIONAL`, historical Arm C independent contribution `CONFOUNDED`)."
+    "Historical G0 findings and 14 pending errata remain untouched and locked (`G0_ACCEPTANCE=CONDITIONAL`, `READY_FOR_G1=CONDITIONAL`, historical Arm C independent contribution `CONFOUNDED`)."
   ]
 }

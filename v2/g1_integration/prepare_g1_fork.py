@@ -292,6 +292,10 @@ def overlay_cli_g1(original: str) -> str:
             raise ValueError("unexpected pinned CLI imports: " + module)
         result = result.replace(line, "")
 
+    if result.count("from typing import Optional\n") != 1:
+        raise ValueError("unexpected pinned CLI typing import")
+    result = result.replace("from typing import Optional\n", "from typing import List, Optional\n", 1)
+
     if result.count("from .scanner import SemgrepScanner\n") != 1:
         raise ValueError("unexpected pinned SemgrepScanner import")
     result = result.replace(
@@ -314,6 +318,7 @@ def overlay_cli_g1(original: str) -> str:
         '    timeout: float = typer.Option(120.0, "--timeout", help="Per-finding Ollama HTTP timeout in seconds"),\n'
         '    no_llm: bool = typer.Option(False, "--no-llm", help="Skip Ollama calls and record UNDETERMINED in SQLite queue"),\n'
         '    runtime_origin: str = typer.Option("unverified", "--runtime-origin", help="Runtime origin label: unverified or mock"),\n'
+        '    path_map: Optional[List[str]] = typer.Option(None, "--path-map", help="Optional explicit POSIX/WSL prefix mapping PREFIX=LOCAL_DIR inside source root"),\n'
     )
     result = result.replace(signature, signature + extra_options)
 
@@ -344,6 +349,7 @@ def overlay_cli_g1(original: str) -> str:
                 timeout=timeout,
                 no_llm=no_llm,
                 runtime_origin=runtime_origin,
+                path_map=list(path_map or []),
                 argv=list(_g1_sys.argv),
             )
         except Exception as _exc:

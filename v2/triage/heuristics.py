@@ -358,18 +358,33 @@ def _merge_states(s1: str, s2: str, primary_cwe: str) -> str:
 
 
 def _collect_available_lines(record: dict[str, Any]) -> tuple[str, str, dict[int, str]]:
-    """Return primary path, sha256, and sorted line_no -> text from record snippets."""
-    primary_path = record.get("path") or ""
-    snapshots = record.get("snapshots") or {}
+    """Return Evidence-verified primary relative path, sha256, and sorted line_no -> text from record snippets."""
+    snapshots = record.get("snapshots") if isinstance(record.get("snapshots"), dict) else {}
+    snippets = record.get("snippets") if isinstance(record.get("snippets"), list) else []
+    primary_path = ""
+    for snippet in snippets:
+        if isinstance(snippet, dict) and snippet.get("role") == "finding":
+            cand = snippet.get("path")
+            if isinstance(cand, str) and cand in snapshots:
+                primary_path = cand
+                break
+    if not primary_path:
+        raw_p = record.get("path")
+        if isinstance(raw_p, str) and raw_p in snapshots:
+            primary_path = raw_p
+        elif snippets and isinstance(snippets[0], dict) and snippets[0].get("role") is None:
+            cand = snippets[0].get("path")
+            if isinstance(cand, str) and cand in snapshots:
+                primary_path = cand
+
     lines_by_no: dict[int, str] = {}
-    for snippet in record.get("snippets") or []:
-        if not primary_path:
-            primary_path = snippet.get("path") or ""
-        if snippet.get("path") == primary_path or not lines_by_no:
-            primary_path = snippet.get("path") or primary_path
-            for ln in snippet.get("lines") or []:
-                lines_by_no[ln["line"]] = ln["text"]
-    sha = (snapshots.get(primary_path) or {}).get("sha256", "")
+    if primary_path:
+        for snippet in snippets:
+            if isinstance(snippet, dict) and snippet.get("path") == primary_path:
+                for ln in snippet.get("lines") or []:
+                    if isinstance(ln, dict) and type(ln.get("line")) is int and isinstance(ln.get("text"), str):
+                        lines_by_no[ln["line"]] = ln["text"]
+    sha = (snapshots.get(primary_path) or {}).get("sha256", "") if primary_path else ""
     return primary_path, sha, dict(sorted(lines_by_no.items()))
 
 

@@ -17,7 +17,7 @@ Yêu cầu môi trường:
 - Python >= 3.11 với `typer`, `rich`, `PyYAML`.
 - Binary `opengrep` cục bộ (ví dụ OpenGrep 1.20.0+).
 - Dịch vụ `ollama` cục bộ lắng nghe trên `http://127.0.0.1:11434` cùng model Qwen đã cài đặt (mặc định tham chiếu: `qwen3.5:9b-q4_K_M`).
-  - *Lưu ý cho Windows + WSL2:* nếu `ollama` chạy trong WSL2, giữ một tiến trình WSL hoạt động (ví dụ `wsl -- sleep 300`) trong suốt phiên gọi HTTP từ Windows để tránh WSL2 tự tắt máy ảo khi nhàn rỗi.
+  - *Lưu ý cho Windows + WSL2:* khi OpenGrep chạy qua cầu nối WSL2 và sinh đường dẫn `/mnt/<drive>/...`, `bridge.py` tự động suy xuất ánh xạ tin cậy một chiều từ đúng `source_root` đã xác minh sang đường dẫn Windows tương ứng mà không chỉnh sửa nội dung gốc của `opengrep.json` / `opengrep.sarif` (đồng thời hỗ trợ tùy chọn `--path-map PREFIX=LOCAL_DIR` cho các điểm gắn tùy chỉnh nằm trong `source_root`). Nếu `ollama` chạy trong WSL2, giữ một tiến trình WSL hoạt động trong suốt phiên gọi HTTP từ Windows để tránh WSL2 tự tạm dừng máy ảo khi nhàn rỗi.
 
 Dựng bản fork vào thư mục riêng ngoài repository:
 

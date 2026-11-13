@@ -10,7 +10,7 @@ import copy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
@@ -630,6 +630,399 @@ class G1HumanReviewAndStaleSourceTests(unittest.TestCase):
         self.assertEqual(hist_full["events"], [])
         self.assertEqual(len(hist_full["rejected_decisions"]), 1)
         self.assertEqual(hist_full["rejected_decisions"][0]["rejection_code"], "STALE_SOURCE")
+
+
+class G1Wsl2PathMappingIntegrationTests(unittest.TestCase):
+    """Section 8 Group 4 (G1-C2): End-to-end WSL2 OpenGrep -> Windows source_root bridge & security boundaries."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.tmp_path = Path(self.tmp.name).resolve(strict=True)
+        self.prepared_source = _build_synthetic_prepared_fork(self.tmp_path / "prepared_fork")
+        self.rules = REPO_ROOT / "v2" / "g1_integration" / "rules" / "java_g1_cwe22_cwe89.yml"
+
+        self.src_dir = self.tmp_path / "wsl_target_src"
+        self.src_dir.mkdir()
+        self.demo1_src = REPO_ROOT / "v2" / "g1_integration" / "demo_fixtures" / "Demo1TruePositive.java"
+        self.target_java = self.src_dir / "Demo1TruePositive.java"
+        shutil.copy2(self.demo1_src, self.target_java)
+
+    def _wsl_path_for_file(self, file_path: Path) -> str:
+        resolved = file_path.resolve(strict=True)
+        if os.name == "nt" and resolved.drive:
+            drv = resolved.drive[0].lower()
+            rel = resolved.relative_to(resolved.anchor).as_posix().strip("/")
+            return str(PurePosixPath(f"/mnt/{drv}/{rel}"))
+        return str(PurePosixPath(f"/mnt/c/ntk_wsl_sim/{resolved.name}"))
+
+    def _make_wsl_opengrep_wrapper(self, emitted_wsl_path: str) -> tuple[Path, bytes, bytes]:
+        """Build a local wrapper named `opengrep_wsl_sim(.cmd)` that emits 2 findings and 11 WSL2 locations."""
+        code_bytes = self.target_java.read_bytes()
+        code_text = code_bytes.decode("utf-8")
+        lines_ke = code_text.splitlines(keepends=True)
+        lines = code_text.splitlines()
+
+        def pt(ln: int, col: int) -> dict[str, int]:
+            return {
+                "line": ln,
+                "col": col,
+                "offset": sum(len(x.encode("utf-8")) for x in lines_ke[: ln - 1]) + col - 1,
+            }
+
+        def loc_dict(ln: int, snippet_txt: str) -> dict:
+            c = lines[ln - 1].index(snippet_txt) + 1
+            return {
+                "path": emitted_wsl_path,
+                "start": pt(ln, c),
+                "end": pt(ln, c + len(snippet_txt.encode("utf-8"))),
+            }
+
+        def cli_loc(ln: int, snippet_txt: str) -> list:
+            return ["CliLoc", [loc_dict(ln, snippet_txt), snippet_txt]]
+
+        # Find actual line numbers in Demo1TruePositive.java dynamically (6 + 5 = 11 WSL2 locations, matching ADMIN-PC!)
+        sqli_src_ln = next(i + 1 for i, l in enumerate(lines) if 'req.getParameter("role")' in l)
+        sqli_norm_ln = next(i + 1 for i, l in enumerate(lines) if "String normalizedRole =" in l)
+        sqli_var_ln = next(i + 1 for i, l in enumerate(lines) if "String sql =" in l)
+        sqli_sink_ln = next(i + 1 for i, l in enumerate(lines) if "stmt.executeQuery(sql)" in l)
+
+        pt_src_ln = next(i + 1 for i, l in enumerate(lines) if 'req.getParameter("file")' in l)
+        pt_var_ln = next(i + 1 for i, l in enumerate(lines) if "String targetPath =" in l)
+        pt_sink_ln = next(i + 1 for i, l in enumerate(lines) if "new FileInputStream(targetPath)" in l)
+
+        sqli_sink_loc = loc_dict(sqli_sink_ln, "stmt.executeQuery(sql)")
+        pt_sink_loc = loc_dict(pt_sink_ln, "new FileInputStream(targetPath)")
+
+        raw_json_obj = {
+            "version": "1.25.0",
+            "results": [
+                {
+                    "check_id": "v2.g1_integration.rules.ntk.g1.java.cwe89.sql-injection",
+                    "path": emitted_wsl_path,
+                    "start": sqli_sink_loc["start"],
+                    "end": sqli_sink_loc["end"],
+                    "extra": {
+                        "severity": "ERROR",
+                        "message": "SQLi",
+                        "metadata": {"cwe": ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]},
+                        "dataflow_trace": {
+                            "taint_source": cli_loc(sqli_src_ln, 'req.getParameter("role")'),
+                            "intermediate_vars": [
+                                {"location": loc_dict(sqli_src_ln, "role"), "content": "role"},
+                                {"location": loc_dict(sqli_norm_ln, "normalizedRole"), "content": "normalizedRole"},
+                                {"location": loc_dict(sqli_var_ln, "sql"), "content": "sql"},
+                            ],
+                            "taint_sink": cli_loc(sqli_sink_ln, "stmt.executeQuery(sql)"),
+                        },
+                    },
+                },
+                {
+                    "check_id": "v2.g1_integration.rules.ntk.g1.java.cwe22.path-traversal",
+                    "path": emitted_wsl_path,
+                    "start": pt_sink_loc["start"],
+                    "end": pt_sink_loc["end"],
+                    "extra": {
+                        "severity": "ERROR",
+                        "message": "Path traversal",
+                        "metadata": {"cwe": ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory"]},
+                        "dataflow_trace": {
+                            "taint_source": cli_loc(pt_src_ln, 'req.getParameter("file")'),
+                            "intermediate_vars": [
+                                {"location": loc_dict(pt_src_ln, "invoiceName"), "content": "invoiceName"},
+                                {"location": loc_dict(pt_var_ln, "targetPath"), "content": "targetPath"},
+                            ],
+                            "taint_sink": cli_loc(pt_sink_ln, "new FileInputStream(targetPath)"),
+                        },
+                    },
+                },
+            ],
+            "errors": [],
+            "paths": {"scanned": [emitted_wsl_path], "skipped": []},
+        }
+        sarif_uri = "file://" + emitted_wsl_path
+        raw_sarif_obj = {
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [
+                {
+                    "tool": {"driver": {"name": "opengrep", "semanticVersion": "1.25.0", "rules": []}},
+                    "results": [
+                        {
+                            "ruleId": "v2.g1_integration.rules.ntk.g1.java.cwe89.sql-injection",
+                            "locations": [{
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": sarif_uri},
+                                    "region": {
+                                        "startLine": sqli_sink_loc["start"]["line"],
+                                        "startColumn": sqli_sink_loc["start"]["col"],
+                                        "endLine": sqli_sink_loc["end"]["line"],
+                                        "endColumn": sqli_sink_loc["end"]["col"],
+                                    },
+                                }
+                            }],
+                        },
+                        {
+                            "ruleId": "v2.g1_integration.rules.ntk.g1.java.cwe22.path-traversal",
+                            "locations": [{
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": sarif_uri},
+                                    "region": {
+                                        "startLine": pt_sink_loc["start"]["line"],
+                                        "startColumn": pt_sink_loc["start"]["col"],
+                                        "endLine": pt_sink_loc["end"]["line"],
+                                        "endColumn": pt_sink_loc["end"]["col"],
+                                    },
+                                }
+                            }],
+                        },
+                    ],
+                }
+            ],
+        }
+
+        payload_dir = self.tmp_path / f"wsl_payload_{abs(hash(emitted_wsl_path))}"
+        payload_dir.mkdir(parents=True, exist_ok=True)
+        raw_json_bytes = (json.dumps(raw_json_obj, indent=2) + "\n").encode("utf-8")
+        raw_sarif_bytes = (json.dumps(raw_sarif_obj, indent=2) + "\n").encode("utf-8")
+        (payload_dir / "payload.json").write_bytes(raw_json_bytes)
+        (payload_dir / "payload.sarif").write_bytes(raw_sarif_bytes)
+
+        helper_py = payload_dir / "emit_scan.py"
+        helper_py.write_text(
+            "import pathlib, shutil, sys\n"
+            "args = sys.argv[1:]\n"
+            "base = pathlib.Path(__file__).resolve().parent\n"
+            "if '--version' in args:\n"
+            "    print('1.25.0')\n"
+            "    raise SystemExit(0)\n"
+            "src = base / ('payload.sarif' if '--sarif' in args else 'payload.json')\n"
+            "if '--output' in args:\n"
+            "    out = pathlib.Path(args[args.index('--output') + 1])\n"
+            "    shutil.copyfile(src, out)\n"
+            "else:\n"
+            "    sys.stdout.buffer.write(src.read_bytes())\n",
+            encoding="utf-8",
+        )
+
+        bin_dir = payload_dir / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        if os.name == "nt":
+            wrapper = bin_dir / "opengrep_wsl_sim.cmd"
+            wrapper.write_text(f'@echo off\r\n"{sys.executable}" -B "{helper_py}" %*\r\n', encoding="utf-8")
+        else:
+            wrapper = bin_dir / "opengrep_wsl_sim"
+            wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" -B "{helper_py}" "$@"\n', encoding="utf-8")
+            wrapper.chmod(0o755)
+        return wrapper, raw_json_bytes, raw_sarif_bytes
+
+    def test_11_wsl2_opengrep_e2e_via_inherited_cli_preserves_raw_capture_and_invokes_qwen(self):
+        wsl_path = self._wsl_path_for_file(self.target_java)
+        wrapper, expected_json_bytes, expected_sarif_bytes = self._make_wsl_opengrep_wrapper(wsl_path)
+
+        chat_requests: list[dict] = []
+
+        class MockQwenHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                if self.path == "/api/tags":
+                    body = json.dumps({
+                        "models": [{"name": "qwen3.5:9b-q4_K_M", "digest": "mock-wsl-test", "size": 1}]
+                    }).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self.send_error(404)
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                req_doc = json.loads(self.rfile.read(length).decode("utf-8"))
+                chat_requests.append(req_doc)
+                user_ev = json.loads(req_doc["messages"][1]["content"])
+                snip = user_ev["snippets"][0]
+                sink_ln = user_ev["start"]["line"]
+                line_obj = next(ln for ln in snip["lines"] if ln["line"] == sink_ln)
+                ans = {
+                    "status": "SUPPORTED",
+                    "explanation": "Tham số HTTP đi thẳng tới sink nhạy cảm không qua bước làm sạch.",
+                    "fix_suggestion": "Sử dụng PreparedStatement hoặc kiểm tra đường dẫn chính tắc.",
+                    "citations": [{
+                        "path": snip["path"],
+                        "start_line": sink_ln,
+                        "end_line": sink_ln,
+                        "quote": line_obj["text"],
+                        "sha256": snip["sha256"],
+                    }],
+                }
+                resp = {
+                    "done": True,
+                    "done_reason": "stop",
+                    "model": "qwen3.5:9b-q4_K_M",
+                    "mock_test_fixture": True,
+                    "eval_count": 64,
+                    "eval_duration": 1000000,
+                    "message": {"role": "assistant", "content": json.dumps(ans, ensure_ascii=False)},
+                }
+                body = json.dumps(resp, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), MockQwenHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            out_dir = self.tmp_path / "wsl_g1_e2e_out"
+            extra_flags = [] if os.name == "nt" else ["--path-map", f"/mnt/c/ntk_wsl_sim={self.src_dir}"]
+            res = _run_prepared_cli(
+                self.prepared_source,
+                [
+                    "scan", str(self.target_java),
+                    "--rules-path", str(self.rules),
+                    "--output-dir", str(out_dir),
+                    "--executable", str(wrapper),
+                    "--local-triage",
+                    "--endpoint", f"http://127.0.0.1:{server.server_port}",
+                    "--model", "qwen3.5:9b-q4_K_M",
+                    "--runtime-origin", "mock",
+                    *extra_flags,
+                ],
+            )
+            self.assertEqual(res.returncode, 0, f"STDERR:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
+
+            # 1. Raw OpenGrep JSON and SARIF are preserved byte-for-byte lossless (no path rewriting!)
+            self.assertEqual((out_dir / "capture" / "opengrep.json").read_bytes(), expected_json_bytes)
+            self.assertEqual((out_dir / "capture" / "opengrep.sarif").read_bytes(), expected_sarif_bytes)
+
+            # 2. All stages succeeded, 0 rescans, Qwen actually invoked twice (once per finding)
+            manifest = json.loads((out_dir / "g1-run-manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["triage_subprocess_invocations"], 0)
+            self.assertEqual(manifest["stage_statuses"]["scanner_status"], "OK")
+            self.assertEqual(manifest["stage_statuses"]["source_integrity_status"], "VERIFIED")
+            self.assertEqual(manifest["stage_statuses"]["json_sarif_parity_status"], "MATCHED")
+            self.assertEqual(manifest["stage_statuses"]["handoff_status"], "VERIFIED")
+            self.assertEqual(manifest["stage_statuses"]["qwen_inference_status"], "ALL_HTTP_COMPLETED")
+            self.assertEqual(manifest["stage_statuses"]["validator_status"], "ALL_VALIDATED")
+            self.assertEqual(manifest["stage_statuses"]["queue_status"], "OPEN_READY")
+            self.assertTrue(manifest["stage_statuses"]["all_stages_succeeded"])
+            self.assertEqual(len(chat_requests), 2)
+
+            # 3. Evidence bundle has 0 issues, preserves raw `/mnt/...` provenance, and binds canonical relative snapshot
+            ev_bundle = json.loads((out_dir / "triage" / "evidence.json").read_text(encoding="utf-8"))
+            self.assertEqual(ev_bundle["issues"], [])
+            for rec in ev_bundle["records"]:
+                self.assertEqual(rec["issues"], [])
+                self.assertEqual(rec["path"], wsl_path)
+                self.assertIn("Demo1TruePositive.java", rec["snapshots"])
+                self.assertEqual(rec["snippets"][0]["path"], "Demo1TruePositive.java")
+                self.assertEqual(rec["snippets"][0]["raw_path"], wsl_path)
+
+            # 4. Human queue holds both findings as OPEN with validated SUPPORTED status
+            q_doc = json.loads(
+                _run_prepared_cli(self.prepared_source, ["queue", "--db", str(out_dir / "triage" / "review.sqlite")]).stdout
+            )
+            self.assertEqual(len(q_doc["warnings"]), 2)
+            self.assertTrue(all(w["state"] == "OPEN" for w in q_doc["warnings"]))
+            self.assertEqual([w["validated_status"] for w in q_doc["warnings"]], ["SUPPORTED", "SUPPORTED"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def test_12_untrusted_posix_cross_drive_sibling_traversal_and_symlink_escape_fail_closed_in_cli(self):
+        outside_dir = self.tmp_path / "outside_secret"
+        outside_dir.mkdir()
+        shutil.copy2(self.demo1_src, outside_dir / "Demo1TruePositive.java")
+
+        sibling_dir = self.tmp_path / "wsl_target_src-evil"
+        sibling_dir.mkdir()
+        shutil.copy2(self.demo1_src, sibling_dir / "Demo1TruePositive.java")
+
+        escape_link = self.src_dir / "escape_sub"
+        if os.name == "nt":
+            import _winapi
+            _winapi.CreateJunction(str(outside_dir), str(escape_link))
+        else:
+            os.symlink(str(outside_dir), str(escape_link), target_is_directory=True)
+
+        valid_wsl_file = self._wsl_path_for_file(self.target_java)
+        valid_wsl_dir = valid_wsl_file.rsplit("/", 1)[0]
+
+        attack_paths = [
+            ("/etc/Demo1TruePositive.java", None),
+            ("/mnt/z/cross_drive/Demo1TruePositive.java", None),
+            (f"{valid_wsl_dir}-evil/Demo1TruePositive.java", None),
+            (f"{valid_wsl_dir}/../outside_secret/Demo1TruePositive.java", "invalid mapped path suffix"),
+            (f"{valid_wsl_dir}/escape_sub/Demo1TruePositive.java", "outside configured root"),
+        ]
+        try:
+            # Directory-target inventory also rejects a junction/symlink escaping source_root before scanning
+            with self.assertRaisesRegex(EvidenceError, "outside configured root"):
+                bridge._source_inventory(self.src_dir)
+
+            for idx, (bad_wsl_path, expected_issue_substr) in enumerate(attack_paths):
+                with self.subTest(bad_wsl_path=bad_wsl_path):
+                    wrapper, _, _ = self._make_wsl_opengrep_wrapper(bad_wsl_path)
+                    out_dir = self.tmp_path / f"attack_out_{idx}"
+                    extra_flags = [] if os.name == "nt" else ["--path-map", f"/mnt/c/ntk_wsl_sim={self.src_dir}"]
+                    res = _run_prepared_cli(
+                        self.prepared_source,
+                        [
+                            "scan", str(self.target_java),
+                            "--rules-path", str(self.rules),
+                            "--output-dir", str(out_dir),
+                            "--executable", str(wrapper),
+                            "--local-triage",
+                            "--no-llm",
+                            *extra_flags,
+                        ],
+                    )
+                    # Wrapper must exit 2 (degraded/failed evidence) and retain both alerts OPEN + UNDETERMINED
+                    self.assertEqual(res.returncode, 2)
+                    ev_bundle = json.loads((out_dir / "triage" / "evidence.json").read_text(encoding="utf-8"))
+                    for rec in ev_bundle["records"]:
+                        self.assertTrue(rec["issues"])
+                        if expected_issue_substr:
+                            self.assertTrue(
+                                any(expected_issue_substr in iss for iss in rec["issues"]),
+                                f"Expected {expected_issue_substr!r} in {rec['issues']}",
+                            )
+                        self.assertEqual(rec["snapshots"], {})
+                    q_doc = json.loads(
+                        _run_prepared_cli(self.prepared_source, ["queue", "--db", str(out_dir / "triage" / "review.sqlite")]).stdout
+                    )
+                    self.assertEqual(len(q_doc["warnings"]), 2)
+                    self.assertTrue(all(w["state"] == "OPEN" for w in q_doc["warnings"]))
+                    self.assertTrue(all(w["validated_status"] == "UNDETERMINED" for w in q_doc["warnings"]))
+        finally:
+            if escape_link.exists() or escape_link.is_symlink():
+                if os.name == "nt":
+                    os.rmdir(escape_link)
+                else:
+                    escape_link.unlink()
+
+        # Also verify explicit --path-map outside source_root via CLI fails closed with exit code 2 before scanning
+        bad_map_out = self.tmp_path / "bad_cli_map_out"
+        res_bad_map = _run_prepared_cli(
+            self.prepared_source,
+            [
+                "scan", str(self.target_java),
+                "--rules-path", str(self.rules),
+                "--output-dir", str(bad_map_out),
+                "--local-triage",
+                "--no-llm",
+                "--path-map", f"/mnt/x/outside={outside_dir}",
+            ],
+        )
+        self.assertEqual(res_bad_map.returncode, 2)
+        self.assertFalse((bad_map_out / "triage" / "review.sqlite").exists())
 
 
 if __name__ == "__main__":
