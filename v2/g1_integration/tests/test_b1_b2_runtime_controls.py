@@ -8,12 +8,15 @@ All HTTP servers in this suite are explicit local loopback MOCK fixtures; real Q
 """
 from __future__ import annotations
 
+import contextlib
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -485,7 +488,7 @@ class B1B2EndToEndAcceptanceControlsTests(unittest.TestCase):
 
         # F07b: Mutate Demo1 warnings.state without event -> event-replay mismatch -> R03 FAIL
         def _tamper_warning_state(db_p: Path):
-            with sqlite3.connect(str(db_p)) as conn:
+            with contextlib.closing(sqlite3.connect(str(db_p))) as conn:
                 conn.execute("UPDATE warnings SET state='CONFIRMED_TRUE' WHERE state='OPEN'")
                 conn.commit()
 
@@ -493,11 +496,130 @@ class B1B2EndToEndAcceptanceControlsTests(unittest.TestCase):
 
         # F07c: Mutate Demo2 event evidence_sha256 & invalid timestamp -> R03 FAIL
         def _tamper_event_row(db_p: Path):
-            with sqlite3.connect(str(db_p)) as conn:
+            with contextlib.closing(sqlite3.connect(str(db_p))) as conn:
                 conn.execute("UPDATE events SET evidence_sha256='badsha', timestamp='not-iso' WHERE sequence=1")
                 conn.commit()
 
         _assert_tampered_file(d2_dir / "triage" / "review.sqlite", _tamper_event_row, "R03")
+
+        # F06c (A2 in-place without relocation): mandatory review.post_ingestion.sqlite SHA-256 anchor in g1-run-manifest.json
+        def _drop_review_sha(p: Path):
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            doc["artifacts"]["review_sqlite"].pop("sha256", None)
+            p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+
+        def _null_review_sha(p: Path):
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            doc["artifacts"]["review_sqlite"]["sha256"] = None
+            p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+
+        def _bad_hex_review_sha(p: Path):
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            doc["artifacts"]["review_sqlite"]["sha256"] = "not-a-valid-sha256"
+            p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+
+        def _wrong_review_sha(p: Path):
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            doc["artifacts"]["review_sqlite"]["sha256"] = "0" * 64
+            p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+
+        def _drop_review_entry(p: Path):
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            doc["artifacts"].pop("review_sqlite", None)
+            p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+
+        for mut in (_drop_review_sha, _null_review_sha, _bad_hex_review_sha, _wrong_review_sha, _drop_review_entry):
+            _assert_tampered_file(d1_dir / "g1-run-manifest.json", mut, "R03")
+        _assert_tampered_file(d4_dir / "g1-run-manifest.json", _drop_review_sha, "R03")
+
+        def _mutate_post_ingestion_db(db_p: Path):
+            with contextlib.closing(sqlite3.connect(str(db_p))) as conn:
+                conn.execute("UPDATE warnings SET assessment='{}'")
+                conn.commit()
+
+        _assert_tampered_file(d1_dir / "triage" / "review.post_ingestion.sqlite", _mutate_post_ingestion_db, "R03")
+
+        # F07d (A3 in-place without relocation): review event / rejected_decisions predating scan must FAIL;
+        # valid post-ingestion non-UTC timezone offset (+07:00) must PASS; evaluator stays strictly read-only.
+        d1_db_file = d1_dir / "triage" / "review.sqlite"
+        orig_d1_db_bytes = d1_db_file.read_bytes()
+        try:
+            with contextlib.closing(sqlite3.connect(str(d1_db_file))) as conn:
+                conn.execute("UPDATE events SET timestamp='2000-01-01T00:00:00+00:00'")
+                conn.commit()
+            d1_triage_inv_before = _dir_inventory(d1_dir / "triage")
+            rep_predate = _eval()
+            self.assertEqual(rep_predate["overall_status"], "FAIL")
+            self.assertEqual(rep_predate["criteria"]["R03"]["status"], "FAIL")
+            self.assertTrue(
+                any("precedes scan" in msg or "precedes" in msg for msg in rep_predate["criteria"]["R03"]["failures"]),
+                rep_predate["criteria"]["R03"]["failures"],
+            )
+            self.assertEqual(_dir_inventory(d1_dir / "triage"), d1_triage_inv_before)
+
+            # Naive timestamp without timezone offset -> R03 FAIL
+            with contextlib.closing(sqlite3.connect(str(d1_db_file))) as conn:
+                conn.execute("UPDATE events SET timestamp='2026-11-15T12:00:00'")
+                conn.commit()
+            rep_naive = _eval()
+            self.assertEqual(rep_naive["overall_status"], "FAIL")
+            self.assertEqual(rep_naive["criteria"]["R03"]["status"], "FAIL")
+
+            # Positive timezone-offset control (+07:00 strictly after g1-run-manifest recorded_at) -> PASS
+            d1_manifest_doc = json.loads((d1_dir / "g1-run-manifest.json").read_text(encoding="utf-8"))
+            rec_dt = datetime.fromisoformat(d1_manifest_doc["recorded_at"].replace("Z", "+00:00"))
+            tz_vn = timezone(timedelta(hours=7))
+            valid_plus7_ts = (rec_dt + timedelta(seconds=5)).astimezone(tz_vn).isoformat()
+            with contextlib.closing(sqlite3.connect(str(d1_db_file))) as conn:
+                conn.execute("UPDATE events SET timestamp=?", (valid_plus7_ts,))
+                conn.commit()
+            rep_plus7 = _eval()
+            self.assertEqual(rep_plus7["overall_status"], "PASS", rep_plus7["criteria"])
+            self.assertEqual(rep_plus7["criteria"]["R03"]["status"], "PASS")
+        finally:
+            d1_db_file.write_bytes(orig_d1_db_bytes)
+        self.assertEqual(_eval()["overall_status"], "PASS")
+
+        # Demo4 rejected_decisions predating scan -> R03 FAIL
+        def _predate_d4_rejected(db_p: Path):
+            with contextlib.closing(sqlite3.connect(str(db_p))) as conn:
+                conn.execute("UPDATE rejected_decisions SET timestamp='2000-01-01T00:00:00+00:00'")
+                conn.commit()
+
+        _assert_tampered_file(d4_dir / "triage" / "review.sqlite", _predate_d4_rejected, "R03")
+
+        # A1 deep ancestor junction on scenario directory -> evaluator rejects with FAIL
+        junc_holder = self.tmp_root / "eval_deep_junc_holder"
+        junc_holder.mkdir()
+        junc_outside = self.tmp_root / "eval_deep_junc_outside"
+        (junc_outside / "a" / "b").mkdir(parents=True)
+        shutil.copytree(d1_dir, junc_outside / "a" / "b" / "d1")
+        eval_link = junc_holder / "link"
+        linked_ok = False
+        if os.name == "nt":
+            proc = subprocess.run(
+                ["cmd.exe", "/c", "mklink", "/J", str(eval_link), str(junc_outside)],
+                capture_output=True,
+                text=True,
+            )
+            linked_ok = proc.returncode == 0
+        else:
+            try:
+                os.symlink(str(junc_outside), str(eval_link), target_is_directory=True)
+                linked_ok = True
+            except (OSError, NotImplementedError):
+                linked_ok = False
+        if linked_ok:
+            try:
+                rep_junc = _eval(override_d1=eval_link / "a" / "b" / "d1")
+                self.assertEqual(rep_junc["overall_status"], "FAIL")
+                self.assertEqual(rep_junc["criteria"]["R02"]["status"], "FAIL")
+                self.assertEqual(rep_junc["criteria"]["R03"]["status"], "FAIL")
+            finally:
+                if os.name == "nt":
+                    subprocess.run(["cmd.exe", "/c", "rmdir", str(eval_link)], capture_output=True, text=True)
+                elif eval_link.is_symlink():
+                    eval_link.unlink()
 
         # F05c: Live Java fixture drift on disk after scan -> R02 FAIL without mutating triage/
         live_src_dir = self.tmp_root / "mutable_d1_live_src"

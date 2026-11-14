@@ -21,7 +21,14 @@ import stat
 from typing import Any
 
 from .evidence import EvidenceError, digest, strict_json
-from .ollama import MAX_HTTP_BODY_BYTES, CaptureWriteError, is_reparse_link, request_payload
+from .ollama import (
+    MAX_HTTP_BODY_BYTES,
+    CaptureWriteError,
+    _validate_lexical_dir_path,
+    is_reparse_link,
+    request_payload,
+    verify_safe_directory_chain,
+)
 
 MAX_METADATA_JSON_BYTES = 16 * 1024 * 1024
 
@@ -96,32 +103,78 @@ def _failed_report(errors: list[str]) -> dict[str, Any]:
 
 def _verify_tags_captures(tags_dir: Path, seen_call_ids: set[str], errors: list[str]) -> list[dict[str, Any]]:
     probes: list[dict[str, Any]] = []
-    raw_tags = Path(tags_dir)
-    if ".." in raw_tags.parts:
-        errors.append(f"llm_io/_tags path must not contain '..': {tags_dir}")
+    try:
+        raw_tags = _validate_lexical_dir_path(tags_dir, label="llm_io/_tags")
+    except CaptureWriteError as exc:
+        errors.append(str(exc))
         return probes
     abs_tags = Path(os.path.abspath(raw_tags))
-    if abs_tags.parent != abs_tags and abs_tags.parent != Path(abs_tags.anchor):
-        if os.path.lexists(abs_tags.parent):
-            try:
-                if is_reparse_link(abs_tags.parent):
-                    errors.append(f"llm_io parent directory is a symlink or junction: {abs_tags.parent}")
-                    return probes
-            except CaptureWriteError as exc:
-                errors.append(str(exc))
-                return probes
-    if not os.path.lexists(abs_tags):
+    if not abs_tags.anchor or abs_tags == Path(abs_tags.anchor):
+        errors.append(f"invalid llm_io/_tags root path: {abs_tags}")
         return probes
+    anchor = Path(abs_tags.anchor)
+    try:
+        anchor_st = os.lstat(anchor)
+        if not stat.S_ISDIR(anchor_st.st_mode):
+            errors.append(f"filesystem root anchor is not a directory: {anchor}")
+            return probes
+        prev_resolved = anchor.resolve(strict=True)
+        if os.name == "nt" and prev_resolved.drive.upper() != anchor.drive.upper():
+            errors.append(f"drive root {anchor} redirects to different volume {prev_resolved}")
+            return probes
+        if prev_resolved != Path(os.path.abspath(prev_resolved)) or prev_resolved.parent != prev_resolved:
+            errors.append(f"filesystem root redirects unexpectedly: {anchor} -> {prev_resolved}")
+            return probes
+    except (OSError, RuntimeError) as exc:
+        errors.append(f"cannot verify filesystem root for llm_io/_tags {anchor}: {exc}")
+        return probes
+
+    rel_parts = abs_tags.relative_to(anchor).parts
+    cur = anchor
+    for part in rel_parts[:-1]:
+        cur = cur / part
+        try:
+            st_anc = os.lstat(cur)
+        except FileNotFoundError:
+            return probes
+        except OSError as exc:
+            errors.append(f"cannot inspect llm_io/_tags ancestor {cur}: {exc}")
+            return probes
+        try:
+            if is_reparse_link(cur):
+                errors.append(f"llm_io/_tags ancestor must not be a symlink, junction, or reparse point: {cur}")
+                return probes
+            if not stat.S_ISDIR(st_anc.st_mode):
+                errors.append(f"llm_io/_tags ancestor is not a directory: {cur}")
+                return probes
+            resolved_anc = cur.resolve(strict=True)
+            res_anc_st = os.lstat(resolved_anc)
+        except (OSError, CaptureWriteError, RuntimeError) as exc:
+            errors.append(f"cannot verify llm_io/_tags ancestor {cur}: {exc}")
+            return probes
+        if resolved_anc.parent != prev_resolved or not os.path.samestat(st_anc, res_anc_st):
+            errors.append(f"llm_io/_tags ancestor resolves outside lexical parent chain: {cur} -> {resolved_anc}")
+            return probes
+        prev_resolved = resolved_anc
+
+    try:
+        st = os.lstat(abs_tags)
+    except FileNotFoundError:
+        return probes
+    except OSError as exc:
+        errors.append(f"cannot inspect llm_io/_tags {abs_tags}: {exc}")
+        return probes
+
     try:
         if is_reparse_link(abs_tags):
-            errors.append(f"llm_io/_tags must not be a symlink or junction: {abs_tags}")
+            errors.append(f"llm_io/_tags must not be a symlink, junction, or reparse point: {abs_tags}")
             return probes
-        st = os.lstat(abs_tags)
         if not stat.S_ISDIR(st.st_mode):
             errors.append(f"llm_io/_tags is not a directory: {abs_tags}")
             return probes
         resolved_tags = abs_tags.resolve(strict=True)
-        if os.path.lexists(abs_tags.parent) and resolved_tags.parent != abs_tags.parent.resolve(strict=True):
+        res_tags_st = os.lstat(resolved_tags)
+        if resolved_tags.parent != prev_resolved or not os.path.samestat(st, res_tags_st):
             errors.append(f"llm_io/_tags resolves outside parent llm_io directory: {resolved_tags}")
             return probes
         dir_entries = sorted(abs_tags.iterdir(), key=lambda p: p.name)
@@ -272,27 +325,13 @@ def verify_run_http_captures(
     require_live_chat: bool = False,
     minimum_findings: int = 0,
 ) -> dict[str, Any]:
-    raw_triage = Path(triage_dir)
-    if ".." in raw_triage.parts:
-        return _failed_report([f"triage_dir must not contain '..': {triage_dir}"])
-    abs_triage = Path(os.path.abspath(raw_triage))
     errors: list[str] = []
-    if not os.path.lexists(abs_triage):
-        return _failed_report([f"missing triage directory: {abs_triage}"])
     try:
-        if abs_triage.parent != abs_triage and abs_triage.parent != Path(abs_triage.anchor):
-            if os.path.lexists(abs_triage.parent) and is_reparse_link(abs_triage.parent):
-                return _failed_report([f"triage parent directory is a symlink or junction: {abs_triage.parent}"])
-        if is_reparse_link(abs_triage):
-            return _failed_report([f"triage directory must not be a symlink or junction: {abs_triage}"])
-        if not stat.S_ISDIR(os.lstat(abs_triage).st_mode):
-            return _failed_report([f"triage path is not a directory: {abs_triage}"])
-        resolved_triage = abs_triage.resolve(strict=True)
-        if abs_triage.parent != abs_triage and os.path.lexists(abs_triage.parent):
-            if resolved_triage.parent != abs_triage.parent.resolve(strict=True):
-                return _failed_report([f"triage directory resolves outside parent directory: {resolved_triage}"])
+        raw_triage = _validate_lexical_dir_path(triage_dir, label="triage_dir")
+        abs_triage = Path(os.path.abspath(raw_triage))
+        resolved_triage = verify_safe_directory_chain(raw_triage, boundary_root=raw_triage, create=False)
     except (OSError, CaptureWriteError, RuntimeError) as exc:
-        return _failed_report([f"cannot verify triage directory {abs_triage}: {exc}"])
+        return _failed_report([f"unsafe or invalid triage directory {triage_dir}: {exc}"])
 
     finding_checks: list[dict[str, Any]] = []
     seen_call_ids: set[str] = set()
@@ -828,20 +867,21 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_write:
         target = args.output if args.output is not None else (Path(args.run) / "http-capture-check.json")
         unsafe_reason = None
-        if args.output is None:
-            run_path = Path(args.run)
-            if ".." in run_path.parts or not os.path.lexists(run_path) or is_reparse_link(run_path) or not run_path.is_dir():
-                unsafe_reason = f"refusing to write http-capture-check.json into unsafe or link triage dir: {args.run}"
-            elif os.path.lexists(target) and is_reparse_link(target):
-                unsafe_reason = f"refusing to write through reparse/symlink target: {target}"
-        else:
-            if ".." in target.parts:
-                unsafe_reason = f"refusing '..' in verifier --output path: {target}"
+        safe_parent_dir: Path | None = None
+        try:
+            if args.output is None:
+                safe_parent_dir = verify_safe_directory_chain(Path(args.run), boundary_root=Path(args.run), create=False)
+                target = safe_parent_dir / "http-capture-check.json"
             else:
-                for anc in (target, *target.parents):
-                    if os.path.lexists(anc) and is_reparse_link(anc):
-                        unsafe_reason = f"refusing to write --output through reparse/symlink ancestor: {anc}"
-                        break
+                raw_out = _validate_lexical_dir_path(target, label="verifier --output")
+                if not _is_strict_basename(raw_out.name):
+                    raise CaptureWriteError(f"invalid verifier --output filename: {target}")
+                safe_parent_dir = verify_safe_directory_chain(raw_out.parent, boundary_root=raw_out.parent, create=True)
+                target = safe_parent_dir / raw_out.name
+            if os.path.lexists(target):
+                raise CaptureWriteError(f"refusing to overwrite existing verifier report: {target}")
+        except (OSError, CaptureWriteError, RuntimeError) as exc:
+            unsafe_reason = f"refusing unsafe verifier output target {target}: {exc}"
         if unsafe_reason is not None:
             if unsafe_reason not in result["errors"]:
                 result["errors"].append(unsafe_reason)
@@ -850,8 +890,8 @@ def main(argv: list[str] | None = None) -> int:
             result["capture_status"] = "FAILED"
             print(json.dumps(result, indent=2, ensure_ascii=False))
             return 2
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(rendered + "\n", encoding="utf-8")
+        with target.open("xb") as handle:
+            handle.write((rendered + "\n").encode("utf-8"))
     print(rendered)
     if args.require_live_chat:
         return 0 if result["live_chat_verified"] else 2

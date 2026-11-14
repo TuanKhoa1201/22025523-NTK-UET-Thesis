@@ -10,7 +10,7 @@ Never infers R01 PASS from CLI exit code `0`, HTTP `200`, `ALL_HTTP_COMPLETED`, 
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -24,10 +24,13 @@ from v2.triage.evidence import EvidenceError, SourceTree, StaleSourceError, chec
 from v2.triage.ollama import (
     PROMPT_CONTRACT_BLIND,
     PROMPT_VERSION,
+    CaptureWriteError,
+    _validate_lexical_dir_path,
     assert_prompt_contract,
     inspect_citations_provenance,
     is_reparse_link,
     validate_answer,
+    verify_safe_directory_chain,
 )
 from v2.triage.scan_receipt import verify_receipt
 from v2.triage.verify_http_capture import _safe_id, verify_run_http_captures
@@ -56,43 +59,124 @@ def _encode_canonical(value: Any) -> str:
 
 
 def _has_parent_traversal(path: Path) -> bool:
+    try:
+        _validate_lexical_dir_path(path, label="path")
+    except CaptureWriteError:
+        return True
     return ".." in Path(path).parts
 
 
-def _is_safe_dir(path: Path) -> bool:
-    p = Path(path)
-    if _has_parent_traversal(p) or not os.path.lexists(p):
-        return False
-    if is_reparse_link(p):
-        return False
+def _is_missing_clean_path(path: Path) -> bool:
+    """Return True only when path is lexically clean, traverses no symlink/junction ancestors,
+    and does not exist yet because a clean non-reparse directory segment is absent.
+    """
     try:
-        st = os.lstat(p)
-    except OSError:
+        raw_p = _validate_lexical_dir_path(path, label="scenario directory")
+    except CaptureWriteError:
         return False
-    if not stat.S_ISDIR(st.st_mode):
+    abs_p = Path(os.path.abspath(raw_p))
+    if not abs_p.anchor or abs_p == Path(abs_p.anchor):
         return False
-    parent = p.parent
-    if parent != p and os.path.lexists(parent) and is_reparse_link(parent):
+    anchor = Path(abs_p.anchor)
+    try:
+        anchor_st = os.lstat(anchor)
+        if not stat.S_ISDIR(anchor_st.st_mode):
+            return False
+        prev_resolved = anchor.resolve(strict=True)
+        if os.name == "nt" and prev_resolved.drive.upper() != anchor.drive.upper():
+            return False
+        if prev_resolved != Path(os.path.abspath(prev_resolved)) or prev_resolved.parent != prev_resolved:
+            return False
+    except (OSError, RuntimeError):
+        return False
+    cur = anchor
+    for part in abs_p.relative_to(anchor).parts:
+        cur = cur / part
+        try:
+            st = os.lstat(cur)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        try:
+            if is_reparse_link(cur) or not stat.S_ISDIR(st.st_mode):
+                return False
+            resolved_cur = cur.resolve(strict=True)
+            res_st = os.lstat(resolved_cur)
+        except (OSError, CaptureWriteError, RuntimeError):
+            return False
+        if resolved_cur.parent != prev_resolved or not os.path.samestat(st, res_st):
+            return False
+        prev_resolved = resolved_cur
+    return False
+
+
+def _is_safe_dir(path: Path) -> bool:
+    try:
+        verify_safe_directory_chain(Path(path), boundary_root=Path(path), create=False)
+    except (CaptureWriteError, OSError, RuntimeError, ValueError, TypeError):
         return False
     return True
 
 
 def _is_safe_regular_file(path: Path) -> bool:
-    p = Path(path)
-    if _has_parent_traversal(p) or not os.path.lexists(p):
-        return False
-    if is_reparse_link(p):
-        return False
     try:
-        st = os.lstat(p)
-    except OSError:
-        return False
-    if not stat.S_ISREG(st.st_mode):
-        return False
-    parent = p.parent
-    if parent != p and os.path.lexists(parent) and is_reparse_link(parent):
+        raw_p = _validate_lexical_dir_path(path, label="artifact file")
+        abs_p = Path(os.path.abspath(raw_p))
+        if abs_p.parent == abs_p:
+            return False
+        resolved_parent = verify_safe_directory_chain(abs_p.parent, boundary_root=abs_p.parent, create=False)
+        if not os.path.lexists(abs_p) or is_reparse_link(abs_p):
+            return False
+        st = os.lstat(abs_p)
+        if not stat.S_ISREG(st.st_mode):
+            return False
+        resolved = abs_p.resolve(strict=True)
+        res_st = os.lstat(resolved)
+        if resolved.parent != resolved_parent or not os.path.samestat(st, res_st):
+            return False
+    except (CaptureWriteError, OSError, RuntimeError, ValueError, TypeError):
         return False
     return True
+
+
+def _parse_utc_timestamp(value: Any) -> datetime:
+    """Parse timezone-aware ISO-8601 timestamp and normalize to UTC."""
+    return contracts.timestamp(value).astimezone(timezone.utc)
+
+
+def _verify_manifest_artifact_hash(
+    label: str,
+    artifacts_meta: Any,
+    key: str,
+    file_path: Path,
+    *,
+    expected_basename: str | None = None,
+) -> tuple[str | None, list[str]]:
+    if not isinstance(artifacts_meta, dict):
+        return None, [f"{label}: g1-run-manifest missing artifacts dictionary for {key}"]
+    entry = artifacts_meta.get(key)
+    if not isinstance(entry, dict):
+        return None, [f"{label}: g1-run-manifest missing mandatory artifacts.{key} entry"]
+    raw_decl_path = entry.get("path")
+    target_basename = expected_basename or file_path.name
+    if not isinstance(raw_decl_path, str) or not raw_decl_path.strip() or Path(raw_decl_path).name != target_basename:
+        return None, [
+            f"{label}: artifacts.{key}.path must name {target_basename!r}, got {raw_decl_path!r}"
+        ]
+    raw_sha = entry.get("sha256")
+    try:
+        expected_sha = contracts.hexhash(raw_sha)
+    except (ValueError, TypeError) as exc:
+        return None, [f"{label}: missing or invalid mandatory artifacts.{key}.sha256 ({raw_sha!r}): {exc}"]
+    if not _is_safe_regular_file(file_path):
+        return expected_sha, [f"{label}: missing or unsafe artifact file for artifacts.{key}: {file_path.name}"]
+    actual_sha = digest(file_path.read_bytes())
+    if actual_sha != expected_sha:
+        return expected_sha, [
+            f"{label}: artifacts.{key}.sha256 mismatch for {file_path.name} (expected {expected_sha}, got {actual_sha})"
+        ]
+    return expected_sha, []
 
 
 def _open_sqlite_ro(db_path: Path) -> sqlite3.Connection:
@@ -179,11 +263,50 @@ def _verify_sqlite_against_triage(
     evidence_bundle: dict[str, Any],
     rows: list[dict[str, Any]],
     *,
+    scan_manifest: dict[str, Any] | None = None,
+    run_manifest: dict[str, Any] | None = None,
+    require_scan_manifest: bool = True,
+    require_run_manifest: bool = True,
     require_zero_rejected: bool = True,
 ) -> list[str]:
     errors: list[str] = []
     scan_sha = evidence_bundle.get("scan_sha256")
     records = evidence_bundle.get("records") or []
+
+    scan_started_ts: datetime | None = None
+    scan_finished_ts: datetime | None = None
+    scan_sources_before: dict[str, Any] | None = None
+    if require_scan_manifest and not isinstance(scan_manifest, dict):
+        errors.append(f"{label}: missing valid scan-manifest.json anchor for SQLite chronology verification")
+    elif isinstance(scan_manifest, dict):
+        try:
+            scan_started_ts = _parse_utc_timestamp(scan_manifest.get("started_at"))
+            scan_finished_ts = _parse_utc_timestamp(scan_manifest.get("finished_at"))
+            if scan_finished_ts < scan_started_ts:
+                errors.append(f"{label}: scan-manifest finished_at precedes started_at")
+        except (ValueError, TypeError) as exc:
+            errors.append(f"{label}: invalid scan-manifest timestamps for chronology verification: {exc}")
+        if isinstance(scan_manifest.get("sources_before"), dict):
+            scan_sources_before = scan_manifest["sources_before"]
+
+    bundle_collected_ts: datetime | None = None
+    try:
+        bundle_collected_ts = _parse_utc_timestamp(evidence_bundle.get("collected_at"))
+        if scan_finished_ts is not None and bundle_collected_ts < scan_finished_ts:
+            errors.append(f"{label}: evidence.json collected_at precedes scan-manifest finished_at")
+    except (ValueError, TypeError) as exc:
+        errors.append(f"{label}: invalid or missing evidence.json collected_at: {exc}")
+
+    run_recorded_ts: datetime | None = None
+    if require_run_manifest and not isinstance(run_manifest, dict):
+        errors.append(f"{label}: missing valid g1-run-manifest.json anchor for SQLite chronology verification")
+    elif isinstance(run_manifest, dict):
+        try:
+            run_recorded_ts = _parse_utc_timestamp(run_manifest.get("recorded_at"))
+            if bundle_collected_ts is not None and run_recorded_ts < bundle_collected_ts:
+                errors.append(f"{label}: g1-run-manifest recorded_at precedes evidence.json collected_at")
+        except (ValueError, TypeError) as exc:
+            errors.append(f"{label}: invalid or missing g1-run-manifest recorded_at: {exc}")
 
     if db_state["scans_count"] != 1:
         errors.append(f"{label}: expected 1 scans row, got {db_state['scans_count']}")
@@ -206,6 +329,8 @@ def _verify_sqlite_against_triage(
         return errors
 
     rec_by_id: dict[str, dict[str, Any]] = {}
+    rec_collected_by_id: dict[str, datetime | None] = {}
+    analyzed_ts_by_id: dict[str, datetime | None] = {}
     for idx, (w, rec, row) in enumerate(zip(warnings, records, rows)):
         wid = rec["id"]
         rec_by_id[wid] = rec
@@ -217,6 +342,39 @@ def _verify_sqlite_against_triage(
             errors.append(f"{label}: warning[{idx}] SQLite evidence differs from evidence.json")
         if w.get("assessment") != row.get("assessment"):
             errors.append(f"{label}: warning[{idx}] SQLite assessment differs from assessments.jsonl")
+
+        try:
+            rec_ts = _parse_utc_timestamp(rec.get("collected_at"))
+            if scan_finished_ts is not None and rec_ts < scan_finished_ts:
+                errors.append(f"{label}: warning[{idx}] evidence collected_at precedes scan finished_at")
+            if bundle_collected_ts is not None and rec_ts > bundle_collected_ts:
+                errors.append(f"{label}: warning[{idx}] evidence collected_at exceeds bundle collected_at")
+        except (ValueError, TypeError) as exc:
+            rec_ts = None
+            errors.append(f"{label}: warning[{idx}] invalid evidence collected_at: {exc}")
+        rec_collected_by_id[wid] = rec_ts
+
+        assessment_obj = row.get("assessment") if isinstance(row.get("assessment"), dict) else {}
+        try:
+            an_ts = _parse_utc_timestamp(assessment_obj.get("analyzed_at"))
+            if rec_ts is not None and an_ts < rec_ts:
+                errors.append(f"{label}: warning[{idx}] assessment analyzed_at precedes finding collected_at")
+            if bundle_collected_ts is not None and an_ts < bundle_collected_ts:
+                errors.append(f"{label}: warning[{idx}] assessment analyzed_at precedes bundle collected_at")
+            if run_recorded_ts is not None and an_ts > run_recorded_ts:
+                errors.append(f"{label}: warning[{idx}] assessment analyzed_at exceeds g1-run-manifest recorded_at")
+        except (ValueError, TypeError) as exc:
+            an_ts = None
+            errors.append(f"{label}: warning[{idx}] invalid assessment analyzed_at: {exc}")
+        analyzed_ts_by_id[wid] = an_ts
+
+        if scan_sources_before is not None:
+            snaps = rec.get("snapshots") if isinstance(rec.get("snapshots"), dict) else {}
+            for sp, snap in snaps.items():
+                if not isinstance(snap, dict) or scan_sources_before.get(sp) != snap.get("sha256"):
+                    errors.append(
+                        f"{label}: warning[{idx}] snapshot hash for {sp!r} does not match scan-manifest sources_before"
+                    )
 
     events = db_state["events"]
     expected_seqs = list(range(1, len(events) + 1))
@@ -232,11 +390,37 @@ def _verify_sqlite_against_triage(
             continue
         rec = rec_by_id[wid]
         try:
-            ts = contracts.timestamp(ev.get("timestamp"))
+            ts = _parse_utc_timestamp(ev.get("timestamp"))
         except (ValueError, TypeError) as exc:
             errors.append(f"{label}: event[{idx}] invalid timestamp {ev.get('timestamp')!r}: {exc}")
             ts = None
         if ts is not None:
+            if scan_started_ts is not None and ts < scan_started_ts:
+                errors.append(
+                    f"{label}: event[{idx}] timestamp ({ts.isoformat()}) precedes scan started_at ({scan_started_ts.isoformat()})"
+                )
+            if scan_finished_ts is not None and ts < scan_finished_ts:
+                errors.append(
+                    f"{label}: event[{idx}] timestamp ({ts.isoformat()}) precedes scan finished_at ({scan_finished_ts.isoformat()})"
+                )
+            rec_ts = rec_collected_by_id.get(wid)
+            if rec_ts is not None and ts < rec_ts:
+                errors.append(
+                    f"{label}: event[{idx}] timestamp ({ts.isoformat()}) precedes finding collected_at ({rec_ts.isoformat()})"
+                )
+            if bundle_collected_ts is not None and ts < bundle_collected_ts:
+                errors.append(
+                    f"{label}: event[{idx}] timestamp ({ts.isoformat()}) precedes evidence bundle collected_at ({bundle_collected_ts.isoformat()})"
+                )
+            an_ts = analyzed_ts_by_id.get(wid)
+            if an_ts is not None and ts < an_ts:
+                errors.append(
+                    f"{label}: event[{idx}] timestamp ({ts.isoformat()}) precedes triage analyzed_at ({an_ts.isoformat()})"
+                )
+            if run_recorded_ts is not None and ts < run_recorded_ts:
+                errors.append(
+                    f"{label}: event[{idx}] timestamp ({ts.isoformat()}) precedes ingestion manifest recorded_at ({run_recorded_ts.isoformat()})"
+                )
             if prev_ts is not None and ts < prev_ts:
                 errors.append(f"{label}: event[{idx}] timestamp regressed before prior event")
             prev_ts = ts
@@ -248,6 +432,13 @@ def _verify_sqlite_against_triage(
         if not isinstance(reason, str) or not reason.strip() or reason != reason.strip():
             errors.append(f"{label}: event[{idx}] invalid or unstripped reason")
 
+        expected_snapshots = rec.get("snapshots") or {}
+        expected_obs = {
+            p: snap.get("sha256")
+            for p, snap in expected_snapshots.items()
+            if isinstance(snap, dict)
+        }
+
         action = ev.get("action")
         if action == "confirm-true":
             if sim_states[wid] != "OPEN":
@@ -256,6 +447,12 @@ def _verify_sqlite_against_triage(
         elif action == "confirm-false":
             if sim_states[wid] != "OPEN":
                 errors.append(f"{label}: event[{idx}] invalid confirm-false from state {sim_states[wid]!r}")
+            if rec.get("issues"):
+                errors.append(f"{label}: event[{idx}] confirm-false accepted despite evidence issues {rec.get('issues')!r}")
+            if not isinstance(expected_snapshots, dict) or not expected_snapshots:
+                errors.append(f"{label}: event[{idx}] confirm-false accepted without verified source snapshots")
+            if rec.get("scan_provenance", {}).get("source_capture_verified") is not True:
+                errors.append(f"{label}: event[{idx}] confirm-false accepted without source_capture_verified=True")
             sim_states[wid] = "CONFIRMED_FALSE"
         elif action == "reopen":
             if sim_states[wid] not in ("CONFIRMED_TRUE", "CONFIRMED_FALSE"):
@@ -264,12 +461,6 @@ def _verify_sqlite_against_triage(
         else:
             errors.append(f"{label}: event[{idx}] unknown action {action!r}")
 
-        expected_snapshots = rec.get("snapshots") or {}
-        expected_obs = {
-            p: snap.get("sha256")
-            for p, snap in expected_snapshots.items()
-            if isinstance(snap, dict)
-        }
         try:
             ev_sv = strict_json(ev.get("source_version"))
         except (EvidenceError, TypeError):
@@ -291,8 +482,54 @@ def _verify_sqlite_against_triage(
     if actual_states != sim_states:
         errors.append(f"{label}: SQLite warning states {actual_states!r} do not match event replay {sim_states!r}")
 
-    if require_zero_rejected and db_state["rejected_decisions"]:
-        errors.append(f"{label}: unexpectedly contains {len(db_state['rejected_decisions'])} rejected_decisions row(s)")
+    rejected_rows = db_state["rejected_decisions"]
+    if require_zero_rejected and rejected_rows:
+        errors.append(f"{label}: unexpectedly contains {len(rejected_rows)} rejected_decisions row(s)")
+    elif rejected_rows:
+        expected_rej_seqs = list(range(1, len(rejected_rows) + 1))
+        if [rj.get("sequence") for rj in rejected_rows] != expected_rej_seqs:
+            errors.append(f"{label}: SQLite rejected_decisions sequence numbers are non-sequential")
+        prev_rej_ts: datetime | None = None
+        for idx, rj in enumerate(rejected_rows):
+            r_wid = rj.get("warning_id")
+            if r_wid not in rec_by_id:
+                errors.append(f"{label}: rejected_decisions[{idx}] references unknown warning_id {r_wid!r}")
+                continue
+            try:
+                rj_ts = _parse_utc_timestamp(rj.get("timestamp"))
+            except (ValueError, TypeError) as exc:
+                errors.append(f"{label}: rejected_decisions[{idx}] invalid timestamp {rj.get('timestamp')!r}: {exc}")
+                rj_ts = None
+            if rj_ts is not None:
+                if scan_started_ts is not None and rj_ts < scan_started_ts:
+                    errors.append(
+                        f"{label}: rejected_decisions[{idx}] timestamp ({rj_ts.isoformat()}) precedes scan started_at ({scan_started_ts.isoformat()})"
+                    )
+                if scan_finished_ts is not None and rj_ts < scan_finished_ts:
+                    errors.append(
+                        f"{label}: rejected_decisions[{idx}] timestamp ({rj_ts.isoformat()}) precedes scan finished_at ({scan_finished_ts.isoformat()})"
+                    )
+                rec_ts = rec_collected_by_id.get(r_wid)
+                if rec_ts is not None and rj_ts < rec_ts:
+                    errors.append(
+                        f"{label}: rejected_decisions[{idx}] timestamp ({rj_ts.isoformat()}) precedes finding collected_at ({rec_ts.isoformat()})"
+                    )
+                if bundle_collected_ts is not None and rj_ts < bundle_collected_ts:
+                    errors.append(
+                        f"{label}: rejected_decisions[{idx}] timestamp ({rj_ts.isoformat()}) precedes evidence bundle collected_at ({bundle_collected_ts.isoformat()})"
+                    )
+                an_ts = analyzed_ts_by_id.get(r_wid)
+                if an_ts is not None and rj_ts < an_ts:
+                    errors.append(
+                        f"{label}: rejected_decisions[{idx}] timestamp ({rj_ts.isoformat()}) precedes triage analyzed_at ({an_ts.isoformat()})"
+                    )
+                if run_recorded_ts is not None and rj_ts < run_recorded_ts:
+                    errors.append(
+                        f"{label}: rejected_decisions[{idx}] timestamp ({rj_ts.isoformat()}) precedes ingestion manifest recorded_at ({run_recorded_ts.isoformat()})"
+                    )
+                if prev_rej_ts is not None and rj_ts < prev_rej_ts:
+                    errors.append(f"{label}: rejected_decisions[{idx}] timestamp regressed before prior rejected decision")
+                prev_rej_ts = rj_ts
 
     return errors
 
@@ -530,8 +767,18 @@ def _inspect_primary_scenario(
     r02_errors: list[str] = []
     r03_errors: list[str] = []
 
-    if os.path.lexists(raw_scenario_dir) and is_reparse_link(raw_scenario_dir):
-        msg = f"{scenario_name}: scenario directory is a symlink/junction: {raw_scenario_dir}"
+    if not _is_safe_dir(raw_scenario_dir):
+        if _is_missing_clean_path(raw_scenario_dir):
+            return {
+                "scenario": scenario_name,
+                "status": "BLOCKED",
+                "findings_count": 0,
+                "r02_errors": [],
+                "r03_errors": [],
+                "blockers": [f"missing scenario directory: {raw_scenario_dir}"],
+                "failures": [],
+            }
+        msg = f"{scenario_name}: scenario directory is unsafe or traverses a symlink/junction: {raw_scenario_dir}"
         return {
             "scenario": scenario_name,
             "status": "FAIL",
@@ -540,16 +787,6 @@ def _inspect_primary_scenario(
             "r03_errors": [msg],
             "blockers": [],
             "failures": [msg],
-        }
-    if not _is_safe_dir(raw_scenario_dir):
-        return {
-            "scenario": scenario_name,
-            "status": "BLOCKED",
-            "findings_count": 0,
-            "r02_errors": [],
-            "r03_errors": [],
-            "blockers": [f"missing scenario directory: {raw_scenario_dir}"],
-            "failures": [],
         }
 
     scenario_dir = raw_scenario_dir.resolve()
@@ -615,6 +852,14 @@ def _inspect_primary_scenario(
             "blockers": [],
             "failures": [msg],
         }
+
+    if not isinstance(manifest, dict) or manifest.get("schema") != "ntk-g1-run-manifest-1":
+        schema_val = manifest.get("schema") if isinstance(manifest, dict) else None
+        msg_schema = f"{scenario_name}: invalid g1-run-manifest schema={schema_val!r} != 'ntk-g1-run-manifest-1'"
+        r02_errors.append(msg_schema)
+        r03_errors.append(msg_schema)
+        if not isinstance(manifest, dict):
+            manifest = {}
 
     if len(rows) != expected_findings:
         failures.append(f"{scenario_name}: expected {expected_findings} finding(s), observed {len(rows)}")
@@ -705,11 +950,10 @@ def _inspect_primary_scenario(
             ("cli_origin", capture_dir / "cli-origin.json"),
             ("evidence_json", triage_dir / "evidence.json"),
             ("assessments_jsonl", triage_dir / "assessments.jsonl"),
+            ("http_capture_check", triage_dir / "http-capture-check.json"),
         ):
-            entry = artifacts_meta.get(akey)
-            expected_sha = entry.get("sha256") if isinstance(entry, dict) else None
-            if not _is_safe_regular_file(apath) or digest(apath.read_bytes()) != expected_sha:
-                r02_errors.append(f"{scenario_name}: artifacts.{akey}.sha256 mismatch or missing file")
+            _, art_errs = _verify_manifest_artifact_hash(scenario_name, artifacts_meta, akey, apath)
+            r02_errors.extend(art_errs)
 
     # Live source drift check against finding evidence snapshots (R02 STALE_SOURCE failure)
     records = evidence_bundle.get("records") or []
@@ -842,8 +1086,17 @@ def _inspect_primary_scenario(
             "errors": f_errors,
         })
 
-    # Mandatory pre-lifecycle SQLite snapshot check (F06/F07)
+    # Mandatory pre-lifecycle SQLite snapshot check & mandatory SHA-256 anchor (F06/F07)
     pre_db = triage_dir / "review.post_ingestion.sqlite"
+    expected_rev_sha, rev_anchor_errs = _verify_manifest_artifact_hash(
+        scenario_name,
+        artifacts_meta,
+        "review_sqlite",
+        pre_db,
+        expected_basename="review.sqlite",
+    )
+    r03_errors.extend(rev_anchor_errs)
+
     ing_db_state = None
     if not _is_safe_regular_file(pre_db):
         r03_errors.append(f"{scenario_name}: missing or unsafe mandatory review.post_ingestion.sqlite")
@@ -856,6 +1109,8 @@ def _inspect_primary_scenario(
                     ing_db_state,
                     evidence_bundle,
                     rows,
+                    scan_manifest=s_man,
+                    run_manifest=manifest,
                     require_zero_rejected=True,
                 )
             )
@@ -863,10 +1118,10 @@ def _inspect_primary_scenario(
                 r03_errors.append(f"{scenario_name}: review.post_ingestion.sqlite does not hold {expected_findings} OPEN warning(s)")
             if ing_db_state["events"]:
                 r03_errors.append(f"{scenario_name}: review.post_ingestion.sqlite unexpectedly has pre-existing events")
-            review_art = artifacts_meta.get("review_sqlite") if isinstance(artifacts_meta, dict) else None
-            expected_rev_sha = review_art.get("sha256") if isinstance(review_art, dict) else None
-            if expected_rev_sha and ing_db_state["db_sha256"] != expected_rev_sha:
-                r03_errors.append(f"{scenario_name}: review.post_ingestion.sqlite SHA-256 differs from manifest artifacts.review_sqlite.sha256")
+            if expected_rev_sha is None or ing_db_state["db_sha256"] != expected_rev_sha:
+                r03_errors.append(
+                    f"{scenario_name}: review.post_ingestion.sqlite SHA-256 missing mandatory anchor or differs from manifest artifacts.review_sqlite.sha256"
+                )
         except (OSError, sqlite3.Error, EvidenceError, ValueError, KeyError, TypeError) as exc:
             r03_errors.append(f"{scenario_name}: invalid review.post_ingestion.sqlite: {exc}")
 
@@ -879,9 +1134,22 @@ def _inspect_primary_scenario(
                 current_db_state,
                 evidence_bundle,
                 rows,
+                scan_manifest=s_man,
+                run_manifest=manifest,
                 require_zero_rejected=True,
             )
         )
+        if ing_db_state is not None:
+            if current_db_state["events"] or current_db_state["rejected_decisions"]:
+                if current_db_state["db_sha256"] == ing_db_state["db_sha256"]:
+                    r03_errors.append(
+                        f"{scenario_name}: review.sqlite SHA-256 equals review.post_ingestion.sqlite despite recorded lifecycle events"
+                    )
+            else:
+                if current_db_state["db_sha256"] != ing_db_state["db_sha256"]:
+                    r03_errors.append(
+                        f"{scenario_name}: review.sqlite SHA-256 differs from review.post_ingestion.sqlite despite zero lifecycle events"
+                    )
     except (OSError, sqlite3.Error, EvidenceError, ValueError, KeyError, TypeError) as exc:
         r03_errors.append(f"{scenario_name}: invalid review.sqlite: {exc}")
 
@@ -899,6 +1167,8 @@ def _inspect_primary_scenario(
                         af_db_state,
                         evidence_bundle,
                         rows,
+                        scan_manifest=s_man,
+                        run_manifest=manifest,
                         require_zero_rejected=True,
                     )
                 )
@@ -910,6 +1180,18 @@ def _inspect_primary_scenario(
                     not current_db_state["events"] or af_db_state["events"][0] != current_db_state["events"][0]
                 ):
                     r03_errors.append(f"{scenario_name}: review.after_confirm_false.sqlite event differs from current review.sqlite events[0]")
+                if ing_db_state is not None and af_db_state["db_sha256"] == ing_db_state["db_sha256"]:
+                    r03_errors.append(
+                        f"{scenario_name}: review.after_confirm_false.sqlite SHA-256 unexpectedly equals review.post_ingestion.sqlite"
+                    )
+                if (
+                    current_db_state is not None
+                    and len(current_db_state["events"]) > 1
+                    and af_db_state["db_sha256"] == current_db_state["db_sha256"]
+                ):
+                    r03_errors.append(
+                        f"{scenario_name}: review.after_confirm_false.sqlite SHA-256 unexpectedly equals post-reopen review.sqlite"
+                    )
             except (OSError, sqlite3.Error, EvidenceError, ValueError, KeyError, TypeError) as exc:
                 r03_errors.append(f"{scenario_name}: invalid review.after_confirm_false.sqlite: {exc}")
 
@@ -954,10 +1236,14 @@ def _inspect_m1_scan_only(m1_dir: Path) -> dict[str, Any]:
     raw_m1 = Path(m1_dir)
     errors: list[str] = []
     blockers: list[str] = []
-    if os.path.lexists(raw_m1) and is_reparse_link(raw_m1):
-        return {"present": True, "blockers": [], "errors": [f"M1 directory is a symlink/junction: {raw_m1}"]}
     if not _is_safe_dir(raw_m1):
-        return {"present": False, "blockers": [f"missing M1 scan-only directory: {raw_m1}"], "errors": []}
+        if _is_missing_clean_path(raw_m1):
+            return {"present": False, "blockers": [f"missing M1 scan-only directory: {raw_m1}"], "errors": []}
+        return {
+            "present": True,
+            "blockers": [],
+            "errors": [f"M1 directory is unsafe or traverses a symlink/junction: {raw_m1}"],
+        }
 
     m1_dir = raw_m1.resolve()
     cap_dir = m1_dir if os.path.lexists(m1_dir / "scan-manifest.json") else (m1_dir / "capture")
@@ -1005,21 +1291,20 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
     if demo3b_dir is None:
         return {"present": False, "excluded_from_real_denominator": True, "errors": []}
     raw_d3b = Path(demo3b_dir)
-    if os.path.lexists(raw_d3b) and is_reparse_link(raw_d3b):
-        return {
-            "present": True,
-            "excluded_from_real_denominator": True,
-            "errors": [f"Demo3b directory is a symlink/junction: {raw_d3b}"],
-        }
     if not _is_safe_dir(raw_d3b):
-        return {"present": False, "excluded_from_real_denominator": True, "errors": [f"missing demo3b dir: {raw_d3b}"]}
+        return {
+            "present": not _is_missing_clean_path(raw_d3b),
+            "excluded_from_real_denominator": True,
+            "errors": [f"missing or unsafe demo3b dir: {raw_d3b}"],
+        }
 
     demo3b_dir = raw_d3b.resolve()
     errors: list[str] = []
     capture_dir = demo3b_dir / "capture"
     triage_dir = demo3b_dir / "triage"
-    if not _is_safe_dir(capture_dir) or not _is_safe_dir(triage_dir):
-        errors.append(f"Demo3b missing or unsafe capture/ or triage/ in {demo3b_dir}")
+    manifest_path = demo3b_dir / "g1-run-manifest.json"
+    if not _is_safe_dir(capture_dir) or not _is_safe_dir(triage_dir) or not _is_safe_regular_file(manifest_path):
+        errors.append(f"Demo3b missing or unsafe capture/, triage/, or g1-run-manifest.json in {demo3b_dir}")
         return {
             "present": True,
             "evidence_kind": "SYNTHETIC_MOCK_HTTP",
@@ -1028,17 +1313,42 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
             "errors": errors,
         }
 
+    d3b_manifest: dict[str, Any] | None = None
+    try:
+        parsed_d3b = strict_json(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(parsed_d3b, dict) or parsed_d3b.get("schema") != "ntk-g1-run-manifest-1":
+            errors.append(
+                f"Demo3b invalid g1-run-manifest schema: {parsed_d3b.get('schema') if isinstance(parsed_d3b, dict) else None!r}"
+            )
+        else:
+            d3b_manifest = parsed_d3b
+    except (OSError, UnicodeError, EvidenceError) as exc:
+        errors.append(f"Demo3b invalid g1-run-manifest.json: {exc}")
+
     http_check = verify_run_http_captures(triage_dir, require_live_chat=False, minimum_findings=1)
     if not http_check["capture_integrity_ok"]:
         errors.append(f"Demo3b mock HTTP raw capture check failed: {http_check['errors']}")
 
-    cap_errors, _ = _verify_capture_dir_integrity(
+    cap_errors, d3b_s_man = _verify_capture_dir_integrity(
         "Demo3b",
         capture_dir,
         expected_cli_mode="local-triage",
         expect_live_source_current=True,
     )
     errors.extend(cap_errors)
+
+    d3b_artifacts = d3b_manifest.get("artifacts") if isinstance(d3b_manifest, dict) else None
+    for akey, apath in (
+        ("opengrep_json", capture_dir / "opengrep.json"),
+        ("opengrep_sarif", capture_dir / "opengrep.sarif"),
+        ("scan_manifest", capture_dir / "scan-manifest.json"),
+        ("cli_origin", capture_dir / "cli-origin.json"),
+        ("evidence_json", triage_dir / "evidence.json"),
+        ("assessments_jsonl", triage_dir / "assessments.jsonl"),
+        ("http_capture_check", triage_dir / "http-capture-check.json"),
+    ):
+        _, art_errs = _verify_manifest_artifact_hash("Demo3b", d3b_artifacts, akey, apath)
+        errors.extend(art_errs)
 
     ev_path = triage_dir / "evidence.json"
     assess_path = triage_dir / "assessments.jsonl"
@@ -1095,6 +1405,7 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
             except (StaleSourceError, EvidenceError, OSError, ValueError, RuntimeError) as exc:
                 errors.append(f"Demo3b[{idx}] live source drift / integrity error: {exc}")
 
+    db_state = None
     try:
         db_state = _read_sqlite_state_ro(triage_dir / "review.sqlite")
         if evidence_bundle is not None:
@@ -1104,6 +1415,8 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
                     db_state,
                     evidence_bundle,
                     rows,
+                    scan_manifest=d3b_s_man,
+                    run_manifest=d3b_manifest,
                     require_zero_rejected=True,
                 )
             )
@@ -1115,7 +1428,17 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
         errors.append(f"Demo3b invalid review.sqlite: {exc}")
 
     d3b_pre = triage_dir / "review.post_ingestion.sqlite"
-    if os.path.lexists(d3b_pre):
+    d3b_expected_rev_sha, d3b_rev_errs = _verify_manifest_artifact_hash(
+        "Demo3b",
+        d3b_artifacts,
+        "review_sqlite",
+        d3b_pre,
+        expected_basename="review.sqlite",
+    )
+    errors.extend(d3b_rev_errs)
+    if not _is_safe_regular_file(d3b_pre):
+        errors.append("Demo3b missing or unsafe mandatory review.post_ingestion.sqlite")
+    else:
         try:
             d3b_pre_state = _read_sqlite_state_ro(d3b_pre)
             if evidence_bundle is not None:
@@ -1125,11 +1448,17 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
                         d3b_pre_state,
                         evidence_bundle,
                         rows,
+                        scan_manifest=d3b_s_man,
+                        run_manifest=d3b_manifest,
                         require_zero_rejected=True,
                     )
                 )
             if [w["state"] for w in d3b_pre_state["warnings"]] != ["OPEN"] or d3b_pre_state["events"]:
                 errors.append("Demo3b review.post_ingestion.sqlite must hold 1 OPEN warning and 0 events")
+            if d3b_expected_rev_sha is None or d3b_pre_state["db_sha256"] != d3b_expected_rev_sha:
+                errors.append("Demo3b review.post_ingestion.sqlite SHA-256 missing anchor or differs from manifest")
+            if db_state is not None and db_state["db_sha256"] != d3b_pre_state["db_sha256"]:
+                errors.append("Demo3b review.sqlite SHA-256 differs from review.post_ingestion.sqlite despite zero events")
         except (OSError, sqlite3.Error, EvidenceError, ValueError, KeyError, TypeError) as exc:
             errors.append(f"Demo3b invalid review.post_ingestion.sqlite: {exc}")
 
@@ -1144,15 +1473,15 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
 
 def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
     raw_d4 = Path(demo4_dir)
-    if os.path.lexists(raw_d4) and is_reparse_link(raw_d4):
+    if not _is_safe_dir(raw_d4):
+        if _is_missing_clean_path(raw_d4):
+            return {"present": False, "blockers": [f"missing Demo4 stale-source directory: {raw_d4}"], "errors": []}
         return {
             "present": True,
             "excluded_from_real_denominator": True,
             "blockers": [],
-            "errors": [f"Demo4 directory is a symlink/junction: {raw_d4}"],
+            "errors": [f"Demo4 directory is unsafe or traverses a symlink/junction: {raw_d4}"],
         }
-    if not _is_safe_dir(raw_d4):
-        return {"present": False, "blockers": [f"missing Demo4 stale-source directory: {raw_d4}"], "errors": []}
 
     demo4_dir = raw_d4.resolve()
     errors: list[str] = []
@@ -1170,16 +1499,22 @@ def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
             "errors": errors,
         }
 
+    manifest: dict[str, Any] | None = None
     try:
-        manifest = strict_json(manifest_path.read_text(encoding="utf-8"))
+        parsed_d4 = strict_json(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(parsed_d4, dict) or parsed_d4.get("schema") != "ntk-g1-run-manifest-1":
+            errors.append(
+                f"Demo4 invalid g1-run-manifest schema: {parsed_d4.get('schema') if isinstance(parsed_d4, dict) else None!r}"
+            )
+        else:
+            manifest = parsed_d4
     except (OSError, UnicodeError, EvidenceError) as exc:
-        manifest = {}
         errors.append(f"Demo4 invalid g1-run-manifest.json: {exc}")
 
-    if manifest.get("ollama", {}).get("enabled") is not False:
+    if not isinstance(manifest, dict) or manifest.get("ollama", {}).get("enabled") is not False:
         errors.append("Demo4 stale-source control must run with --no-llm (excluded from Qwen calls)")
 
-    cap_errors, _ = _verify_capture_dir_integrity(
+    cap_errors, d4_s_man = _verify_capture_dir_integrity(
         "Demo4",
         capture_dir,
         expected_cli_mode="local-triage",
@@ -1224,7 +1559,33 @@ def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
             errors.append(f"Demo4 contract/SARIF validation failed: {exc}")
 
     artifacts_meta = manifest.get("artifacts") if isinstance(manifest, dict) else None
+    for akey, apath in (
+        ("opengrep_json", capture_dir / "opengrep.json"),
+        ("opengrep_sarif", capture_dir / "opengrep.sarif"),
+        ("scan_manifest", capture_dir / "scan-manifest.json"),
+        ("cli_origin", capture_dir / "cli-origin.json"),
+        ("evidence_json", triage_dir / "evidence.json"),
+        ("assessments_jsonl", triage_dir / "assessments.jsonl"),
+    ):
+        _, art_errs = _verify_manifest_artifact_hash("Demo4", artifacts_meta, akey, apath)
+        errors.extend(art_errs)
+    http_art = artifacts_meta.get("http_capture_check") if isinstance(artifacts_meta, dict) else None
+    if not isinstance(http_art, dict) or http_art.get("sha256") is not None:
+        errors.append("Demo4 --no-llm artifacts.http_capture_check must exist with sha256=null")
+    if os.path.lexists(triage_dir / "http-capture-check.json"):
+        errors.append("Demo4 --no-llm unexpectedly contains triage/http-capture-check.json")
+
     pre_db = triage_dir / "review.post_ingestion.sqlite"
+    d4_expected_rev_sha, d4_rev_errs = _verify_manifest_artifact_hash(
+        "Demo4",
+        artifacts_meta,
+        "review_sqlite",
+        pre_db,
+        expected_basename="review.sqlite",
+    )
+    errors.extend(d4_rev_errs)
+
+    ing_state = None
     if not _is_safe_regular_file(pre_db):
         errors.append("Demo4 missing or unsafe mandatory review.post_ingestion.sqlite")
     else:
@@ -1237,15 +1598,17 @@ def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
                         ing_state,
                         evidence_bundle,
                         rows,
+                        scan_manifest=d4_s_man,
+                        run_manifest=manifest,
                         require_zero_rejected=True,
                     )
                 )
             if [w["state"] for w in ing_state["warnings"]] != ["OPEN"] or ing_state["events"]:
                 errors.append("Demo4 review.post_ingestion.sqlite must hold 1 OPEN warning and 0 events")
-            d4_rev_art = artifacts_meta.get("review_sqlite") if isinstance(artifacts_meta, dict) else None
-            d4_expected_rev_sha = d4_rev_art.get("sha256") if isinstance(d4_rev_art, dict) else None
-            if d4_expected_rev_sha and ing_state["db_sha256"] != d4_expected_rev_sha:
-                errors.append("Demo4 review.post_ingestion.sqlite SHA-256 differs from manifest artifacts.review_sqlite.sha256")
+            if d4_expected_rev_sha is None or ing_state["db_sha256"] != d4_expected_rev_sha:
+                errors.append(
+                    "Demo4 review.post_ingestion.sqlite SHA-256 missing mandatory anchor or differs from manifest artifacts.review_sqlite.sha256"
+                )
         except (OSError, sqlite3.Error, EvidenceError, ValueError, KeyError, TypeError) as exc:
             errors.append(f"Demo4 invalid review.post_ingestion.sqlite: {exc}")
 
@@ -1260,9 +1623,13 @@ def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
                     db_state,
                     evidence_bundle,
                     rows,
+                    scan_manifest=d4_s_man,
+                    run_manifest=manifest,
                     require_zero_rejected=False,
                 )
             )
+        if ing_state is not None and db_state["db_sha256"] == ing_state["db_sha256"]:
+            errors.append("Demo4 review.sqlite SHA-256 equals review.post_ingestion.sqlite despite recorded rejected decision")
         if len(db_state["warnings"]) != 1 or db_state["warnings"][0]["state"] != "OPEN":
             errors.append(f"Demo4 warning must remain OPEN, got {[w['state'] for w in db_state['warnings']]}")
         if len(db_state["events"]) != 0:
@@ -1501,20 +1868,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-mock-primary", action="store_true", help="Offline unit-test flag only; never set in real acceptance")
     args = parser.parse_args(argv)
 
-    if _has_parent_traversal(args.output):
-        parser.error(f"refusing '..' in --output path: {args.output}")
-    for anc in (args.output, *args.output.parents):
-        if os.path.lexists(anc) and is_reparse_link(anc):
-            parser.error(f"refusing to write --output through symlink/junction: {anc}")
-    if os.path.lexists(args.output):
+    try:
+        raw_out = _validate_lexical_dir_path(args.output, label="--output")
+    except CaptureWriteError as exc:
+        parser.error(f"invalid --output path {args.output}: {exc}")
+    abs_out = Path(os.path.abspath(raw_out))
+    if abs_out.parent == abs_out or Path(abs_out.name).name != abs_out.name or abs_out.name in ("", ".", ".."):
+        parser.error(f"invalid --output filename: {args.output}")
+    if os.path.lexists(abs_out):
         parser.error(f"refusing to overwrite existing evaluation report: {args.output}")
-    out_resolved = args.output.resolve()
+    if not _is_missing_clean_path(abs_out):
+        parser.error(f"refusing unsafe or symlink/junction-linked --output path: {args.output}")
     protected_dirs = [args.demo1_dir, args.demo2_dir, args.demo3a_dir, args.m1_dir, args.demo4_dir]
     if args.demo3b_dir is not None:
         protected_dirs.append(args.demo3b_dir)
     for p_dir in protected_dirs:
-        if p_dir.exists() and out_resolved.is_relative_to(p_dir.resolve()):
-            parser.error(f"--output must lie outside scenario directory {p_dir}")
+        if os.path.lexists(p_dir):
+            abs_p = Path(os.path.abspath(p_dir))
+            if abs_out.is_relative_to(abs_p):
+                parser.error(f"--output must lie outside scenario directory {p_dir}")
+            try:
+                res_p = p_dir.resolve(strict=True)
+                if abs_out.is_relative_to(res_p):
+                    parser.error(f"--output must lie outside scenario directory {p_dir}")
+            except (OSError, RuntimeError):
+                pass
 
     report = evaluate_acceptance(
         demo1_dir=args.demo1_dir,
@@ -1525,8 +1903,12 @@ def main(argv: list[str] | None = None) -> int:
         demo3b_dir=args.demo3b_dir,
         allow_mock_primary=args.allow_mock_primary,
     )
+    try:
+        safe_out_parent = verify_safe_directory_chain(abs_out.parent, boundary_root=abs_out.parent, create=True)
+        out_resolved = safe_out_parent / abs_out.name
+    except CaptureWriteError as exc:
+        parser.error(f"refusing unsafe --output directory {abs_out.parent}: {exc}")
     rendered = json.dumps(report, indent=2, ensure_ascii=False)
-    out_resolved.parent.mkdir(parents=True, exist_ok=True)
     with out_resolved.open("xb") as handle:
         handle.write((rendered + "\n").encode("utf-8"))
     print(rendered)

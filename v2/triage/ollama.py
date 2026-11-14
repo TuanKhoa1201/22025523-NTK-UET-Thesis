@@ -971,7 +971,7 @@ _REPARSE_SYMLINK_TAG = getattr(stat, "IO_REPARSE_TAG_SYMLINK", 0xA000000C)
 
 
 def is_reparse_link(path: Path) -> bool:
-    """Return True if path itself is a POSIX symlink or Windows symlink/junction reparse point."""
+    """Return True if path itself is a POSIX symlink or Windows symlink/junction/reparse point."""
     try:
         st = os.lstat(path)
     except FileNotFoundError:
@@ -990,9 +990,10 @@ def is_reparse_link(path: Path) -> bool:
     if os.name == "nt":
         file_attrs = getattr(st, "st_file_attributes", 0)
         if file_attrs & _REPARSE_ATTR:
-            reparse_tag = getattr(st, "st_reparse_tag", 0)
-            if reparse_tag in (_REPARSE_MOUNT_TAG, _REPARSE_SYMLINK_TAG) or bool(reparse_tag & _REPARSE_TAG_SURROGATE_BIT):
-                return True
+            return True
+        reparse_tag = getattr(st, "st_reparse_tag", 0)
+        if reparse_tag in (_REPARSE_MOUNT_TAG, _REPARSE_SYMLINK_TAG) or bool(reparse_tag & _REPARSE_TAG_SURROGATE_BIT):
+            return True
     return False
 
 
@@ -1004,87 +1005,149 @@ def _validate_single_filename(filename: str) -> str:
         or "/" in filename
         or "\\" in filename
         or ":" in filename
+        or "\x00" in filename
         or Path(filename).name != filename
     ):
         raise CaptureWriteError(f"invalid capture artifact filename: {filename!r}")
     return filename
 
 
-def _prepare_safe_capture_dir(io_dir: Path, *, boundary_root: Path | None = None, create: bool = True) -> Path:
-    """Validate and optionally create a capture directory without traversing symlinks/junctions."""
-    raw_io = Path(io_dir)
-    if ".." in raw_io.parts:
-        raise CaptureWriteError(f"capture directory path must not contain '..': {io_dir}")
+def _validate_lexical_dir_path(raw_path: Path | str, *, label: str = "capture directory") -> Path:
+    """Validate lexical string properties before any filesystem resolution or creation."""
+    if raw_path is None or not isinstance(raw_path, (str, Path)):
+        raise CaptureWriteError(f"{label} path is missing or invalid: {raw_path!r}")
+    raw_str = str(raw_path)
+    if not raw_str or any(ord(ch) < 32 for ch in raw_str):
+        raise CaptureWriteError(f"{label} path contains empty or control characters: {raw_path!r}")
+    if raw_str.startswith("\\\\") or raw_str.startswith("//"):
+        raise CaptureWriteError(f"{label} UNC or device path is forbidden: {raw_path}")
+    tokens = [tok for tok in re.split(r"[\\/]+", raw_str) if tok]
+    if ".." in tokens:
+        raise CaptureWriteError(f"{label} path must not contain '..': {raw_path}")
+    p = Path(raw_path)
+    if ".." in p.parts:
+        raise CaptureWriteError(f"{label} path must not contain '..': {raw_path}")
+    if p.drive and p.drive.startswith("\\\\"):
+        raise CaptureWriteError(f"{label} UNC drive is forbidden: {raw_path}")
+    if p.drive and not p.is_absolute():
+        raise CaptureWriteError(f"{label} drive-relative path is forbidden: {raw_path}")
+    return p
+
+
+def verify_safe_directory_chain(
+    target_dir: Path,
+    *,
+    boundary_root: Path | None = None,
+    create: bool = False,
+) -> Path:
+    """Validate every ancestor from filesystem root to target_dir without traversing links/junctions.
+
+    Separates:
+    1. Lexical path validation (no '..', NUL/control bytes, UNC/device prefixes, or drive-relative paths).
+    2. Top-down filesystem verification on every ancestor from anchor to target_dir using os.lstat()
+       and reparse inspection BEFORE calling resolve(), plus parent-chain and samestat identity checks.
+
+    TOCTOU note: Python stdlib on Windows does not expose handle-relative openat(..., O_NOFOLLOW)
+    directory descriptors (dir_fd is unsupported on Windows). Static junctions, symlinks, and reparse
+    points at any ancestor depth fail closed before read/write, and exclusive open('xb') + post-open
+    lstat/resolve checks fail closed if a path changes, without claiming kernel-atomic race immunity.
+    """
+    raw_io = _validate_lexical_dir_path(target_dir, label="capture directory")
     abs_io = Path(os.path.abspath(raw_io))
 
     if boundary_root is not None:
-        raw_boundary = Path(boundary_root)
-        if ".." in raw_boundary.parts:
-            raise CaptureWriteError(f"capture boundary path must not contain '..': {boundary_root}")
+        raw_boundary = _validate_lexical_dir_path(boundary_root, label="capture boundary")
         abs_boundary = Path(os.path.abspath(raw_boundary))
     elif abs_io.name == "_tags":
         abs_boundary = abs_io.parent.parent
     else:
         abs_boundary = abs_io.parent
 
+    if not abs_io.anchor:
+        raise CaptureWriteError(f"capture directory lacks filesystem root anchor: {abs_io}")
+    anchor = Path(abs_io.anchor)
+    if abs_io == anchor:
+        raise CaptureWriteError(f"refusing bare filesystem root as capture directory: {abs_io}")
     if abs_io != abs_boundary and not abs_io.is_relative_to(abs_boundary):
         raise CaptureWriteError(f"capture directory {abs_io} lies outside boundary {abs_boundary}")
 
-    if abs_boundary.parent != abs_boundary and abs_boundary.parent != Path(abs_boundary.anchor):
-        if os.path.lexists(abs_boundary.parent) and is_reparse_link(abs_boundary.parent):
-            raise CaptureWriteError(f"capture parent directory is a symlink or junction: {abs_boundary.parent}")
+    try:
+        anchor_st = os.lstat(anchor)
+    except OSError as exc:
+        raise CaptureWriteError(f"cannot inspect filesystem root {anchor}: {exc}") from exc
+    if not stat.S_ISDIR(anchor_st.st_mode):
+        raise CaptureWriteError(f"filesystem root anchor is not a directory: {anchor}")
+    try:
+        prev_resolved = anchor.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise CaptureWriteError(f"cannot resolve filesystem root {anchor}: {exc}") from exc
+    if os.name == "nt" and prev_resolved.drive.upper() != anchor.drive.upper():
+        raise CaptureWriteError(f"drive root {anchor} redirects to different volume {prev_resolved}")
+    if prev_resolved != Path(os.path.abspath(prev_resolved)) or prev_resolved.parent != prev_resolved:
+        raise CaptureWriteError(f"drive/root anchor redirects to non-root directory: {anchor} -> {prev_resolved}")
 
-    # Check upward from abs_io for the deepest existing ancestor before creating missing dirs step-by-step.
-    to_create: list[Path] = []
-    cur = abs_io
-    while not os.path.lexists(cur):
-        to_create.append(cur)
-        parent = cur.parent
-        if parent == cur:
-            break
-        cur = parent
-    if os.path.lexists(cur):
-        if is_reparse_link(cur):
-            raise CaptureWriteError(f"capture ancestor is a symlink or junction: {cur}")
-        if cur.parent != cur and os.path.lexists(cur.parent) and is_reparse_link(cur.parent):
-            raise CaptureWriteError(f"capture ancestor parent is a symlink or junction: {cur.parent}")
-        cur_st = os.lstat(cur)
-        if not stat.S_ISDIR(cur_st.st_mode):
-            raise CaptureWriteError(f"capture ancestor is not a directory: {cur}")
-
-    if to_create:
-        if not create:
-            raise CaptureWriteError(f"capture directory does not exist: {abs_io}")
-        for step in reversed(to_create):
+    rel_parts = abs_io.relative_to(anchor).parts
+    cur = anchor
+    missing_started = False
+    for part in rel_parts:
+        cur = cur / part
+        try:
+            st = os.lstat(cur)
+        except FileNotFoundError as exc:
+            missing_started = True
+            if not create:
+                raise CaptureWriteError(f"capture directory does not exist: {abs_io}") from exc
             try:
-                step.mkdir(exist_ok=False)
-            except FileExistsError:
-                pass
-            if not os.path.lexists(step) or is_reparse_link(step):
-                raise CaptureWriteError(f"created capture directory became a symlink or junction: {step}")
-            if not stat.S_ISDIR(os.lstat(step).st_mode):
-                raise CaptureWriteError(f"capture path is not a directory: {step}")
+                cur.mkdir(exist_ok=False)
+                st = os.lstat(cur)
+            except OSError as mkdir_exc:
+                raise CaptureWriteError(f"cannot safely create capture directory {cur}: {mkdir_exc}") from mkdir_exc
+            if is_reparse_link(cur):
+                raise CaptureWriteError(f"created capture directory is a symlink, junction, or reparse point: {cur}")
+            if not stat.S_ISDIR(st.st_mode):
+                raise CaptureWriteError(f"created capture path is not a directory: {cur}")
+            try:
+                resolved_cur = cur.resolve(strict=True)
+                res_st = os.lstat(resolved_cur)
+            except (OSError, RuntimeError) as res_exc:
+                raise CaptureWriteError(f"cannot verify created capture directory {cur}: {res_exc}") from res_exc
+            if resolved_cur.parent != prev_resolved or not os.path.samestat(st, res_st):
+                raise CaptureWriteError(f"created capture directory resolved outside parent chain: {cur} -> {resolved_cur}")
+            prev_resolved = resolved_cur
+        except OSError as exc:
+            raise CaptureWriteError(f"cannot verify capture ancestor {cur}: {exc}") from exc
+        else:
+            if missing_started:
+                raise CaptureWriteError(f"concurrent path mutation detected beneath previously missing ancestor: {cur}")
+            if is_reparse_link(cur):
+                raise CaptureWriteError(f"capture ancestor is a symlink, junction, or reparse point: {cur}")
+            if not stat.S_ISDIR(st.st_mode):
+                raise CaptureWriteError(f"capture ancestor is not a directory: {cur}")
+            try:
+                resolved_cur = cur.resolve(strict=True)
+                res_st = os.lstat(resolved_cur)
+            except (OSError, RuntimeError) as res_exc:
+                raise CaptureWriteError(f"cannot resolve capture ancestor {cur}: {res_exc}") from res_exc
+            if resolved_cur.parent != prev_resolved or not os.path.samestat(st, res_st):
+                raise CaptureWriteError(f"capture ancestor resolves outside lexical parent chain: {cur} -> {resolved_cur}")
+            prev_resolved = resolved_cur
 
-    rel = abs_io.relative_to(abs_boundary)
-    check_nodes = [abs_boundary]
-    walk = abs_boundary
-    for part in rel.parts:
-        walk = walk / part
-        check_nodes.append(walk)
-    for node in check_nodes:
-        if not os.path.lexists(node):
-            raise CaptureWriteError(f"missing capture path component: {node}")
-        if is_reparse_link(node):
-            raise CaptureWriteError(f"capture path component is a symlink or junction: {node}")
-        if not stat.S_ISDIR(os.lstat(node).st_mode):
-            raise CaptureWriteError(f"capture path component is not a directory: {node}")
+    try:
+        resolved_boundary = abs_boundary.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise CaptureWriteError(f"cannot resolve capture boundary {abs_boundary}: {exc}") from exc
+    rel_from_boundary = abs_io.relative_to(abs_boundary)
+    expected_resolved = resolved_boundary if abs_io == abs_boundary else (resolved_boundary / rel_from_boundary)
+    if prev_resolved != expected_resolved or (
+        prev_resolved != resolved_boundary and not prev_resolved.is_relative_to(resolved_boundary)
+    ):
+        raise CaptureWriteError(f"capture directory resolves outside allowed boundary: {prev_resolved}")
+    return prev_resolved
 
-    resolved_boundary = abs_boundary.resolve(strict=True)
-    resolved_io = abs_io.resolve(strict=True)
-    expected_resolved = resolved_boundary if abs_io == abs_boundary else (resolved_boundary / rel)
-    if resolved_io != expected_resolved or not resolved_io.is_relative_to(resolved_boundary):
-        raise CaptureWriteError(f"capture directory resolves outside allowed boundary: {resolved_io}")
-    return resolved_io
+
+def _prepare_safe_capture_dir(io_dir: Path, *, boundary_root: Path | None = None, create: bool = True) -> Path:
+    """Validate and optionally create a capture directory without traversing symlinks/junctions."""
+    return verify_safe_directory_chain(io_dir, boundary_root=boundary_root, create=create)
 
 
 def _write_exclusive_bytes_in_dir(validated_dir: Path, filename: str, data: bytes) -> Path:

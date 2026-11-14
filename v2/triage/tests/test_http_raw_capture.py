@@ -18,10 +18,20 @@ import unittest
 
 from v2.triage import live_check
 from v2.triage.evidence import collect, digest, strict_json
-from v2.triage.ollama import MAX_HTTP_BODY_BYTES, OllamaClient, request_payload
+from v2.triage.ollama import (
+    MAX_HTTP_BODY_BYTES,
+    CaptureWriteError,
+    OllamaClient,
+    _prepare_safe_capture_dir,
+    request_payload,
+)
 from v2.triage.runtime import SCHEMA_VERSION
 from v2.triage.store import ReviewStore
-from v2.triage.verify_http_capture import main as verify_cli_main, verify_run_http_captures
+from v2.triage.verify_http_capture import (
+    _verify_tags_captures,
+    main as verify_cli_main,
+    verify_run_http_captures,
+)
 
 
 def _write_triage_run_files(triage_dir: Path, bundle: dict, assessments: list[dict]) -> None:
@@ -1125,6 +1135,158 @@ class RawHttpCaptureTests(unittest.TestCase):
         attempt_doc = strict_json(attempt_resp_path.read_text(encoding="utf-8"))
         self.assertEqual(attempt_doc["runtime"]["sidecar_artifact_stem"], f"{fid}.attempt-0002")
         self.assertFalse(attempt_doc["runtime"]["http_response_received"])
+
+    def test_11_f01_f02_deep_ancestor_junction_capture_and_tags_rejection(self):
+        post_hits = {"count": 0}
+        get_hits = {"count": 0}
+        content_escaped = json.dumps(self._valid_content_json(5), ensure_ascii=False)
+        ok_body = json.dumps(
+            {
+                "done": True,
+                "done_reason": "stop",
+                "model": "qwen3.5:9b-q4_K_M",
+                "mock_test_fixture": True,
+                "message": {"role": "assistant", "content": json.loads(content_escaped)},
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+
+        class _DeepCheckHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                get_hits["count"] += 1
+                body = json.dumps({"models": [{"name": "qwen3.5:9b-q4_K_M", "digest": "d", "size": 1}]}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_POST(self):
+                post_hits["count"] += 1
+                length = int(self.headers.get("Content-Length", "0"))
+                self.rfile.read(length)
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(ok_body)))
+                self.end_headers()
+                self.wfile.write(ok_body)
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), _DeepCheckHandler)
+        th = threading.Thread(target=srv.serve_forever, daemon=True)
+        th.start()
+        self.addCleanup(lambda: (srv.shutdown(), srv.server_close(), th.join(timeout=2)))
+        endpoint = f"http://127.0.0.1:{srv.server_port}"
+
+        # 1) Normal deep nested valid path (positive control)
+        normal_triage = self.tmp_root / "normal_deep" / "a" / "b" / "triage"
+        normal_io = normal_triage / "llm_io"
+        client_ok = OllamaClient(
+            endpoint=endpoint,
+            model="qwen3.5:9b-q4_K_M",
+            timeout=10,
+            runtime_origin="mock",
+            io_log_dir=normal_io,
+            capture_root=normal_triage,
+        )
+        inv_ok = client_ok.verify_model_installed()
+        self.assertTrue(inv_ok["reachable"])
+        self.assertTrue(inv_ok["model_found"])
+        res_ok = client_ok.analyze(self.record0)
+        self.assertEqual(res_ok["validated_status"], "SUPPORTED")
+        _write_triage_run_files(normal_triage, self.bundle_one, [res_ok])
+        ver_ok = verify_run_http_captures(normal_triage)
+        self.assertTrue(ver_ok["capture_integrity_ok"], ver_ok["errors"])
+        self.assertEqual(len(ver_ok["tags_probes"]), 1)
+        self.assertEqual(get_hits["count"], 1)
+        self.assertEqual(post_hits["count"], 1)
+
+        # Verifier CLI writes fresh report once, then refuses overwriting existing evidence
+        out_report = self.tmp_root / "normal_deep_report.json"
+        self.assertEqual(verify_cli_main([str(normal_triage), "--output", str(out_report)]), 0)
+        orig_report_bytes = out_report.read_bytes()
+        self.assertEqual(verify_cli_main([str(normal_triage), "--output", str(out_report)]), 2)
+        self.assertEqual(out_report.read_bytes(), orig_report_bytes)
+
+        # 2) Deep ancestor junction / directory symlink above boundary parent (negative control)
+        junc_holder = self.tmp_root / "deep_holder"
+        junc_holder.mkdir()
+        outside = self.tmp_root / "deep_outside"
+        outside_io = outside / "a" / "b" / "triage" / "llm_io"
+        outside_io.mkdir(parents=True)
+        link = junc_holder / "link"
+        if os.name == "nt":
+            proc = subprocess.run(
+                ["cmd.exe", "/c", "mklink", "/J", str(link), str(outside)],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode != 0:
+                self.skipTest("Windows mklink /J unavailable")
+        else:
+            os.symlink(str(outside), str(link), target_is_directory=True)
+
+        deep_triage = link / "a" / "b" / "triage"
+        deep_io = deep_triage / "llm_io"
+
+        # 2a) analyze() rejects deep existing junction ancestor with zero external writes & zero POSTs
+        client_deep = OllamaClient(
+            endpoint=endpoint,
+            model="qwen3.5:9b-q4_K_M",
+            timeout=10,
+            runtime_origin="mock",
+            io_log_dir=deep_io,
+            capture_root=deep_triage,
+        )
+        res_deep = client_deep.analyze(self.record0)
+        self.assertEqual(res_deep["validated_status"], "UNDETERMINED")
+        self.assertEqual(res_deep["failure_kind"], "EVIDENCE_CAPTURE_WRITE_FAILED")
+        self.assertEqual(post_hits["count"], 1, "deep junction must block before issuing HTTP POST")
+        self.assertEqual(list(outside_io.iterdir()), [], "must write zero files into outside target")
+
+        # 2b) verify_model_installed() rejects deep junction in _tags ancestor with zero GETs & zero external dirs
+        inv_deep = client_deep.verify_model_installed()
+        self.assertFalse(inv_deep["reachable"])
+        self.assertEqual(get_hits["count"], 1, "deep junction must block before issuing HTTP GET")
+        self.assertEqual(list(outside_io.iterdir()), [])
+
+        # 2c) _prepare_safe_capture_dir(..., create=True) on non-existent subtree under deep junction creates nothing outside
+        with self.assertRaises(CaptureWriteError):
+            _prepare_safe_capture_dir(link / "uncreated" / "sub" / "llm_io", boundary_root=link / "uncreated" / "sub", create=True)
+        self.assertFalse((outside / "uncreated").exists())
+
+        # 2d) _verify_tags_captures and verify_run_http_captures reject deep junction in _tags branch without accepting probes
+        outside_tags = outside_io / "_tags"
+        outside_tags.mkdir()
+        canary_body = b'{"models":[],"note":"MOCK_DEEP_TAGS_CANARY"}'
+        (outside_tags / "tags-0001.response.body.bin").write_bytes(canary_body)
+        (outside_tags / "tags-0001.http-capture.json").write_text(
+            json.dumps({
+                "schema": "ntk-ollama-http-capture-1",
+                "call_id": "MOCK:deep-tags-0001",
+                "call_kind": "tags_probe",
+                "method": "GET",
+                "path": "/api/tags",
+                "finding_id": None,
+                "request_raw_file": None,
+                "http_status": 200,
+                "completeness": "complete",
+                "complete": True,
+                "response_raw_file": "tags-0001.response.body.bin",
+                "response_byte_length": len(canary_body),
+                "response_body_sha256": digest(canary_body),
+            }),
+            encoding="utf-8",
+        )
+        tags_errors: list[str] = []
+        probes = _verify_tags_captures(deep_io / "_tags", set(), tags_errors)
+        self.assertTrue(tags_errors, "deep junction in _tags ancestor must produce verification error")
+        self.assertEqual(probes, [])
+
+        _write_triage_run_files(outside / "a" / "b" / "triage", self.bundle_one, [res_deep])
+        rep_deep = verify_run_http_captures(deep_triage)
+        self.assertFalse(rep_deep["capture_integrity_ok"])
+        self.assertTrue(rep_deep["errors"])
 
 
 if __name__ == "__main__":
