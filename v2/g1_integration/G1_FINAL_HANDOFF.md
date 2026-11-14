@@ -1,11 +1,15 @@
-> Errata hiện hành cho G1-C3: phần bên dưới là hồ sơ handoff lịch sử của Antigravity;
+> Errata hiện hành cho G1-C4: phần bên dưới là hồ sơ handoff lịch sử của Antigravity;
 > các số PASS/PENDING, nhánh động và kế hoạch giai đoạn sau không phải nghiệm thu hay chỉ dẫn hiện hành.
 > G1-C2 tại `6ebf3ec6668741a346199f860cf349332ad94eae` đã có kết quả
-> `G1_C2_RUNTIME_ACCEPTANCE_FAILED`; giữ nguyên toàn bộ bằng chứng gốc bên ngoài repository.
+> `G1_C2_RUNTIME_ACCEPTANCE_FAILED`; G1-C3 tại `236439ead654d12448bb2cf711e534a243007afd`
+> có kết luận kiểm toán cổng runtime `RUNTIME_PLAN_REQUIRES_CORRECTION`; giữ nguyên toàn bộ bằng chứng gốc bên ngoài repository.
 > Dòng kiểm tra vệ sinh thiếu entrypoint đã được loại khỏi bảng lệnh bên dưới; claim PASS đó
 > không có căn cứ áp dụng cho commit G1-C2. Không sửa biên nhận gốc.
-> Ứng viên hiện hành là G1-C3, prompt `v2.2.2-cwe22-cwe89-canonical-citations`;
-> xem `CANDIDATE.json`, README mục 5 và manifest commit bên ngoài để pin SHA mới.
+> Ứng viên hiện hành là G1-C4 (bổ sung lưu HTTP body bytes cùng lượt gọi B1 và quy trình nghiệm thu chuẩn B2),
+> prompt `v2.2.2-cwe22-cwe89-canonical-citations`; xem `CANDIDATE.json`, `RUNTIME_ACCEPTANCE_PLAN.md`,
+> README mục 5 và manifest commit bên ngoài để pin SHA mới.
+> Bộ tham chiếu giảng viên (OpenGrep `1.33.1`, Ollama `0.40.16`, `qwen3.5:9b-q4_K_M`) khác với
+> `ADMIN-PC` thực tế (OpenGrep `1.25.0`, Ollama `0.40.7`, `qwen3.5:9b-q4_K_M`); ghi rõ sai khác và không tự thay đổi môi trường.
 > REAL_OLLAMA/R01–R03 chưa chạy; kiểm toán độc lập và runtime cần quy trình riêng.
 > Kiểm thử phát triển hiện hành dùng venv Python 3.12.3 theo phê duyệt người vận hành;
 > dependency và biến log/settings scanner được ghi trong README mục 5 và hồ sơ bàn giao mới.

@@ -1,13 +1,24 @@
 """Loopback-only Ollama HTTP adapter, neutral prompt builder, and strict citation provenance validator."""
+from contextlib import contextmanager
+from http.client import HTTPException, IncompleteRead
 import json
 import re
 import time
+import uuid
 from pathlib import Path
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, ProxyHandler, HTTPRedirectHandler, build_opener
 from .evidence import EvidenceError, StaleSourceError, strict_json, check_current, now, digest
 from .runtime import execution
+
+
+MAX_HTTP_BODY_BYTES = 1_000_000
+
+
+class CaptureWriteError(EvidenceError):
+    """Raised when mandatory raw HTTP capture bytes or receipts cannot be persisted safely."""
+
 
 
 STATUSES = ("SUPPORTED", "REFUTED", "UNDETERMINED")
@@ -951,10 +962,60 @@ def request_payload(record, model):
             "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 1200}}
 
 
+def _write_exclusive_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("xb") as handle:
+        handle.write(data)
+
+
+def _write_text_artifact(path: Path, content: str, *, exclusive: bool) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = "x" if exclusive else "w"
+    with path.open(mode, encoding="utf-8") as handle:
+        handle.write(content)
+
+
+def _declared_content_length(headers_items) -> tuple[int | None, bool]:
+    """Return (declared_content_length_or_None, is_chunked) from response headers."""
+    if not headers_items:
+        return None, False
+    is_chunked = False
+    lengths = set()
+    for k, v in headers_items:
+        key_low = str(k).lower()
+        val_str = str(v).strip()
+        if key_low == "transfer-encoding" and "chunked" in val_str.lower():
+            is_chunked = True
+        elif key_low == "content-length" and val_str:
+            for part in val_str.split(","):
+                tok = part.strip()
+                if not tok.isdigit():
+                    raise EvidenceError("invalid HTTP Content-Length header")
+                lengths.add(int(tok))
+    if is_chunked:
+        return None, True
+    if len(lengths) > 1:
+        raise EvidenceError("conflicting HTTP Content-Length headers")
+    return (next(iter(lengths)) if lengths else None), False
+
+
+def _peek_raw_model_status_from_bytes(raw_bytes: bytes) -> str | None:
+    """Best-effort peek at raw model status from unparsed HTTP body bytes without mutating or repairing."""
+    try:
+        envelope = json.loads(raw_bytes.decode("utf-8"))
+    except (UnicodeError, ValueError, TypeError, RecursionError):
+        return None
+    if not isinstance(envelope, dict) or not isinstance(envelope.get("message"), dict):
+        return None
+    return _extract_raw_model_status(envelope["message"].get("content"))
+
+
 def _classify_failure(exc, http_status=None, error_body_text=""):
     msg = str(exc)
     msg_low = msg.lower()
     body_low = (error_body_text or "").lower()
+    if isinstance(exc, CaptureWriteError):
+        return "EVIDENCE_CAPTURE_WRITE_FAILED"
     if isinstance(exc, HTTPError):
         if exc.code == 404 or "not found" in body_low or ("model" in body_low and "not found" in body_low):
             return "MODEL_UNAVAILABLE"
@@ -965,9 +1026,11 @@ def _classify_failure(exc, http_status=None, error_body_text=""):
         return "MODEL_UNAVAILABLE"
     if "redirects are forbidden" in msg_low:
         return "REDIRECT_FORBIDDEN"
+    if isinstance(exc, (IncompleteRead,)) or "incomplete http body read" in msg_low:
+        return "TRUNCATED_OUTPUT"
     if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError) or "timed out" in msg_low or "timeout" in msg_low:
         return "TIMEOUT"
-    if isinstance(exc, URLError) or (isinstance(exc, OSError) and not isinstance(exc, EvidenceError)):
+    if isinstance(exc, URLError) or (isinstance(exc, (OSError, HTTPException)) and not isinstance(exc, EvidenceError)):
         return "CONNECTION_ERROR"
     if "incomplete ollama response" in msg_low:
         return "TRUNCATED_OUTPUT"
@@ -977,7 +1040,7 @@ def _classify_failure(exc, http_status=None, error_body_text=""):
         return "PROMPT_TOO_LARGE"
     if isinstance(exc, StaleSourceError) or "insufficient evidence" in msg_low or "source hash mismatch" in msg_low or "source identity" in msg_low:
         return "EVIDENCE_PRECHECK_FAILED"
-    if "invalid json" in msg_low or "duplicate json key" in msg_low or "nonfinite json" in msg_low:
+    if isinstance(exc, UnicodeDecodeError) or "invalid json" in msg_low or "duplicate json key" in msg_low or "nonfinite json" in msg_low:
         return "MALFORMED_JSON"
     if (
         "do not match schema" in msg_low
@@ -1015,41 +1078,290 @@ class OllamaClient:
         self.runtime_origin = runtime_origin
         self.io_log_dir = Path(io_log_dir) if io_log_dir is not None else None
         self._last_error_body_text = ""
+        self._last_raw_model_status = None
+        self._active_capture = None
+        self._tags_call_seq = 0
         self.runtime = execution(runtime_origin)
         self.opener = build_opener(ProxyHandler({}), NoRedirect())
 
+    @contextmanager
+    def _capture_scope(self, scope):
+        previous = self._active_capture
+        self._active_capture = scope
+        try:
+            yield
+        finally:
+            self._active_capture = previous
+
     def request(self, path, payload=None):
         self._last_error_body_text = ""
+        self._last_raw_model_status = None
+        cap = self._active_capture
+        method = "GET" if payload is None else "POST"
         data = None if payload is None else json.dumps(payload).encode("utf-8")
+        req_sha = None
+        req_rel = None
         if data is not None:
-            self.runtime["request_payload_sha256"] = digest(data)
+            req_sha = digest(data)
+            self.runtime["request_payload_sha256"] = req_sha
+            self.runtime["request_payload_bytes"] = len(data)
+            if cap is not None:
+                req_name = f"{cap['artifact_prefix']}.request.body.bin"
+                try:
+                    _write_exclusive_bytes(cap["io_dir"] / req_name, data)
+                except OSError as exc:
+                    self.runtime["http_capture_completeness"] = "capture_write_failed"
+                    self.runtime["http_capture_complete"] = False
+                    self.runtime["http_capture_error"] = str(exc)
+                    raise CaptureWriteError(f"failed to persist raw HTTP request body: {exc}") from exc
+                req_rel = f"{cap['rel_dir_prefix']}/{req_name}"
+                self.runtime["request_raw_artifact"] = req_rel
+
         req = Request(
             self.endpoint + path,
             data=data,
             headers={"Content-Type": "application/json", "Connection": "close"},
         )
         self.runtime["request_attempted"] = True
+        started_utc = now()
+        started_mono = time.monotonic()
+        http_status = None
+        http_reason = None
+        resp_headers = None
+        raw_complete_bytes = None
+        raw_incomplete_bytes = None
+        completeness = "no_body_received"
+        complete_flag = False
+        resp_rel = None
+        inc_rel = None
+        json_parse_ok = False
+        parsed = None
+        transport_exc = None
+        parse_exc = None
+        capture_write_exc = None
+
         try:
             with self.opener.open(req, timeout=self.timeout) as response:
                 self.runtime["http_response_received"] = True
-                self.runtime["http_status"] = response.status
-                raw = response.read(1_000_001)
+                http_status = response.status
+                self.runtime["http_status"] = http_status
+                http_reason = getattr(response, "reason", None)
+                resp_headers = list(response.headers.items()) if getattr(response, "headers", None) is not None else []
+                declared_len, _is_chunked = _declared_content_length(resp_headers)
+                buf = bytearray()
+                try:
+                    while len(buf) <= MAX_HTTP_BODY_BYTES:
+                        want = min(65536, (MAX_HTTP_BODY_BYTES + 1) - len(buf))
+                        chunk = response.read(want)
+                        if not chunk:
+                            break
+                        buf.extend(chunk)
+                    raw = bytes(buf)
+                except IncompleteRead as read_exc:
+                    if read_exc.partial:
+                        buf.extend(read_exc.partial)
+                    raw_incomplete_bytes = bytes(buf[:MAX_HTTP_BODY_BYTES])
+                    completeness = "partial_read_error"
+                    transport_exc = read_exc
+                    raise
+                except (TimeoutError, OSError, HTTPException) as read_exc:
+                    if buf:
+                        raw_incomplete_bytes = bytes(buf[:MAX_HTTP_BODY_BYTES])
+                        completeness = "partial_read_error"
+                    else:
+                        completeness = "read_error_after_headers"
+                    transport_exc = read_exc
+                    raise
+
+                if len(raw) > MAX_HTTP_BODY_BYTES:
+                    raw_incomplete_bytes = raw[:MAX_HTTP_BODY_BYTES]
+                    completeness = "exceeded_max_bytes_prefix_only"
+                    complete_flag = False
+                    transport_exc = EvidenceError("Ollama response too large")
+                    raise transport_exc
+
+                if declared_len is not None and len(raw) < declared_len:
+                    raw_incomplete_bytes = raw
+                    completeness = "partial_read_error"
+                    complete_flag = False
+                    transport_exc = EvidenceError(
+                        f"incomplete HTTP body read: expected {declared_len} bytes, got {len(raw)}"
+                    )
+                    raise transport_exc
+
+                raw_complete_bytes = raw
+                completeness = "complete"
+                complete_flag = True
+                self.runtime["response_body_sha256"] = digest(raw)
+                self.runtime["response_body_bytes"] = len(raw)
+                self._last_raw_model_status = _peek_raw_model_status_from_bytes(raw)
         except HTTPError as exc:
+            transport_exc = exc
             self.runtime["http_response_received"] = True
-            self.runtime["http_status"] = exc.code
+            http_status = exc.code
+            self.runtime["http_status"] = http_status
+            http_reason = getattr(exc, "reason", None)
+            resp_headers = list(exc.headers.items()) if getattr(exc, "headers", None) is not None else []
             try:
-                body = exc.read(1_000_001)
-                if len(body) <= 1_000_000:
-                    self.runtime["response_body_sha256"] = digest(body)
-                    self._last_error_body_text = body.decode("utf-8", errors="replace")
+                declared_err_len, _ = _declared_content_length(resp_headers)
+            except EvidenceError:
+                declared_err_len = None
+            try:
+                try:
+                    body = exc.read(MAX_HTTP_BODY_BYTES + 1)
+                except IncompleteRead as read_exc:
+                    partial = bytes(read_exc.partial or b"")
+                    raw_incomplete_bytes = partial[:MAX_HTTP_BODY_BYTES]
+                    completeness = "partial_read_error"
+                    self._last_error_body_text = raw_incomplete_bytes.decode("utf-8", errors="replace")
+                    body = None
+                except (TimeoutError, OSError, HTTPException):
+                    completeness = "read_error_after_headers"
+                    body = None
+                if body is not None:
+                    if len(body) > MAX_HTTP_BODY_BYTES:
+                        raw_incomplete_bytes = body[:MAX_HTTP_BODY_BYTES]
+                        completeness = "exceeded_max_bytes_prefix_only"
+                        complete_flag = False
+                        self._last_error_body_text = raw_incomplete_bytes.decode("utf-8", errors="replace")
+                    elif declared_err_len is not None and len(body) < declared_err_len:
+                        raw_incomplete_bytes = body
+                        completeness = "partial_read_error"
+                        complete_flag = False
+                        self._last_error_body_text = body.decode("utf-8", errors="replace")
+                    else:
+                        raw_complete_bytes = body
+                        completeness = "complete_http_error_body"
+                        complete_flag = True
+                        self.runtime["response_body_sha256"] = digest(body)
+                        self.runtime["response_body_bytes"] = len(body)
+                        self._last_error_body_text = body.decode("utf-8", errors="replace")
             finally:
                 exc.close()
-            raise
-        if len(raw) > 1_000_000:
-            raise EvidenceError("Ollama response too large")
-        self.runtime["response_body_sha256"] = digest(raw)
-        parsed = strict_json(raw.decode("utf-8"))
-        self.runtime["response_json_sha256"] = digest(json.dumps(parsed, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8"))
+        except Exception as exc:
+            if transport_exc is None:
+                transport_exc = exc
+
+        finished_utc = now()
+        call_elapsed = time.monotonic() - started_mono
+
+        # 1. Persist exact raw HTTP response body bytes BEFORE UTF-8 decoding or JSON parsing.
+        if cap is not None:
+            try:
+                if raw_complete_bytes is not None:
+                    resp_name = f"{cap['artifact_prefix']}.response.body.bin"
+                    _write_exclusive_bytes(cap["io_dir"] / resp_name, raw_complete_bytes)
+                    resp_rel = f"{cap['rel_dir_prefix']}/{resp_name}"
+                    self.runtime["response_raw_artifact"] = resp_rel
+                elif raw_incomplete_bytes is not None and len(raw_incomplete_bytes) > 0:
+                    inc_name = f"{cap['artifact_prefix']}.response.incomplete.bin"
+                    _write_exclusive_bytes(cap["io_dir"] / inc_name, raw_incomplete_bytes)
+                    inc_rel = f"{cap['rel_dir_prefix']}/{inc_name}"
+                    self.runtime["response_incomplete_raw_artifact"] = inc_rel
+            except OSError as exc:
+                capture_write_exc = exc
+
+        # 2. Parse UTF-8 + strict JSON only when transport succeeded with a complete bounded body.
+        if transport_exc is None and raw_complete_bytes is not None:
+            try:
+                parsed = strict_json(raw_complete_bytes.decode("utf-8"))
+                json_parse_ok = True
+                self.runtime["response_json_sha256"] = digest(
+                    json.dumps(parsed, sort_keys=True, ensure_ascii=False, allow_nan=False).encode("utf-8")
+                )
+            except (UnicodeError, ValueError, TypeError) as exc:
+                parse_exc = exc
+
+        # 3. Persist per-call HTTP capture receipt linking raw request/response bytes, status, headers, and finding.
+        if cap is not None and capture_write_exc is None:
+            receipt_name = f"{cap['artifact_prefix']}.http-capture.json"
+            receipt_doc = {
+                "schema": "ntk-ollama-http-capture-1",
+                "capture_scope": "http_body_and_client_metadata_not_tcp_wire",
+                "call_id": cap["call_id"],
+                "call_kind": cap["call_kind"],
+                "finding_id": cap.get("finding_id"),
+                "alert_id": cap.get("alert_id"),
+                "scan_sha256": cap.get("scan_sha256"),
+                "finding_index": cap.get("finding_index"),
+                "rule_id": cap.get("rule_id"),
+                "endpoint": self.endpoint,
+                "method": method,
+                "path": path,
+                "requested_model": self.model,
+                "started_at_utc": started_utc,
+                "finished_at_utc": finished_utc,
+                "elapsed_seconds": call_elapsed,
+                "latency_ms": round(call_elapsed * 1000.0, 3),
+                "transport_entered": True,
+                "request_attempted": True,
+                "request_raw_file": f"{cap['artifact_prefix']}.request.body.bin" if req_rel is not None else None,
+                "request_relative_artifact": req_rel,
+                "request_byte_length": len(data) if data is not None else None,
+                "request_payload_sha256": req_sha,
+                "http_response_received": bool(self.runtime.get("http_response_received")),
+                "http_status": http_status,
+                "http_reason": http_reason,
+                "response_headers": resp_headers,
+                "completeness": completeness,
+                "complete": complete_flag,
+                "max_response_bytes": MAX_HTTP_BODY_BYTES,
+                "response_raw_file": f"{cap['artifact_prefix']}.response.body.bin" if resp_rel is not None else None,
+                "response_relative_artifact": resp_rel,
+                "response_byte_length": len(raw_complete_bytes) if raw_complete_bytes is not None else None,
+                "response_body_sha256": self.runtime.get("response_body_sha256"),
+                "response_incomplete_raw_file": (
+                    f"{cap['artifact_prefix']}.response.incomplete.bin" if inc_rel is not None else None
+                ),
+                "response_incomplete_relative_artifact": inc_rel,
+                "response_incomplete_byte_length": (
+                    len(raw_incomplete_bytes)
+                    if (raw_incomplete_bytes is not None and len(raw_incomplete_bytes) > 0)
+                    else None
+                ),
+                "response_incomplete_sha256": (
+                    digest(raw_incomplete_bytes)
+                    if (raw_incomplete_bytes is not None and len(raw_incomplete_bytes) > 0)
+                    else None
+                ),
+                "response_json_parse_succeeded": json_parse_ok,
+                "response_json_sha256": self.runtime.get("response_json_sha256"),
+                "transport_error_type": type(transport_exc).__name__ if transport_exc is not None else None,
+                "transport_error": str(transport_exc) if transport_exc is not None else None,
+                "parse_error_type": type(parse_exc).__name__ if parse_exc is not None else None,
+                "parse_error": str(parse_exc) if parse_exc is not None else None,
+                "note": (
+                    "Preserves exact client-sent HTTP request payload bytes and client-received HTTP response "
+                    "body bytes from the same urllib call prior to UTF-8/JSON decoding. Does not capture raw "
+                    "TCP/chunked wire framing or attest server-side model execution."
+                ),
+            }
+            try:
+                _write_exclusive_bytes(
+                    cap["io_dir"] / receipt_name,
+                    (json.dumps(receipt_doc, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                )
+                self.runtime["http_capture_receipt"] = f"{cap['rel_dir_prefix']}/{receipt_name}"
+                self.runtime["http_capture_completeness"] = completeness
+                self.runtime["http_capture_complete"] = bool(
+                    complete_flag and (data is None or req_rel is not None) and resp_rel is not None
+                )
+            except OSError as exc:
+                capture_write_exc = exc
+        elif cap is None:
+            self.runtime["http_capture_completeness"] = "not_configured"
+            self.runtime["http_capture_complete"] = False
+
+        if capture_write_exc is not None:
+            self.runtime["http_capture_completeness"] = "capture_write_failed"
+            self.runtime["http_capture_complete"] = False
+            self.runtime["http_capture_error"] = str(capture_write_exc)
+            raise CaptureWriteError(f"failed to persist raw HTTP capture artifact: {capture_write_exc}") from capture_write_exc
+
+        if transport_exc is not None:
+            raise transport_exc
+        if parse_exc is not None:
+            raise parse_exc
         return parsed
 
     def tags(self):
@@ -1059,8 +1371,33 @@ class OllamaClient:
         """Query local Ollama /api/tags without failing closed on probe errors; return actual tag inventory."""
         saved_runtime = self.runtime
         self.runtime = execution(self.runtime_origin)
+        tags_scope = None
+        if self.io_log_dir is not None:
+            tags_dir = self.io_log_dir / "_tags"
+            self._tags_call_seq += 1
+            seq = self._tags_call_seq
+            while (tags_dir / f"tags-{seq:04d}.http-capture.json").exists() or (tags_dir / f"tags-{seq:04d}.response.body.bin").exists():
+                seq += 1
+            self._tags_call_seq = seq
+            prefix = f"tags-{seq:04d}"
+            tags_scope = {
+                "io_dir": tags_dir,
+                "artifact_prefix": prefix,
+                "rel_dir_prefix": "llm_io/_tags",
+                "call_id": f"tags_probe:{prefix}:{uuid.uuid4().hex[:12]}",
+                "call_kind": "tags_probe",
+                "finding_id": None,
+                "alert_id": None,
+                "scan_sha256": None,
+                "finding_index": None,
+                "rule_id": None,
+            }
         try:
-            doc = self.tags()
+            if tags_scope is not None:
+                with self._capture_scope(tags_scope):
+                    doc = self.tags()
+            else:
+                doc = self.tags()
             models = doc.get("models") if isinstance(doc, dict) and isinstance(doc.get("models"), list) else []
             installed = []
             matched_digest = None
@@ -1079,9 +1416,21 @@ class OllamaClient:
                 "model_found": any(item["name"] == self.model for item in installed),
                 "model_digest": matched_digest,
                 "installed_models": installed,
+                "http_capture": (
+                    {
+                        "receipt": self.runtime.get("http_capture_receipt"),
+                        "response_raw_artifact": self.runtime.get("response_raw_artifact"),
+                        "response_body_sha256": self.runtime.get("response_body_sha256"),
+                        "response_body_bytes": self.runtime.get("response_body_bytes"),
+                        "http_status": self.runtime.get("http_status"),
+                        "complete": self.runtime.get("http_capture_complete"),
+                    }
+                    if tags_scope is not None
+                    else None
+                ),
                 "error": None,
             }
-        except (EvidenceError, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
+        except (EvidenceError, HTTPException, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
             return {
                 "reachable": False,
                 "endpoint": self.endpoint,
@@ -1089,60 +1438,87 @@ class OllamaClient:
                 "model_found": False,
                 "model_digest": None,
                 "installed_models": [],
+                "http_capture": (
+                    {
+                        "receipt": self.runtime.get("http_capture_receipt"),
+                        "response_raw_artifact": self.runtime.get("response_raw_artifact"),
+                        "response_body_sha256": self.runtime.get("response_body_sha256"),
+                        "response_body_bytes": self.runtime.get("response_body_bytes"),
+                        "http_status": self.runtime.get("http_status"),
+                        "complete": self.runtime.get("http_capture_complete"),
+                        "capture_error": self.runtime.get("http_capture_error"),
+                    }
+                    if tags_scope is not None
+                    else None
+                ),
                 "error": str(exc),
             }
         finally:
             self.runtime = saved_runtime
 
-    def _write_io_artifacts(self, io_dir, finding_id, *, contract, messages, prompt_sha, req_payload, response, error_text, elapsed):
+    def _write_io_artifacts(self, io_dir, finding_id, *, contract, messages, prompt_sha, req_payload, response, error_text, elapsed, exclusive=False):
         if io_dir is None:
             return
         io_dir = Path(io_dir)
-        io_dir.mkdir(parents=True, exist_ok=True)
         safe_id = re.sub(r"[^0-9a-fA-F_-]", "_", str(finding_id or "unknown"))[:80]
-        if messages is not None:
-            (io_dir / f"{safe_id}.prompt.json").write_text(
+        try:
+            io_dir.mkdir(parents=True, exist_ok=True)
+            if messages is not None:
+                _write_text_artifact(
+                    io_dir / f"{safe_id}.prompt.json",
+                    json.dumps(
+                        {
+                            "finding_id": finding_id,
+                            "prompt_version": PROMPT_VERSION,
+                            "prompt_contract": contract,
+                            "prompt_sha256": prompt_sha,
+                            "messages": messages,
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    exclusive=exclusive,
+                )
+            if req_payload is not None:
+                _write_text_artifact(
+                    io_dir / f"{safe_id}.request.json",
+                    json.dumps(req_payload, indent=2, ensure_ascii=False),
+                    exclusive=exclusive,
+                )
+            _write_text_artifact(
+                io_dir / f"{safe_id}.response.json",
                 json.dumps(
                     {
                         "finding_id": finding_id,
-                        "prompt_version": PROMPT_VERSION,
-                        "prompt_contract": contract,
-                        "prompt_sha256": prompt_sha,
-                        "messages": messages,
+                        "model": self.model,
+                        "endpoint": self.endpoint,
+                        "elapsed_seconds": elapsed,
+                        "latency_ms": round(elapsed * 1000.0, 3),
+                        "runtime": dict(self.runtime),
+                        "raw_response": response,
+                        "raw_response_note": (
+                            "Parsed JSON envelope (or null on transport/parse failure). "
+                            "Exact same-call raw HTTP response body bytes are stored separately in "
+                            f"{safe_id}.response.body.bin when received within size bounds."
+                        ),
+                        "error": error_text,
+                        "http_error_body": self._last_error_body_text or None,
                     },
                     indent=2,
                     ensure_ascii=False,
                 ),
-                encoding="utf-8",
+                exclusive=exclusive,
             )
-        if req_payload is not None:
-            (io_dir / f"{safe_id}.request.json").write_text(
-                json.dumps(req_payload, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-        (io_dir / f"{safe_id}.response.json").write_text(
-            json.dumps(
-                {
-                    "finding_id": finding_id,
-                    "model": self.model,
-                    "endpoint": self.endpoint,
-                    "elapsed_seconds": elapsed,
-                    "latency_ms": round(elapsed * 1000.0, 3),
-                    "runtime": dict(self.runtime),
-                    "raw_response": response,
-                    "error": error_text,
-                    "http_error_body": self._last_error_body_text or None,
-                },
-                indent=2,
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+        except OSError as exc:
+            raise CaptureWriteError(f"failed to persist llm_io JSON artifacts: {exc}") from exc
 
     def analyze(self, record, io_log_dir=None):
         active_io_dir = Path(io_log_dir) if io_log_dir is not None else self.io_log_dir
         self.runtime = execution(self.runtime_origin)
-        self.runtime["finding_id"] = record["id"]
+        rec_id = record["id"] if isinstance(record, dict) and "id" in record else "unknown"
+        self.runtime["finding_id"] = rec_id
+        if active_io_dir is not None:
+            self.runtime["http_capture_completeness"] = "precheck_not_attempted"
         contract_val = record.get("prompt_contract", DEFAULT_PROMPT_CONTRACT) if isinstance(record, dict) else None
         provenance = {"transport": "ollama-http", "model": self.model, "endpoint": self.endpoint,
                       "raw_response": None, "runtime": self.runtime,
@@ -1151,6 +1527,7 @@ class OllamaClient:
         req_body = None
         prompt_sha = None
         raw_model_status = None
+        safe_id = re.sub(r"[^0-9a-fA-F_-]", "_", str(rec_id or "unknown"))[:80]
         started = time.monotonic()
         try:
             if record["issues"]:
@@ -1164,7 +1541,26 @@ class OllamaClient:
             if len(json.dumps(messages).encode("utf-8")) > 32_000:
                 raise EvidenceError("prompt exceeds bounded evidence size; use UNDETERMINED")
             req_body = request_payload(record, self.model)
-            response = self.request("/api/chat", req_body)
+            chat_scope = None
+            if active_io_dir is not None:
+                self.runtime["http_capture_completeness"] = "request_method_mocked"
+                chat_scope = {
+                    "io_dir": active_io_dir,
+                    "artifact_prefix": safe_id,
+                    "rel_dir_prefix": "llm_io",
+                    "call_id": f"chat_analyze:{safe_id}:{uuid.uuid4().hex[:12]}",
+                    "call_kind": "chat_analyze",
+                    "finding_id": rec_id,
+                    "alert_id": record.get("alert_id") if isinstance(record, dict) else None,
+                    "scan_sha256": record.get("scan_sha256") if isinstance(record, dict) else None,
+                    "finding_index": record.get("finding_index") if isinstance(record, dict) else None,
+                    "rule_id": record.get("rule_id") if isinstance(record, dict) else None,
+                }
+            if chat_scope is not None:
+                with self._capture_scope(chat_scope):
+                    response = self.request("/api/chat", req_body)
+            else:
+                response = self.request("/api/chat", req_body)
             provenance["raw_response"] = response
             if isinstance(response, dict):
                 if response.get("mock_test_fixture") is True:
@@ -1184,12 +1580,13 @@ class OllamaClient:
                 raise EvidenceError("Ollama returned an unexpected model identifier")
             content = response.get("message", {}).get("content") if isinstance(response.get("message"), dict) else None
             answer = validate_answer(content, record)
+            elapsed = time.monotonic() - started
+            # Mark validated strictly AFTER mandatory raw + JSON artifacts succeed without write errors.
             self.runtime["answer_validated"] = True
             self.runtime["failure_kind"] = "NONE"
-            elapsed = time.monotonic() - started
             self._write_io_artifacts(
                 active_io_dir,
-                record["id"],
+                rec_id,
                 contract=contract_val,
                 messages=messages,
                 prompt_sha=prompt_sha,
@@ -1197,6 +1594,7 @@ class OllamaClient:
                 response=response,
                 error_text=None,
                 elapsed=elapsed,
+                exclusive=bool(self.runtime.get("request_attempted")),
             )
             return {
                 **answer,
@@ -1204,23 +1602,42 @@ class OllamaClient:
                 "elapsed_seconds": elapsed,
                 "latency_ms": round(elapsed * 1000.0, 3),
             }
-        except (EvidenceError, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
+        except (EvidenceError, HTTPException, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
             elapsed = time.monotonic() - started
+            self.runtime["answer_validated"] = False
+            if raw_model_status is None and self._last_raw_model_status is not None:
+                raw_model_status = self._last_raw_model_status
+            if isinstance(exc, CaptureWriteError):
+                self.runtime["http_capture_completeness"] = "capture_write_failed"
+                self.runtime["http_capture_complete"] = False
+                if not self.runtime.get("http_capture_error"):
+                    self.runtime["http_capture_error"] = str(exc)
             f_kind = _classify_failure(exc, http_status=self.runtime.get("http_status"), error_body_text=self._last_error_body_text)
             self.runtime["failure_kind"] = f_kind
-            self._write_io_artifacts(
-                active_io_dir,
-                record.get("id") if isinstance(record, dict) else "unknown",
-                contract=contract_val,
-                messages=messages,
-                prompt_sha=prompt_sha,
-                req_payload=req_body,
-                response=provenance.get("raw_response"),
-                error_text=str(exc),
-                elapsed=elapsed,
-            )
+            error_msg = str(exc)
+            if not isinstance(exc, CaptureWriteError):
+                try:
+                    self._write_io_artifacts(
+                        active_io_dir,
+                        rec_id,
+                        contract=contract_val,
+                        messages=messages,
+                        prompt_sha=prompt_sha,
+                        req_payload=req_body,
+                        response=provenance.get("raw_response"),
+                        error_text=error_msg,
+                        elapsed=elapsed,
+                        exclusive=bool(self.runtime.get("request_attempted")),
+                    )
+                except CaptureWriteError as io_exc:
+                    self.runtime["http_capture_completeness"] = "capture_write_failed"
+                    self.runtime["http_capture_complete"] = False
+                    self.runtime["http_capture_error"] = str(io_exc)
+                    f_kind = "EVIDENCE_CAPTURE_WRITE_FAILED"
+                    self.runtime["failure_kind"] = f_kind
+                    error_msg = f"{error_msg}; {io_exc}"
             return undecided(
-                str(exc),
+                error_msg,
                 raw_model_status=raw_model_status,
                 failure_kind=f_kind,
                 **provenance,

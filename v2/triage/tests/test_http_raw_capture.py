@@ -1,0 +1,758 @@
+"""Byte-for-byte raw HTTP capture & SHA-256 verification tests (B1).
+
+All HTTP responses in this test module are explicit local loopback MOCK fixtures;
+zero calls are made to real Ollama/Qwen.
+"""
+from __future__ import annotations
+
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+from pathlib import Path
+import socket
+import tempfile
+import threading
+import time
+import unittest
+
+from v2.triage import live_check
+from v2.triage.evidence import collect, digest, strict_json
+from v2.triage.ollama import MAX_HTTP_BODY_BYTES, OllamaClient, request_payload
+from v2.triage.runtime import SCHEMA_VERSION
+from v2.triage.store import ReviewStore
+from v2.triage.verify_http_capture import main as verify_cli_main, verify_run_http_captures
+
+
+def _write_triage_run_files(triage_dir: Path, bundle: dict, assessments: list[dict]) -> None:
+    triage_dir.mkdir(parents=True, exist_ok=True)
+    (triage_dir / "evidence.json").write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+    lines = []
+    for rec, assessment in zip(bundle["records"], assessments):
+        row = {
+            "schema_version": SCHEMA_VERSION,
+            "id": rec["id"],
+            "alert_id": rec["alert_id"],
+            "scan_sha256": rec["scan_sha256"],
+            "finding_index": rec["finding_index"],
+            "state": "OPEN",
+            "evidence": rec,
+            "assessment": assessment,
+        }
+        lines.append(json.dumps(row, ensure_ascii=False))
+    (triage_dir / "assessments.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class RawHttpCaptureTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.tmp_root = Path(self.tmp.name).resolve()
+        self.src_root = self.tmp_root / "src"
+        self.src_root.mkdir()
+        self.java_file = self.src_root / "Demo.java"
+        self.java_text = (
+            "class Demo {\n"
+            "  void run(javax.servlet.http.HttpServletRequest req, java.sql.Statement stmt) throws Exception {\n"
+            '    String input = req.getParameter("x");\n'
+            '    String sql = "SELECT " + input;\n'
+            "    stmt.executeQuery(sql);\n"
+            "    java.io.FileInputStream fis = new java.io.FileInputStream(input);\n"
+            "    fis.close();\n"
+            "  }\n"
+            "}\n"
+        )
+        self.java_file.write_bytes(self.java_text.encode("utf-8"))
+        lines_ke = self.java_text.splitlines(keepends=True)
+        lines = self.java_text.splitlines()
+
+        def pt(ln: int, col: int) -> dict[str, int]:
+            return {"line": ln, "col": col, "offset": sum(len(x.encode("utf-8")) for x in lines_ke[: ln - 1]) + col - 1}
+
+        def loc(ln: int, txt: str) -> dict:
+            c = lines[ln - 1].index(txt) + 1
+            return {"path": "Demo.java", "start": pt(ln, c), "end": pt(ln, c + len(txt.encode("utf-8")))}
+
+        def tag(ln: int, txt: str) -> list:
+            return ["CliLoc", [loc(ln, txt), txt]]
+
+        self.raw_scan = {
+            "results": [
+                {
+                    "check_id": "test.cwe89",
+                    "path": "Demo.java",
+                    "start": pt(5, 5),
+                    "end": pt(5, 27),
+                    "extra": {
+                        "severity": "ERROR",
+                        "metadata": {"cwe": ["CWE-89"]},
+                        "message": "SQLi",
+                        "dataflow_trace": {
+                            "taint_source": tag(3, 'req.getParameter("x")'),
+                            "intermediate_vars": [{"location": loc(4, "sql"), "content": "sql"}],
+                            "taint_sink": tag(5, "stmt.executeQuery(sql)"),
+                        },
+                    },
+                },
+                {
+                    "check_id": "test.cwe22",
+                    "path": "Demo.java",
+                    "start": pt(6, 35),
+                    "end": pt(6, 69),
+                    "extra": {
+                        "severity": "ERROR",
+                        "metadata": {"cwe": ["CWE-22"]},
+                        "message": "Path traversal",
+                        "dataflow_trace": {
+                            "taint_source": tag(3, 'req.getParameter("x")'),
+                            "intermediate_vars": [],
+                            "taint_sink": tag(6, "new java.io.FileInputStream(input)"),
+                        },
+                    },
+                },
+            ],
+            "errors": [],
+        }
+        self.bundle_two = collect(
+            json.dumps(self.raw_scan),
+            self.src_root,
+            engine_exit=0,
+            scan_provenance={"origin": "UNIT_TEST_MOCK_CAPTURE", "source_capture_verified": True},
+        )
+        self.bundle_one = collect(
+            json.dumps({"results": [self.raw_scan["results"][0]], "errors": []}),
+            self.src_root,
+            engine_exit=0,
+            scan_provenance={"origin": "UNIT_TEST_MOCK_CAPTURE", "source_capture_verified": True},
+        )
+        self.record0 = self.bundle_one["records"][0]
+        self.snap_sha = self.record0["snapshots"]["Demo.java"]["sha256"]
+
+    def _valid_content_json(self, line_no: int = 5) -> str:
+        quote = self.java_text.splitlines()[line_no - 1]
+        return json.dumps(
+            {
+                "status": "SUPPORTED",
+                "explanation": "MOCK: Tiếng Việt — đường dẫn / truy vấn nhận dữ liệu chưa lọc.",
+                "citations": [
+                    {
+                        "path": "Demo.java",
+                        "start_line": line_no,
+                        "end_line": line_no,
+                        "quote": quote,
+                        "sha256": self.snap_sha,
+                    }
+                ],
+                "fix_suggestion": "MOCK: Sử dụng tham số hóa hoặc chuẩn hóa đường dẫn.",
+            },
+            ensure_ascii=False,
+        )
+
+    def test_01_http200_preserves_exact_unicode_whitespace_crlf_and_key_order_bytes(self):
+        received_requests: list[tuple[str, str, bytes]] = []
+        content_escaped = json.dumps(self._valid_content_json(5), ensure_ascii=False)
+        # Hand-crafted raw bytes with irregular whitespace, CRLF, tabs, unsorted keys, raw UTF-8 + \uXXXX escape
+        server_sent_bytes = (
+            '{\r\n'
+            '   "mock_test_fixture" : true ,\r\n'
+            '\t"eval_duration" :  9876543 ,\r\n'
+            '  "eval_count": 42,\n'
+            '  "done_reason" : "stop" ,\r\n'
+            '  "model" : "qwen3.5:9b-q4_K_M",\r\n'
+            '  " unicode_probe_note_not_forbidden " : false,\r\n'
+            f'  "message" :\r\n    {{\r\n      "role": "assistant",\r\n      "content" : {content_escaped}\r\n    }} ,\r\n'
+            '  "done" :   true\r\n'
+            '}\r\n'
+        ).replace('" unicode_probe_note_not_forbidden " : false,\r\n', "")
+        # Also inject a \uXXXX escape inside message.role-adjacent envelope string (created_at) so escape representation differs from json.dumps!
+        server_sent_bytes_raw = server_sent_bytes.replace(
+            '"done" :   true',
+            '"created_at" : "2026-11-14T00:00:00Z\\u002b00:00 — Ti\u1ebfng Vi\u1ec7t",\r\n  "done" :   true',
+        ).encode("utf-8")
+
+        class _ExactBytesHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                req_raw = self.rfile.read(length)
+                received_requests.append((self.command, self.path, req_raw))
+                self.send_response(200, "OK")
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("X-Test-Header", "same-call-raw")
+                self.send_header("Content-Length", str(len(server_sent_bytes_raw)))
+                self.end_headers()
+                self.wfile.write(server_sent_bytes_raw)
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), _ExactBytesHandler)
+        th = threading.Thread(target=srv.serve_forever, daemon=True)
+        th.start()
+        self.addCleanup(lambda: (srv.shutdown(), srv.server_close(), th.join(timeout=2)))
+
+        triage_dir = self.tmp_root / "run_01" / "triage"
+        io_dir = triage_dir / "llm_io"
+        client = OllamaClient(
+            endpoint=f"http://127.0.0.1:{srv.server_port}",
+            model="qwen3.5:9b-q4_K_M",
+            timeout=10,
+            runtime_origin="mock",
+            io_log_dir=io_dir,
+        )
+        assessment = client.analyze(self.record0)
+        _write_triage_run_files(triage_dir, self.bundle_one, [assessment])
+
+        # Exactly 1 HTTP POST — never a second call to obtain raw bytes
+        self.assertEqual(len(received_requests), 1)
+        self.assertEqual(received_requests[0][0], "POST")
+        self.assertEqual(received_requests[0][1], "/api/chat")
+
+        fid = self.record0["id"]
+        req_bin = (io_dir / f"{fid}.request.body.bin").read_bytes()
+        resp_bin = (io_dir / f"{fid}.response.body.bin").read_bytes()
+        receipt = strict_json((io_dir / f"{fid}.http-capture.json").read_text(encoding="utf-8"))
+        resp_json_wrapper = strict_json((io_dir / f"{fid}.response.json").read_text(encoding="utf-8"))
+
+        # Request raw bytes == exact bytes received by HTTP server == canonical request_payload serialization
+        self.assertEqual(req_bin, received_requests[0][2])
+        self.assertEqual(req_bin, json.dumps(request_payload(self.record0, "qwen3.5:9b-q4_K_M")).encode("utf-8"))
+        self.assertEqual(digest(req_bin), assessment["runtime"]["request_payload_sha256"])
+        self.assertEqual(digest(req_bin), receipt["request_payload_sha256"])
+
+        # Response raw bytes == exact server-sent bytes (including CRLF, tabs, key order, and \u002b escape!)
+        self.assertEqual(resp_bin, server_sent_bytes_raw)
+        self.assertIn(b"\r\n\t\"eval_duration\" :  9876543", resp_bin)
+        self.assertIn(b"\\u002b00:00", resp_bin)
+        self.assertNotEqual(resp_bin, json.dumps(assessment["raw_response"], ensure_ascii=False).encode("utf-8"))
+        self.assertNotEqual(resp_bin, (io_dir / f"{fid}.response.json").read_bytes())
+
+        # SHA-256 of raw response body matches disk file, distinct from canonical JSON SHA-256
+        self.assertEqual(digest(resp_bin), assessment["runtime"]["response_body_sha256"])
+        self.assertEqual(digest(resp_bin), receipt["response_body_sha256"])
+        self.assertNotEqual(assessment["runtime"]["response_body_sha256"], assessment["runtime"]["response_json_sha256"])
+
+        # Scope honesty & compatibility JSON preservation
+        self.assertEqual(receipt["capture_scope"], "http_body_and_client_metadata_not_tcp_wire")
+        self.assertIn("response.body.bin", resp_json_wrapper["raw_response_note"])
+        self.assertEqual(assessment["validated_status"], "SUPPORTED")
+        self.assertTrue(assessment["runtime"]["answer_validated"])
+
+        # Verifier passes
+        ver = verify_run_http_captures(triage_dir, require_live_chat=False)
+        self.assertTrue(ver["capture_integrity_ok"], ver["errors"])
+        self.assertEqual(ver["capture_status"], "VERIFIED_COMPLETE")
+        # Mock origin must NOT pass require_live_chat=True!
+        ver_live = verify_run_http_captures(triage_dir, require_live_chat=True)
+        self.assertFalse(ver_live["live_chat_verified"])
+
+    def test_02_malformed_json_duplicate_keys_and_invalid_utf8_preserve_raw_bytes_and_stay_open(self):
+        payloads = [
+            ("truncated_json", b'{"done":true,"model":"qwen3.5:9b-q4_K_M","message":{"content":"{\\"status\\":\\"REFUTED\\"\r\n'),
+            ("duplicate_keys", b'{"done": true, "done": true, "model": "qwen3.5:9b-q4_K_M", "message": {"content": "{}"}}'),
+            ("invalid_utf8", b'\xff\xfe\x80\x00{"broken_utf8": true}\r\n'),
+        ]
+        for label, bad_bytes in payloads:
+            with self.subTest(case=label):
+                post_count = 0
+
+                class _BadBodyHandler(BaseHTTPRequestHandler):
+                    def log_message(self, *args):
+                        pass
+
+                    def do_POST(self):
+                        nonlocal post_count
+                        post_count += 1
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if length:
+                            self.rfile.read(length)
+                        self.send_response(200)
+                        self.send_header("Content-Length", str(len(bad_bytes)))
+                        self.end_headers()
+                        self.wfile.write(bad_bytes)
+
+                srv = ThreadingHTTPServer(("127.0.0.1", 0), _BadBodyHandler)
+                th = threading.Thread(target=srv.serve_forever, daemon=True)
+                th.start()
+                try:
+                    triage_dir = self.tmp_root / f"run_02_{label}" / "triage"
+                    io_dir = triage_dir / "llm_io"
+                    client = OllamaClient(
+                        endpoint=f"http://127.0.0.1:{srv.server_port}",
+                        model="qwen3.5:9b-q4_K_M",
+                        timeout=10,
+                        runtime_origin="mock",
+                        io_log_dir=io_dir,
+                    )
+                    assessment = client.analyze(self.record0)
+                    _write_triage_run_files(triage_dir, self.bundle_one, [assessment])
+
+                    self.assertEqual(post_count, 1, "must never retry on malformed JSON / invalid UTF-8")
+                    self.assertIsNone(assessment["raw_response"])
+                    self.assertEqual(assessment["validated_status"], "UNDETERMINED")
+                    self.assertEqual(assessment["failure_kind"], "MALFORMED_JSON")
+                    self.assertFalse(assessment["runtime"]["answer_validated"])
+
+                    fid = self.record0["id"]
+                    saved_raw = (io_dir / f"{fid}.response.body.bin").read_bytes()
+                    self.assertEqual(saved_raw, bad_bytes)
+                    self.assertEqual(digest(bad_bytes), assessment["runtime"]["response_body_sha256"])
+
+                    store = ReviewStore(triage_dir / "review.sqlite")
+                    try:
+                        store.add(self.bundle_one, [assessment])
+                        q = store.queue()
+                        self.assertEqual(len(q), 1)
+                        self.assertEqual(q[0]["state"], "OPEN")
+                    finally:
+                        store.close()
+
+                    ver = verify_run_http_captures(triage_dir, require_live_chat=False)
+                    self.assertTrue(ver["capture_integrity_ok"], ver["errors"])
+                    self.assertEqual(ver["capture_status"], "VERIFIED_COMPLETE")
+                finally:
+                    srv.shutdown()
+                    srv.server_close()
+                    th.join(timeout=2)
+
+    def test_03_http_404_and_500_preserve_undecodable_binary_error_bodies(self):
+        cases = [
+            (404, b'{"error":"model not found"}\xff\xfe', "MODEL_UNAVAILABLE"),
+            (500, b"\x89PNG\r\n\x1a\n\xff\x00internal server binary dump", "HTTP_ERROR"),
+        ]
+        for code, err_bytes, expected_kind in cases:
+            with self.subTest(http_status=code):
+                class _ErrHandler(BaseHTTPRequestHandler):
+                    def log_message(self, *args):
+                        pass
+
+                    def do_POST(self):
+                        length = int(self.headers.get("Content-Length", "0"))
+                        if length:
+                            self.rfile.read(length)
+                        self.send_response(code)
+                        self.send_header("X-Error-Tag", f"err-{code}")
+                        self.send_header("Content-Length", str(len(err_bytes)))
+                        self.end_headers()
+                        self.wfile.write(err_bytes)
+
+                srv = ThreadingHTTPServer(("127.0.0.1", 0), _ErrHandler)
+                th = threading.Thread(target=srv.serve_forever, daemon=True)
+                th.start()
+                try:
+                    triage_dir = self.tmp_root / f"run_03_{code}" / "triage"
+                    io_dir = triage_dir / "llm_io"
+                    client = OllamaClient(
+                        endpoint=f"http://127.0.0.1:{srv.server_port}",
+                        model="qwen3.5:9b-q4_K_M",
+                        timeout=10,
+                        runtime_origin="mock",
+                        io_log_dir=io_dir,
+                    )
+                    assessment = client.analyze(self.record0)
+                    _write_triage_run_files(triage_dir, self.bundle_one, [assessment])
+
+                    fid = self.record0["id"]
+                    saved_err = (io_dir / f"{fid}.response.body.bin").read_bytes()
+                    receipt = strict_json((io_dir / f"{fid}.http-capture.json").read_text(encoding="utf-8"))
+                    self.assertEqual(saved_err, err_bytes)
+                    self.assertEqual(digest(err_bytes), assessment["runtime"]["response_body_sha256"])
+                    self.assertEqual(receipt["completeness"], "complete_http_error_body")
+                    self.assertEqual(receipt["http_status"], code)
+                    self.assertTrue(any(k.lower() == "x-error-tag" for k, _ in receipt["response_headers"]))
+                    self.assertEqual(assessment["failure_kind"], expected_kind)
+                    self.assertEqual(assessment["validated_status"], "UNDETERMINED")
+
+                    ver = verify_run_http_captures(triage_dir, require_live_chat=False)
+                    self.assertTrue(ver["capture_integrity_ok"], ver["errors"])
+                    self.assertEqual(ver["capture_status"], "VERIFIED_ERROR_OR_PARTIAL_CAPTURED")
+                finally:
+                    srv.shutdown()
+                    srv.server_close()
+                    th.join(timeout=2)
+
+    def test_04_timeout_partial_read_and_oversize_body_never_claim_complete_hash(self):
+        # 4a) Timeout before HTTP response headers/body
+        sock_srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock_srv.bind(("127.0.0.1", 0))
+        sock_srv.listen(1)
+        port_timeout = sock_srv.getsockname()[1]
+
+        def _stall_peer():
+            try:
+                conn, _ = sock_srv.accept()
+                with conn:
+                    conn.recv(4096)
+                    time.sleep(0.45)
+            except OSError:
+                pass
+            finally:
+                sock_srv.close()
+
+        th_timeout = threading.Thread(target=_stall_peer, daemon=True)
+        th_timeout.start()
+        triage_t = self.tmp_root / "run_04_timeout" / "triage"
+        client_t = OllamaClient(
+            endpoint=f"http://127.0.0.1:{port_timeout}",
+            model="qwen3.5:9b-q4_K_M",
+            timeout=0.15,
+            runtime_origin="mock",
+            io_log_dir=triage_t / "llm_io",
+        )
+        a_t = client_t.analyze(self.record0)
+        th_timeout.join(timeout=2)
+        _write_triage_run_files(triage_t, self.bundle_one, [a_t])
+        fid = self.record0["id"]
+        self.assertTrue((triage_t / "llm_io" / f"{fid}.request.body.bin").is_file())
+        self.assertFalse((triage_t / "llm_io" / f"{fid}.response.body.bin").exists())
+        self.assertFalse((triage_t / "llm_io" / f"{fid}.response.incomplete.bin").exists())
+        self.assertIsNone(a_t["runtime"]["response_body_sha256"])
+        self.assertEqual(a_t["failure_kind"], "TIMEOUT")
+        rec_t = strict_json((triage_t / "llm_io" / f"{fid}.http-capture.json").read_text(encoding="utf-8"))
+        self.assertEqual(rec_t["completeness"], "no_body_received")
+        self.assertFalse(rec_t["complete"])
+        self.assertTrue(verify_run_http_captures(triage_t)["capture_integrity_ok"])
+
+        # 4b) Partial HTTP body truncated mid-stream relative to Content-Length (clean FIN after partial bytes)
+        partial_payload = b'{"done":false,"partial":123'
+
+        class _PartialBodyHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                if length:
+                    self.rfile.read(length)
+                self.wfile.write(
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Content-Type: application/json\r\n"
+                    b"Content-Length: 500\r\n"
+                    b"Connection: close\r\n\r\n"
+                    + partial_payload
+                )
+                self.wfile.flush()
+
+        srv_part = ThreadingHTTPServer(("127.0.0.1", 0), _PartialBodyHandler)
+        th_part = threading.Thread(target=srv_part.serve_forever, daemon=True)
+        th_part.start()
+        try:
+            triage_p = self.tmp_root / "run_04_partial" / "triage"
+            client_p = OllamaClient(
+                endpoint=f"http://127.0.0.1:{srv_part.server_port}",
+                model="qwen3.5:9b-q4_K_M",
+                timeout=5,
+                runtime_origin="mock",
+                io_log_dir=triage_p / "llm_io",
+            )
+            a_p = client_p.analyze(self.record0)
+            _write_triage_run_files(triage_p, self.bundle_one, [a_p])
+            self.assertFalse((triage_p / "llm_io" / f"{fid}.response.body.bin").exists())
+            inc_file = triage_p / "llm_io" / f"{fid}.response.incomplete.bin"
+            self.assertTrue(inc_file.is_file())
+            self.assertEqual(inc_file.read_bytes(), partial_payload)
+            self.assertIsNone(a_p["runtime"]["response_body_sha256"])
+            self.assertEqual(a_p["failure_kind"], "TRUNCATED_OUTPUT")
+            rec_p = strict_json((triage_p / "llm_io" / f"{fid}.http-capture.json").read_text(encoding="utf-8"))
+            self.assertEqual(rec_p["completeness"], "partial_read_error")
+            self.assertFalse(rec_p["complete"])
+            self.assertEqual(rec_p["response_incomplete_sha256"], digest(partial_payload))
+            self.assertTrue(verify_run_http_captures(triage_p)["capture_integrity_ok"])
+        finally:
+            srv_part.shutdown()
+            srv_part.server_close()
+            th_part.join(timeout=2)
+
+        # 4b-chunked) Truncated chunked transfer raising http.client.IncompleteRead with partial bytes
+        chunk_partial = b'{"chunked_partial":true'
+
+        class _ChunkedTruncatedHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                if length:
+                    self.rfile.read(length)
+                # Deliver chunk 1 cleanly, then close socket before terminating 0\r\n\r\n chunk!
+                first_chunk_frame = f"{len(chunk_partial):x}\r\n".encode("ascii") + chunk_partial + b"\r\n"
+                self.wfile.write(
+                    b"HTTP/1.1 200 OK\r\n"
+                    b"Transfer-Encoding: chunked\r\n"
+                    b"Connection: close\r\n\r\n"
+                    + first_chunk_frame
+                )
+                self.wfile.flush()
+
+        srv_chk = ThreadingHTTPServer(("127.0.0.1", 0), _ChunkedTruncatedHandler)
+        th_chk = threading.Thread(target=srv_chk.serve_forever, daemon=True)
+        th_chk.start()
+        try:
+            triage_c = self.tmp_root / "run_04_chunked_incomplete" / "triage"
+            client_c = OllamaClient(
+                endpoint=f"http://127.0.0.1:{srv_chk.server_port}",
+                model="qwen3.5:9b-q4_K_M",
+                timeout=5,
+                runtime_origin="mock",
+                io_log_dir=triage_c / "llm_io",
+            )
+            a_c = client_c.analyze(self.record0)
+            _write_triage_run_files(triage_c, self.bundle_one, [a_c])
+            self.assertFalse((triage_c / "llm_io" / f"{fid}.response.body.bin").exists())
+            inc_chk = triage_c / "llm_io" / f"{fid}.response.incomplete.bin"
+            self.assertTrue(inc_chk.is_file())
+            self.assertEqual(inc_chk.read_bytes(), chunk_partial)
+            self.assertIsNone(a_c["runtime"]["response_body_sha256"])
+            self.assertEqual(a_c["failure_kind"], "TRUNCATED_OUTPUT")
+            self.assertTrue(verify_run_http_captures(triage_c)["capture_integrity_ok"])
+        finally:
+            srv_chk.shutdown()
+            srv_chk.server_close()
+            th_chk.join(timeout=2)
+
+        # 4c) Oversized HTTP body exceeding MAX_HTTP_BODY_BYTES
+        oversized = b"X" * (MAX_HTTP_BODY_BYTES + 2048)
+
+        class _OversizeHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length", "0"))
+                if length:
+                    self.rfile.read(length)
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(oversized)))
+                self.end_headers()
+                self.wfile.write(oversized)
+
+        srv_o = ThreadingHTTPServer(("127.0.0.1", 0), _OversizeHandler)
+        th_o = threading.Thread(target=srv_o.serve_forever, daemon=True)
+        th_o.start()
+        try:
+            triage_o = self.tmp_root / "run_04_oversize" / "triage"
+            client_o = OllamaClient(
+                endpoint=f"http://127.0.0.1:{srv_o.server_port}",
+                model="qwen3.5:9b-q4_K_M",
+                timeout=10,
+                runtime_origin="mock",
+                io_log_dir=triage_o / "llm_io",
+            )
+            a_o = client_o.analyze(self.record0)
+            _write_triage_run_files(triage_o, self.bundle_one, [a_o])
+            self.assertFalse((triage_o / "llm_io" / f"{fid}.response.body.bin").exists())
+            inc_o = (triage_o / "llm_io" / f"{fid}.response.incomplete.bin").read_bytes()
+            self.assertEqual(len(inc_o), MAX_HTTP_BODY_BYTES)
+            self.assertIsNone(a_o["runtime"]["response_body_sha256"])
+            self.assertEqual(a_o["failure_kind"], "PROMPT_TOO_LARGE")
+            rec_o = strict_json((triage_o / "llm_io" / f"{fid}.http-capture.json").read_text(encoding="utf-8"))
+            self.assertEqual(rec_o["completeness"], "exceeded_max_bytes_prefix_only")
+            self.assertFalse(rec_o["complete"])
+            self.assertTrue(verify_run_http_captures(triage_o)["capture_integrity_ok"])
+        finally:
+            srv_o.shutdown()
+            srv_o.server_close()
+            th_o.join(timeout=2)
+
+    def test_05_consecutive_findings_and_tags_probe_isolation(self):
+        tags_raw = b'{\r\n  "models": [ { "name": "qwen3.5:9b-q4_K_M", "digest": "sha256:mock123", "size": 1234 } ]\r\n}\r\n'
+        f1_content = self._valid_content_json(6)
+        f1_raw = json.dumps({
+            "mock_test_fixture": True,
+            "done": True,
+            "done_reason": "stop",
+            "model": "qwen3.5:9b-q4_K_M",
+            "eval_count": 19,
+            "eval_duration": 100000,
+            "message": {"role": "assistant", "content": f1_content},
+        }, ensure_ascii=False).encode("utf-8")
+        chat_step = 0
+
+        class _MultiHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(tags_raw)))
+                self.end_headers()
+                self.wfile.write(tags_raw)
+
+            def do_POST(self):
+                nonlocal chat_step
+                chat_step += 1
+                length = int(self.headers.get("Content-Length", "0"))
+                if length:
+                    self.rfile.read(length)
+                if chat_step == 1:
+                    err = b'{"error":"temporary 500 on first finding"}'
+                    self.send_response(500)
+                    self.send_header("Content-Length", str(len(err)))
+                    self.end_headers()
+                    self.wfile.write(err)
+                else:
+                    self.send_response(200)
+                    self.send_header("Content-Length", str(len(f1_raw)))
+                    self.end_headers()
+                    self.wfile.write(f1_raw)
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), _MultiHandler)
+        th = threading.Thread(target=srv.serve_forever, daemon=True)
+        th.start()
+        self.addCleanup(lambda: (srv.shutdown(), srv.server_close(), th.join(timeout=2)))
+
+        triage_dir = self.tmp_root / "run_05" / "triage"
+        io_dir = triage_dir / "llm_io"
+        client = OllamaClient(
+            endpoint=f"http://127.0.0.1:{srv.server_port}",
+            model="qwen3.5:9b-q4_K_M",
+            timeout=10,
+            runtime_origin="mock",
+            io_log_dir=io_dir,
+        )
+        inv = client.verify_model_installed()
+        self.assertTrue(inv["reachable"])
+        self.assertTrue(inv["model_found"])
+        self.assertEqual((io_dir / "_tags" / "tags-0001.response.body.bin").read_bytes(), tags_raw)
+
+        rec_a, rec_b = self.bundle_two["records"]
+        a0 = client.analyze(rec_a)
+        a1 = client.analyze(rec_b)
+        _write_triage_run_files(triage_dir, self.bundle_two, [a0, a1])
+
+        self.assertEqual(a0["failure_kind"], "HTTP_ERROR")
+        self.assertEqual(a0["validated_status"], "UNDETERMINED")
+        self.assertEqual(a1["failure_kind"], "NONE")
+        self.assertEqual(a1["validated_status"], "SUPPORTED")
+
+        # Verify distinct call_ids and no cross-finding contamination
+        r0 = strict_json((io_dir / f"{rec_a['id']}.http-capture.json").read_text(encoding="utf-8"))
+        r1 = strict_json((io_dir / f"{rec_b['id']}.http-capture.json").read_text(encoding="utf-8"))
+        rt = strict_json((io_dir / "_tags" / "tags-0001.http-capture.json").read_text(encoding="utf-8"))
+        self.assertEqual(len({r0["call_id"], r1["call_id"], rt["call_id"]}), 3)
+        self.assertIsNone(
+            strict_json((io_dir / f"{rec_b['id']}.response.json").read_text(encoding="utf-8"))["http_error_body"]
+        )
+
+        ver = verify_run_http_captures(triage_dir, require_live_chat=False)
+        self.assertTrue(ver["capture_integrity_ok"], ver["errors"])
+        self.assertEqual(len(ver["tags_probes"]), 1)
+
+    def test_06_collision_tamper_missing_and_unwritable_capture_fail_closed(self):
+        good_raw = json.dumps({
+            "mock_test_fixture": True,
+            "done": True,
+            "done_reason": "stop",
+            "model": "qwen3.5:9b-q4_K_M",
+            "eval_count": 15,
+            "eval_duration": 50000,
+            "message": {"role": "assistant", "content": self._valid_content_json(5)},
+        }).encode("utf-8")
+        post_calls = 0
+
+        class _GoodHandler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                nonlocal post_calls
+                post_calls += 1
+                length = int(self.headers.get("Content-Length", "0"))
+                if length:
+                    self.rfile.read(length)
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(good_raw)))
+                self.end_headers()
+                self.wfile.write(good_raw)
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), _GoodHandler)
+        th = threading.Thread(target=srv.serve_forever, daemon=True)
+        th.start()
+        self.addCleanup(lambda: (srv.shutdown(), srv.server_close(), th.join(timeout=2)))
+
+        # 6a) Collision on same finding_id in same io_log_dir refuses overwrite & does NOT call server again
+        triage_dir = self.tmp_root / "run_06_collision" / "triage"
+        io_dir = triage_dir / "llm_io"
+        client = OllamaClient(
+            endpoint=f"http://127.0.0.1:{srv.server_port}",
+            model="qwen3.5:9b-q4_K_M",
+            timeout=10,
+            runtime_origin="mock",
+            io_log_dir=io_dir,
+        )
+        first = client.analyze(self.record0)
+        self.assertEqual(first["validated_status"], "SUPPORTED")
+        self.assertEqual(post_calls, 1)
+        fid = self.record0["id"]
+        orig_resp_bytes = (io_dir / f"{fid}.response.body.bin").read_bytes()
+
+        second = client.analyze(self.record0)
+        self.assertEqual(post_calls, 1, "collision must fail before issuing a duplicate HTTP request")
+        self.assertEqual(second["validated_status"], "UNDETERMINED")
+        self.assertEqual(second["failure_kind"], "EVIDENCE_CAPTURE_WRITE_FAILED")
+        self.assertFalse(second["runtime"]["answer_validated"])
+        self.assertFalse(second["security_conclusion_verified"])
+        self.assertEqual((io_dir / f"{fid}.response.body.bin").read_bytes(), orig_resp_bytes)
+
+        # 6b) Response-write failure AFTER HTTP 200 (pre-seeded colliding .response.body.bin only):
+        # preserves raw_model_status='SUPPORTED', downgrades validated_status='UNDETERMINED', no retry!
+        triage_partial_fail = self.tmp_root / "run_06_resp_write_fail" / "triage"
+        io_partial = triage_partial_fail / "llm_io"
+        io_partial.mkdir(parents=True)
+        (io_partial / f"{fid}.response.body.bin").write_bytes(b"preexisting-collision")
+        client_pf = OllamaClient(
+            endpoint=f"http://127.0.0.1:{srv.server_port}",
+            model="qwen3.5:9b-q4_K_M",
+            timeout=10,
+            runtime_origin="mock",
+            io_log_dir=io_partial,
+        )
+        res_pf = client_pf.analyze(self.record0)
+        self.assertEqual(post_calls, 2)
+        self.assertEqual(res_pf["raw_model_status"], "SUPPORTED")
+        self.assertEqual(res_pf["validated_status"], "UNDETERMINED")
+        self.assertTrue(res_pf["validator_downgraded"])
+        self.assertEqual(res_pf["failure_kind"], "EVIDENCE_CAPTURE_WRITE_FAILED")
+        self.assertFalse(res_pf["runtime"]["answer_validated"])
+        self.assertEqual((io_partial / f"{fid}.response.body.bin").read_bytes(), b"preexisting-collision")
+        _write_triage_run_files(triage_partial_fail, self.bundle_one, [res_pf])
+        self.assertFalse(verify_run_http_captures(triage_partial_fail)["capture_integrity_ok"])
+
+        # 6c) Unwritable io_log_dir (regular file blocking directory creation)
+        blocker_file = self.tmp_root / "blocked_io_file"
+        blocker_file.write_bytes(b"not a directory")
+        client_unw = OllamaClient(
+            endpoint=f"http://127.0.0.1:{srv.server_port}",
+            model="qwen3.5:9b-q4_K_M",
+            timeout=10,
+            runtime_origin="mock",
+            io_log_dir=blocker_file,
+        )
+        res_unw = client_unw.analyze(self.record0)
+        self.assertEqual(res_unw["validated_status"], "UNDETERMINED")
+        self.assertEqual(res_unw["failure_kind"], "EVIDENCE_CAPTURE_WRITE_FAILED")
+        self.assertFalse(res_unw["runtime"]["answer_validated"])
+
+        # 6d) Verifier detects 1-byte tamper, missing file, and orphan file; CLI --no-write keeps triage untouched
+        _write_triage_run_files(triage_dir, self.bundle_one, [first])
+        self.assertEqual(verify_cli_main([str(triage_dir), "--no-write"]), 0)
+        self.assertFalse((triage_dir / "http-capture-check.json").exists())
+
+        resp_path = io_dir / f"{fid}.response.body.bin"
+        resp_path.write_bytes(orig_resp_bytes + b" ")
+        tampered = verify_run_http_captures(triage_dir)
+        self.assertFalse(tampered["capture_integrity_ok"])
+        self.assertEqual(tampered["capture_status"], "FAILED")
+
+        # Restore bytes, then plant orphan file -> detected
+        resp_path.write_bytes(orig_resp_bytes)
+        self.assertTrue(verify_run_http_captures(triage_dir)["capture_integrity_ok"])
+        orphan = io_dir / "stray.response.body.bin"
+        orphan.write_bytes(b"{}")
+        self.assertFalse(verify_run_http_captures(triage_dir)["capture_integrity_ok"])
+        orphan.unlink()
+
+        # Delete raw response file -> detected
+        resp_path.unlink()
+        self.assertFalse(verify_run_http_captures(triage_dir)["capture_integrity_ok"])
+
+
+if __name__ == "__main__":
+    unittest.main()

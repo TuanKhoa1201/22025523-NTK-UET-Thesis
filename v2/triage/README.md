@@ -64,16 +64,24 @@ or that any warning is safe. Scan/evidence errors return 2; model failures are
 retained per warning as UNDETERMINED. Queue output includes scan-level errors even
 when there were no readable findings.
 
-Run the separate recorded-live protocol check after an actual model-enabled run:
+Run the separate recorded-live protocol check and same-call raw HTTP body check
+after an actual model-enabled run:
 
 ```powershell
 python -m v2.triage.live_check v2/triage/evidence/my-run
+python -m v2.triage.verify_http_capture v2/triage/evidence/my-run --require-live-chat --no-write
 ```
 
-Exit 0 means enough nonmock HTTP/request/response/model-counter records match their
-finding identity; output is explicitly OLLAMA_REPORTED_UNATTESTED, never independent
-model attestation. It accepts any proposed status including UNDETERMINED. Exit 2
-means PENDING; triage's exit 0 cannot satisfy it. Keep server model digest/run logs.
+`live_check` exit 0 means enough nonmock HTTP/request/response/model-counter records
+match their finding identity (`OLLAMA_REPORTED_UNATTESTED`, never independent model
+attestation). `verify_http_capture` independently verifies that `llm_io/<id>.request.body.bin`
+and `llm_io/<id>.response.body.bin` (or `.response.incomplete.bin` on truncated/oversize
+transfers) match `request_payload_sha256` and `response_body_sha256` byte-for-byte via
+`llm_io/<id>.http-capture.json`, while compatibility `*.response.json["raw_response"]`
+stores the parsed JSON envelope. Capture covers HTTP payload/body bytes and client
+headers, not raw TCP wire framing; write collisions or I/O errors fail closed to
+`UNDETERMINED` (`EVIDENCE_CAPTURE_WRITE_FAILED`) and retain warnings `OPEN`. Keep
+server model digest/run logs externally; generated `llm_io/` files are Git-ignored.
 
 ## Ollama and validation
 
