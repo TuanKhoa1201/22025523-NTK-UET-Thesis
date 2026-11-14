@@ -35,6 +35,11 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python -B -m unittest discover -s v2/baseline/tests -v
 
+      - name: Kiem tra Qwen va hang doi review bang du lieu mo phong
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -B -m unittest discover -s v2/triage/tests -v
+
       - name: Ghi ro gioi han kiem thu
         run: |
           echo "Chi kiem thu ma nguon va du lieu mo phong."
