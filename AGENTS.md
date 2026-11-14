@@ -21,7 +21,7 @@ Không tự đưa IRIS, LoRA, CWSS hoặc kiến trúc đồ án trước trở 
 
 ## 2. Quy định Git bắt buộc
 
-Codex, Antigravity, JavisOS và mọi tiến trình do Orchestrator điều phối phải tuân thủ:
+Codex, Antigravity, JavisOS và mọi tiến trình hỗ trợ phải tuân thủ:
 
 - Không tạo thêm nhánh remote.
 - Không force-push.
@@ -36,7 +36,7 @@ Agent được phép sử dụng nhánh cục bộ hoặc worktree riêng để 
 
 Việc cập nhật `main` phải được điều phối tuần tự, kiểm tra xung đột và xác nhận quyền thực hiện.
 
-Khi Orchestrator chưa hoàn thành kiểm toán triển khai, sử dụng quy trình tích hợp thủ công có kiểm soát.
+Orchestrator đã tạm dừng phát triển sau tái kiểm toán chưa đạt. Sử dụng quy trình tích hợp thủ công có kiểm soát.
 
 ## 3. Quy định thông điệp commit
 
@@ -81,7 +81,7 @@ Trước khi xác nhận cảnh báo giả, phải kiểm tra tính toàn vẹn 
 
 ## 5. Phân công và phối hợp
 
-Antigravity, Codex và JavisOS nhận nhiệm vụ thông qua Orchestrator hoặc người vận hành.
+Antigravity ưu tiên lập trình và sửa lỗi phức tạp; Codex ưu tiên kiểm toán độc lập; JavisOS phụ trách runtime trên ADMIN-PC. Ba agent nhận nhiệm vụ qua người vận hành, làm việc trên các workspace riêng.
 
 Người thực hiện và người kiểm toán độc lập phải được phân biệt rõ.
 
@@ -89,7 +89,7 @@ Mỗi nhiệm vụ phải lưu được mã nguồn thay đổi, kết quả ki�
 
 Không tự kiểm toán để phê duyệt chính phần việc mình vừa thực hiện.
 
-Orchestrator không được tự cấp quyền vượt qua điều kiện kiểm toán hoặc phê duyệt của người vận hành.
+Không agent hoặc công cụ hỗ trợ nào được tự cấp quyền vượt qua điều kiện kiểm toán hoặc phê duyệt của người vận hành.
 
 Ba agent không được đồng thời push lên `main`.
 

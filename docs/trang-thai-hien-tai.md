@@ -30,20 +30,20 @@ Không sử dụng tám mẫu tổng hợp này để tuyên bố hiệu quả t
 - Phần tích hợp thực tế còn tồn tại điều kiện chặn nghiệm thu.
 - Chưa tuyên bố hoàn thành toàn bộ backend.
 
-## Công cụ điều phối
+## Công cụ điều phối (đã tạm dừng phát triển)
 
-- Đã có các phiên bản phát triển và các lượt kiểm toán.
-- Kiểm toán độc lập gần đây phát hiện các lỗi cần sửa.
-- Antigravity đang thực hiện lượt sửa tiếp theo.
-- Codex cần kiểm toán lại trước khi cho phép triển khai.
-- Chưa coi Worker mới và Orchestrator là đã nghiệm thu production.
+- Các phiên bản phát triển, commit và bằng chứng kiểm toán được bảo toàn trên laptop.
+- Tái kiểm toán độc lập A7 kết luận REMEDIATION_INCOMPLETE_REVIEW_REQUIRED: có 5 findings, trong đó 3 blocker.
+- Đã quyết định đóng băng Orchestrator, không tiếp tục mở rộng hoặc giao thêm nhiệm vụ sửa lỗi.
+- Codex đã hoàn thành lượt tái kiểm toán; kết quả chưa đáp ứng điều kiện triển khai.
+- Không triển khai Orchestrator lên ADMIN-PC. Ba agent được người vận hành phối hợp trực tiếp để ưu tiên hoàn thiện OpenGrep và Qwen.
 
 ## Những công việc tiếp theo
 
 1. Kiểm toán và tích hợp mã nguồn mới vào nhánh chính.
 2. Tái hiện thực nghiệm theo cùng tập dữ liệu và cùng định nghĩa chỉ số.
 3. Hoàn thiện cơ chế xử lý cảnh báo thật, giả và chưa đủ bằng chứng.
-4. Kết nối lại frontend cũ khi backend đạt điều kiện.
+4. Hoàn thiện kiểm thử an toàn G2, đánh giá G3 và nghiệm thu E2E Java trong G4 theo thứ tự được duyệt.
 5. Chuẩn bị hồ sơ báo cáo và bảo vệ đồ án.
 
 ## Quy định bằng chứng

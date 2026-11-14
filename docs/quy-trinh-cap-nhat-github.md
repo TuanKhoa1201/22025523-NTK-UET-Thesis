@@ -39,4 +39,4 @@ Những kết quả thất bại phải được giữ lại và giải thích t
 
 ## Trạng thái hiện tại
 
-Orchestrator đang được sửa và kiểm toán. Chưa sử dụng cơ chế tự động push lên main khi chưa được nghiệm thu.
+Orchestrator đã tạm dừng phát triển sau tái kiểm toán chưa đạt. Ba agent phối hợp trực tiếp qua người vận hành. Việc cập nhật main tiếp tục theo quy trình tích hợp thủ công, có kiểm tra và phê duyệt; không tự động push.

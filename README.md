@@ -28,7 +28,7 @@ Các công việc đang được thực hiện:
 1. Kiểm chứng bộ mã tham chiếu OpenGrep và Qwen của thầy.
 2. Hoàn thiện tích hợp trong fork simple_semgrepAI.
 3. Bổ sung kiểm tra bằng chứng mã nguồn và xác nhận cảnh báo giả.
-4. Hoàn thiện công cụ điều phối Codex, Antigravity và JavisOS.
+4. Phối hợp trực tiếp Antigravity, Codex và JavisOS. Orchestrator đã tạm dừng phát triển sau kiểm toán chưa đạt.
 5. Xây dựng thực nghiệm đối chứng có thể tái lập.
 
 Xem `docs/trang-thai-hien-tai.md` để biết kết quả đã kiểm tra và các giới hạn tồn tại.
