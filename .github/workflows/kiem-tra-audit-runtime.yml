@@ -24,7 +24,7 @@ jobs:
 
     env:
       G1_EXPECTED_SHA: ${{ github.sha }}
-      G1_CHECKOUT: ${{ runner.temp }}/ntk-g1-pinned-main
+      G1_CHECKOUT: ${{ github.workspace }}/../ntk-g1-pinned-main
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
       PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
