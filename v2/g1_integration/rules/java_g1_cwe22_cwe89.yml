@@ -1,0 +1,65 @@
+# NTK Thesis V2 - G1 Local Java Taint Ruleset (CWE-22 & CWE-89 Priority)
+# Local offline ruleset for OpenGrep taint mode; requires zero cloud registry access.
+rules:
+  - id: ntk.g1.java.cwe22.path-traversal
+    mode: taint
+    languages:
+      - java
+    severity: ERROR
+    message: >-
+      [CWE-22] Untrusted HTTP input flows to a filesystem sink; human security review required.
+    metadata:
+      cwe:
+        - "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      owasp:
+        - "A01:2021 - Broken Access Control"
+      category: security
+      technology:
+        - java
+      confidence: MEDIUM
+      provenance: "NTK G1 local taint ruleset for Java CWE-22"
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ.getParameter(...)
+          - pattern: $REQ.getHeader(...)
+          - pattern: $REQ.getQueryString(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: new java.io.FileInputStream(...)
+          - pattern: new java.io.FileOutputStream(...)
+          - pattern: new java.io.FileReader(...)
+          - pattern: new FileInputStream(...)
+          - pattern: new FileOutputStream(...)
+          - pattern: new FileReader(...)
+          - pattern: java.nio.file.Files.readAllBytes(...)
+          - pattern: java.nio.file.Files.readString(...)
+          - pattern: Files.readAllBytes(...)
+          - pattern: Files.readString(...)
+
+  - id: ntk.g1.java.cwe89.sql-injection
+    mode: taint
+    languages:
+      - java
+    severity: ERROR
+    message: >-
+      [CWE-89] Untrusted HTTP input flows to a dynamic SQL execution sink; human security review required.
+    metadata:
+      cwe:
+        - "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      owasp:
+        - "A03:2021 - Injection"
+      category: security
+      technology:
+        - java
+      confidence: HIGH
+      provenance: "NTK G1 local taint ruleset for Java CWE-89"
+    pattern-sources:
+      - pattern-either:
+          - pattern: $REQ.getParameter(...)
+          - pattern: $REQ.getHeader(...)
+          - pattern: $REQ.getQueryString(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: $STMT.executeQuery($SQL)
+          - pattern: $STMT.executeUpdate($SQL)
+          - pattern: $STMT.execute($SQL)

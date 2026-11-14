@@ -7,6 +7,8 @@ on:
     paths:
       - 'v2/baseline/**'
       - 'v2/triage/**'
+      - 'v2/g1_integration/**'
+      - 'v2/demo/**'
       - '.github/workflows/kiem-tra-opengrep.yml'
   workflow_dispatch:
 
@@ -30,6 +32,9 @@ jobs:
       - name: Cai PyYAML cho kiem thu
         run: python -m pip install PyYAML==6.0.2
 
+      - name: Cai Typer va Rich cho CLI fork
+        run: python -m pip install typer==0.17.5 rich==15.0.0
+
       - name: Chay kiem thu ngoai tuyen
         env:
           PYTHONDONTWRITEBYTECODE: '1'
@@ -39,6 +44,12 @@ jobs:
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: python -B -m unittest discover -s v2/triage/tests -v
+
+      - name: Kiem thu tich hop G1
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          PYTHONUTF8: '1'
+        run: python -X utf8 -B -m unittest discover -s v2/g1_integration/tests -p 'test_*.py' -v
 
       - name: Ghi ro gioi han kiem thu
         run: |

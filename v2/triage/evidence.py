@@ -5,10 +5,31 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from .runtime import SCHEMA_VERSION
+from .java_context import extract_java_context
 
 
 class EvidenceError(ValueError):
-    pass
+    error_code = "EVIDENCE_ERROR"
+
+
+class StaleSourceError(EvidenceError):
+    error_code = "STALE_SOURCE"
+
+    def __init__(self, message, *, mismatched_paths=(), expected_hashes=None, observed_hashes=None):
+        prefix = "" if str(message).startswith("STALE_SOURCE:") else "STALE_SOURCE: "
+        super().__init__(prefix + str(message))
+        self.mismatched_paths = list(mismatched_paths)
+        self.expected_hashes = dict(expected_hashes or {})
+        self.observed_hashes = dict(observed_hashes or {})
+
+    def to_dict(self):
+        return {
+            "error_code": self.error_code,
+            "message": str(self),
+            "mismatched_paths": list(self.mismatched_paths),
+            "expected_hashes": dict(self.expected_hashes),
+            "observed_hashes": dict(self.observed_hashes),
+        }
 
 
 def now():
@@ -204,7 +225,31 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=(), pa
                     if isinstance(payload, list) and len(payload) == 2:
                         add(payload[0], role, payload[1])
                         return
-                # Preserve CliCall raw; do not guess its semantics or flatten it.
+                if isinstance(node, list) and len(node) == 2 and node[0] == "CliCall":
+                    payload = node[1]
+                    if (isinstance(payload, list) and len(payload) == 3
+                            and isinstance(payload[0], list) and len(payload[0]) == 2
+                            and isinstance(payload[0][0], dict) and isinstance(payload[0][1], str)
+                            and isinstance(payload[1], list)
+                            and isinstance(payload[2], list) and len(payload[2]) == 2):
+                        call_site, call_steps, inner = payload
+                        if role == "source":
+                            visit(inner, "source", depth + 1)
+                            add(call_site[0], "intermediate", call_site[1])
+                            for step in call_steps:
+                                if isinstance(step, dict) and "content" in step:
+                                    add(step.get("location"), "intermediate", step["content"])
+                                else:
+                                    problems.append("invalid intermediate trace step")
+                        else:
+                            add(call_site[0], "intermediate", call_site[1])
+                            for step in call_steps:
+                                if isinstance(step, dict) and "content" in step:
+                                    add(step.get("location"), "intermediate", step["content"])
+                                else:
+                                    problems.append("invalid intermediate trace step")
+                            visit(inner, role, depth + 1)
+                        return
                 problems.append("unsupported or missing " + role + " trace structure")
             visit(trace.get("taint_source"), "source")
             steps = trace.get("intermediate_vars", [])
@@ -217,16 +262,46 @@ def collect(raw_json, root, path_base=None, engine_exit=None, scan_issues=(), pa
             else:
                 problems.append("invalid intermediate trace list")
             visit(trace.get("taint_sink"), "sink")
+        java_ctx = None
+        if snippets and snippets[0].get("role") == "finding":
+            try:
+                f_snip = snippets[0]
+                _, _, f_text = tree.read(f_snip.get("raw_path") or f_snip["path"])
+                f_lines = f_text.splitlines(keepends=True)
+                f_sl, f_el = f_snip["start"]["line"], f_snip["end"]["line"]
+                if f_el - f_sl <= 140:
+                    t_lines = [
+                        s["start"]["line"]
+                        for s in snippets[1:]
+                        if s.get("path") == f_snip["path"] and isinstance(s.get("start"), dict)
+                    ]
+                    java_ctx = extract_java_context(f_text, f_sl, f_el, trace_lines=t_lines, max_span=140)
+                    c_low = max(1, min(f_sl, java_ctx["context_start_line"]))
+                    c_high = min(len(f_lines), max(f_el, java_ctx["context_end_line"]))
+                    if c_high - c_low <= 150:
+                        f_snip["lines"] = [
+                            {"line": i, "text": f_lines[i - 1].rstrip("\r\n")}
+                            for i in range(c_low, c_high + 1)
+                        ]
+            except (EvidenceError, OSError, UnicodeError, ValueError, RuntimeError):
+                java_ctx = None
         identifier = digest((scan_hash + ":" + str(index)).encode())
-        records.append({"schema_version": SCHEMA_VERSION, "id": identifier, "alert_id": identifier,
-                        "finding_index": index, "scan_sha256": scan_hash, "root": str(tree.root),
-                        "path_mappings": tree.path_maps,
-                        "scan_provenance": {k: v for k, v in provenance.items() if k != "source_hashes"},
-                        "rule_id": item.get("check_id"), "cwe": cwe, "severity": extra.get("severity"),
-                        "path": item.get("path"), "start": item.get("start"), "end": item.get("end"),
-                        "raw_finding": original, "raw_trace": trace,
-                        "snapshots": snapshots, "snippets": snippets, "issues": problems,
-                        "collected_at": now()})
+        rec_obj = {"schema_version": SCHEMA_VERSION, "id": identifier, "alert_id": identifier,
+                   "finding_index": index, "scan_sha256": scan_hash, "root": str(tree.root),
+                   "path_mappings": tree.path_maps,
+                   "scan_provenance": {k: v for k, v in provenance.items() if k != "source_hashes"},
+                   "rule_id": item.get("check_id"), "cwe": cwe, "severity": extra.get("severity"),
+                   "path": item.get("path"), "start": item.get("start"), "end": item.get("end"),
+                   "raw_finding": original, "raw_trace": trace,
+                   "snapshots": snapshots, "snippets": snippets, "issues": problems,
+                   "java_context": java_ctx,
+                   "collected_at": now()}
+        try:
+            from .heuristics import extract_evidence_signals
+            rec_obj["heuristic_signals"] = extract_evidence_signals(rec_obj) if snippets else None
+        except Exception:
+            rec_obj["heuristic_signals"] = None
+        records.append(rec_obj)
     return {"schema_version": SCHEMA_VERSION, "scan_sha256": scan_hash, "root": str(tree.root), "collected_at": now(),
             "path_mappings": tree.path_maps,
             "issues": issues, "records": records, "raw_document": doc}
@@ -239,8 +314,38 @@ def check_current(record):
         raise EvidenceError("scan-time source identity unavailable; rescan required")
     if not record.get("snapshots"):
         raise EvidenceError("no source hashes; rescan required")
-    tree = SourceTree(record["root"])
+    expected = {p: v.get("sha256") for p, v in record["snapshots"].items() if isinstance(v, dict)}
+    try:
+        tree = SourceTree(record["root"])
+    except (EvidenceError, OSError, ValueError, RuntimeError) as exc:
+        raise StaleSourceError(
+            "source root unavailable; rescan required: " + str(exc),
+            mismatched_paths=sorted(expected),
+            expected_hashes=expected,
+            observed_hashes={p: "MISSING_OR_UNREADABLE" for p in expected},
+        ) from exc
+    observed = {}
+    mismatched = []
+    first_reason = None
     for path, snapshot in record["snapshots"].items():
-        _, data, _ = tree.read(path)
-        if digest(data) != snapshot["sha256"]:
-            raise EvidenceError("source hash mismatch; rescan required: " + path)
+        exp_sha = snapshot.get("sha256") if isinstance(snapshot, dict) else None
+        try:
+            _, data, _ = tree.read(path)
+            obs_sha = digest(data)
+            observed[path] = obs_sha
+            if obs_sha != exp_sha:
+                mismatched.append(path)
+                if first_reason is None:
+                    first_reason = "source hash mismatch; rescan required: " + path
+        except (EvidenceError, OSError, UnicodeError, ValueError, RuntimeError) as exc:
+            observed[path] = "MISSING_OR_UNREADABLE"
+            mismatched.append(path)
+            if first_reason is None:
+                first_reason = f"source unavailable/changed ({path}); rescan required: {exc}"
+    if mismatched:
+        raise StaleSourceError(
+            first_reason or ("source hash mismatch; rescan required: " + ", ".join(mismatched)),
+            mismatched_paths=mismatched,
+            expected_hashes=expected,
+            observed_hashes=observed,
+        )

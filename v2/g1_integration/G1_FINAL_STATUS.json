@@ -1,0 +1,254 @@
+{
+  "schema": "ntk-g1-final-status-1",
+  "final_verdict": "G1_INCOMPLETE",
+  "verdict_reason": "Candidate G1-C2 resolves the Windows/WSL2 trusted source_root path-mapping failure observed on ADMIN-PC in G1-C1 (ab4af37d8f3fc4060c0fb31fc85ca09d1172367b), hardens verified relative-path citation/sanitizer checks in v2/triage/ollama.py and v2/triage/heuristics.py, and passes 173 automated tests plus M1 --scan-only verification; independent G1-C2 verification by Codex (v2/g1_audit/G1-C2/VERDICT.json) and JavisOS Qwen3.5-9B server runtime on ADMIN-PC (v2/g1_runtime/G1-C2/VERDICT.json) remain PENDING.",
+  "qwen_server_runtime_status": "PENDING",
+  "advisor_acceptance_status": "PENDING",
+  "locked_g0_baseline": {
+    "AUDIT_EXECUTION_COMPLETED": true,
+    "G0_ACCEPTANCE": "CONDITIONAL",
+    "READY_FOR_G1": "CONDITIONAL",
+    "historical_arm_c_independent_contribution": "CONFOUNDED",
+    "pending_errata_count": 14,
+    "reinterpreted_or_modified": false
+  },
+  "git_provenance": {
+    "repository": "https://github.com/TuanKhoa1201/22025523-NTK-UET-Thesis",
+    "integration_branch": "v2/antigravity-review",
+    "base_commit": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+    "candidate_id": "G1-C2",
+    "previous_candidate_id": "G1-C1",
+    "previous_candidate_commit": "ab4af37d8f3fc4060c0fb31fc85ca09d1172367b",
+    "candidate_marker_path": "v2/g1_integration/CANDIDATE.json",
+    "candidate_marker_sha256": "0566f3adfc6b16e56f9f5b0f5e7be7cfbf0f26180b61607bba7fb1dc1490487b",
+    "candidate_commit_resolution_note": "Resolve the exact G1-C2 candidate commit directly via git rev-parse v2/antigravity-review (or origin/v2/antigravity-review).",
+    "upstream": {
+      "repository": "hardw00t/simple_semgrepAI",
+      "version": "0.2.0",
+      "commit": "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9",
+      "tree": "c0ab3e20152ce5c3e6b80e1525288ad59c9aee93",
+      "verified_file_count": 96,
+      "pinned_manifest_path": "v2/g1_integration/pinned_upstream_tree.json",
+      "pinned_manifest_sha256": "b6221da8e91736a936150d23e36e71fc1b981299da7b679361a5aa585c4fdcd3"
+    },
+    "reference_branches_observed": {
+      "v2/codex-core_initial": "30b0bac464ade5c5f32287917eb877a575308a06",
+      "v2/codex-core_final": "a099ac670bc3c18996d47063dfee266fcde6a9d0",
+      "v2/javis-benchmark_initial": "bf19b5e1392645baba55e5039ebc0d71a1af9aaa",
+      "v2/javis-benchmark_final": "4de45981cd83dcada56186d707fe9f11609ed006"
+    }
+  },
+  "diff_summary_at_candidate_commit": {
+    "files_changed_count": 27,
+    "insertions": 4041,
+    "deletions": 91,
+    "modified_triage_files": [
+      "v2/triage/cli.py",
+      "v2/triage/evidence.py",
+      "v2/triage/heuristics.py",
+      "v2/triage/ollama.py",
+      "v2/triage/scan_receipt.py",
+      "v2/triage/store.py",
+      "v2/triage/tests/test_blind_spot_regressions.py",
+      "v2/triage/tests/test_g0_v22_payload_contract.py",
+      "v2/triage/tests/test_stage2_stage3_cwe22_cwe89.py",
+      "v2/triage/tests/test_wsl_path_map_and_validator_regressions.py"
+    ],
+    "added_g1_integration_files": [
+      "v2/g1_integration/CANDIDATE.json",
+      "v2/g1_integration/README.md",
+      "v2/g1_integration/__init__.py",
+      "v2/g1_integration/bridge.py",
+      "v2/g1_integration/demo_fixtures/Demo1TruePositive.java",
+      "v2/g1_integration/demo_fixtures/Demo2ProtectedFalsePositive.java",
+      "v2/g1_integration/demo_fixtures/Demo3ExternalHelperUndetermined.java",
+      "v2/g1_integration/finding_identity.py",
+      "v2/g1_integration/fork_support/__init__.py",
+      "v2/g1_integration/fork_support/scan_manifest.py",
+      "v2/g1_integration/fork_support/scan_recording.py",
+      "v2/g1_integration/fork_support/scanner_config.py",
+      "v2/g1_integration/pinned_upstream_tree.json",
+      "v2/g1_integration/prepare_g1_fork.py",
+      "v2/g1_integration/rules/java_g1_cwe22_cwe89.yml",
+      "v2/g1_integration/run_g1_demo.py",
+      "v2/g1_integration/tests/__init__.py",
+      "v2/g1_integration/tests/test_g1_integration.py"
+    ],
+    "deterministic_fork_patches": {
+      "advisor_patch_sha256": "17ac840af6db0b293e8ac7626abfd0c9ee2469eb82f0e96d8aff56869e6d58c1",
+      "g1_overlay_with_advisor_layer_sha256": "2c0e6380b2d13a92292ae5b5032b90f6bf636c8e67c604ba21f5a3e2d9f39d7d",
+      "g1_overlay_with_ntk_cleanroom_layer_sha256": "3604532cc4a731d495080901e835d14a7f8f98bd45be2a137a3faabe3b3a31ae"
+    }
+  },
+  "runtime_versions_and_rules": {
+    "local_verification_host": {
+      "python": "3.12.3",
+      "typer": "0.17.5",
+      "rich": "15.0.0",
+      "pyyaml": "6.0.3",
+      "opengrep_version": "1.20.0",
+      "ollama_version": "0.34.2 (WSL2 Ubuntu-22.04 loopback http://127.0.0.1:11434)",
+      "live_tested_model_tag": "qwen2.5-coder:1.5b",
+      "live_tested_model_digest": "d7372fd828518a4d38b1eb196c673c31a85f2ed302b3d1e406c4c2d1b64a0668",
+      "missing_9b_tag_failclosed_test": {
+        "requested_model": "qwen3.5:9b-q4_K_M",
+        "http_status": 404,
+        "failure_kind": "MODEL_UNAVAILABLE",
+        "validated_status": "UNDETERMINED",
+        "human_review_state": "OPEN",
+        "all_stages_succeeded": false
+      }
+    },
+    "reference_server_reported_by_javisos_pre_candidate": {
+      "host_alias": "ADMIN-PC",
+      "opengrep_version": "1.25.0",
+      "ollama_version": "0.40.7",
+      "reference_model_tag": "qwen3.5:9b-q4_K_M",
+      "reference_model_digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+      "candidate_rerun_status": "PENDING"
+    },
+    "rules": {
+      "g1_rules_path": "v2/g1_integration/rules/java_g1_cwe22_cwe89.yml",
+      "g1_rules_sha256": "68ac64329098e45e36ee650af2d483ee70ee3dff889d73586f21be1b29ee2eba",
+      "baseline_rules_path": "v2/baseline/rules/java.yml",
+      "baseline_rules_sha256": "f34e7b51880cc5baf4ff3cda47a16232c8d405b8fd5e65aaed1aa3745367d5aa"
+    },
+    "prompt_contract": {
+      "default_contract": "blind",
+      "prompt_version": "v2.2.1-cwe22-cwe89-whitelist",
+      "ollama_module_sha256": "cee0be2f8c46db559fe1fe337881ff5cda2767dffcd6475c930973aeb4d14586"
+    }
+  },
+  "scan_and_demo_evidence": {
+    "private_evidence_stored_outside_git": true,
+    "private_evidence_placeholder": "<PRIVATE_RUN_ROOT>/live-demo-verified",
+    "source_fixture_sha256": {
+      "Demo1TruePositive.java": "934fff73bb2053c1160f296e2e9747f87349eafdaae77145039d6d20668f24af",
+      "Demo2ProtectedFalsePositive.java": "51ca2bd23cb4134f93c1c59095240744ab9eb78184408a08eb5cd560de06a7b0",
+      "Demo3ExternalHelperUndetermined.java": "9945d19bd2aa007e99e37d3495c401684e467cfe8ef83489be793dd88a01f601"
+    },
+    "m1_scan_only_compatibility": {
+      "status": "PASS",
+      "opengrep_version": "1.20.0",
+      "scan_sha256": "a8ecd08960df436c9ad8aeafedcdd761bc03b8154d8529ffbd11bc89ead4d735",
+      "findings_count": 2,
+      "json_sarif_parity": "MATCHED"
+    },
+    "scenarios": {
+      "demo1_true_positive": {
+        "evidence_kind": "REAL_RUNTIME",
+        "scan_sha256": "a8ecd08960df436c9ad8aeafedcdd761bc03b8154d8529ffbd11bc89ead4d735",
+        "scanner_subprocesses": 3,
+        "triage_subprocesses": 0,
+        "total_findings": 2,
+        "findings_with_trace": 2,
+        "json_sarif_parity": "MATCHED",
+        "raw_model_statuses": ["SUPPORTED", "SUPPORTED"],
+        "validated_statuses": ["UNDETERMINED", "UNDETERMINED"],
+        "failure_kinds": ["INVALID_CITATION", "INVALID_CITATION"],
+        "latencies_ms": [9109.0, 3235.0],
+        "eval_counts": [226, 209],
+        "human_confirm_true_tested": true,
+        "resulting_state": "CONFIRMED_TRUE"
+      },
+      "demo2_false_positive_reopen": {
+        "evidence_kind": "REAL_RUNTIME",
+        "scan_sha256": "b01d85958b495033043ef59b624c32b25c227be11ed5381bab6eca7e4fd4d9b6",
+        "scanner_subprocesses": 3,
+        "triage_subprocesses": 0,
+        "total_findings": 1,
+        "findings_with_trace": 1,
+        "json_sarif_parity": "MATCHED",
+        "raw_model_statuses": ["SUPPORTED"],
+        "validated_statuses": ["UNDETERMINED"],
+        "failure_kinds": ["INVALID_CITATION"],
+        "latencies_ms": [14390.0],
+        "eval_counts": [1063],
+        "default_queue_after_confirm_false": 0,
+        "all_queue_state_after_confirm_false": "CONFIRMED_FALSE",
+        "state_after_reopen": "OPEN",
+        "preserved_history_actions": ["confirm-false", "reopen"]
+      },
+      "demo3a_missing_helper_real": {
+        "evidence_kind": "REAL_RUNTIME",
+        "scan_sha256": "ff6a292f9b87545fb8f128a13e41260281e268aed50cff6cd2aadc1fa44cf446",
+        "total_findings": 1,
+        "findings_with_trace": 1,
+        "raw_model_statuses": ["SUPPORTED"],
+        "validated_statuses": ["UNDETERMINED"],
+        "failure_kinds": ["INVALID_SCHEMA"],
+        "latencies_ms": [2313.0],
+        "eval_counts": [112],
+        "human_review_state": "OPEN"
+      },
+      "demo3b_malformed_json_mock": {
+        "evidence_kind": "SYNTHETIC_MOCK_HTTP",
+        "scan_sha256": "b01d85958b495033043ef59b624c32b25c227be11ed5381bab6eca7e4fd4d9b6",
+        "total_findings": 1,
+        "findings_with_trace": 1,
+        "raw_model_statuses": [null],
+        "validated_statuses": ["UNDETERMINED"],
+        "failure_kinds": ["MALFORMED_JSON"],
+        "human_review_state": "OPEN"
+      },
+      "demo4_stale_source": {
+        "evidence_kind": "REAL_OPENGREP_SCAN_AND_SQLITE_GUARD",
+        "scan_sha256": "89c2ae38afcabedf97e9ddab2bcf9d46c87cbf306a34e586fbf7cbf4efcccdca",
+        "total_findings": 1,
+        "findings_with_trace": 1,
+        "expected_source_sha256": "51ca2bd23cb4134f93c1c59095240744ab9eb78184408a08eb5cd560de06a7b0",
+        "mutated_source_sha256": "52b5fa1c08f1eef425c2acc63b07f87132fa94d732dd6d8ad411114911895151",
+        "confirm_false_exit_code": 2,
+        "rejection_code": "STALE_SOURCE",
+        "accepted_events_count": 0,
+        "rejected_decisions_count": 1,
+        "warning_state_after_refusal": "OPEN"
+      }
+    },
+    "totals_across_demo_runs": {
+      "ingested_findings_total": 6,
+      "findings_with_dataflow_trace": 6,
+      "real_qwen_http_calls_completed": 4,
+      "synthetic_mock_http_calls": 1,
+      "disabled_llm_runs": 1
+    }
+  },
+  "test_suites": {
+    "v2_g1_integration_tests": {"ran": 12, "passed": 12, "skipped": 0, "failed": 0, "status": "PASS"},
+    "v2_triage_tests": {"ran": 134, "passed": 133, "skipped": 1, "failed": 0, "status": "PASS"},
+    "v2_baseline_tests": {"ran": 27, "passed": 27, "skipped": 0, "failed": 0, "status": "PASS"},
+    "v2_baseline_verify_patch": {"status": "PASS"},
+    "scripts_verify_repository": {"status": "PASS"},
+    "codex_public_artifact_gates_smoke": {
+      "gates_checked": ["manifest", "identity", "sarif", "sources", "database", "runtime"],
+      "demos_checked": ["demo1_true_positive", "demo2_false_positive_reopen", "demo3a_missing_helper_real", "wsl2_mapped_e2e_smoke"],
+      "status": "PASS"
+    }
+  },
+  "independent_agent_verdicts": {
+    "codex_audit": {
+      "branch": "v2/codex-core",
+      "expected_verdict_path": "v2/g1_audit/G1-C2/VERDICT.json",
+      "status": "PENDING"
+    },
+    "javis_runtime": {
+      "branch": "v2/javis-benchmark",
+      "expected_verdict_path": "v2/g1_runtime/G1-C2/VERDICT.json",
+      "g1_c1_observed_defect_resolved_in_g1_c2": "11x POSIX/WSL source path requires an explicit --path-map",
+      "status": "PENDING"
+    }
+  },
+  "remaining_limitations": [
+    "Independent post-candidate verification of G1-C2 by Codex (v2/g1_audit/G1-C2/VERDICT.json) and JavisOS with qwen3.5:9b-q4_K_M on ADMIN-PC (v2/g1_runtime/G1-C2/VERDICT.json) is PENDING; Qwen server runtime is NOT marked PASS prior to ADMIN-PC re-execution.",
+    "On the 4GB VRAM / 21 GiB free-disk development laptop, live Ollama inference ran qwen2.5-coder:1.5b (producing honest raw SUPPORTED outputs whose citations/schema failed closed to UNDETERMINED); full qwen3.5:9b-q4_K_M execution on the integrated CLI awaits JavisOS server verification.",
+    "Java context extraction covers the enclosing method and same-file helper callees within <=150 lines; cross-file helpers are intentionally treated as unresolved external calls and fail closed to UNDETERMINED.",
+    "CLI --actor strings are unauthenticated local operator identifiers, and SQLite enforces application-level append-only history without claiming OS-level tamper-proof MAC controls.",
+    "Historical G0 findings remain locked (G0_ACCEPTANCE=CONDITIONAL, READY_FOR_G1=CONDITIONAL, historical Arm C CONFOUNDED, 14 errata pending advisor approval)."
+  ],
+  "deferred_to_g2": [
+    "Expand curated G1/G2 local OpenGrep rule pack and Java structural context patterns to CWE-78 (OS Command Injection) and CWE-79 (Cross-Site Scripting) alongside CWE-22 and CWE-89.",
+    "Add bounded cross-file Java constant/sanitizer declaration lookup within the scanned repository root while preserving fail-closed UNDETERMINED behavior on unresolved flows.",
+    "Prepare locked evaluation harness hooks and prompt/validator telemetry aggregation required before G3 held-out benchmark execution.",
+    "Refine operator CLI ergonomics for batch triage queue inspection without altering human-confirmation safety gates."
+  ]
+}
