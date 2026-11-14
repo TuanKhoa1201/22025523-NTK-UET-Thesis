@@ -26,7 +26,7 @@ SCHEMA = {
                            "quote": {"type": "string", "minLength": 1},
                            "sha256": {"type": "string"}}}}}}
 
-PROMPT_VERSION = "v2.2.1-cwe22-cwe89-whitelist"
+PROMPT_VERSION = "v2.2.2-cwe22-cwe89-canonical-citations"
 PREVIOUS_NEUTRAL_PROMPT_VERSION = "v2.2-cwe22-cwe89-neutral"
 LEGACY_STEERED_PROMPT_VERSION = "v2.1-cwe22-cwe89-grounded"
 
@@ -73,7 +73,7 @@ _METHOD_SUMMARY_FIELDS = (
     "name", "owner_class", "signature", "return_type", "parameters", "annotations",
     "header_line", "start_line", "end_line", "is_entrypoint",
 )
-_SNIPPET_WHITELIST_KEYS = ("role", "path", "raw_path", "start", "end", "sha256", "lines")
+_SNIPPET_WHITELIST_KEYS = ("role", "path", "start", "end", "sha256", "lines")
 _LOC_POINT_KEYS = ("line", "col", "offset")
 _SNIPPET_LINE_KEYS = ("line", "text")
 _TRACE_STEP_KEYS = ("role", "path", "start_line", "end_line")
@@ -98,7 +98,7 @@ GROUND_TRUTH_FORBIDDEN_KEYS = frozenset({
 _PROMPT_SOURCE_TEXT_KEYS = frozenset({
     # verbatim source-derived strings (the model already sees the same code in snippets)
     "text", "matched", "signature", "parameters", "annotations", "return_type", "name",
-    "owner_class", "enclosing_class", "qualifier", "method", "path", "raw_path", "rule_id",
+    "owner_class", "enclosing_class", "qualifier", "method", "path", "rule_id",
 })
 _FORBIDDEN_PROMPT_KEYS = STEERING_SIGNAL_KEYS | DERIVED_ANALYSIS_KEYS | GROUND_TRUTH_FORBIDDEN_KEYS
 _VERDICT_TOKEN_RE = re.compile(r"\b(?:SUPPORTED|REFUTED|UNDETERMINED|SAFE_CONST(?:ANT)?|TAINTED|SANITIZED_CWE\d+)\b")
@@ -243,7 +243,7 @@ def _project_snippet(s, lines_override=None):
     if not isinstance(s, dict):
         return {}
     out = {}
-    for k in ("role", "path", "raw_path", "sha256"):
+    for k in ("role", "path", "sha256"):
         if k in s and isinstance(s[k], str):
             out[k] = s[k]
     for k in ("start", "end"):
@@ -818,8 +818,15 @@ def prompt(record):
          "If evidence_signals is present it only lists neutral structural positions (source_line, sink_line, "
          "source_kind) and calls whose implementation is absent from snippets (unresolved_external_calls); "
          "it never contains a verdict. "
-         "CRITICAL CITATION RULE: Cite 1 to 3 executable Java lines directly from snippets (using each snippet's exact "
-         "path, sha256, start_line, end_line, and verbatim character-for-character quote). Never cite comments or blank lines. "
+         "CRITICAL CITATION RULE: Cite executable Java code directly from the supplied snippets. "
+         "Copy citation path exactly from the canonical snippets[].path and sha256 from that same snippet. "
+         "Take start_line and end_line from the supplied lines[].line numbers; the range is inclusive. "
+         "For a multiline citation, quote must contain EVERY lines[].text from start_line through end_line, "
+         "in order, joined with the newline character (\\n), preserving all whitespace character-for-character. "
+         "Prefer a single executable line with start_line = end_line when it proves the relevant detail. "
+         "Never cite comments, blank lines, or lines absent from the prompt. Never invent missing lines, trim quote "
+         "whitespace, or substitute a path or hash. Invalid citations are rejected; they cannot establish SUPPORTED "
+         "or REFUTED. Use UNDETERMINED when the supplied evidence cannot support valid citations. "
          "Write explanation and fix_suggestion concisely in Vietnamese (1-2 sentences each) for human review."},
         {"role": "user", "content": json.dumps(evidence, ensure_ascii=False)}]
 

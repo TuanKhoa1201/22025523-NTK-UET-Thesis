@@ -1,3 +1,15 @@
+> Errata hiện hành cho G1-C3: phần bên dưới là hồ sơ handoff lịch sử của Antigravity;
+> các số PASS/PENDING, nhánh động và kế hoạch giai đoạn sau không phải nghiệm thu hay chỉ dẫn hiện hành.
+> G1-C2 tại `6ebf3ec6668741a346199f860cf349332ad94eae` đã có kết quả
+> `G1_C2_RUNTIME_ACCEPTANCE_FAILED`; giữ nguyên toàn bộ bằng chứng gốc bên ngoài repository.
+> Dòng kiểm tra vệ sinh thiếu entrypoint đã được loại khỏi bảng lệnh bên dưới; claim PASS đó
+> không có căn cứ áp dụng cho commit G1-C2. Không sửa biên nhận gốc.
+> Ứng viên hiện hành là G1-C3, prompt `v2.2.2-cwe22-cwe89-canonical-citations`;
+> xem `CANDIDATE.json`, README mục 5 và manifest commit bên ngoài để pin SHA mới.
+> REAL_OLLAMA/R01–R03 chưa chạy; kiểm toán độc lập và runtime cần quy trình riêng.
+> Kiểm thử phát triển hiện hành dùng venv Python 3.12.3 theo phê duyệt người vận hành;
+> dependency và biến log/settings scanner được ghi trong README mục 5 và hồ sơ bàn giao mới.
+
 # Hồ Sơ Bàn Giao G1 — Tích Hợp CLI Kế Thừa `simple_semgrepAI` → OpenGrep → Qwen Cục Bộ → SQLite Kiểm Duyệt
 
 **Kết luận kỹ thuật G1 hiện tại:** **`G1_INCOMPLETE`**
@@ -208,7 +220,6 @@ Báo cáo trung thực kết quả thực tế từ model nhỏ `qwen2.5-coder:1
 | Regression & contract tests (`v2/triage/tests`) | `python -B -m unittest discover -s v2/triage/tests -p "test_*.py" -q` | **134 chạy: 133 PASS, 1 SKIP, 0 FAIL** |
 | Baseline M1 tests (`v2/baseline/tests`) | `python -B -m unittest discover -s v2/baseline/tests -p "test_*.py" -q` | **27/27 PASS** |
 | Kiểm chứng bản vá M1 (`verify_patch.py`) | `python -B v2/baseline/verify_patch.py` | **PASS** (khớp 6 blob upstream & 4 tệp fork) |
-| Kiểm chứng vệ sinh kho mã (`verify-repository.py`) | `python -B scripts/verify-repository.py` | **PASS** (không có hiện vật riêng trong Git index) |
 | Đối chiếu các chốt dữ liệu công khai của `audit.py` | Kiểm tra ngoại tuyến trên hiện vật thực và hiện vật ánh xạ WSL2 | **PASS** (`identity`, `sarif`, `sources`, `database`, `runtime`) |
 | Tương thích ngược M1 `--scan-only` trên fork 96 tệp `G1-C2` | Chạy với OpenGrep `1.20.0` qua `semgrepai scan --scan-only` | **PASS** (exit code `0`, `forbidden_imports: []`) |
 

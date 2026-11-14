@@ -85,15 +85,65 @@ python -B -m v2.g1_integration.run_g1_demo \
   --timeout 180
 ```
 
-## 5. Kiểm thử tự động
+## 5. Kiểm thử offline và gate cho G1-C3
 
-```bash
-python -B -m unittest discover -s v2/g1_integration/tests -p "test_*.py" -v
-python -B -m unittest discover -s v2/triage/tests -p "test_*.py" -q
-python -B -m unittest discover -s v2/baseline/tests -p "test_*.py" -q
-python -B v2/baseline/verify_patch.py
-python -B scripts/verify-repository.py
+G1-C2 tại `6ebf3ec6668741a346199f860cf349332ad94eae` giữ nguyên
+`G1_C2_RUNTIME_ACCEPTANCE_FAILED`. Prompt mới:
+`v2.2.2-cwe22-cwe89-canonical-citations`. Kết quả offline không chứng thực Qwen runtime.
+Các lệnh runtime ở mục 2–4 là template cho lượt được người vận hành cho phép riêng.
+
+Ưu tiên Python 3.11 để đối chiếu ADMIN-PC; ghi executable/version thực tế.
+Lượt phát triển này dùng venv Python 3.12.3 AMD64 được người vận hành phê duyệt,
+với `typer==0.29.1`, `rich==15.0.0`, `PyYAML==6.0.3`; parity Python 3.11 chưa kiểm thử.
+Tạo/cài venv bằng chính tài khoản chạy test, `include-system-site-packages=false`,
+không nối `.pth` tới dependency bên ngoài. Chạy tại root của checkout G1-C3
+detached riêng, pin full SHA từ manifest bàn giao bên ngoài. Không detach worktree phát triển.
+Trong PowerShell, thay các placeholder bằng đường dẫn mới đã được cấp quyền:
+
+```powershell
+$c3Python = '<PYTHON_EXE>'
+$c3Checkout = '<DETACHED_CHECKOUT>'
+$c3Sha = '<FULL_C3_SHA_FROM_HANDOFF_MANIFEST>'
+$c3Checks = '<NEW_EXTERNAL_CHECKS_DIR>'
+Set-Location -LiteralPath $c3Checkout
+$env:PYTHONUTF8 = '1'
+$env:PYTHONDONTWRITEBYTECODE = '1'
+$env:G1_CHECKOUT = $c3Checkout
+$env:G1_EXPECTED_SHA = $c3Sha
+$env:TEMP = '<EXISTING_FRESH_EXTERNAL_TEMP_DIR>'
+$env:TMP = $env:TEMP
+$env:SEMGREP_LOG_FILE = '<NEW_WRITABLE_EXTERNAL_SCANNER_LOG>'
+$env:SEMGREP_SETTINGS_FILE = '<NEW_WRITABLE_EXTERNAL_SCANNER_SETTINGS>'
+$env:SEMGREP_SEND_METRICS = 'off'
+$env:SEMGREP_ENABLE_VERSION_CHECK = '0'
+$env:OPENGREP_ENABLE_VERSION_CHECK = '0'
+& $c3Python -X utf8 -B -m unittest discover -s v2/g1_integration/tests -p 'test_*.py' -v
+& $c3Python -X utf8 -B -m unittest discover -s v2/triage/tests -p 'test_*.py' -v
+& $c3Python -X utf8 -B -m unittest discover -s v2/baseline/tests -p 'test_*.py' -v
+& $c3Python -X utf8 -B -m unittest discover -s v2/g1_audit -p 'test_*.py' -v
+& $c3Python -X utf8 -B v2/baseline/verify_patch.py
+& $c3Python -X utf8 -B v2/g1_audit/run_checks.py --checkout $c3Checkout --expected-sha $c3Sha --output $c3Checks
+& $c3Python -X utf8 -B v2/g1_audit/verify_test_receipt.py $c3Checks
 ```
+
+Kiểm tra `$LASTEXITCODE` ngay sau từng lệnh; giữ stdout/stderr, hash log, số test và lý do skip.
+Không chạy tiếp nâng gate nếu có FAIL/ERROR. Gate yêu cầu HEAD detached đúng SHA và tracked tree sạch
+trước/sau; output phải mới và ngoài checkout. `G1_CHECKOUT`/`G1_EXPECTED_SHA` cần cho audit suite.
+Audit helper tự truyền `git -c safe.directory=<exact checkout>`; không sửa cấu hình Git toàn máy.
+Các biến scanner ở trên tránh ghi log/settings vào profile của tài khoản khác;
+chúng chỉ áp dụng cho tiến trình kiểm thử, không đổi ACL hoặc cấu hình dịch vụ.
+`verify_patch.py` ghi receipt ignored tại `v2/baseline/evidence/patch-verification.json`;
+giữ receipt ra ngoài checkout để bàn giao. `run_checks.py` chạy tập synthetic chọn lọc,
+không thay toàn bộ các suite hoặc kiểm tra vệ sinh bộ tệp công khai.
+
+Skip phải được ghi rõ: test OpenGrep tích hợp khi không tìm thấy binary; live upstream proof khi
+thiếu `NTK_M1_LIVE_UPSTREAM`/`NTK_M1_ADVISOR_DIR`; symlink khi tài khoản Windows không có khả năng tạo.
+Không cung cấp dữ liệu PRIVATE cũ để bỏ skip. Tách `OFFLINE_SYNTHETIC`, `MOCK_HTTP`,
+`REAL_OPENGREP`, `REAL_OLLAMA`, `NOT_TESTED` trong báo cáo. Không chạy Ollama trong nhiệm vụ implementation.
+
+Errata: entrypoint kiểm tra vệ sinh repository ghi trong handoff cũ không tồn tại tại G1-C2.
+Các suite/gate trên là entrypoint thực; chúng không chứng minh đã thay toàn bộ một kiểm tra vệ sinh
+không còn spec. Trước công bố phải review inventory/diff riêng, loại dữ liệu riêng và secrets.
 
 ## 6. Giới hạn kỹ thuật được công bố rõ
 

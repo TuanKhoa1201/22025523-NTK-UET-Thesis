@@ -1,16 +1,16 @@
 {
-  "candidate_id": "G1-C2",
-  "previous_candidate_id": "G1-C1",
-  "previous_candidate_commit": "ab4af37d8f3fc4060c0fb31fc85ca09d1172367b",
+  "candidate_id": "G1-C3",
+  "previous_candidate_id": "G1-C2",
+  "previous_candidate_commit": "6ebf3ec6668741a346199f860cf349332ad94eae",
   "status": "READY_FOR_INDEPENDENT_TEST",
-  "qwen_server_runtime_status": "PENDING",
-  "integration_branch": "v2/antigravity-review",
-  "base_commit": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "qwen_server_runtime_status": "NOT_TESTED",
+  "integration_branch": "v2/g1-c3-remediation",
+  "base_commit": "6ebf3ec6668741a346199f860cf349332ad94eae",
   "upstream_repo": "hardw00t/simple_semgrepAI",
   "upstream_version": "0.2.0",
   "upstream_commit": "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9",
   "upstream_tree_sha": "c0ab3e20152ce5c3e6b80e1525288ad59c9aee93",
-  "candidate_commit_resolution_note": "Do not read candidate SHA from this file; resolve the exact commit SHA directly via `git rev-parse v2/antigravity-review` (or `origin/v2/antigravity-review`) and pin that commit during independent verification.",
+  "candidate_commit_resolution_note": "Pin the full SHA in the external G1_C3_COMMIT_MANIFEST.json supplied at handoff. This commit cannot contain its own SHA. Do not resolve a moving branch as the audited SHA.",
   "entrypoint": "python -B -m semgrepai (semgrepai.__main__ -> semgrepai.cli:app in prepared fork)",
   "default_prompt_contract": "blind",
   "default_rules_path": "v2/g1_integration/rules/java_g1_cwe22_cwe89.yml",
@@ -22,7 +22,7 @@
     "Added regression and security boundary tests covering valid WSL2 mapping, native Windows paths, pure POSIX mode, arbitrary POSIX paths, cross-drive paths, forged sibling prefixes, `..` traversal, escaping directory junctions/symlinks, SHA-256 mismatches, out-of-scope/dead-branch citations, and invalid-sanitizer `REFUTED` rejections."
   ],
   "setup_instructions": [
-    "1. Checkout detached HEAD at the exact resolved commit of origin/v2/antigravity-review in an isolated workspace.",
+    "1. Pin the full G1-C3 handoff SHA in a separate detached checkout; do not detach the development worktree. See README section 5 for offline setup.",
     "2. Verify or clone clean upstream `https://github.com/hardw00t/simple_semgrepAI.git` checked out at `2c79a58a16d11e9dea3723e30d2a7faffba7bdc9`.",
     "3. Prepare the G1 fork into a fresh private directory outside Git: `python -B -m v2.g1_integration.prepare_g1_fork --upstream <UPSTREAM_DIR> --advisor-dir <PRIVATE_ADVISOR_DIR> --output-dir <PRIVATE_OUT>/fork-g1` (or pass `--scanner-layer ntk-cleanroom` if running on a clean server without the private advisor ZIP).",
     "4. Set `PYTHONPATH=<PRIVATE_OUT>/fork-g1/source:<REPO_ROOT>` (use `;` separator on Windows PowerShell)."
@@ -34,11 +34,13 @@
     "Full 4-scenario reproducible demo: `python -B -m v2.g1_integration.run_g1_demo --prepared-source <PRIVATE_OUT>/fork-g1/source --output-dir <PRIVATE_OUT>/demo-suite --executable <OPENGREP_BIN> --endpoint http://127.0.0.1:11434 --model qwen3.5:9b-q4_K_M --timeout 180`"
   ],
   "test_instructions": [
-    "python -B -m unittest discover -s v2/g1_integration/tests -p \"test_*.py\" -v",
-    "python -B -m unittest discover -s v2/triage/tests -p \"test_*.py\" -q",
-    "python -B -m unittest discover -s v2/baseline/tests -p \"test_*.py\" -q",
-    "python -B v2/baseline/verify_patch.py",
-    "python -B scripts/verify-repository.py"
+    "<PYTHON_EXE> -X utf8 -B -m unittest discover -s v2/g1_integration/tests -p \"test_*.py\" -v",
+    "<PYTHON_EXE> -X utf8 -B -m unittest discover -s v2/triage/tests -p \"test_*.py\" -v",
+    "<PYTHON_EXE> -X utf8 -B -m unittest discover -s v2/baseline/tests -p \"test_*.py\" -v",
+    "<PYTHON_EXE> -X utf8 -B -m unittest discover -s v2/g1_audit -p \"test_*.py\" -v",
+    "<PYTHON_EXE> -X utf8 -B v2/baseline/verify_patch.py",
+    "<PYTHON_EXE> -X utf8 -B v2/g1_audit/run_checks.py --checkout <DETACHED_CHECKOUT> --expected-sha <FULL_C3_SHA> --output <NEW_EXTERNAL_CHECKS_DIR>",
+    "<PYTHON_EXE> -X utf8 -B v2/g1_audit/verify_test_receipt.py <NEW_EXTERNAL_CHECKS_DIR>"
   ],
   "required_environment": {
     "python": ">=3.11 with typer, rich, PyYAML",
@@ -46,14 +48,49 @@
     "ollama": "Local loopback HTTP Ollama at http://127.0.0.1:11434 (verify installed model tags via /api/tags; server reference model is qwen3.5:9b-q4_K_M; on Windows+WSL2 keep a WSL session active during HTTP calls so WSL2 does not auto-suspend)"
   },
   "expected_independent_verdict_paths": {
-    "codex_audit": "v2/g1_audit/G1-C2/VERDICT.json",
-    "javis_runtime": "v2/g1_runtime/G1-C2/VERDICT.json"
+    "codex_audit": "External independent G1-C3 audit bundle",
+    "javis_runtime": "Future separately authorized G1-C3 runtime bundle"
   },
   "private_evidence_excluded": true,
   "known_limitations": [
-    "Independent server runtime verification of `G1-C2` with `qwen3.5:9b-q4_K_M` on `ADMIN-PC` is PENDING and must be executed by JavisOS before claiming Qwen server runtime PASS.",
+    "G1-C2 remains G1_C2_RUNTIME_ACCEPTANCE_FAILED. G1-C3 REAL_OLLAMA and runtime criteria R01-R03 are NOT_TESTED; independent audit and operator approval remain required.",
     "Java context extraction is bounded to the enclosing method and same-file helper callees (<=150 lines); cross-file callees are treated as unresolved external calls and fail closed to UNDETERMINED when safety is claimed.",
     "CLI `--actor` is an unauthenticated operator string for local audit trail, and SQLite does not claim OS-level tamper resistance against privileged local users.",
     "Historical G0 findings and 14 pending errata remain untouched and locked (`G0_ACCEPTANCE=CONDITIONAL`, `READY_FOR_G1=CONDITIONAL`, historical Arm C independent contribution `CONFOUNDED`)."
-  ]
+  ],
+  "previous_candidate_runtime_status": "G1_C2_RUNTIME_ACCEPTANCE_FAILED",
+  "prompt_version": "v2.2.2-cwe22-cwe89-canonical-citations",
+  "changes_in_g1_c3": [
+    "Exclude raw_path from both snippet producer and whitelist without mutating evidence.",
+    "Specify canonical snippet path/hash and exact inclusive multiline quotes; strict validator unchanged.",
+    "Replace missing test entrypoint with existing offline suites and detached audit gate; preserve failed G1-C2 lineage."
+  ],
+  "offline_test_environment": {
+    "cwd": "Root of pinned checkout",
+    "python": "Prefer Python 3.11 for ADMIN-PC parity. Development verification uses an isolated Python 3.12.3 AMD64 venv authorized by the operator; Python 3.11 parity remains NOT_TESTED.",
+    "development_dependency_pins": [
+      "typer==0.29.1",
+      "rich==15.0.0",
+      "PyYAML==6.0.3"
+    ],
+    "variables": [
+      "PYTHONUTF8=1",
+      "PYTHONDONTWRITEBYTECODE=1",
+      "G1_CHECKOUT=<absolute pinned detached checkout>",
+      "G1_EXPECTED_SHA=<full handoff SHA>",
+      "TEMP/TMP=<fresh external test temporary directory>",
+      "SEMGREP_LOG_FILE=<fresh writable external scanner log>",
+      "SEMGREP_SETTINGS_FILE=<fresh writable external scanner settings>",
+      "SEMGREP_SEND_METRICS=off",
+      "SEMGREP_ENABLE_VERSION_CHECK=0",
+      "OPENGREP_ENABLE_VERSION_CHECK=0"
+    ],
+    "git": "Only per-command exact safe.directory allowed for the development worktree; audit helper already supplies per-checkout -c safe.directory. Never change global configuration.",
+    "skip_conditions": [
+      "OpenGrep integration test skips if binary unavailable; no real Ollama is run by these suites.",
+      "Live upstream proof skips unless NTK_M1_LIVE_UPSTREAM and NTK_M1_ADVISOR_DIR are supplied; do not access old PRIVATE data.",
+      "Symlink test may skip if Windows account cannot create symlinks."
+    ],
+    "verify_patch_note": "verify_patch.py writes v2/baseline/evidence/patch-verification.json (ignored); run in isolated checkout, retain output externally. Gate is a selected synthetic suite, not full runtime acceptance."
+  }
 }
