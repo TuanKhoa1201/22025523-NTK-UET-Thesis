@@ -1,0 +1,882 @@
+--- a/semgrepai/scanner.py
++++ b/semgrepai/scanner.py
+@@ -1,113 +1,116 @@
++# Derived from hardw00t/simple_semgrepAI scanner.py, MIT; see ../LICENSE.
+ import subprocess
+ import json
++import os
+ from pathlib import Path
+ from typing import Optional, Dict, List
+-import tempfile
+-from rich.console import Console
+-from rich.progress import Progress, SpinnerColumn, TextColumn
+-
+-console = Console()
++from .config import OpenGrepConfig
++from .scan_manifest import ScanCapture
++
++
++class ScanError(RuntimeError):
++    """No successful scan may be inferred from a failed/partial engine run."""
++
+ 
+ class SemgrepScanner:
+-    def __init__(self):
+-        self.verify_semgrep_installation()
++    """Compatibility name retained for the upstream scan/_process_results interface."""
++
++    def __init__(self, config=None, output_dir=Path("reports")):
++        self.config = config or OpenGrepConfig()
++        self.output_dir = Path(output_dir).resolve()
++        self.target_root = None
++        self.capture = None
++
++    def _run(self, label, command):
++        env = os.environ.copy()
++        env["SEMGREP_LOG_FILE"] = str(self.output_dir / "opengrep.log")
++        env["SEMGREP_SETTINGS_FILE"] = str(self.output_dir / "settings.yml")
++        env["SEMGREP_ENABLE_VERSION_CHECK"] = "0"
++        env["OPENGREP_ENABLE_VERSION_CHECK"] = "0"
++        env["SEMGREP_SEND_METRICS"] = "off"
++        (self.output_dir / (label + ".command.json")).write_text(
++            json.dumps(command, indent=2), encoding="utf-8")
++        try:
++            result = subprocess.run(command, capture_output=True,
++                                    timeout=self.config.timeout + 30, env=env)
++        except (OSError, subprocess.TimeoutExpired) as exc:
++            (self.output_dir / (label + ".failure.txt")).write_text(str(exc), encoding="utf-8")
++            raise ScanError(str(exc)) from exc
++        for name, value in (("stdout", result.stdout), ("stderr", result.stderr)):
++            data = value if isinstance(value, bytes) else value.encode("utf-8")
++            (self.output_dir / (label + "." + name + ".txt")).write_bytes(data)
++        (self.output_dir / (label + ".exit.txt")).write_text(str(result.returncode), encoding="utf-8")
++        if self.capture is not None:
++            self.capture.runs[label] = {"argv": command, "exit_code": result.returncode}
++        if result.returncode != 0:
++            raise ScanError(f"{label} exited {result.returncode}; see captured stderr")
++        try:
++            return result.stdout.decode("utf-8") if isinstance(result.stdout, bytes) else result.stdout
++        except UnicodeError as exc:
++            raise ScanError("engine output is not UTF-8; raw bytes retained") from exc
+ 
+     def verify_semgrep_installation(self):
+-        """Verify that semgrep is installed and accessible."""
+-        try:
+-            result = subprocess.run(["semgrep", "--version"], capture_output=True, text=True, check=True)
+-            console.print(f"[green]✓[/green] Semgrep version: {result.stdout.strip()}")
+-        except subprocess.CalledProcessError:
+-            raise RuntimeError("Semgrep is not installed or not accessible")
++        return self._run("version", [self.config.executable, "--version"]).strip()
+ 
+     def scan(self, target_path: Path, rules_path: Optional[Path] = None) -> Dict:
+-        """Run Semgrep scan and return findings."""
+-        # Ensure reports directory exists
+-        reports_dir = Path("reports")
+-        reports_dir.mkdir(exist_ok=True)
+-        
+-        with Progress(
+-            SpinnerColumn(),
+-            TextColumn("[progress.description]{task.description}"),
+-            console=console
+-        ) as progress:
+-            console.print(f"\n[cyan]Starting Semgrep scan on:[/cyan] {target_path}")
+-            if rules_path:
+-                console.print(f"[cyan]Using custom rules from:[/cyan] {rules_path}")
+-            else:
+-                console.print("[cyan]Using default Semgrep rules[/cyan]")
+-
+-            task = progress.add_task("[yellow]Running Semgrep scan...", total=1)
+-            
+-            # Define output files
+-            json_output_file = reports_dir / "semgrep.json"
+-            sarif_output_file = reports_dir / "semgrep.sarif"
+-            
+-            # Build base command
+-            cmd = ["semgrep", "scan"]
+-            
+-            if rules_path:
+-                cmd.extend(["--config", str(rules_path)])
+-            else:
+-                cmd.append("--config=auto")
+-            
+-            # Add target path
+-            cmd.append(str(target_path))
+-            
++        target_path = Path(target_path).resolve()
++        if not target_path.exists():
++            raise ScanError("target does not exist")
++        self.target_root = target_path if target_path.is_dir() else target_path.parent
++        if self.output_dir.exists() and any(self.output_dir.iterdir()):
++            raise ScanError("output directory must be new or empty; preserve previous evidence")
++        self.output_dir.mkdir(parents=True, exist_ok=True)
++        config = self.config
++        if rules_path is not None:
++            config = OpenGrepConfig(config.executable, Path(rules_path), config.timeout, config.jobs)
++        self.capture = ScanCapture(target_path, config.rules, self.output_dir)
++        try:
++            results = self._scan_outputs(target_path, config)
++        except Exception:
++            self.capture.finish(False)
++            raise
++        manifest = self.capture.finish(True)
++        if not manifest["success"]:
++            raise ScanError("scan inputs changed; rescan required")
++        return results
++
++    def _scan_outputs(self, target_path, config):
++        version = self.verify_semgrep_installation()
++        results = {}
++        for fmt in ("json", "sarif"):
++            raw = self._run(fmt, config.command(target_path, fmt))
++            (self.output_dir / ("opengrep." + fmt)).write_bytes(raw.encode("utf-8"))
+             try:
+-                # Run JSON scan
+-                json_cmd = cmd + ["--json", "--output", str(json_output_file)]
+-                json_result = subprocess.run(json_cmd, check=True, capture_output=True, text=True)
+-                
+-                # Run SARIF scan
+-                sarif_cmd = cmd + ["--sarif", "--output", str(sarif_output_file)]
+-                sarif_result = subprocess.run(sarif_cmd, check=True, capture_output=True, text=True)
+-                
+-                # Read outputs
+-                try:
+-                    with open(json_output_file) as f:
+-                        json_results = json.load(f)
+-                        if not json_results.get('results'):
+-                            console.print("[yellow]Found 0 potential issues[/yellow]")
+-                except json.JSONDecodeError as e:
+-                    console.print("[red]Error:[/red] Failed to parse JSON output")
+-                    console.print(f"JSON output file contents:")
+-                    with open(json_output_file) as f:
+-                        console.print(f.read())
+-                    raise RuntimeError(f"Failed to parse JSON output: {e}")
+-                    
+-                try:
+-                    with open(sarif_output_file) as f:
+-                        sarif_results = json.load(f)
+-                except json.JSONDecodeError as e:
+-                    console.print("[red]Error:[/red] Failed to parse SARIF output")
+-                    console.print(f"SARIF output file contents:")
+-                    with open(sarif_output_file) as f:
+-                        console.print(f.read())
+-                    raise RuntimeError(f"Failed to parse SARIF output: {e}")
+-                
+-                results = {
+-                    'json': json_results,
+-                    'sarif': sarif_results
+-                }
+-                
+-                progress.advance(task)
+-                console.print("[green]✓[/green] Scan completed")
+-                console.print(f"[green]Raw results saved to:[/green]")
+-                console.print(f"  - JSON: {json_output_file}")
+-                console.print(f"  - SARIF: {sarif_output_file}")
+-                
+-                if json_results.get('results'):
+-                    console.print(f"\nFound {len(json_results['results'])} potential issues")
+-                    return results
+-                else:
+-                    console.print("\n[yellow]No issues found[/yellow]")
+-                    return None
+-                
+-            except subprocess.CalledProcessError as e:
+-                console.print(f"[red]Error:[/red] Semgrep scan failed")
+-                console.print(e.stderr)
+-                raise RuntimeError("Semgrep scan failed") from e
++                results[fmt] = json.loads(raw)
++            except (ValueError, TypeError) as exc:
++                raise ScanError(f"invalid {fmt}; REVIEW required") from exc
++        self.validate_json(results["json"])
++        sarif = results["sarif"]
++        if not isinstance(sarif, dict) or not isinstance(sarif.get("runs"), list):
++            raise ScanError("invalid SARIF envelope; REVIEW required")
++        results["engine_version"] = version
++        return results
++
++    @staticmethod
++    def validate_json(document):
++        if not isinstance(document, dict) or not isinstance(document.get("results"), list):
++            raise ScanError("invalid results envelope; REVIEW required")
++        if document.get("errors"):
++            raise ScanError("engine reported errors/partial scan; REVIEW required")
++        for item in document["results"]:
++            if not isinstance(item, dict):
++                raise ScanError("invalid finding; REVIEW required")
++            extra = item.get("extra")
++            if not isinstance(extra, dict) or not isinstance(extra.get("metadata", {}), dict):
++                raise ScanError("invalid finding extra/metadata; REVIEW required")
++            if not isinstance(item.get("path"), str) or not item["path"]:
++                raise ScanError("missing finding path; REVIEW required")
++            if not isinstance(item.get("check_id"), str) or not item["check_id"]:
++                raise ScanError("missing rule ID; REVIEW required")
++            for key in ("start", "end"):
++                loc = item.get(key)
++                if not isinstance(loc, dict) or type(loc.get("line")) is not int or loc["line"] < 1:
++                    raise ScanError("invalid finding location; REVIEW required")
+ 
+     def _extract_code(self, result: Dict) -> str:
+         """Extract code snippet with context from a finding."""
+@@ -115,19 +118,19 @@
+         code = result.get('lines', '')
+         if code and code != "requires login":
+             return code.strip()
+-            
++
+         # Then try extra.lines
+         if 'extra' in result:
+             code = result['extra'].get('lines', '')
+             if code and code != "requires login":
+                 return code.strip()
+-        
++
+         # If we got here, try to read from file
+         try:
+             raw_path = result.get('path', '')
+             if not raw_path:
+                 return "No file path available"
+-                
++
+             # Handle relative paths
+             path = Path(raw_path)
+             if not path.is_absolute():
+@@ -141,32 +144,35 @@
+                     cwd_path = Path.cwd() / clean_path
+                     if cwd_path.exists():
+                         path = cwd_path
+-                    
++
++            path = path.resolve()
++            if self.target_root is not None and not path.is_relative_to(self.target_root):
++                return "Source path outside scan target; REVIEW required"
+             if not path.exists():
+                 return f"File not found: {raw_path}"
+-                
++
+             # Read the file and extract relevant lines
+             with open(path, 'r', encoding='utf-8') as f:
+                 lines = f.readlines()
+-                
++
+             # Get line numbers
+             start_line = result.get('start', {}).get('line', 0)
+             end_line = result.get('end', {}).get('line', start_line)
+-            
++
+             # Validate line numbers
+             if start_line < 1 or start_line > len(lines):
+                 return f"Invalid start line: {start_line}"
+             if end_line < start_line or end_line > len(lines):
+                 end_line = start_line
+-                
++
+             # Get context lines
+             context_lines = 10
+             start_idx = max(0, start_line - 1 - context_lines)
+             end_idx = min(len(lines), end_line + context_lines)
+-            
++
+             # Extract the lines
+             code_lines = lines[start_idx:end_idx]
+-            
++
+             # Add line numbers and highlight the vulnerable lines
+             numbered_lines = []
+             for i, line in enumerate(code_lines, start=start_idx + 1):
+@@ -175,23 +181,24 @@
+                     numbered_lines.append(f">>> {prefix}{line.rstrip()}")
+                 else:
+                     numbered_lines.append(f"    {prefix}{line.rstrip()}")
+-            
++
+             return '\n'.join(numbered_lines)
+-            
++
+         except Exception as e:
+             return f"Error extracting code: {str(e)}"
+ 
+     def _process_results(self, results: Dict) -> List[Dict]:
+         """Process and normalize Semgrep results."""
++        self.validate_json(results['json'])
+         findings = []
+-        
++
+         for result in results['json'].get('results', []):
+             # Extract metadata
+             metadata = result.get('extra', {}).get('metadata', {})
+-            
++
+             # Extract code with context
+             code = self._extract_code(result)
+-            
++
+             finding = {
+                 'rule_id': result.get('check_id'),
+                 'severity': result.get('extra', {}).get('severity', 'UNKNOWN'),
+@@ -202,6 +209,7 @@
+                 'dataflow': self._extract_dataflow(result),
+                 'references': self._extract_references(result),
+                 'security_patterns': self._extract_security_patterns(result),
++                'review_status': 'REVIEW',
+                 'metadata': {
+                     'cwe': metadata.get('cwe', []),
+                     'owasp': metadata.get('owasp', ''),
+@@ -217,17 +225,12 @@
+ 
+         return findings
+ 
+-    def _extract_dataflow(self, result: Dict) -> List[Dict]:
+-        """Extract dataflow information from a finding."""
+-        dataflow = []
+-        if 'dataflow_trace' in result:
+-            for step in result['dataflow_trace']:
+-                dataflow.append({
+-                    'location': step.get('location'),
+-                    'content': step.get('content'),
+-                    'type': step.get('type')
+-                })
+-        return dataflow
++    def _extract_dataflow(self, result: Dict):
++        """Preserve native OpenGrep tagged trace structures without guessing steps."""
++        extra = result.get("extra", {})
++        if "dataflow_trace" in extra:
++            return extra["dataflow_trace"]
++        return result.get("dataflow_trace", [])
+ 
+     def _extract_references(self, result: Dict) -> List[Dict]:
+         """Extract reference information from a finding."""
+--- a/semgrepai/config.py
++++ b/semgrepai/config.py
+@@ -1,195 +1,28 @@
++"""Local scanner configuration; deliberately independent of upstream LLM imports."""
++from dataclasses import dataclass
+ from pathlib import Path
+-from typing import Optional, Dict, List, Set
+-import yaml
+-from pydantic import BaseModel, Field, ConfigDict
+-from .llm.providers import LLMProviderConfig
+-
+-class LLMConfig(BaseModel):
+-    provider: LLMProviderConfig = Field(
+-        default_factory=lambda: LLMProviderConfig(
+-            provider="openai",
+-            model="gpt-4.1-mini",
+-            temperature=0
+-        )
+-    )
+-    cache_dir: Path = Field(default_factory=lambda: Path(".cache/llm"))
+-    max_workers: Optional[int] = 4
+-    batch_size: int = 10
+-
+-    model_config = ConfigDict(protected_namespaces=())
+-
+-class SemgrepConfig(BaseModel):
+-    default_rules: List[str] = ["auto"]
+-    max_target_files: int = 1000
+-    timeout: int = 300
+-    jobs: Optional[int] = None
+-
+-    model_config = ConfigDict(protected_namespaces=())
+-
+-class CodeAnalysisConfig(BaseModel):
+-    max_file_size: int = 1_000_000  # Max file size to analyze in bytes
+-    max_related_files: int = 10  # Max number of related files to analyze
+-    analyze_imports: bool = True  # Whether to analyze imported files
+-    analyze_references: bool = True  # Whether to analyze file references
+-    excluded_dirs: Set[str] = Field(default_factory=lambda: {
+-        'venv', 'node_modules', '.git', '__pycache__',
+-        'build', 'dist', 'migrations'
+-    })
+-    excluded_files: Set[str] = Field(default_factory=lambda: {
+-        '*.pyc', '*.pyo', '*.pyd', '*.so', '*.dylib',
+-        '*.min.js', '*.min.css', '*.map'
+-    })
+-    languages: Set[str] = Field(default_factory=lambda: {
+-        'python', 'javascript', 'typescript', 'java',
+-        'ruby', 'php', 'go', 'csharp'
+-    })
+-    max_analysis_time: int = 30  # Maximum time in seconds to spend analyzing a single file
+-    cache_analysis: bool = True  # Whether to cache analysis results
+-
+-    model_config = ConfigDict(protected_namespaces=())
+-
+-class RAGConfig(BaseModel):
+-    persist_dir: Path = Field(default_factory=lambda: Path(".semgrepai/db"))
+-    collection_name: str = "findings"
+-    distance_metric: str = "cosine"
+-    embeddings_model: str = "all-MiniLM-L6-v2"
+-
+-    model_config = ConfigDict(protected_namespaces=())
+-
+-class ReportConfig(BaseModel):
+-    output_dir: Path = Field(default_factory=lambda: Path("reports"))
+-    formats: List[str] = ["html", "json", "sarif"]
+-    max_findings_per_page: int = 50
+-
+-    model_config = ConfigDict(protected_namespaces=())
+ 
+ 
+-class AsyncConfig(BaseModel):
+-    """Configuration for async processing."""
+-    max_concurrent_requests: int = 4
+-    """Maximum number of concurrent LLM requests."""
+-
+-    requests_per_minute: int = 60
+-    """Rate limit: maximum requests per minute."""
+-
+-    retry_max_attempts: int = 3
+-    """Maximum number of retry attempts for failed requests."""
+-
+-    retry_base_delay: float = 1.0
+-    """Base delay in seconds for exponential backoff."""
+-
+-    retry_max_delay: float = 60.0
+-    """Maximum delay in seconds for exponential backoff."""
+-
+-    enable_jitter: bool = True
+-    """Add random jitter to retry delays to prevent thundering herd."""
+-
+-    model_config = ConfigDict(protected_namespaces=())
++DEFAULT_RULES = Path(__file__).resolve().parents[2] / "rules" / "java.yml"
+ 
+ 
+-class APIConfig(BaseModel):
+-    """Configuration for the web API server."""
+-    host: str = "127.0.0.1"
+-    """Host to bind the server to."""
++@dataclass(frozen=True)
++class OpenGrepConfig:
++    executable: str = "opengrep"
++    rules: Path = DEFAULT_RULES
++    timeout: int = 60
++    jobs: int = 1
+ 
+-    port: int = 8080
+-    """Port to bind the server to."""
++    def __post_init__(self):
++        if self.timeout <= 0 or self.jobs <= 0:
++            raise ValueError("timeout and jobs must be positive")
++        if not Path(self.rules).is_file():
++            raise ValueError("rules must be an existing local file; registry/URLs are forbidden")
+ 
+-    cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"])
+-    """Allowed CORS origins for the frontend."""
+-
+-    db_url: str = "sqlite+aiosqlite:///.semgrepai/semgrepai.db"
+-    """Database URL for async SQLAlchemy."""
+-
+-    secret_key: Optional[str] = None
+-    """Secret key for session management. If not set, a random one is generated."""
+-
+-    debug: bool = False
+-    """Enable debug mode with auto-reload."""
+-
+-    log_level: str = "info"
+-    """Logging level for the API server."""
+-
+-    model_config = ConfigDict(protected_namespaces=())
+-
+-
+-class Config(BaseModel):
+-    llm: LLMConfig = Field(default_factory=LLMConfig)
+-    semgrep: SemgrepConfig = Field(default_factory=SemgrepConfig)
+-    rag: RAGConfig = Field(default_factory=RAGConfig)
+-    report: ReportConfig = Field(default_factory=ReportConfig)
+-    analysis: CodeAnalysisConfig = Field(default_factory=CodeAnalysisConfig)
+-    async_config: AsyncConfig = Field(default_factory=AsyncConfig, alias="async")
+-    api: APIConfig = Field(default_factory=APIConfig)
+-
+-    model_config = ConfigDict(
+-        protected_namespaces=(),
+-        populate_by_name=True  # Allow using alias 'async' in config files
+-    )
+-
+-class ConfigManager:
+-    DEFAULT_CONFIG_PATHS = [
+-        Path("semgrepai.yml"),
+-        Path("~/.config/semgrepai/config.yml"),
+-        Path("/etc/semgrepai/config.yml")
+-    ]
+-
+-    def __init__(self, config_path: Optional[str] = None):
+-        self.config = self._load_config(config_path)
+-
+-    def _load_config(self, config_path: Optional[str]) -> Config:
+-        """Load configuration from file or use defaults."""
+-        config_data = {}
+-        
+-        # Try loading from specified path
+-        if config_path:
+-            path = Path(config_path)
+-            if path.exists():
+-                with open(path) as f:
+-                    config_data = yaml.safe_load(f)
+-        
+-        # Try default paths if no config loaded
+-        if not config_data:
+-            for path in self.DEFAULT_CONFIG_PATHS:
+-                path = path.expanduser()
+-                if path.exists():
+-                    with open(path) as f:
+-                        config_data = yaml.safe_load(f)
+-                    break
+-        
+-        return Config(**config_data if config_data else {})
+-
+-    def save_config(self, path: Optional[Path] = None) -> None:
+-        """Save current configuration to file."""
+-        save_path = path or self.DEFAULT_CONFIG_PATHS[0]
+-        save_path.parent.mkdir(parents=True, exist_ok=True)
+-        
+-        with open(save_path, 'w') as f:
+-            yaml.dump(self.config.dict(), f, default_flow_style=False)
+-
+-    @classmethod
+-    def generate_default_config(cls, path: Path) -> None:
+-        """Generate a default configuration file."""
+-        config = Config()
+-        path.parent.mkdir(parents=True, exist_ok=True)
+-        
+-        with open(path, 'w') as f:
+-            yaml.dump(config.dict(), f, default_flow_style=False)
+-            
+-    def update_config(self, updates: Dict) -> None:
+-        """Update configuration with new values."""
+-        current_dict = self.config.dict()
+-        self._deep_update(current_dict, updates)
+-        self.config = Config(**current_dict)
+-        
+-    def _deep_update(self, base_dict: Dict, update_dict: Dict) -> None:
+-        """Recursively update a dictionary."""
+-        for key, value in update_dict.items():
+-            if (
+-                key in base_dict 
+-                and isinstance(base_dict[key], dict) 
+-                and isinstance(value, dict)
+-            ):
+-                self._deep_update(base_dict[key], value)
+-            else:
+-                base_dict[key] = value
++    def command(self, target: Path, output_format: str):
++        if output_format not in ("json", "sarif"):
++            raise ValueError("unsupported output format")
++        return [self.executable, "scan", "--config", str(Path(self.rules).resolve()),
++                "--" + output_format, "--dataflow-traces", "--no-git-ignore",
++                "--disable-version-check", "--jobs", str(self.jobs),
++                "--timeout", str(self.timeout), "--include", "*.java", str(target.resolve())]
+--- a/semgrepai/cli.py
++++ b/semgrepai/cli.py
+@@ -1,219 +1,35 @@
+-import typer
+-import asyncio
++"""M1 scanner-only CLI. Never initializes upstream cloud validators or RAG."""
++import argparse
++import json
++import sys
+ from pathlib import Path
+-from rich.console import Console
+-from typing import Optional
+-from .scanner import SemgrepScanner
+-from .validator import AIValidator
+-from .reporter import HTMLReporter
+-from .rag import RAGStore
+-from .config import ConfigManager
+-
+-app = typer.Typer(
+-    name="semgrepai",
+-    help="AI-powered Semgrep vulnerability validator",
+-    add_completion=False,
+-)
+-console = Console()
+-
+-@app.command()
+-def scan(
+-    target_path: Path = typer.Argument(..., help="Path to the code to scan"),
+-    rules_path: Optional[Path] = typer.Option(None, help="Path to custom rules"),
+-    output_dir: Path = typer.Option("./reports", help="Directory for output reports"),
+-    config_path: Optional[Path] = typer.Option(None, help="Path to configuration file"),
+-):
+-    """Run Semgrep scan with optional custom rules and generate reports."""
+-    try:
+-        console.print("[bold blue]Starting SemgrepAI Security Scan[/bold blue]")
+-        console.print(f"Target: {target_path}")
+-
+-        # Initialize scanner
+-        scanner = SemgrepScanner()
+-        results = scanner.scan(target_path, rules_path)
+-
+-        # Extract findings from results
+-        if results and isinstance(results, dict) and 'json' in results and isinstance(results['json'], dict):
+-            scan_findings = scanner._process_results(results)
+-
+-            if scan_findings:
+-                console.print(f"\n[cyan]Found {len(scan_findings)} findings to analyze[/cyan]")
+-
+-                # Initialize RAG store for false positive learning
+-                rag = RAGStore()
+-
+-                # Store scan findings in RAG
+-                rag.store_findings(scan_findings)
+-
+-                # Validate findings using AI with RAG integration
+-                validator = AIValidator(config_path=config_path, rag_store=rag)
+-                validated_findings = validator.validate_findings(scan_findings)
+-
+-                # Get cost metrics if available
+-                cost_metrics = None
+-                if hasattr(validator.llm, 'cost_metrics') and validator.llm.cost_metrics:
+-                    # Save cost metrics before generating report
+-                    if hasattr(validator.llm, 'config') and validator.llm.config.cost_metrics_path:
+-                        validator.llm.cost_metrics.save(validator.llm.config.cost_metrics_path)
+-
+-                    cost_metrics = {
+-                        'total_cost': validator.llm.cost_metrics.total_cost,
+-                        'total_requests': validator.llm.cost_metrics.total_requests,
+-                        'total_input_tokens': validator.llm.cost_metrics.total_input_tokens,
+-                        'total_output_tokens': validator.llm.cost_metrics.total_output_tokens,
+-                        'failed_requests': validator.llm.cost_metrics.failed_requests,
+-                        'retried_requests': validator.llm.cost_metrics.retried_requests,
+-                        'total_latency': validator.llm.cost_metrics.total_latency,
+-                        'costs_by_model': validator.llm.cost_metrics.costs_by_model,
+-                    }
+-
+-                    # Display cost summary
+-                    console.print(f"\n[bold green]Cost Summary:[/bold green]")
+-                    console.print(f"  Total Cost: ${cost_metrics['total_cost']:.4f}")
+-                    console.print(f"  Total Requests: {cost_metrics['total_requests']}")
+-                    console.print(f"  Total Tokens: {cost_metrics['total_input_tokens'] + cost_metrics['total_output_tokens']:,}")
+-
+-                # Get validation metrics
+-                validation_metrics = None
+-                if hasattr(validator, 'metrics') and validator.metrics:
+-                    validation_metrics = validator.metrics.get_current_metrics()
+-
+-                # Display cache statistics
+-                if hasattr(validator, 'cache') and validator.cache:
+-                    try:
+-                        if hasattr(validator.cache, 'get_statistics'):
+-                            cache_stats = validator.cache.get_statistics()
+-                            console.print(f"\n[bold green]Cache Performance:[/bold green]")
+-                            console.print(f"  Hit Rate: {cache_stats.get('hit_rate', 'N/A')}")
+-                            console.print(f"  Total Entries: {cache_stats.get('total_entries', 0)}")
+-                            console.print(f"  Capacity: {cache_stats.get('capacity_used', 'N/A')}")
+-                        elif hasattr(validator.cache, 'cache'):
+-                            console.print(f"\n[bold green]Cache Performance:[/bold green]")
+-                            console.print(f"  Total Entries: {len(validator.cache.cache)}")
+-                    except Exception:
+-                        pass  # Cache stats are optional
+-
+-                # Display RAG statistics if available
+-                try:
+-                    rag_stats = rag.get_validation_statistics()
+-                    if rag_stats.get('total_validations', 0) > 0:
+-                        console.print(f"\n[bold green]Learning Database:[/bold green]")
+-                        console.print(f"  Historical Validations: {rag_stats['total_validations']}")
+-                        console.print(f"  True Positives: {rag_stats['true_positives']}")
+-                        console.print(f"  False Positives: {rag_stats['false_positives']}")
+-                except Exception as e:
+-                    pass  # RAG stats are optional
+-
+-                # Generate reports with enhanced statistics
+-                console.print(f"\n[bold blue]Generating reports...[/bold blue]")
+-                reporter = HTMLReporter()
+-                report_path = reporter.generate_report(
+-                    validated_findings,
+-                    output_dir,
+-                    metrics=validation_metrics,
+-                    cost_metrics=cost_metrics
+-                )
+-
+-                console.print(f"[green]✓[/green] Report generated: {report_path}")
+-            else:
+-                console.print("[yellow]No findings to analyze[/yellow]")
+-        else:
+-            console.print("[yellow]No scan results found[/yellow]")
+-
+-        console.print("\n[green]✓[/green] Scan completed successfully!")
+-
+-    except Exception as e:
+-        console.print(f"[red]Error:[/red] {str(e)}")
+-        import traceback
+-        console.print(f"[red]{traceback.format_exc()}[/red]")
+-        raise typer.Exit(1)
+-
+-@app.command()
+-def search(
+-    query: str = typer.Argument(..., help="Search query for findings"),
+-):
+-    """Search through previous findings using RAG."""
+-    try:
+-        rag = RAGStore()
+-        results = rag.search(query)
+-        for result in results:
+-            console.print(result)
+-    except Exception as e:
+-        console.print(f"[red]Error:[/red] {str(e)}")
+-        raise typer.Exit(1)
++from .config import OpenGrepConfig, DEFAULT_RULES
++from .scanner import SemgrepScanner, ScanError
+ 
+ 
+-@app.command()
+-def serve(
+-    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind the server to"),
+-    port: int = typer.Option(8080, "--port", "-p", help="Port to bind the server to"),
+-    reload: bool = typer.Option(False, "--reload", "-r", help="Enable auto-reload for development"),
+-):
+-    """Start the SemgrepAI web server with REST API and Web UI."""
++def main():
++    parser = argparse.ArgumentParser(description="NTK M1 local OpenGrep scanner")
++    parser.add_argument("target", type=Path)
++    parser.add_argument("--rules-path", type=Path, default=DEFAULT_RULES)
++    parser.add_argument("--output-dir", type=Path, required=True)
++    parser.add_argument("--executable", default="opengrep")
++    parser.add_argument("--timeout", type=int, default=60)
++    parser.add_argument("--jobs", type=int, default=1)
++    args = parser.parse_args()
+     try:
+-        import uvicorn
+-
+-        console.print(f"[cyan]Starting SemgrepAI web server...[/cyan]")
+-        console.print(f"[green]API docs:[/green] http://{host}:{port}/api/docs")
+-        console.print(f"[green]Web UI:[/green] http://{host}:{port}/")
+-
+-        uvicorn.run(
+-            "semgrepai.api.main:app",
+-            host=host,
+-            port=port,
+-            reload=reload,
+-            log_level="info",
+-        )
+-    except ImportError:
+-        console.print("[red]Error:[/red] uvicorn is not installed. Install it with: pip install uvicorn[standard]")
+-        raise typer.Exit(1)
+-    except Exception as e:
+-        console.print(f"[red]Error:[/red] {str(e)}")
+-        raise typer.Exit(1)
+-
+-
+-@app.command(name="init-db")
+-def init_db():
+-    """Initialize the database schema."""
+-    try:
+-        from .api.db import init_db as _init_db
+-
+-        console.print("[cyan]Initializing database...[/cyan]")
+-        asyncio.run(_init_db())
+-        console.print("[green]Database initialized successfully![/green]")
+-    except Exception as e:
+-        console.print(f"[red]Error:[/red] {str(e)}")
+-        raise typer.Exit(1)
+-
+-
+-@app.command()
+-def config(
+-    generate: bool = typer.Option(False, "--generate", "-g", help="Generate a default configuration file"),
+-    show: bool = typer.Option(False, "--show", "-s", help="Show current configuration"),
+-    path: Optional[Path] = typer.Option(None, "--path", "-p", help="Path for config file"),
+-):
+-    """Manage SemgrepAI configuration."""
+-    try:
+-        if generate:
+-            output_path = path or Path("semgrepai.yml")
+-            ConfigManager.generate_default_config(output_path)
+-            console.print(f"[green]Configuration file generated at:[/green] {output_path}")
+-        elif show:
+-            config_manager = ConfigManager(str(path) if path else None)
+-            import yaml
+-            console.print(yaml.dump(config_manager.config.model_dump(), default_flow_style=False))
+-        else:
+-            console.print("Use --generate to create a config file or --show to display current config")
+-    except Exception as e:
+-        console.print(f"[red]Error:[/red] {str(e)}")
+-        raise typer.Exit(1)
+-
+-
+-@app.command()
+-def version():
+-    """Show version information."""
+-    console.print("[cyan]SemgrepAI[/cyan] version 0.2.0")
++        config = OpenGrepConfig(args.executable, args.rules_path, args.timeout, args.jobs)
++        scanner = SemgrepScanner(config, args.output_dir)
++        results = scanner.scan(args.target)
++        findings = scanner._process_results(results)
++        (args.output_dir / "findings.json").write_text(
++            json.dumps({"status": "REVIEW", "engine_version": results["engine_version"],
++                        "findings": findings}, indent=2), encoding="utf-8")
++        print(f"OpenGrep {results['engine_version']}: {len(findings)} findings; human REVIEW required")
++        return 0
++    except (ScanError, ValueError, OSError) as exc:
++        print(f"REVIEW/UNDETERMINED: {exc}", file=sys.stderr)
++        return 2
+ 
+ 
+ if __name__ == "__main__":
+-    app()
++    sys.exit(main())
+--- /dev/null
++++ b/semgrepai/scan_manifest.py
+@@ -0,0 +1,64 @@
++"""Portable, unsigned scan receipt: bind source/rules, raw output and recorded exits."""
++import hashlib
++import json
++from datetime import datetime, timezone
++from pathlib import Path
++
++SCHEMA = "ntk-scan-capture-1"
++
++
++def sha(data):
++    return hashlib.sha256(data).hexdigest()
++
++
++def timestamp():
++    return datetime.now(timezone.utc).isoformat()
++
++
++def inventory(target):
++    target = Path(target).resolve(strict=True)
++    root = target.parent if target.is_file() else target
++    paths = [target] if target.is_file() else sorted(root.rglob("*.java"))
++    found = {}
++    for path in paths:
++        resolved = path.resolve(strict=True)
++        if not resolved.is_relative_to(root) or resolved.suffix.lower() != ".java" or not resolved.is_file():
++            raise ValueError("unsafe/non-Java scan source")
++        found[resolved.relative_to(root).as_posix()] = sha(resolved.read_bytes())
++    return found
++
++
++class ScanCapture:
++    def __init__(self, target, rules, output, producer="ntk-local-scan-capture"):
++        self.target, self.rules, self.output = Path(target).resolve(), Path(rules).resolve(), Path(output).resolve()
++        self.root = self.target.parent if self.target.is_file() else self.target
++        self.started = timestamp()
++        self.producer = producer
++        self.before = inventory(self.target)
++        self.rule_bytes = self.rules.read_bytes()
++        self.runs = {}
++        (self.output / "rules.snapshot.yml").write_bytes(self.rule_bytes)
++
++    def finish(self, success):
++        issues = []
++        try:
++            after = inventory(self.target)
++            rule_after = sha(self.rules.read_bytes())
++            if self.before != after or rule_after != sha(self.rule_bytes):
++                issues.append("source inventory or rules changed during scan")
++        except (OSError, ValueError) as exc:
++            after, rule_after = None, None
++            issues.append("cannot recheck scan inputs: " + str(exc))
++        artifacts = {}
++        for file in self.output.iterdir():
++            if file.is_file() and file.name != "scan-manifest.json" and file.suffix in (".txt", ".json", ".sarif", ".yml") and file.name != "settings.yml":
++                artifacts[file.name] = sha(file.read_bytes())
++        document = {"schema": SCHEMA, "producer": self.producer, "started_at": self.started,
++                    "finished_at": timestamp(), "source_root": str(self.root),
++                    "target_kind": "file" if self.target.is_file() else "directory",
++                    "sources_before": self.before, "sources_after": after,
++                    "rules_before_sha256": sha(self.rule_bytes), "rules_after_sha256": rule_after,
++                    "runs": self.runs, "artifacts": artifacts, "issues": issues,
++                    "success": bool(success and not issues), "signed_or_independently_attested": False}
++        (self.output / "scan-manifest.json").write_text(json.dumps(document, indent=2), encoding="utf-8")
++        return document

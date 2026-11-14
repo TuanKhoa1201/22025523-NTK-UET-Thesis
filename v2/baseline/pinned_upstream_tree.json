@@ -1,0 +1,487 @@
+{
+  "upstream_commit": "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9",
+  "tree_sha": "c0ab3e20152ce5c3e6b80e1525288ad59c9aee93",
+  "source_url": "https://api.github.com/repos/hardw00t/simple_semgrepAI/git/trees/2c79a58a16d11e9dea3723e30d2a7faffba7bdc9?recursive=1",
+  "files": [
+    {
+      "path": ".gitignore",
+      "mode": "100644",
+      "git_blob_sha": "95764beffdba88a6ae75f756624bca30bc4631f6"
+    },
+    {
+      "path": ".python-version",
+      "mode": "100644",
+      "git_blob_sha": "c8cfe3959183f8e9a50f83f54cd723f2dc9c252d"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "mode": "100644",
+      "git_blob_sha": "03ddcc509037805b03b51b97521055e79737346f"
+    },
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "git_blob_sha": "0d6c6874fbcd9b3af4e566714be96ee9f8f42886"
+    },
+    {
+      "path": "Makefile",
+      "mode": "100644",
+      "git_blob_sha": "886595463544a7b36f4e72846a8e6d2a8a3edc2f"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "git_blob_sha": "969b9029b0efcc6dd99a2234c86a5fe7ef326071"
+    },
+    {
+      "path": "SECURITY.md",
+      "mode": "100644",
+      "git_blob_sha": "67c20c10c2996d000c65e161d6b9e1520a2ca2fb"
+    },
+    {
+      "path": "logging.yml",
+      "mode": "100644",
+      "git_blob_sha": "48f38e495b9ab7291fb676fac6944ce9895fd3ee"
+    },
+    {
+      "path": "main.py",
+      "mode": "100644",
+      "git_blob_sha": "1c227907d846b2edc7e2673d0a4807c7b0ac53e5"
+    },
+    {
+      "path": "pyproject.toml",
+      "mode": "100644",
+      "git_blob_sha": "a997a9fd53c3714fe4c50ab4844f60c086240e7f"
+    },
+    {
+      "path": "requirements.txt",
+      "mode": "100644",
+      "git_blob_sha": "8148147e19d823464f0c826905d6d94bea32f607"
+    },
+    {
+      "path": "semgrepai.yml",
+      "mode": "100644",
+      "git_blob_sha": "1fdf83173e837a442b2f5c8695ea05203ecb9476"
+    },
+    {
+      "path": "semgrepai/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "c6022bd14ec20d2c3c9565db9b5265f34f809008"
+    },
+    {
+      "path": "semgrepai/__main__.py",
+      "mode": "100644",
+      "git_blob_sha": "b7563964127ff979fed70b68fd69b16f7261e3c6"
+    },
+    {
+      "path": "semgrepai/analyzers/code_analyzer.py",
+      "mode": "100644",
+      "git_blob_sha": "2d0d1b71afb654a1739ba293a5f1e33a3c62465d"
+    },
+    {
+      "path": "semgrepai/api/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "a0e3a9c5ceddfa70e239b41c7e3c57123adddf88"
+    },
+    {
+      "path": "semgrepai/api/db/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "e4db725bd438f390a6040d03a7199e089f025b28"
+    },
+    {
+      "path": "semgrepai/api/db/session.py",
+      "mode": "100644",
+      "git_blob_sha": "a428a2d4087a1b731d5bc29ccf676da877dd4e66"
+    },
+    {
+      "path": "semgrepai/api/main.py",
+      "mode": "100644",
+      "git_blob_sha": "5ef26641618fe87bc3a46f4708334080e0b98a23"
+    },
+    {
+      "path": "semgrepai/api/models/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "0d705e64c7cc23c7ad8bc262ac4c3930fff76298"
+    },
+    {
+      "path": "semgrepai/api/models/finding.py",
+      "mode": "100644",
+      "git_blob_sha": "ab71c6d3a1b0869803934f3c15690d416b237977"
+    },
+    {
+      "path": "semgrepai/api/models/scan.py",
+      "mode": "100644",
+      "git_blob_sha": "998194d47969a2a3d72236973fc283ef13d8f3d8"
+    },
+    {
+      "path": "semgrepai/api/routes/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "f6a7958df52cf256f429302efb3275349c4322c5"
+    },
+    {
+      "path": "semgrepai/api/routes/findings.py",
+      "mode": "100644",
+      "git_blob_sha": "424953bdb17dbd6f1a09ced8114d2f50ad5e2e93"
+    },
+    {
+      "path": "semgrepai/api/routes/scans.py",
+      "mode": "100644",
+      "git_blob_sha": "a0318ad4779188231af02ee1eac9391f04072378"
+    },
+    {
+      "path": "semgrepai/api/routes/stats.py",
+      "mode": "100644",
+      "git_blob_sha": "434bda38a4c180f9ae3ee162d90cdc97bb4ac3be"
+    },
+    {
+      "path": "semgrepai/api/routes/websocket.py",
+      "mode": "100644",
+      "git_blob_sha": "58d63f5d80918f8497df8a150105a2c259fb5637"
+    },
+    {
+      "path": "semgrepai/api/schemas/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "9f0961b1832e61591f2ad4f1060265a55822a785"
+    },
+    {
+      "path": "semgrepai/api/schemas/common.py",
+      "mode": "100644",
+      "git_blob_sha": "fbe9ff4c9a4b2ae5fb08c3493b8111e327863ea5"
+    },
+    {
+      "path": "semgrepai/api/schemas/finding.py",
+      "mode": "100644",
+      "git_blob_sha": "24a0acda30def17d3061c3b297442eb6291fe71e"
+    },
+    {
+      "path": "semgrepai/api/schemas/scan.py",
+      "mode": "100644",
+      "git_blob_sha": "0c835940b3b8d0833d973b73dac8e16d297f0e65"
+    },
+    {
+      "path": "semgrepai/api/services/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "da304588b28cf17f5c3bb72bb4030b6169b6fc81"
+    },
+    {
+      "path": "semgrepai/api/services/scan_service.py",
+      "mode": "100644",
+      "git_blob_sha": "df39ac6005c41d3998a8fffa2a57a79e0b608372"
+    },
+    {
+      "path": "semgrepai/async_utils/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "eb3108b4f5158a48603f51fd442973980305b708"
+    },
+    {
+      "path": "semgrepai/async_utils/progress.py",
+      "mode": "100644",
+      "git_blob_sha": "8980499921dc7805a73a028f38d2aed12a334abb"
+    },
+    {
+      "path": "semgrepai/async_utils/rate_limiter.py",
+      "mode": "100644",
+      "git_blob_sha": "cdd6332d39e18d1f215dbe228f10fb778b9143a8"
+    },
+    {
+      "path": "semgrepai/cache.py",
+      "mode": "100644",
+      "git_blob_sha": "783620a80c631c0ce7c39a8a3fd713a2ff3f2a7c"
+    },
+    {
+      "path": "semgrepai/cli.py",
+      "mode": "100644",
+      "git_blob_sha": "b0f3ab7daacedcf85211393a635b52cf462fafe2"
+    },
+    {
+      "path": "semgrepai/config.py",
+      "mode": "100644",
+      "git_blob_sha": "b3433b07d1e41ee8bab21b233c80fe35d5dd485d"
+    },
+    {
+      "path": "semgrepai/llm/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "3c5e7ccc2d03ffa567942abc2fc7d20bb9fcb29b"
+    },
+    {
+      "path": "semgrepai/llm/providers.py",
+      "mode": "100644",
+      "git_blob_sha": "e215a4b5e6312289fde181c78ca993ec39d644d4"
+    },
+    {
+      "path": "semgrepai/logging.py",
+      "mode": "100644",
+      "git_blob_sha": "fb71f7046d154e7a2e84dfb481e949697bbf576d"
+    },
+    {
+      "path": "semgrepai/metrics.py",
+      "mode": "100644",
+      "git_blob_sha": "b7d303a6e0f1604184bd36549a955686abac6169"
+    },
+    {
+      "path": "semgrepai/parallel.py",
+      "mode": "100644",
+      "git_blob_sha": "55b88d2aa58bce6425ce84517fa5d452329a49dc"
+    },
+    {
+      "path": "semgrepai/rag.py",
+      "mode": "100644",
+      "git_blob_sha": "30da4768e0230fd44073c54d245cb8faad6afef8"
+    },
+    {
+      "path": "semgrepai/reporter.py",
+      "mode": "100644",
+      "git_blob_sha": "a84c5303df80e6c455187373ee778bd179e5a49c"
+    },
+    {
+      "path": "semgrepai/rules/common_vulnerabilities.yml",
+      "mode": "100644",
+      "git_blob_sha": "bcdfe1526685e38fb8f5ee5c357d0c5d8c9f0943"
+    },
+    {
+      "path": "semgrepai/scanner.py",
+      "mode": "100644",
+      "git_blob_sha": "e1945da5f6e96f14b0028933ef994b6cbb4f1241"
+    },
+    {
+      "path": "semgrepai/templates/report.html",
+      "mode": "100644",
+      "git_blob_sha": "348061fb3483a52bcbb6c5e3f2665afd3df97c31"
+    },
+    {
+      "path": "semgrepai/validator.py",
+      "mode": "100644",
+      "git_blob_sha": "124ceaa070ff0faf79d13088ca902fcc59b30f7b"
+    },
+    {
+      "path": "semgrepai/validator/prompts.py",
+      "mode": "100644",
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "semgrepai/web/frontend/index.html",
+      "mode": "100644",
+      "git_blob_sha": "b1a0142fd7396a62c02266bd450c998be2397c36"
+    },
+    {
+      "path": "semgrepai/web/frontend/package-lock.json",
+      "mode": "100644",
+      "git_blob_sha": "f1b1426efde1735ea16c856661023980008609f4"
+    },
+    {
+      "path": "semgrepai/web/frontend/package.json",
+      "mode": "100644",
+      "git_blob_sha": "e7447f12b42f286bfffd727dd4ea2a6ae840e947"
+    },
+    {
+      "path": "semgrepai/web/frontend/postcss.config.js",
+      "mode": "100644",
+      "git_blob_sha": "2e7af2b7f1a6f391da1631d93968a9d487ba977d"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/App.tsx",
+      "mode": "100644",
+      "git_blob_sha": "28fcdd94c83a35a1afb75d8fa72ce715909196f6"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/api/client.ts",
+      "mode": "100644",
+      "git_blob_sha": "ed89706c3fa1aa058bf5bea825749cd6535a5da9"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/AIValidationSection.tsx",
+      "mode": "100644",
+      "git_blob_sha": "7bb13eadb08fb40b67cae20e8c90403b1c1a1629"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/CodeSection.tsx",
+      "mode": "100644",
+      "git_blob_sha": "9790b6277a9f504a04c7bb103eb43e7dabb47d15"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/FieldGroup.tsx",
+      "mode": "100644",
+      "git_blob_sha": "98acdd92e7b7f9417d2e5776095c45020788c240"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/FindingDetailPanel.tsx",
+      "mode": "100644",
+      "git_blob_sha": "5b9c05a17b5ff9753462a0309d2dd0e9727b67d4"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/ImpactGrid.tsx",
+      "mode": "100644",
+      "git_blob_sha": "ad56d9b4f0f738bff788f897b35495226f8f6f6e"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/ListSection.tsx",
+      "mode": "100644",
+      "git_blob_sha": "a72c83bb6bc85e136b72611d4bfc1622286a75e7"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/MetadataGrid.tsx",
+      "mode": "100644",
+      "git_blob_sha": "4c268d3dc2e1ed88423da1e2a367a1bb106c7d57"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Finding/index.ts",
+      "mode": "100644",
+      "git_blob_sha": "d9437e277efc799167cfef16d7d352fc2ecf9bbe"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/components/Layout/MainLayout.tsx",
+      "mode": "100644",
+      "git_blob_sha": "9129cf2c4df0ab0d65536ac99da49be994454327"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/hooks/useFindings.ts",
+      "mode": "100644",
+      "git_blob_sha": "911c44acfc4b918d2d6c5cb7d45aa167b79669e5"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/hooks/useScans.ts",
+      "mode": "100644",
+      "git_blob_sha": "3e69f2d75a42385c15781a352b09c5c2a37aeabd"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/hooks/useStats.ts",
+      "mode": "100644",
+      "git_blob_sha": "436a99aeab36947ae5dd44fe783f0e85d9dcc161"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/hooks/useWebSocket.ts",
+      "mode": "100644",
+      "git_blob_sha": "1ad4207985e40a5a2a2a104edb754743c9f40535"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/index.css",
+      "mode": "100644",
+      "git_blob_sha": "009cd1f2f5129d700f5073a008f9338992c684f9"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/main.tsx",
+      "mode": "100644",
+      "git_blob_sha": "abdb98281ff1af9d899edcdad7fdee7ac61733bf"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/pages/Dashboard.tsx",
+      "mode": "100644",
+      "git_blob_sha": "4a4b2ed6d60ce4ff4046c0dca009d474607263f2"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/pages/ScanDetail.tsx",
+      "mode": "100644",
+      "git_blob_sha": "d995eec0a6d916431d654877fcc24e1661507d29"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/pages/Scans.tsx",
+      "mode": "100644",
+      "git_blob_sha": "861a68adf97822931169fc0a5a47d030df5389da"
+    },
+    {
+      "path": "semgrepai/web/frontend/src/types/index.ts",
+      "mode": "100644",
+      "git_blob_sha": "bb712acc59d3693f20d9dae43837dfa3afdbd8ac"
+    },
+    {
+      "path": "semgrepai/web/frontend/tailwind.config.js",
+      "mode": "100644",
+      "git_blob_sha": "7b2d56a1da8b764d2def3d75d5693707101de0ae"
+    },
+    {
+      "path": "semgrepai/web/frontend/tsconfig.json",
+      "mode": "100644",
+      "git_blob_sha": "ffbfd1f1463b8cb2ba3e8f514654d847fcd2f8eb"
+    },
+    {
+      "path": "semgrepai/web/frontend/tsconfig.node.json",
+      "mode": "100644",
+      "git_blob_sha": "42872c59f5b01c9155864572bc2fbd5833a7406c"
+    },
+    {
+      "path": "semgrepai/web/frontend/vite.config.ts",
+      "mode": "100644",
+      "git_blob_sha": "9334e27f1a0a4e8c9a2027c34f0ba8028a7c0fc9"
+    },
+    {
+      "path": "tests/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "99088409a4c738fa33938cda01c895d314311ff1"
+    },
+    {
+      "path": "tests/conftest.py",
+      "mode": "100644",
+      "git_blob_sha": "c55a2f648b6890c1a8f6a7dda6d3283056b434bc"
+    },
+    {
+      "path": "tests/e2e/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "e00441386529baec340482f9a5cd9f466a5e6e40"
+    },
+    {
+      "path": "tests/e2e/test_cli_scan_workflow.py",
+      "mode": "100644",
+      "git_blob_sha": "c0889bdd53fabb00375535ad621e3f8b8548c8e8"
+    },
+    {
+      "path": "tests/e2e/test_web_api.py",
+      "mode": "100644",
+      "git_blob_sha": "a8b8664a0903d438bac5a366c472da4d718d3bfe"
+    },
+    {
+      "path": "tests/fixtures/sample_code/python/safe_code.py",
+      "mode": "100644",
+      "git_blob_sha": "3ed7c4ec45fe7adfd9babde7bfac020422a0618b"
+    },
+    {
+      "path": "tests/fixtures/sample_code/python/sql_injection.py",
+      "mode": "100644",
+      "git_blob_sha": "71230554d43483541300afba0267080b7c3a887e"
+    },
+    {
+      "path": "tests/fixtures/sample_code/python/xss_vulnerable.py",
+      "mode": "100644",
+      "git_blob_sha": "68b45a1c9b91d70d17bf97083e656ff76e56fb27"
+    },
+    {
+      "path": "tests/helpers/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "985a8f003c3bacd57b403a24a3470d290f0f4d60"
+    },
+    {
+      "path": "tests/integration/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "2f9901f286f248605ba825da42caddcabec928f8"
+    },
+    {
+      "path": "tests/integration/test_full_scan.py",
+      "mode": "100644",
+      "git_blob_sha": "003a41a855d59b216330b954ec710a18cb4e2186"
+    },
+    {
+      "path": "tests/integration/test_validator_real_llm.py",
+      "mode": "100644",
+      "git_blob_sha": "14fb97a62084d089c1c52eb967d5d0c12dda9406"
+    },
+    {
+      "path": "tests/unit/__init__.py",
+      "mode": "100644",
+      "git_blob_sha": "48b165df6247c443651f737a938d6d2a7d594df4"
+    },
+    {
+      "path": "tests/unit/test_cache.py",
+      "mode": "100644",
+      "git_blob_sha": "cc6ce4d48515a1643a373f6440fca3a1a18df4c9"
+    },
+    {
+      "path": "tests/unit/test_config.py",
+      "mode": "100644",
+      "git_blob_sha": "60fe35b525df2ab8c2d721dca752d5c9ece6bd03"
+    },
+    {
+      "path": "uv.lock",
+      "mode": "100644",
+      "git_blob_sha": "cc0a15256812590cc19f186e0d1e9e98e80b0d09"
+    }
+  ]
+}

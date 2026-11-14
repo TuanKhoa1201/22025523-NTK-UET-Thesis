@@ -1,0 +1,6 @@
+# Preserve pinned blob bytes and deterministic patch on Windows checkouts.
+upstream/** -text
+opengrep.patch -text
+fork/semgrepai/*.py text eol=lf
+make_patch.py text eol=lf
+verify_patch.py text eol=lf
