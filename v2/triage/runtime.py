@@ -16,6 +16,8 @@ def execution(origin="unverified"):
             "http_capture_completeness": "not_configured",
             "http_capture_complete": False,
             "http_capture_error": None,
+            "sidecar_artifact_stem": None,
+            "sidecar_artifacts": None,
             "response_complete": False, "model_identity_matched": False,
             "reported_eval_count": None, "reported_eval_duration_ns": None,
             "answer_validated": False, "model_runtime_verified": False}

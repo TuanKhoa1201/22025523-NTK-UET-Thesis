@@ -2,7 +2,9 @@
 from contextlib import contextmanager
 from http.client import HTTPException, IncompleteRead
 import json
+import os
 import re
+import stat
 import time
 import uuid
 from pathlib import Path
@@ -962,17 +964,144 @@ def request_payload(record, model):
             "options": {"temperature": 0, "num_ctx": 8192, "num_predict": 1200}}
 
 
-def _write_exclusive_bytes(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as handle:
+_REPARSE_TAG_SURROGATE_BIT = 0x20000000
+_REPARSE_ATTR = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+_REPARSE_MOUNT_TAG = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003)
+_REPARSE_SYMLINK_TAG = getattr(stat, "IO_REPARSE_TAG_SYMLINK", 0xA000000C)
+
+
+def is_reparse_link(path: Path) -> bool:
+    """Return True if path itself is a POSIX symlink or Windows symlink/junction reparse point."""
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise CaptureWriteError(f"cannot inspect capture path {path}: {exc}") from exc
+    if stat.S_ISLNK(st.st_mode):
+        return True
+    isjunction_fn = getattr(os.path, "isjunction", None)
+    if isjunction_fn is not None:
+        try:
+            if isjunction_fn(str(path)):
+                return True
+        except OSError as exc:
+            raise CaptureWriteError(f"cannot inspect junction status for {path}: {exc}") from exc
+    if os.name == "nt":
+        file_attrs = getattr(st, "st_file_attributes", 0)
+        if file_attrs & _REPARSE_ATTR:
+            reparse_tag = getattr(st, "st_reparse_tag", 0)
+            if reparse_tag in (_REPARSE_MOUNT_TAG, _REPARSE_SYMLINK_TAG) or bool(reparse_tag & _REPARSE_TAG_SURROGATE_BIT):
+                return True
+    return False
+
+
+def _validate_single_filename(filename: str) -> str:
+    if (
+        not isinstance(filename, str)
+        or not filename
+        or filename in (".", "..")
+        or "/" in filename
+        or "\\" in filename
+        or ":" in filename
+        or Path(filename).name != filename
+    ):
+        raise CaptureWriteError(f"invalid capture artifact filename: {filename!r}")
+    return filename
+
+
+def _prepare_safe_capture_dir(io_dir: Path, *, boundary_root: Path | None = None, create: bool = True) -> Path:
+    """Validate and optionally create a capture directory without traversing symlinks/junctions."""
+    raw_io = Path(io_dir)
+    if ".." in raw_io.parts:
+        raise CaptureWriteError(f"capture directory path must not contain '..': {io_dir}")
+    abs_io = Path(os.path.abspath(raw_io))
+
+    if boundary_root is not None:
+        raw_boundary = Path(boundary_root)
+        if ".." in raw_boundary.parts:
+            raise CaptureWriteError(f"capture boundary path must not contain '..': {boundary_root}")
+        abs_boundary = Path(os.path.abspath(raw_boundary))
+    elif abs_io.name == "_tags":
+        abs_boundary = abs_io.parent.parent
+    else:
+        abs_boundary = abs_io.parent
+
+    if abs_io != abs_boundary and not abs_io.is_relative_to(abs_boundary):
+        raise CaptureWriteError(f"capture directory {abs_io} lies outside boundary {abs_boundary}")
+
+    if abs_boundary.parent != abs_boundary and abs_boundary.parent != Path(abs_boundary.anchor):
+        if os.path.lexists(abs_boundary.parent) and is_reparse_link(abs_boundary.parent):
+            raise CaptureWriteError(f"capture parent directory is a symlink or junction: {abs_boundary.parent}")
+
+    # Check upward from abs_io for the deepest existing ancestor before creating missing dirs step-by-step.
+    to_create: list[Path] = []
+    cur = abs_io
+    while not os.path.lexists(cur):
+        to_create.append(cur)
+        parent = cur.parent
+        if parent == cur:
+            break
+        cur = parent
+    if os.path.lexists(cur):
+        if is_reparse_link(cur):
+            raise CaptureWriteError(f"capture ancestor is a symlink or junction: {cur}")
+        if cur.parent != cur and os.path.lexists(cur.parent) and is_reparse_link(cur.parent):
+            raise CaptureWriteError(f"capture ancestor parent is a symlink or junction: {cur.parent}")
+        cur_st = os.lstat(cur)
+        if not stat.S_ISDIR(cur_st.st_mode):
+            raise CaptureWriteError(f"capture ancestor is not a directory: {cur}")
+
+    if to_create:
+        if not create:
+            raise CaptureWriteError(f"capture directory does not exist: {abs_io}")
+        for step in reversed(to_create):
+            try:
+                step.mkdir(exist_ok=False)
+            except FileExistsError:
+                pass
+            if not os.path.lexists(step) or is_reparse_link(step):
+                raise CaptureWriteError(f"created capture directory became a symlink or junction: {step}")
+            if not stat.S_ISDIR(os.lstat(step).st_mode):
+                raise CaptureWriteError(f"capture path is not a directory: {step}")
+
+    rel = abs_io.relative_to(abs_boundary)
+    check_nodes = [abs_boundary]
+    walk = abs_boundary
+    for part in rel.parts:
+        walk = walk / part
+        check_nodes.append(walk)
+    for node in check_nodes:
+        if not os.path.lexists(node):
+            raise CaptureWriteError(f"missing capture path component: {node}")
+        if is_reparse_link(node):
+            raise CaptureWriteError(f"capture path component is a symlink or junction: {node}")
+        if not stat.S_ISDIR(os.lstat(node).st_mode):
+            raise CaptureWriteError(f"capture path component is not a directory: {node}")
+
+    resolved_boundary = abs_boundary.resolve(strict=True)
+    resolved_io = abs_io.resolve(strict=True)
+    expected_resolved = resolved_boundary if abs_io == abs_boundary else (resolved_boundary / rel)
+    if resolved_io != expected_resolved or not resolved_io.is_relative_to(resolved_boundary):
+        raise CaptureWriteError(f"capture directory resolves outside allowed boundary: {resolved_io}")
+    return resolved_io
+
+
+def _write_exclusive_bytes_in_dir(validated_dir: Path, filename: str, data: bytes) -> Path:
+    safe_name = _validate_single_filename(filename)
+    target = validated_dir / safe_name
+    if os.path.lexists(target):
+        raise CaptureWriteError(f"refusing to overwrite or follow existing capture artifact: {target}")
+    with target.open("xb") as handle:
         handle.write(data)
+        handle.flush()
+    if is_reparse_link(target) or target.resolve(strict=True).parent != validated_dir:
+        raise CaptureWriteError(f"capture artifact resolved outside validated directory: {target}")
+    return target
 
 
-def _write_text_artifact(path: Path, content: str, *, exclusive: bool) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    mode = "x" if exclusive else "w"
-    with path.open(mode, encoding="utf-8") as handle:
-        handle.write(content)
+def _write_text_artifact_in_dir(validated_dir: Path, filename: str, content: str) -> Path:
+    return _write_exclusive_bytes_in_dir(validated_dir, filename, content.encode("utf-8"))
 
 
 def _declared_content_length(headers_items) -> tuple[int | None, bool]:
@@ -1059,7 +1188,7 @@ def _classify_failure(exc, http_status=None, error_body_text=""):
 
 class OllamaClient:
     def __init__(self, endpoint="http://127.0.0.1:11434", model="qwen3.5:9b-q4_K_M", timeout=60,
-                 runtime_origin="unverified", io_log_dir=None):
+                 runtime_origin="unverified", io_log_dir=None, *, capture_root=None):
         parsed = urlsplit(endpoint)
         if (parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "::1", "localhost")
                 or parsed.username or parsed.password or parsed.path not in ("", "/")
@@ -1077,6 +1206,7 @@ class OllamaClient:
             raise EvidenceError("runtime origin must be unverified or mock; HTTP alone cannot attest a model")
         self.runtime_origin = runtime_origin
         self.io_log_dir = Path(io_log_dir) if io_log_dir is not None else None
+        self.capture_root = Path(capture_root) if capture_root is not None else None
         self._last_error_body_text = ""
         self._last_raw_model_status = None
         self._active_capture = None
@@ -1101,19 +1231,42 @@ class OllamaClient:
         data = None if payload is None else json.dumps(payload).encode("utf-8")
         req_sha = None
         req_rel = None
+        validated_io_dir: Path | None = None
+        if cap is not None:
+            try:
+                validated_io_dir = _prepare_safe_capture_dir(
+                    cap["io_dir"],
+                    boundary_root=cap.get("boundary_root"),
+                    create=True,
+                )
+            except OSError as exc:
+                self.runtime["http_capture_completeness"] = "capture_write_failed"
+                self.runtime["http_capture_complete"] = False
+                self.runtime["http_capture_error"] = str(exc)
+                raise CaptureWriteError(f"unsafe capture directory {cap['io_dir']}: {exc}") from exc
+            except CaptureWriteError as exc:
+                self.runtime["http_capture_completeness"] = "capture_write_failed"
+                self.runtime["http_capture_complete"] = False
+                self.runtime["http_capture_error"] = str(exc)
+                raise
         if data is not None:
             req_sha = digest(data)
             self.runtime["request_payload_sha256"] = req_sha
             self.runtime["request_payload_bytes"] = len(data)
-            if cap is not None:
+            if cap is not None and validated_io_dir is not None:
                 req_name = f"{cap['artifact_prefix']}.request.body.bin"
                 try:
-                    _write_exclusive_bytes(cap["io_dir"] / req_name, data)
+                    _write_exclusive_bytes_in_dir(validated_io_dir, req_name, data)
                 except OSError as exc:
                     self.runtime["http_capture_completeness"] = "capture_write_failed"
                     self.runtime["http_capture_complete"] = False
                     self.runtime["http_capture_error"] = str(exc)
                     raise CaptureWriteError(f"failed to persist raw HTTP request body: {exc}") from exc
+                except CaptureWriteError as exc:
+                    self.runtime["http_capture_completeness"] = "capture_write_failed"
+                    self.runtime["http_capture_complete"] = False
+                    self.runtime["http_capture_error"] = str(exc)
+                    raise
                 req_rel = f"{cap['rel_dir_prefix']}/{req_name}"
                 self.runtime["request_raw_artifact"] = req_rel
 
@@ -1246,19 +1399,19 @@ class OllamaClient:
         call_elapsed = time.monotonic() - started_mono
 
         # 1. Persist exact raw HTTP response body bytes BEFORE UTF-8 decoding or JSON parsing.
-        if cap is not None:
+        if cap is not None and validated_io_dir is not None:
             try:
                 if raw_complete_bytes is not None:
                     resp_name = f"{cap['artifact_prefix']}.response.body.bin"
-                    _write_exclusive_bytes(cap["io_dir"] / resp_name, raw_complete_bytes)
+                    _write_exclusive_bytes_in_dir(validated_io_dir, resp_name, raw_complete_bytes)
                     resp_rel = f"{cap['rel_dir_prefix']}/{resp_name}"
                     self.runtime["response_raw_artifact"] = resp_rel
                 elif raw_incomplete_bytes is not None and len(raw_incomplete_bytes) > 0:
                     inc_name = f"{cap['artifact_prefix']}.response.incomplete.bin"
-                    _write_exclusive_bytes(cap["io_dir"] / inc_name, raw_incomplete_bytes)
+                    _write_exclusive_bytes_in_dir(validated_io_dir, inc_name, raw_incomplete_bytes)
                     inc_rel = f"{cap['rel_dir_prefix']}/{inc_name}"
                     self.runtime["response_incomplete_raw_artifact"] = inc_rel
-            except OSError as exc:
+            except (OSError, CaptureWriteError) as exc:
                 capture_write_exc = exc
 
         # 2. Parse UTF-8 + strict JSON only when transport succeeded with a complete bounded body.
@@ -1273,7 +1426,7 @@ class OllamaClient:
                 parse_exc = exc
 
         # 3. Persist per-call HTTP capture receipt linking raw request/response bytes, status, headers, and finding.
-        if cap is not None and capture_write_exc is None:
+        if cap is not None and validated_io_dir is not None and capture_write_exc is None:
             receipt_name = f"{cap['artifact_prefix']}.http-capture.json"
             receipt_doc = {
                 "schema": "ntk-ollama-http-capture-1",
@@ -1337,8 +1490,9 @@ class OllamaClient:
                 ),
             }
             try:
-                _write_exclusive_bytes(
-                    cap["io_dir"] / receipt_name,
+                _write_exclusive_bytes_in_dir(
+                    validated_io_dir,
+                    receipt_name,
                     (json.dumps(receipt_doc, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
                 )
                 self.runtime["http_capture_receipt"] = f"{cap['rel_dir_prefix']}/{receipt_name}"
@@ -1346,7 +1500,7 @@ class OllamaClient:
                 self.runtime["http_capture_complete"] = bool(
                     complete_flag and (data is None or req_rel is not None) and resp_rel is not None
                 )
-            except OSError as exc:
+            except (OSError, CaptureWriteError) as exc:
                 capture_write_exc = exc
         elif cap is None:
             self.runtime["http_capture_completeness"] = "not_configured"
@@ -1370,29 +1524,42 @@ class OllamaClient:
     def verify_model_installed(self):
         """Query local Ollama /api/tags without failing closed on probe errors; return actual tag inventory."""
         saved_runtime = self.runtime
+        saved_error_body = self._last_error_body_text
+        saved_raw_status = self._last_raw_model_status
         self.runtime = execution(self.runtime_origin)
+        self._last_error_body_text = ""
+        self._last_raw_model_status = None
         tags_scope = None
-        if self.io_log_dir is not None:
-            tags_dir = self.io_log_dir / "_tags"
-            self._tags_call_seq += 1
-            seq = self._tags_call_seq
-            while (tags_dir / f"tags-{seq:04d}.http-capture.json").exists() or (tags_dir / f"tags-{seq:04d}.response.body.bin").exists():
-                seq += 1
-            self._tags_call_seq = seq
-            prefix = f"tags-{seq:04d}"
-            tags_scope = {
-                "io_dir": tags_dir,
-                "artifact_prefix": prefix,
-                "rel_dir_prefix": "llm_io/_tags",
-                "call_id": f"tags_probe:{prefix}:{uuid.uuid4().hex[:12]}",
-                "call_kind": "tags_probe",
-                "finding_id": None,
-                "alert_id": None,
-                "scan_sha256": None,
-                "finding_index": None,
-                "rule_id": None,
-            }
         try:
+            if self.io_log_dir is not None:
+                tags_boundary = self.capture_root
+                tags_dir = _prepare_safe_capture_dir(
+                    self.io_log_dir / "_tags",
+                    boundary_root=tags_boundary,
+                    create=True,
+                )
+                self._tags_call_seq += 1
+                seq = self._tags_call_seq
+                while (
+                    os.path.lexists(tags_dir / f"tags-{seq:04d}.http-capture.json")
+                    or os.path.lexists(tags_dir / f"tags-{seq:04d}.response.body.bin")
+                ):
+                    seq += 1
+                self._tags_call_seq = seq
+                prefix = f"tags-{seq:04d}"
+                tags_scope = {
+                    "io_dir": tags_dir,
+                    "boundary_root": tags_boundary,
+                    "artifact_prefix": prefix,
+                    "rel_dir_prefix": "llm_io/_tags",
+                    "call_id": f"tags_probe:{prefix}:{uuid.uuid4().hex[:12]}",
+                    "call_kind": "tags_probe",
+                    "finding_id": None,
+                    "alert_id": None,
+                    "scan_sha256": None,
+                    "finding_index": None,
+                    "rule_id": None,
+                }
             if tags_scope is not None:
                 with self._capture_scope(tags_scope):
                     doc = self.tags()
@@ -1425,7 +1592,7 @@ class OllamaClient:
                         "http_status": self.runtime.get("http_status"),
                         "complete": self.runtime.get("http_capture_complete"),
                     }
-                    if tags_scope is not None
+                    if self.io_log_dir is not None
                     else None
                 ),
                 "error": None,
@@ -1446,26 +1613,81 @@ class OllamaClient:
                         "response_body_bytes": self.runtime.get("response_body_bytes"),
                         "http_status": self.runtime.get("http_status"),
                         "complete": self.runtime.get("http_capture_complete"),
-                        "capture_error": self.runtime.get("http_capture_error"),
+                        "capture_error": self.runtime.get("http_capture_error") or str(exc),
                     }
-                    if tags_scope is not None
+                    if self.io_log_dir is not None
                     else None
                 ),
                 "error": str(exc),
             }
         finally:
             self.runtime = saved_runtime
+            self._last_error_body_text = saved_error_body
+            self._last_raw_model_status = saved_raw_status
 
-    def _write_io_artifacts(self, io_dir, finding_id, *, contract, messages, prompt_sha, req_payload, response, error_text, elapsed, exclusive=False):
+    def _write_io_artifacts(
+        self,
+        io_dir,
+        finding_id,
+        *,
+        contract,
+        messages,
+        prompt_sha,
+        req_payload,
+        response,
+        error_text,
+        elapsed,
+        exclusive=False,
+        boundary_root=None,
+    ):
         if io_dir is None:
             return
-        io_dir = Path(io_dir)
-        safe_id = re.sub(r"[^0-9a-fA-F_-]", "_", str(finding_id or "unknown"))[:80]
+        safe_id = _validate_single_filename(re.sub(r"[^0-9a-fA-F_-]", "_", str(finding_id or "unknown"))[:80])
         try:
-            io_dir.mkdir(parents=True, exist_ok=True)
+            validated_io_dir = _prepare_safe_capture_dir(io_dir, boundary_root=boundary_root, create=True)
+            stem = safe_id
+            if not exclusive:
+                canonical_suffixes = (
+                    "prompt.json",
+                    "request.json",
+                    "response.json",
+                    "request.body.bin",
+                    "response.body.bin",
+                    "response.incomplete.bin",
+                    "http-capture.json",
+                )
+                canonical_exists = any(
+                    os.path.lexists(validated_io_dir / f"{safe_id}.{sfx}")
+                    for sfx in canonical_suffixes
+                )
+                if canonical_exists:
+                    chosen = None
+                    for idx in range(2, 10000):
+                        cand_stem = f"{safe_id}.attempt-{idx:04d}"
+                        if not any(
+                            os.path.lexists(validated_io_dir / f"{cand_stem}.{sfx}")
+                            for sfx in ("prompt.json", "request.json", "response.json")
+                        ):
+                            chosen = cand_stem
+                            break
+                    if chosen is None:
+                        raise CaptureWriteError(f"exhausted non-overwriting attempt sidecar slots for {safe_id}")
+                    stem = chosen
+
+            sidecar_files: list[str] = []
             if messages is not None:
-                _write_text_artifact(
-                    io_dir / f"{safe_id}.prompt.json",
+                sidecar_files.append(f"{stem}.prompt.json")
+            if req_payload is not None:
+                sidecar_files.append(f"{stem}.request.json")
+            sidecar_files.append(f"{stem}.response.json")
+
+            self.runtime["sidecar_artifact_stem"] = stem
+            self.runtime["sidecar_artifacts"] = list(sidecar_files)
+
+            if messages is not None:
+                _write_text_artifact_in_dir(
+                    validated_io_dir,
+                    f"{stem}.prompt.json",
                     json.dumps(
                         {
                             "finding_id": finding_id,
@@ -1477,16 +1699,28 @@ class OllamaClient:
                         indent=2,
                         ensure_ascii=False,
                     ),
-                    exclusive=exclusive,
                 )
             if req_payload is not None:
-                _write_text_artifact(
-                    io_dir / f"{safe_id}.request.json",
+                _write_text_artifact_in_dir(
+                    validated_io_dir,
+                    f"{stem}.request.json",
                     json.dumps(req_payload, indent=2, ensure_ascii=False),
-                    exclusive=exclusive,
                 )
-            _write_text_artifact(
-                io_dir / f"{safe_id}.response.json",
+            note = (
+                (
+                    "Parsed JSON envelope (or null on transport/parse failure). "
+                    "Exact same-call raw HTTP response body bytes are stored separately in "
+                    f"{safe_id}.response.body.bin when received within size bounds."
+                )
+                if stem == safe_id
+                else (
+                    "Non-request or repeated attempt compatibility sidecar; prior artifacts for "
+                    f"{safe_id} were preserved without overwriting."
+                )
+            )
+            _write_text_artifact_in_dir(
+                validated_io_dir,
+                f"{stem}.response.json",
                 json.dumps(
                     {
                         "finding_id": finding_id,
@@ -1496,24 +1730,26 @@ class OllamaClient:
                         "latency_ms": round(elapsed * 1000.0, 3),
                         "runtime": dict(self.runtime),
                         "raw_response": response,
-                        "raw_response_note": (
-                            "Parsed JSON envelope (or null on transport/parse failure). "
-                            "Exact same-call raw HTTP response body bytes are stored separately in "
-                            f"{safe_id}.response.body.bin when received within size bounds."
-                        ),
+                        "raw_response_note": note,
                         "error": error_text,
                         "http_error_body": self._last_error_body_text or None,
                     },
                     indent=2,
                     ensure_ascii=False,
                 ),
-                exclusive=exclusive,
             )
         except OSError as exc:
             raise CaptureWriteError(f"failed to persist llm_io JSON artifacts: {exc}") from exc
 
     def analyze(self, record, io_log_dir=None):
         active_io_dir = Path(io_log_dir) if io_log_dir is not None else self.io_log_dir
+        active_boundary = (
+            self.capture_root
+            if (io_log_dir is None or active_io_dir == self.io_log_dir)
+            else None
+        )
+        self._last_error_body_text = ""
+        self._last_raw_model_status = None
         self.runtime = execution(self.runtime_origin)
         rec_id = record["id"] if isinstance(record, dict) and "id" in record else "unknown"
         self.runtime["finding_id"] = rec_id
@@ -1546,6 +1782,7 @@ class OllamaClient:
                 self.runtime["http_capture_completeness"] = "request_method_mocked"
                 chat_scope = {
                     "io_dir": active_io_dir,
+                    "boundary_root": active_boundary,
                     "artifact_prefix": safe_id,
                     "rel_dir_prefix": "llm_io",
                     "call_id": f"chat_analyze:{safe_id}:{uuid.uuid4().hex[:12]}",
@@ -1595,6 +1832,7 @@ class OllamaClient:
                 error_text=None,
                 elapsed=elapsed,
                 exclusive=bool(self.runtime.get("request_attempted")),
+                boundary_root=active_boundary,
             )
             return {
                 **answer,
@@ -1605,7 +1843,11 @@ class OllamaClient:
         except (EvidenceError, HTTPException, OSError, URLError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
             elapsed = time.monotonic() - started
             self.runtime["answer_validated"] = False
-            if raw_model_status is None and self._last_raw_model_status is not None:
+            if (
+                raw_model_status is None
+                and self.runtime.get("http_response_received") is True
+                and self._last_raw_model_status is not None
+            ):
                 raw_model_status = self._last_raw_model_status
             if isinstance(exc, CaptureWriteError):
                 self.runtime["http_capture_completeness"] = "capture_write_failed"
@@ -1628,6 +1870,7 @@ class OllamaClient:
                         error_text=error_msg,
                         elapsed=elapsed,
                         exclusive=bool(self.runtime.get("request_attempted")),
+                        boundary_root=active_boundary,
                     )
                 except CaptureWriteError as io_exc:
                     self.runtime["http_capture_completeness"] = "capture_write_failed"

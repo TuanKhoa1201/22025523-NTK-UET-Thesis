@@ -260,7 +260,9 @@ def run_demo_suite(
             ],
             expected_exit=0,
         )["json"]
-        d2_after_false_db_sha = _db_sha256(d2_db_path)
+        d2_after_false_db_sha = _snapshot_db_readonly_copy(
+            d2_db_path, demo2_dir / "triage" / "review.after_confirm_false.sqlite"
+        )
         d2_queue_after_false = _step("demo2_queue_after_false", ["queue", "--db", d2_db], expected_exit=0)["json"]
         d2_queue_all = _step("demo2_queue_all", ["queue", "--db", d2_db, "--all"], expected_exit=0)["json"]
         d2_reopen = _step(
@@ -390,7 +392,11 @@ def run_demo_suite(
             ],
             expected_exit=0,
         )
-        d3b_db = str(demo3b_dir / "triage" / "review.sqlite")
+        d3b_db_path = demo3b_dir / "triage" / "review.sqlite"
+        _snapshot_db_readonly_copy(
+            d3b_db_path, demo3b_dir / "triage" / "review.post_ingestion.sqlite"
+        )
+        d3b_db = str(d3b_db_path)
         d3b_queue = _step("demo3b_mock_queue", ["queue", "--db", d3b_db], expected_exit=0)["json"]
     finally:
         mock_server.shutdown()

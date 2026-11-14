@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -408,6 +409,132 @@ class B1B2EndToEndAcceptanceControlsTests(unittest.TestCase):
         )
         self.assertEqual(rep_b["criteria"]["R01"]["status"], "FAIL")
         self.assertEqual(rep_b["overall_status"], "FAIL")
+
+    def test_03_f05_f06_f07_evaluator_fail_closed_counterexamples(self):
+        srv, _ = self._start_mock_qwen_server(mode="valid_all")
+        endpoint = f"http://127.0.0.1:{srv.server_port}"
+        run_root = self.tmp_root / "f05_f07_run"
+        m1_dir, d1_dir, d2_dir, d3a_dir = self._run_primary_set_and_lifecycle(run_root, endpoint)
+
+        aux_dir = self.tmp_root / "f05_f07_aux"
+        run_demo_suite(
+            prepared_source=self.prepared_source,
+            output_dir=aux_dir,
+            executable=self.opengrep,
+            auxiliary_controls_only=True,
+        )
+        d3b_dir = aux_dir / "demo3b_malformed_llm_synthetic_mock"
+        d4_dir = aux_dir / "demo4_stale_source"
+
+        def _eval(override_d1: Path | None = None):
+            return evaluate_acceptance(
+                demo1_dir=override_d1 or d1_dir,
+                demo2_dir=d2_dir,
+                demo3a_dir=d3a_dir,
+                m1_dir=m1_dir,
+                demo4_dir=d4_dir,
+                demo3b_dir=d3b_dir,
+                allow_mock_primary=True,
+            )
+
+        self.assertEqual(_eval()["overall_status"], "PASS")
+
+        def _assert_tampered_file(path: Path, mutator, expected_criterion: str):
+            orig = path.read_bytes()
+            try:
+                mutator(path)
+                rep = _eval()
+                self.assertEqual(rep["overall_status"], "FAIL", f"{path.name}: {rep['criteria']}")
+                self.assertEqual(rep["criteria"][expected_criterion]["status"], "FAIL", rep["criteria"][expected_criterion])
+            finally:
+                path.write_bytes(orig)
+
+        # F05a: Missing triage/input.opengrep.json -> R02 FAIL
+        _assert_tampered_file(d1_dir / "triage" / "input.opengrep.json", lambda p: p.unlink(), "R02")
+
+        # F05b: Consistent scanner child non-zero exit (json.exit.txt=7 + scan-manifest.json updated) -> R02 FAIL
+        exit_file = d1_dir / "capture" / "json.exit.txt"
+        man_file = d1_dir / "capture" / "scan-manifest.json"
+        orig_exit = exit_file.read_bytes()
+        orig_man = man_file.read_bytes()
+        try:
+            exit_file.write_text("7", encoding="utf-8")
+            mdoc = json.loads(orig_man.decode("utf-8"))
+            mdoc["runs"]["json"]["exit_code"] = 7
+            mdoc["artifacts"]["json.exit.txt"] = digest(b"7")
+            man_file.write_text(json.dumps(mdoc, indent=2), encoding="utf-8")
+            rep_exit = _eval()
+            self.assertEqual(rep_exit["overall_status"], "FAIL")
+            self.assertEqual(rep_exit["criteria"]["R02"]["status"], "FAIL")
+        finally:
+            exit_file.write_bytes(orig_exit)
+            man_file.write_bytes(orig_man)
+
+        # F06a: Missing Demo1/triage/review.post_ingestion.sqlite -> R03 FAIL
+        _assert_tampered_file(d1_dir / "triage" / "review.post_ingestion.sqlite", lambda p: p.unlink(), "R03")
+
+        # F06b: Missing Demo2/triage/review.after_confirm_false.sqlite -> R03 FAIL
+        _assert_tampered_file(d2_dir / "triage" / "review.after_confirm_false.sqlite", lambda p: p.unlink(), "R03")
+
+        # F07a: Corrupted SQLite bytes -> clean R03 FAIL (no unhandled DatabaseError crash)
+        _assert_tampered_file(
+            d1_dir / "triage" / "review.sqlite",
+            lambda p: p.write_bytes(b"not a valid sqlite database"),
+            "R03",
+        )
+
+        # F07b: Mutate Demo1 warnings.state without event -> event-replay mismatch -> R03 FAIL
+        def _tamper_warning_state(db_p: Path):
+            with sqlite3.connect(str(db_p)) as conn:
+                conn.execute("UPDATE warnings SET state='CONFIRMED_TRUE' WHERE state='OPEN'")
+                conn.commit()
+
+        _assert_tampered_file(d1_dir / "triage" / "review.sqlite", _tamper_warning_state, "R03")
+
+        # F07c: Mutate Demo2 event evidence_sha256 & invalid timestamp -> R03 FAIL
+        def _tamper_event_row(db_p: Path):
+            with sqlite3.connect(str(db_p)) as conn:
+                conn.execute("UPDATE events SET evidence_sha256='badsha', timestamp='not-iso' WHERE sequence=1")
+                conn.commit()
+
+        _assert_tampered_file(d2_dir / "triage" / "review.sqlite", _tamper_event_row, "R03")
+
+        # F05c: Live Java fixture drift on disk after scan -> R02 FAIL without mutating triage/
+        live_src_dir = self.tmp_root / "mutable_d1_live_src"
+        live_src_dir.mkdir()
+        live_java = live_src_dir / "Demo1TruePositive.java"
+        shutil.copy2(self.fixtures / "Demo1TruePositive.java", live_java)
+        d1_live = self.tmp_root / "d1_live_drift_run"
+        r_live = _run_prepared_cli(self.prepared_source, [
+            "scan", str(live_java),
+            "--rules-path", str(self.rules),
+            "--output-dir", str(d1_live),
+            "--executable", self.opengrep,
+            "--local-triage",
+            "--endpoint", endpoint,
+            "--model", "qwen3.5:9b-q4_K_M",
+            "--prompt-contract", "blind",
+            "--runtime-origin", "mock",
+        ])
+        self.assertEqual(r_live.returncode, 0, r_live.stderr)
+        shutil.copy2(d1_live / "triage" / "review.sqlite", d1_live / "triage" / "review.post_ingestion.sqlite")
+        d1_live_db = str(d1_live / "triage" / "review.sqlite")
+        live_wid = json.loads(_run_prepared_cli(self.prepared_source, ["queue", "--db", d1_live_db]).stdout)["warnings"][0]["id"]
+        self.assertEqual(
+            _run_prepared_cli(self.prepared_source, [
+                "confirm-true", live_wid, "--db", d1_live_db, "--actor", "test-operator",
+                "--reason", "Confirmed live fixture before post-scan drift check",
+            ]).returncode,
+            0,
+        )
+        self.assertEqual(_eval(override_d1=d1_live)["overall_status"], "PASS")
+
+        triage_inv_before = _dir_inventory(d1_live / "triage")
+        live_java.write_text(live_java.read_text(encoding="utf-8") + "\n// post-scan live drift\n", encoding="utf-8")
+        rep_drift = _eval(override_d1=d1_live)
+        self.assertEqual(rep_drift["overall_status"], "FAIL")
+        self.assertEqual(rep_drift["criteria"]["R02"]["status"], "FAIL")
+        self.assertEqual(_dir_inventory(d1_live / "triage"), triage_inv_before)
 
 
 if __name__ == "__main__":
