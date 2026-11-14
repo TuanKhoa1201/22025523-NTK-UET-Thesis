@@ -1,38 +1,28 @@
-node_modules/
-dist/
-coverage/
-.vite/
-__pycache__/
-*.pyc
-.pytest_cache/
-.venv/
-venv/
+# Local environment
 .env
 .env.*
 !.env.example
-*.pem
-*.key
-*.safetensors
-*.pt
-*.pth
-*.ckpt
-*.gguf
-*.sqlite
-*.sqlite3
-*.db
-NTK_PRIVATE_*
-private_repro/
-private_results/
-persisted_api_store/
-checkpoints/
-*.log
-*.tmp
-*.tar.gz
-*.bundle
-.cache/
-git_checkouts/
-Thumbs.db
-.DS_Store
+.venv/
+venv/
+__pycache__/
+*.pyc
+node_modules/
 
-# Generated Java bytecode
-*.class
+# Private runtime and models
+/incoming/
+/runs/
+/models/
+/checkpoints/
+/orchestrator-data/
+/private-evidence/
+*.gguf
+*.safetensors
+*.sqlite
+*.db
+*.key
+*.pem
+
+# Local packages and temporary archives
+*.zip
+*.tar.gz
+*.partial

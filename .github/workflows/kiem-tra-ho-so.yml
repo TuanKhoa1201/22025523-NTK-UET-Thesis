@@ -1,0 +1,33 @@
+name: Kiem tra ho so nhanh chinh
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  documentation:
+    name: Kiem tra tai lieu chuyen doi
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Lay ma nguon
+        uses: actions/checkout@v4
+
+      - name: Kiem tra cac tep bat buoc
+        shell: bash
+        run: |
+          test -f README.md
+          test -f AGENTS.md
+          test -f docs/trang-thai-hien-tai.md
+          test -f docs/quy-trinh-cap-nhat-github.md
+
+      - name: Kiem tra noi dung cu da duoc luu tru
+        shell: bash
+        run: |
+          test ! -d apps
+          test ! -d backend
+          echo "Chi kiem tra ho so chuyen doi; khong nghiem thu backend."
