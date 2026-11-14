@@ -1,0 +1,94 @@
+{
+  "schema": "ntk-g1-public-runtime-review-1",
+  "reviewed_at": "2026-11-12T21:31:02.560749+00:00",
+  "reference_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "candidate_sha": null,
+  "javis_tested_sha": null,
+  "evidence_level": "PUBLIC_RECEIPT_ONLY",
+  "checks": [
+    {
+      "check": "identity",
+      "status": "PASS",
+      "detail": "reference receipt identity only; no ready candidate joined"
+    },
+    {
+      "check": "model",
+      "status": "PASS",
+      "detail": {
+        "engine": "1.25.0",
+        "model": "qwen3.5:9b-q4_K_M",
+        "prompt_version": "v2.2.1-cwe22-cwe89-whitelist",
+        "limitation": "model/digest and prompt schema hash are unverified public claims; prompt bytes absent"
+      }
+    },
+    {
+      "check": "findings",
+      "status": "PASS",
+      "detail": {
+        "findings": 5,
+        "responses_claimed": 5,
+        "validated_claimed": 4
+      }
+    },
+    {
+      "check": "artifact_hashes",
+      "status": "PASS",
+      "detail": {
+        "entries": 19,
+        "raw_hashes_recomputed": false
+      }
+    },
+    {
+      "check": "public_scan_id_join",
+      "status": "PASS",
+      "detail": {
+        "public_hash_id_joins": 4,
+        "limitation": "demo2 raw scan hash not listed; private raw bytes unavailable for both demos"
+      }
+    },
+    {
+      "check": "timing",
+      "status": "PASS",
+      "detail": {
+        "commands": 23,
+        "wall_clock_ms": 85385.34
+      }
+    },
+    {
+      "check": "demo_scope",
+      "status": "PASS",
+      "detail": "Scripted review/mock fault/readiness scope kept separate; SQLite and invocation log unavailable to Codex"
+    }
+  ],
+  "public_consistency": "PASS",
+  "g1_verdict": "INCOMPLETE",
+  "reason": "CANDIDATE_NOT_AVAILABLE",
+  "raw_artifacts_independently_checked": false,
+  "runtime_observed_by_codex": false,
+  "limitations": [
+    "No private raw JSON/SARIF, prompt/request/response bytes, DB, source or daemon logs accessed.",
+    "Public counter/digest/hash consistency is not execution attestation or G1 candidate acceptance."
+  ],
+  "public_receipt_sha256": "9c731a6b7409b25fbae3bbfeeef40a136f218c3dc5cbfcf4a9068b8dc8c1bf2e",
+  "source_repository_commit": "4de45981cd83dcada56186d707fe9f11609ed006",
+  "source_path": "v2/g1_runtime/G1-C1/VERDICT.json",
+  "command_receipt": {
+    "argv": [
+      "<python>",
+      "-X",
+      "utf8",
+      "-B",
+      "v2/g1_audit/review_javis.py",
+      "--receipt",
+      "v2/g1_audit/.local/javis-public.json",
+      "--reference-sha",
+      "457183f9e17892fe284da04b57ef6c5c24b008e0",
+      "--output",
+      "v2/g1_audit/.local/javis-review-final.json"
+    ],
+    "exit_code": 2,
+    "stdout": "{\"identity\": \"PASS\", \"model\": \"PASS\", \"findings\": \"PASS\", \"artifact_hashes\": \"PASS\", \"public_scan_id_join\": \"PASS\", \"timing\": \"PASS\", \"demo_scope\": \"PASS\"}",
+    "stdout_sha256": "4aaec75142d33e61fdf8108c0d5fff41cd18123d0e3cede5a6f527a737284c99",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

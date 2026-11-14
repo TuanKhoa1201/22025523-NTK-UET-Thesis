@@ -1,0 +1,228 @@
+{
+  "started_at": "2026-11-12T21:06:35.399823+00:00",
+  "finished_at": "2026-11-12T21:06:44.352846+00:00",
+  "tested_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "environment": {
+    "python": "3.13.3",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "evidence_kind": "SYNTHETIC_ONLY_NO_SCANNER_NO_REAL_QWEN",
+  "counts": {
+    "PASS": 97,
+    "FAIL": 0,
+    "ERROR": 0,
+    "SKIP": 0,
+    "XFAIL": 0,
+    "XPASS": 0
+  },
+  "tests_succeeded": true,
+  "g1_acceptance": "INCOMPLETE",
+  "harness_sha256": "7d2fb3c651b1e5166e7b4eac753e0f874bb27b87d4128905365fbcdf93484573",
+  "private_receipt_sha256": "f21f97c109c26fcc05f773f0d7c73e98a49a4d3b5607c5504c29515973a668ed",
+  "commands": [
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 19,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.3233672999995179,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "3ce0079e09e569e0dd62a1fff0701ee2c089fd9d1b9fa0cb06679c15047045df",
+      "test_file_sha256": "3838ea6a08d3da0f1d5623c0d3b8db74c32b2373540cb407d2e00abf44014564",
+      "structured_sha256": "470d74ec9b1ba75933aceb1f37508c9549d0c65cd67e58798e2f9f205b9be354",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_candidate.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-02\\0.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 19,
+      "run": 19,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 8,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 0.5465264000013121,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "9899827a7f051a6df2c9e1fc2bb40e740e31ba9bcae6bc27a423d8a368f36d89",
+      "test_file_sha256": "24bed591ae057375ade9e15ae1b9380f6db6f48cb15b1dd70d3c18dd3508553f",
+      "structured_sha256": "75fd67c1d04cb3a03091c5fa5764bfc21d73a47438ea8a1daa9a6c6072ba4a3e",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_auditor.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-02\\1.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 8,
+      "run": 8,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 31,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 3.1953499000010197,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "4ad575ce259018de746b58fd1044bcea904c3c476562b515c9f1e75d2b498d72",
+      "test_file_sha256": "eb9dc3d4f1ddf2a70bc45d7f32c574d087da09c63b785e7af5ac370b46c53964",
+      "structured_sha256": "f7f01dc5175e719af9bfcd51ab91cd1514af0b423edcb8ffd1529b09a8fa1976",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_deep_audit.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-02\\2.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 31,
+      "run": 31,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 7,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.435856900003273,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "2b088fe9df38e560f98da962772dc34424b36968c7b8cbbcd45ccf0b2c980128",
+      "test_file_sha256": "4094ec14e4d20172f3194329abc7ebeff58a3e580c37be433818e5b993d59abf",
+      "structured_sha256": "faa0678604d0accc0e485bd9884efea3b2a60b2e755d93c702765469b021f094",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit",
+        "--pattern",
+        "test_runner.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-02\\3.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 7,
+      "run": 7,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.020387299999129,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "26748b3bd6ed16f13a3a60a6886622cf7935347838198f0ea51dcba86eb31540",
+      "test_file_sha256": "761ffa8ac283aecfd269ab24ddfad370e1856b631de888e7a325578ecdc8fa6c",
+      "structured_sha256": "83f01900f4ff3fbd7f7232992fbdf02cbaeb2f14c8f134f75bc55fb162cf3b4c",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "--pattern",
+        "test_g0_v22_payload_contract.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-02\\4.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 16,
+      "run": 16,
+      "import_errors": 0
+    },
+    {
+      "exit_code": 0,
+      "counts": {
+        "PASS": 16,
+        "FAIL": 0,
+        "ERROR": 0,
+        "SKIP": 0,
+        "XFAIL": 0,
+        "XPASS": 0
+      },
+      "elapsed_seconds": 1.3069193000046653,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "ae4ff8d6e0f5b2c912720c40ab5c956e1ccbdb9f71a4db19f1868dd3830afb8a",
+      "test_file_sha256": "9de7cd0df7820213bbc947e6d78b90b38b0546b10006f1b3cd71ad9bc0c2d878",
+      "structured_sha256": "59471558b3df9be255dfcf641268713807ae5519475d4b704f6831be986bbe59",
+      "reconciled": true,
+      "argv": [
+        "<python>",
+        "-X",
+        "utf8",
+        "-B",
+        "<audit-repo>\\v2\\g1_audit\\unittest_probe.py",
+        "--start",
+        "<audit-repo>\\v2\\g1_audit\\.local\\reference\\v2\\triage\\tests",
+        "--pattern",
+        "test_human_review_negative_suite.py",
+        "--receipt",
+        "<audit-repo>\\v2\\g1_audit\\.local\\deep-02\\5.unittest.json"
+      ],
+      "cwd": "<pinned-checkout>",
+      "discovered": 16,
+      "run": 16,
+      "import_errors": 0
+    }
+  ]
+}
