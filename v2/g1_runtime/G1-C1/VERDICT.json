@@ -1,0 +1,857 @@
+{
+  "schema": "ntk-g1-javis-runtime-verdict-1",
+  "candidate_id": "G1-C1",
+  "candidate_available": false,
+  "tested_sha": null,
+  "reference_pre_g1_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+  "reference_is_candidate": false,
+  "upstream_commit": "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9",
+  "verdict": "INCOMPLETE",
+  "reason": "CANDIDATE_NOT_AVAILABLE",
+  "remote_heads_observed": {
+    "at_start": {
+      "main": "78012d08deb0075b57f6d099338f1d77b58ddaf0",
+      "v2/antigravity-review": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+      "v2/codex-core": "b74e5a31f24daa2141bb17ff5195801923b1512c",
+      "v2/javis-benchmark": "bf19b5e1392645baba55e5039ebc0d71a1af9aaa"
+    },
+    "at_finish": {
+      "main": "78012d08deb0075b57f6d099338f1d77b58ddaf0",
+      "v2/antigravity-review": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+      "v2/codex-core": "b74e5a31f24daa2141bb17ff5195801923b1512c",
+      "v2/javis-benchmark": "bf19b5e1392645baba55e5039ebc0d71a1af9aaa"
+    }
+  },
+  "host_environment": {
+    "hostname": "ADMIN-PC",
+    "os": "Windows-11-10.0.26200-SP0",
+    "wsl_distribution": "Ubuntu-IRIS",
+    "python_version": "3.12.10",
+    "python_full": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "git_version": "2.55.0.windows.5",
+    "opengrep_executable": "<private-evidence-root>/bin/opengrep_counted.cmd -> WSL2 /usr/local/bin/opengrep",
+    "opengrep_version": "1.25.0",
+    "ollama_executable": "F:\\ACTIVE-WORKSPACES\\Tools\\Ollama\\v0.40.7\\bin\\ollama.exe",
+    "ollama_version": "0.40.7",
+    "ollama_endpoint": "http://127.0.0.1:11434",
+    "model_name": "qwen3.5:9b-q4_K_M",
+    "model_digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+    "model_size_bytes": 6550825550,
+    "gpu": "NVIDIA GeForce RTX 4060 Ti (16380 MiB VRAM, Driver 591.86)",
+    "ram_gb": 63.82,
+    "disk_free_gb": {
+      "C": 190.75,
+      "F": 292.65
+    },
+    "clock_and_timezone": "UTC ISO-8601 + Asia/Bangkok (UTC+07:00), monotonic intervals via time.perf_counter_ns()"
+  },
+  "timings": {
+    "session_started_at_utc": "2026-11-12T21:06:59.492086+00:00",
+    "session_finished_at_utc": "2026-11-12T21:08:24.877687+00:00",
+    "session_started_at_local": "2026-11-13T04:06:59.492086+07:00",
+    "session_finished_at_local": "2026-11-13T04:08:24.877687+07:00",
+    "session_wall_clock_ms": 85385.34,
+    "total_scan_elapsed_ms": 19656.86,
+    "total_qwen_inference_seconds": 52.875
+  },
+  "preflight_summary": {
+    "status": "PASS",
+    "used_as_g1_acceptance": false,
+    "opengrep_version": "1.25.0",
+    "opengrep_findings": 4,
+    "opengrep_traces": 4,
+    "opengrep_sarif_codeflows": 4,
+    "qwen_http_status": 200,
+    "qwen_elapsed_ms": 593.05,
+    "qwen_eval_count": 18
+  },
+  "provenance": {
+    "candidate_id": "G1-C1",
+    "tested_commit_sha": null,
+    "reference_pre_g1_sha": "457183f9e17892fe284da04b57ef6c5c24b008e0",
+    "upstream_commit": "2c79a58a16d11e9dea3723e30d2a7faffba7bdc9",
+    "engine_version": "1.25.0",
+    "engine_exit_codes": {
+      "demo1_fork_scan": 0,
+      "demo2_fork_scan": 0
+    },
+    "python_version": "3.12.10",
+    "ollama_version": "0.40.7",
+    "model_tag": "qwen3.5:9b-q4_K_M",
+    "model_digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+    "rules_path": "v2/baseline/rules/java.yml",
+    "rules_sha256": "f34e7b51880cc5baf4ff3cda47a16232c8d405b8fd5e65aaed1aa3745367d5aa",
+    "source_hashes_demo1": {
+      "Safe.java": "bf061ca16c4847ac04b023c3a374521cbad37b9f3536e80c1c547472cf417609",
+      "Vulnerable.java": "765f0eb30b4fee693dfabc1d7e06ed85401b1d79fdd3e9d045e778169823dabc"
+    },
+    "source_hash_demo2_before": "aec52e6804992b3195bc3d2a235309faabd00ddb92bf7935eb3aac06c237e54c",
+    "source_hash_demo4_after_mutation": "c58da303d11966a70cb16f2f69a07c4bf943f10c66b9c0f614f828cca27c2797",
+    "prompt_version": "v2.2.1-cwe22-cwe89-whitelist",
+    "prompt_contract_schema_sha256": "97971355e67dce3887f4a53e429a54602f50d646a78e625797dc8bacd6003958",
+    "ollama_module_sha256": "8457f3a2b1dda6aaede4b5d95d88f66538025616573846e052e9fc4772ac5895",
+    "fork_cli_sha256": "19e7ffe28affd9aa4f19e150acd879f955c4f3a4f0173fa9dfa3e67add8c811a"
+  },
+  "runtime_pipeline_execution": {
+    "execution_scope": "PRE_G1_COMPONENT_READINESS_PROBE_ONLY_NOT_CANDIDATE_ACCEPTANCE",
+    "fork_cli_has_triage_bridge_at_inspected_sha": false,
+    "fork_cli_directly_produced_sqlite": false,
+    "opengrep_invocations_during_fork_scan": 6,
+    "opengrep_invocations_during_triage_bridge": 0,
+    "no_redundant_rescan_verified": true,
+    "findings_total": 5,
+    "findings_with_trace": 5,
+    "real_qwen_calls": 5,
+    "valid_qwen_responses": 4,
+    "invalid_qwen_responses": 1,
+    "warnings_by_validated_status": {
+      "SUPPORTED": 4,
+      "UNDETERMINED": 1
+    },
+    "per_finding_records": [
+      {
+        "alert_id": "8f2ebe62749f06b4e657056294b6eaa0b3cabada1e2ba89e06828e2ead7c36c7",
+        "rule_id": "v2.baseline.rules.ntk.java.cwe22",
+        "cwe": [
+          "CWE-22"
+        ],
+        "path": "Vulnerable.java",
+        "start_line": 7,
+        "end_line": 7,
+        "trace_roles": [
+          "finding",
+          "source",
+          "intermediate",
+          "intermediate",
+          "sink"
+        ],
+        "raw_model_status": "SUPPORTED",
+        "validated_status": "SUPPORTED",
+        "citation_check": "MATCHED",
+        "citations_count": 2,
+        "review_state": "OPEN",
+        "elapsed_seconds": 12.39,
+        "eval_count": 315,
+        "eval_duration_ns": 7077610000,
+        "request_payload_sha256": "ca88c60fcb3fc5b4db9a100fce4071b174255ea1a0f65a728b92592798d9ec86",
+        "response_body_sha256": "c791db94fde28855b2d8b0c412faabf6095cab00be8dacb9ae5b49c598e789ea",
+        "response_json_sha256": "fab6eebe96baf9eb6831a9883a6f04e8dad600bc5b82f2f11345554d60b01d99",
+        "http_status": 200,
+        "answer_validated": true
+      },
+      {
+        "alert_id": "7044919579797a7236d256d0f796f606b32e25c728ef96a9f2126a702b2839bf",
+        "rule_id": "v2.baseline.rules.ntk.java.cwe78",
+        "cwe": [
+          "CWE-78"
+        ],
+        "path": "Vulnerable.java",
+        "start_line": 8,
+        "end_line": 8,
+        "trace_roles": [
+          "finding",
+          "source",
+          "intermediate",
+          "intermediate",
+          "sink"
+        ],
+        "raw_model_status": "SUPPORTED",
+        "validated_status": "SUPPORTED",
+        "citation_check": "MATCHED",
+        "citations_count": 2,
+        "review_state": "OPEN",
+        "elapsed_seconds": 8.25,
+        "eval_count": 334,
+        "eval_duration_ns": 7479761000,
+        "request_payload_sha256": "266eebd9abd420e2d1a783d349bd827e75c4501f4198986c842083ff57184123",
+        "response_body_sha256": "8c79e60607558ea1ec2c612a2b1ed7bd14250fefa52ee76dd0e488b7e300a4c6",
+        "response_json_sha256": "741d7ae3c980c809762b865aeea265e0b8e2df4e4f72dfe5f75ccb1dbb5005b9",
+        "http_status": 200,
+        "answer_validated": true
+      },
+      {
+        "alert_id": "0e8658862ddbd196c475ce44b85f5312ba7b660cc41bcd33affc8a7e7a9842ce",
+        "rule_id": "v2.baseline.rules.ntk.java.cwe79",
+        "cwe": [
+          "CWE-79"
+        ],
+        "path": "Vulnerable.java",
+        "start_line": 9,
+        "end_line": 9,
+        "trace_roles": [
+          "finding",
+          "source",
+          "intermediate",
+          "intermediate",
+          "sink"
+        ],
+        "raw_model_status": "SUPPORTED",
+        "validated_status": "SUPPORTED",
+        "citation_check": "MATCHED",
+        "citations_count": 3,
+        "review_state": "OPEN",
+        "elapsed_seconds": 9.016,
+        "eval_count": 369,
+        "eval_duration_ns": 8263373000,
+        "request_payload_sha256": "0bd6ebf0bde3a1562d97c2474b485ec976ed96955df916f8dfbf9b8827dab5b9",
+        "response_body_sha256": "b4b62e0b1918b185846a5003a6271754673edd5b8830686f47746b738a680dc8",
+        "response_json_sha256": "c60bc4430dbf97efea3a25b418ee4187d31997223e097a9a5076e927ef7d3d7e",
+        "http_status": 200,
+        "answer_validated": true
+      },
+      {
+        "alert_id": "eba1ff58561a0e14bd9a9271ffca6862a5b1813a368ea7907a00af0466d7a07c",
+        "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+        "cwe": [
+          "CWE-89"
+        ],
+        "path": "Vulnerable.java",
+        "start_line": 10,
+        "end_line": 10,
+        "trace_roles": [
+          "finding",
+          "source",
+          "intermediate",
+          "intermediate",
+          "sink"
+        ],
+        "raw_model_status": "SUPPORTED",
+        "validated_status": "SUPPORTED",
+        "citation_check": "MATCHED",
+        "citations_count": 3,
+        "review_state": "OPEN",
+        "elapsed_seconds": 8.984,
+        "eval_count": 367,
+        "eval_duration_ns": 8214559999,
+        "request_payload_sha256": "52678bf58899abbbf99c89f0ac47b8c3c4c46af99e873893eab8fa29b3dc8261",
+        "response_body_sha256": "8f7cefbb53e23551303e905748c324ce5c86d1bf281062df678d441bf0e6bc63",
+        "response_json_sha256": "f6eadedd41b3a1ad0e58c7e3ac10c2b9b287eedc6365614cae36837bb99a8116",
+        "http_status": 200,
+        "answer_validated": true
+      },
+      {
+        "alert_id": "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196",
+        "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+        "cwe": [
+          "CWE-89"
+        ],
+        "path": "AllowlistedQuery.java",
+        "start_line": 7,
+        "end_line": 7,
+        "trace_roles": [
+          "finding",
+          "source",
+          "intermediate",
+          "sink"
+        ],
+        "raw_model_status": "REFUTED",
+        "validated_status": "UNDETERMINED",
+        "citation_check": "NOT_VERIFIED",
+        "citations_count": 0,
+        "review_state": "OPEN",
+        "elapsed_seconds": 14.235,
+        "eval_count": 603,
+        "eval_duration_ns": 13484129000,
+        "request_payload_sha256": "29dd23f76d3594fad0ead7f360f67aa7f64a42f972527e12b8cffdc84e540a21",
+        "response_body_sha256": "88ce4a6f2879121975d14fe068b7bd62cedbab63e61422a47e2ff1a497dcb895",
+        "response_json_sha256": "46bbd019d283b004dc4b29e47fc470bef4702ad89858ad162e64866363268467",
+        "http_status": 200,
+        "answer_validated": false
+      }
+    ],
+    "opengrep_invocations_per_single_fork_scan": 3
+  },
+  "demos": {
+    "demo_1_real_warnings_cwe22_cwe89": {
+      "status": "PASS",
+      "findings_count": 4,
+      "cwes_observed": [
+        "CWE-22",
+        "CWE-78",
+        "CWE-79",
+        "CWE-89"
+      ],
+      "all_have_source_and_sink_trace": true,
+      "all_in_default_queue_as_open": true
+    },
+    "demo_2_false_positive_review_scripted": {
+      "status": "PASS",
+      "actor": "SCRIPTED-DEMO",
+      "actor_is_simulated_not_independent_human": true,
+      "alert_id": "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196",
+      "rule_id": "v2.baseline.rules.ntk.java.cwe89",
+      "cwe": [
+        "CWE-89"
+      ],
+      "qwen_raw_status": "REFUTED",
+      "qwen_validated_status": "UNDETERMINED",
+      "confirm_false_exit_code": 0,
+      "default_queue_count_after_confirm_false": 0,
+      "all_queue_count_after_confirm_false": 1
+    },
+    "demo_3_reopen_warning": {
+      "status": "PASS",
+      "alert_id": "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196",
+      "reopen_exit_code": 0,
+      "default_queue_count_after_reopen": 1,
+      "events_recorded_count": 2,
+      "event_actions": [
+        "confirm-false",
+        "reopen"
+      ],
+      "opengrep_and_model_records_preserved": true
+    },
+    "demo_4_stale_source_refusal": {
+      "status": "PASS",
+      "alert_id": "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196",
+      "source_sha256_before": "aec52e6804992b3195bc3d2a235309faabd00ddb92bf7935eb3aac06c237e54c",
+      "source_sha256_after": "c58da303d11966a70cb16f2f69a07c4bf943f10c66b9c0f614f828cca27c2797",
+      "sha256_changed": true,
+      "confirm_false_exit_code": 2,
+      "decision_refused": true,
+      "refusal_stderr": "UNDETERMINED / operation refused: source unavailable/changed; rescan required: source hash mismatch; rescan required: AllowlistedQuery.java",
+      "rescan_message_present": true,
+      "no_new_event_appended": true,
+      "warning_state_preserved": true,
+      "g0_fixtures_unchanged": true
+    },
+    "demo_5_qwen_fault_injection": {
+      "status": "PASS",
+      "execution_kind": "MOCK_FAULT_INJECTION_INVALID_JSON",
+      "not_claimed_as_real_qwen_failure": true,
+      "triage_exit_code": 0,
+      "warnings_preserved_in_queue": 4,
+      "all_warnings_state_open": true,
+      "all_model_statuses_undetermined": true
+    }
+  },
+  "attestation_levels_phase_g": {
+    "level_1_mock_or_synthetic_test": {
+      "observed": true,
+      "scope": "Demo 5 fault injection (invalid JSON over loopback mock server) and 59/32 unit tests."
+    },
+    "level_2_real_scanner_executed": {
+      "observed": true,
+      "scope": "OpenGrep v1.25.0 executed on ADMIN-PC (WSL2 Ubuntu-IRIS binary via bridge), producing verified JSON, SARIF, and dataflow traces."
+    },
+    "level_3_ollama_http_request_received": {
+      "observed": true,
+      "scope": "Loopback http://127.0.0.1:11434 received 1 preflight request + 5 E2E/Demo requests with ProxyHandler({}) and NoRedirect."
+    },
+    "level_4_ollama_response_recorded": {
+      "observed": true,
+      "scope": "All 6 real HTTP 200 responses from Ollama v0.40.7 recorded in private evidence with SHA-256 request/response binding."
+    },
+    "level_5_local_model_runtime_observed_by_host_logs": {
+      "observed": true,
+      "externally_cryptographically_attested": false,
+      "scope": "Observed on ADMIN-PC via Ollama v0.40.7 /api/tags digest 56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90, eval_count > 0, and GPU RTX 4060 Ti execution; no third-party hardware attestation signature exists."
+    },
+    "level_6_independent_ground_truth_security_correctness": {
+      "observed": false,
+      "scope": "Out of scope for G1 (belongs to G3). Qwen SUPPORTED/REFUTED outputs are model assessments, never Ground Truth."
+    }
+  },
+  "private_evidence_location": "<private-evidence-root>/G1-C1/run_20261112T210701Z",
+  "artifact_hashes": {
+    "preflight/preflight_receipt.json": "883b7d120bb91f6ec07d2f267f3a852b0d24d43cdd8324c588a87f16e7554240",
+    "preflight/opengrep_preflight.json": "c701b4873bca7601945a2dbb60f7d1284c4785cd42bdf2f37deaee3a2447e170",
+    "preflight/opengrep_preflight.sarif": "faffceed9d821c1326213a354104ee2f0fd7318398282d22e5dd6be1e8da26c5",
+    "preflight/qwen_preflight_request.json": "59cdb16373ef9d81ca80b157b11d7e5d0eee4955b0145f66ae11011418c66be1",
+    "preflight/qwen_preflight_response.json": "cca0688703bef462b9fd748a70a1c20a4a3d173ad4ef5cc66f53edfda532c0cc",
+    "fork_cli_scan/opengrep.json": "5d2c605d4a5ce4b10757cd2bb584a940c4edaded6c0c9d8db7326d47cc78c5be",
+    "fork_cli_scan/opengrep.sarif": "d7fb54a3e4ebab9ed3a85d569a1457abb63e0c1e8c87315a0fdde18f34efdbd5",
+    "fork_cli_scan/scan-manifest.json": "3d408e803cdb8046c14e0949f9d3ae0eaec6263d7ab2d938c4ecf601cf7225c4",
+    "fork_cli_scan/findings.json": "c84fd6aa839235be6c6cd53380de5af11e91565c67e3458006edd6d7b2f5a602",
+    "e2e_triage_qwen35/evidence.json": "8b054f3c478a4883b88e415e3509592c74fbda0244d328b96b7533c05b96ab3a",
+    "e2e_triage_qwen35/assessments.jsonl": "22d9be7450ecad86f290aafaeaf6f198b535c859d18a2252e6d9f9df089eee6a",
+    "e2e_triage_qwen35/review.sqlite": "d3868c8894f3e015919075aa21283594ef2d8dcfed3725bac1dc4e3c7a30a1ad",
+    "e2e_triage_qwen35/live-protocol-check.json": "fa1c422f74a517b40e6751ef0b010173c419730821b788358a5a3a751b776ac5",
+    "demo2_triage_qwen35/evidence.json": "23523e83d8a65c9156f03b8d281d9e0a0813da6b701d9601afc8406efc07c9f6",
+    "demo2_triage_qwen35/assessments.jsonl": "788399b8deb0b108d812ca0390ff0bb30bee1bc859d12ba8b689eddd7d0f6d93",
+    "demo2_triage_qwen35/review.sqlite": "ba86765f94fa0af02ca4ff30ccfbf733520d021581f685671383b06d5729409e",
+    "demo5_fault_injection/assessments.jsonl": "040dbc3a449b1e899fffb986fc231861154d5a2119daa0494d8641fffcd214fc",
+    "demo5_fault_injection/review.sqlite": "be484766a27f7f6c69f6812e8c51973c20568a73be0ef26cba9b68273df95cdc",
+    "opengrep_invocations.jsonl": "800ab8756520b0c0a2d90c6c6ceefef3186ec7a4d361fb0022bd5314804f6f38"
+  },
+  "commands_executed": [
+    {
+      "argv": [
+        "git",
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "457183f9e17892fe284da04b57ef6c5c24b008e0",
+        "v2/g1_integration"
+      ],
+      "cwd": "<javis-g1-workspace>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:01.415341+00:00",
+      "finished_at_utc": "2026-11-12T21:07:01.447118+00:00",
+      "elapsed_ms": 32.15,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "semgrepai",
+        "--help"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:01.907063+00:00",
+      "finished_at_utc": "2026-11-12T21:07:02.001742+00:00",
+      "elapsed_ms": 93.41,
+      "stdout_sha256": "f48b00beae3a20cbf0f1e137618c515d62a2d787dd2266edb90b270990b43fc0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "semgrepai",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\sources\\demo1_real_vuln",
+        "--rules-path",
+        "<candidate-checkout>\\v2\\baseline\\rules\\java.yml",
+        "--output-dir",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\fork_cli_scan",
+        "--executable",
+        "<private-evidence-root>\\bin\\opengrep_counted.cmd"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:02.005255+00:00",
+      "finished_at_utc": "2026-11-12T21:07:13.851317+00:00",
+      "elapsed_ms": 11845.56,
+      "stdout_sha256": "c85b3d3787ed45d3b94d3c7d3ae62ed2c9423178a93042741ff90e2d86af4af1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "run",
+        "--source-root",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\sources\\demo1_real_vuln",
+        "--json",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\fork_cli_scan\\opengrep.json",
+        "--scan-manifest",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\fork_cli_scan\\scan-manifest.json",
+        "--engine-exit",
+        "0",
+        "--output-dir",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\e2e_triage_qwen35",
+        "--endpoint",
+        "http://127.0.0.1:11434",
+        "--model",
+        "qwen3.5:9b-q4_K_M",
+        "--timeout",
+        "120"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:13.851317+00:00",
+      "finished_at_utc": "2026-11-12T21:07:52.910145+00:00",
+      "elapsed_ms": 39058.43,
+      "stdout_sha256": "355a777233d3e9f7a1ca04c5c5b1cf68a1cbac2ffede16df6f35ca105b0ef566",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "v2/baseline/verify_handoff.py",
+        "--engine",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\fork_cli_scan",
+        "--triage",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\e2e_triage_qwen35"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:52.910145+00:00",
+      "finished_at_utc": "2026-11-12T21:07:52.970364+00:00",
+      "elapsed_ms": 59.8,
+      "stdout_sha256": "f46e49d24d650b67408d483bd4b83bd77d80a9895be6b7778a6aa0fd812e3f50",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage.live_check",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\e2e_triage_qwen35",
+        "--minimum-responses",
+        "4"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:52.970869+00:00",
+      "finished_at_utc": "2026-11-12T21:07:53.061765+00:00",
+      "elapsed_ms": 91.27,
+      "stdout_sha256": "1ec9cd9a16b8d84e57c2a2a0e81615c82b51b725ee20da9f4d04d2abd4774d58",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "queue",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\e2e_triage_qwen35\\review.sqlite"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:53.061765+00:00",
+      "finished_at_utc": "2026-11-12T21:07:53.154042+00:00",
+      "elapsed_ms": 91.7,
+      "stdout_sha256": "b96d329e4f7d5ae630288126777d05bd5e4f5edd73571533133a20b6db93d074",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "semgrepai",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\sources\\demo2_allowlisted",
+        "--rules-path",
+        "<candidate-checkout>\\v2\\baseline\\rules\\java.yml",
+        "--output-dir",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_fork_scan",
+        "--executable",
+        "<private-evidence-root>\\bin\\opengrep_counted.cmd"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:07:53.155049+00:00",
+      "finished_at_utc": "2026-11-12T21:08:00.966364+00:00",
+      "elapsed_ms": 7811.3,
+      "stdout_sha256": "b0dbfcf035d0928863630d1dd9ae3090fe8b44b4cf6c122f9993e630e7a8452f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "run",
+        "--source-root",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\sources\\demo2_allowlisted",
+        "--json",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_fork_scan\\opengrep.json",
+        "--scan-manifest",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_fork_scan\\scan-manifest.json",
+        "--engine-exit",
+        "0",
+        "--output-dir",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35",
+        "--endpoint",
+        "http://127.0.0.1:11434",
+        "--model",
+        "qwen3.5:9b-q4_K_M",
+        "--timeout",
+        "120"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:00.966364+00:00",
+      "finished_at_utc": "2026-11-12T21:08:15.337261+00:00",
+      "elapsed_ms": 14370.41,
+      "stdout_sha256": "13ec2d18384269b555af66f64a7a25c39c562a285e658896220a035f67560958",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "queue",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:15.337261+00:00",
+      "finished_at_utc": "2026-11-12T21:08:15.454894+00:00",
+      "elapsed_ms": 117.08,
+      "stdout_sha256": "7c3deb4b7b38def6d299ca7a2a106c5325a03b1393f60fd75f3f9756a5693a21",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "show",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:15.454894+00:00",
+      "finished_at_utc": "2026-11-12T21:08:15.574545+00:00",
+      "elapsed_ms": 119.77,
+      "stdout_sha256": "0011868e73fdad4971ca9348a602cb766441f51bde36de7304e4ab704b01f360",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "decide",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196",
+        "confirm-false",
+        "--actor",
+        "SCRIPTED-DEMO",
+        "--reason",
+        "SCRIPTED-DEMO control: query is strictly enforced to equal constant SELECT 1 before stmt.executeQuery(query); allowlist guard neutralizes SQL injection."
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:15.575063+00:00",
+      "finished_at_utc": "2026-11-12T21:08:15.699625+00:00",
+      "elapsed_ms": 125.02,
+      "stdout_sha256": "a3382ffbecca0214087817d1dd6b4b3cdf2010f2012500799459f1fb0389cba0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "queue",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:15.699625+00:00",
+      "finished_at_utc": "2026-11-12T21:08:15.809964+00:00",
+      "elapsed_ms": 109.66,
+      "stdout_sha256": "8779951051e1ed2874348700b3989773834162043cfea8294f06378560eed9d1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "queue",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "--all"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:15.809964+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.003926+00:00",
+      "elapsed_ms": 193.98,
+      "stdout_sha256": "0586e14bf49124aed920db2027733a6dc7171a0cd4c451f6c83da9790164b850",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "decide",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196",
+        "reopen",
+        "--actor",
+        "SCRIPTED-DEMO",
+        "--reason",
+        "SCRIPTED-DEMO reopen to verify audit trail preservation and queue restoration."
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:16.003926+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.140091+00:00",
+      "elapsed_ms": 136.91,
+      "stdout_sha256": "0011868e73fdad4971ca9348a602cb766441f51bde36de7304e4ab704b01f360",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "queue",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:16.140091+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.264112+00:00",
+      "elapsed_ms": 123.17,
+      "stdout_sha256": "7c3deb4b7b38def6d299ca7a2a106c5325a03b1393f60fd75f3f9756a5693a21",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "history",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:16.264112+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.395786+00:00",
+      "elapsed_ms": 132.14,
+      "stdout_sha256": "d1d39b352c4305243d64b4285eeb8eaa9f296397709561ceb8878003fad9bbe0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "decide",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196",
+        "confirm-false",
+        "--actor",
+        "SCRIPTED-DEMO",
+        "--reason",
+        "Attempt confirm-false on modified source file (must fail)."
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 2,
+      "started_at_utc": "2026-11-12T21:08:16.397293+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.525538+00:00",
+      "elapsed_ms": 128.44,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "4b9ddbb3671d5726f9ee8310ea576ae8155125f337c44f4db91b05b26916e7fe"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "history",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:16.525538+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.671457+00:00",
+      "elapsed_ms": 145.87,
+      "stdout_sha256": "d1d39b352c4305243d64b4285eeb8eaa9f296397709561ceb8878003fad9bbe0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "show",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo2_triage_qwen35\\review.sqlite",
+        "e156ce55273f0640cf7a4ab082105a7e125578c6caead588adfe92e1628c1196"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:16.671457+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.784904+00:00",
+      "elapsed_ms": 113.61,
+      "stdout_sha256": "0011868e73fdad4971ca9348a602cb766441f51bde36de7304e4ab704b01f360",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "run",
+        "--source-root",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\sources\\demo1_real_vuln",
+        "--json",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\fork_cli_scan\\opengrep.json",
+        "--scan-manifest",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\fork_cli_scan\\scan-manifest.json",
+        "--engine-exit",
+        "0",
+        "--output-dir",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo5_fault_injection",
+        "--endpoint",
+        "http://127.0.0.1:50309",
+        "--model",
+        "qwen3.5:9b-q4_K_M",
+        "--runtime-origin",
+        "mock",
+        "--timeout",
+        "15"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:16.793943+00:00",
+      "finished_at_utc": "2026-11-12T21:08:16.987330+00:00",
+      "elapsed_ms": 193.31,
+      "stdout_sha256": "47f772c24e18a1da8352eb8cab8126f7fa5e422992c1ee6ce69cee1df48aff6c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "v2.triage",
+        "queue",
+        "--db",
+        "<private-evidence-root>\\G1-C1\\run_20261112T210701Z\\demo5_fault_injection\\review.sqlite"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:17.462718+00:00",
+      "finished_at_utc": "2026-11-12T21:08:17.579422+00:00",
+      "elapsed_ms": 116.34,
+      "stdout_sha256": "80fabc8f366b444e61995fcc5e90a557df0fed14cc2fc081e3c91ba1d573953e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "<python>",
+        "-m",
+        "pytest",
+        "v2/baseline/tests",
+        "v2/triage/tests",
+        "-q"
+      ],
+      "cwd": "<candidate-checkout>",
+      "exit_code": 0,
+      "started_at_utc": "2026-11-12T21:08:17.579422+00:00",
+      "finished_at_utc": "2026-11-12T21:08:22.905874+00:00",
+      "elapsed_ms": 5326.59,
+      "stdout_sha256": "c6fbe73389f56bd6bddf01829321ecba46f8ff9e5b5e11ba14723a3c083f4d76",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "runtime_errors": [
+    {
+      "id": "G1-RUNTIME-CANDIDATE-01",
+      "kind": "CANDIDATE_NOT_AVAILABLE",
+      "severity": "BLOCKER_FOR_G1_ACCEPTANCE",
+      "detail": "Branch v2/antigravity-review is at 457183f9e17892fe284da04b57ef6c5c24b008e0 (pre-G1 HEAD) and does not contain v2/g1_integration/CANDIDATE.json with READY_FOR_INDEPENDENT_TEST. At this pre-G1 commit, v2/baseline/fork/semgrepai/cli.py is still the M1 scanner-only CLI and has not yet been bridged directly into v2.triage."
+    }
+  ],
+  "unattested_or_pending_items": [
+    "End-to-end single-command execution from a ready G1 candidate commit (v2/g1_integration/CANDIDATE.json is not yet published on v2/antigravity-review).",
+    "Third-party cryptographic attestation of model inference (only host-level runtime observation on ADMIN-PC is possible).",
+    "Held-out accuracy / Ground Truth evaluation of Qwen3.5-9B (belongs to stage G3, not G1).",
+    "Independent human security analyst review (Demo 2/3/4 used simulated actor SCRIPTED-DEMO)."
+  ]
+}

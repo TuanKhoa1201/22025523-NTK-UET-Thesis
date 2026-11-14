@@ -1,0 +1,7 @@
+.local/
+*.sqlite
+*.sqlite3
+*.db
+*raw_response*
+*raw_prompt*
+__pycache__/
