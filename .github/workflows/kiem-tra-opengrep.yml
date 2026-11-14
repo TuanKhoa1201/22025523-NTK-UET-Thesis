@@ -1,0 +1,38 @@
+name: Kiem tra nen tang OpenGrep
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'v2/baseline/**'
+      - 'v2/triage/**'
+      - '.github/workflows/kiem-tra-opengrep.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit_tests:
+    name: Kiem tra ma nguon va bien nhan quet
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Lay ma nguon
+        uses: actions/checkout@v4
+
+      - name: Chuan bi Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Chay kiem thu ngoai tuyen
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -B -m unittest discover -s v2/baseline/tests -v
+
+      - name: Ghi ro gioi han kiem thu
+        run: |
+          echo "Chi kiem thu ma nguon va du lieu mo phong."
+          echo "Chua nghiem thu OpenGrep va Ollama chay thuc te."
