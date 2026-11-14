@@ -97,6 +97,27 @@ def _source_inventory(target_path: Path) -> tuple[Path, dict[str, str]]:
         if not resolved_target.is_relative_to(lexical_parent):
             raise EvidenceError("directory scan target symlink/junction escapes parent directory")
     tree = SourceTree(resolved_target)
+
+    def _reject_walk_error(exc: OSError) -> None:
+        raise EvidenceError("cannot enumerate source directories") from exc
+
+    for parent, child_dirs, _ in os.walk(
+        tree.root, topdown=True, followlinks=False,
+        onerror=_reject_walk_error
+    ):
+        for child_name in child_dirs:
+            child = Path(parent) / child_name
+            try:
+                resolved_child = child.resolve(strict=True)
+            except (OSError, RuntimeError) as exc:
+                raise EvidenceError("cannot resolve source directory; rescan required") from exc
+            if not resolved_child.is_relative_to(tree.root):
+                raise EvidenceError("directory link outside configured root")
+            if child.is_symlink() or (
+                hasattr(child, "is_junction") and child.is_junction()
+            ):
+                raise EvidenceError("linked source directory cannot be safely inventoried")
+
     inv: dict[str, str] = {}
     for java_file in sorted(tree.root.rglob("*.java")):
         rel, data, _ = tree.read(str(java_file))
