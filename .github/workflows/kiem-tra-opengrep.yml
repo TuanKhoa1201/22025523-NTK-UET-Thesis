@@ -27,6 +27,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Cai PyYAML cho kiem thu
+        run: python -m pip install PyYAML==6.0.2
+
       - name: Chay kiem thu ngoai tuyen
         env:
           PYTHONDONTWRITEBYTECODE: '1'
