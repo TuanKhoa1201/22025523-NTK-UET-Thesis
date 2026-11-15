@@ -13,7 +13,8 @@ import argparse
 from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import re
 import sqlite3
 import stat
 from typing import Any
@@ -257,6 +258,54 @@ def _read_sqlite_state_ro(db_path: Path) -> dict[str, Any]:
         conn.close()
 
 
+_NON_HUMAN_ACTOR_TOKENS = frozenset({
+    "scripted",
+    "mock",
+    "synthetic",
+    "replay",
+    "bot",
+    "fake",
+    "dummy",
+    "fixture",
+})
+_NON_HUMAN_REVIEW_PATTERNS = (
+    re.compile(r"scripted[_\-\s]*test(?:[_\-\s]*only)?", re.IGNORECASE),
+    re.compile(r"synthetic[_\-\s]*mock(?:[_\-\s]*http)?", re.IGNORECASE),
+    re.compile(r"mock[_\-\s]*(?:http|test[_\-\s]*fixture)", re.IGNORECASE),
+    re.compile(r"replay[_\-\s]*(?:only|test|event|decision)", re.IGNORECASE),
+    re.compile(r"not\s+(?:an?\s+|an\s+approved\s+)?human\s+(?:decision|review)", re.IGNORECASE),
+    re.compile(r"not[_\-\s]+human[_\-\s]+(?:decision|review)", re.IGNORECASE),
+    re.compile(r"automated[_\-\s]*test(?:[_\-\s]*only)?", re.IGNORECASE),
+    re.compile(r"dry[_\-\s]*run[_\-\s]*only", re.IGNORECASE),
+    re.compile(r"ntk-demo-operator", re.IGNORECASE),
+)
+_NON_HUMAN_REASON_PREFIX = re.compile(
+    r"^\s*(?:\[?\s*(?:scripted|mock|synthetic|replay|dry[-_\s]?run)\b[^a-z0-9]*(?:\]|:|-|\s))",
+    re.IGNORECASE,
+)
+_NON_HUMAN_UPPER_TAG_RE = re.compile(
+    r"\b(?:SCRIPTED_TEST_ONLY|MOCK_HTTP|MOCK_ONLY|SYNTHETIC_MOCK|REPLAY_ONLY|REPLAY_EVENT|TEST_HARNESS)\b"
+)
+
+
+def _find_non_human_review_marker(actor: Any, reason: Any) -> str | None:
+    """Return a match description when actor/reason indicates scripted, mock, or replay test activity."""
+    actor_str = actor if isinstance(actor, str) else ""
+    reason_str = reason if isinstance(reason, str) else ""
+    for pat in _NON_HUMAN_REVIEW_PATTERNS:
+        if pat.search(actor_str) or pat.search(reason_str):
+            return pat.pattern
+    if _NON_HUMAN_UPPER_TAG_RE.search(actor_str) or _NON_HUMAN_UPPER_TAG_RE.search(reason_str):
+        return "explicit non-human test tag"
+    actor_tokens = [tok for tok in re.split(r"[^a-z0-9]+", actor_str.lower()) if tok]
+    for tok in actor_tokens:
+        if tok in _NON_HUMAN_ACTOR_TOKENS:
+            return f"actor token {tok!r}"
+    if _NON_HUMAN_REASON_PREFIX.search(reason_str):
+        return "reason non-human prefix"
+    return None
+
+
 def _verify_sqlite_against_triage(
     label: str,
     db_state: dict[str, Any],
@@ -268,6 +317,7 @@ def _verify_sqlite_against_triage(
     require_scan_manifest: bool = True,
     require_run_manifest: bool = True,
     require_zero_rejected: bool = True,
+    allow_scripted_events: bool = False,
 ) -> list[str]:
     errors: list[str] = []
     scan_sha = evidence_bundle.get("scan_sha256")
@@ -431,6 +481,12 @@ def _verify_sqlite_against_triage(
             errors.append(f"{label}: event[{idx}] invalid or unstripped actor {actor!r}")
         if not isinstance(reason, str) or not reason.strip() or reason != reason.strip():
             errors.append(f"{label}: event[{idx}] invalid or unstripped reason")
+        non_human_marker = _find_non_human_review_marker(actor, reason)
+        if non_human_marker is not None and not allow_scripted_events:
+            errors.append(
+                f"{label}: event[{idx}] carries non-human/scripted/mock/replay marker ({non_human_marker}); "
+                "cannot count as approved human review in official evaluation"
+            )
 
         expected_snapshots = rec.get("snapshots") or {}
         expected_obs = {
@@ -1068,6 +1124,39 @@ def _inspect_primary_scenario(
                 )
             if replayed_answer is None or replayed_answer.get("validated_status") != "UNDETERMINED":
                 f_errors.append("independent validator replay from raw HTTP body did not reproduce valid UNDETERMINED abstention")
+        elif expected_polarity == "OBSERVED_VALID_TRIAGE":
+            # Supplementary control preserves observed Qwen verdict (REFUTED / SUPPORTED / UNDETERMINED) without coercion
+            if val_status not in ("SUPPORTED", "REFUTED", "UNDETERMINED"):
+                f_errors.append(
+                    f"invalid validated_status={val_status!r} (expected SUPPORTED, REFUTED, or UNDETERMINED)"
+                )
+            if raw_status not in ("SUPPORTED", "REFUTED", "UNDETERMINED"):
+                f_errors.append(
+                    f"missing or non-enum raw_model_status={raw_status!r} (failure_kind={fail_kind!r})"
+                )
+            if downgraded is not False or fail_kind != "NONE" or runtime.get("answer_validated") is not True:
+                f_errors.append(
+                    f"validator did not accept answer cleanly (downgraded={downgraded}, failure_kind={fail_kind}, "
+                    f"answer_validated={runtime.get('answer_validated')})"
+                )
+            cites = assessment.get("citations") or []
+            if val_status in ("SUPPORTED", "REFUTED") or cites:
+                if not cites or assessment.get("citation_check") != "MATCHED":
+                    f_errors.append("supplementary control verdict missing MATCHED canonical citations")
+                else:
+                    prov = inspect_citations_provenance(cites, rec)
+                    if not (
+                        prov["citation_in_source"] is True
+                        and prov["citation_in_prompt"] is True
+                        and prov["citation_posthoc_only"] is False
+                        and prov["all_executable_code"] is True
+                        and prov["any_dead_branch"] is False
+                        and prov["any_in_relevant_scope"] is True
+                        and prov["supports_security_claim_verified"] is False
+                    ):
+                        f_errors.append(f"citation provenance check failed: {prov}")
+            if replayed_answer is None or replayed_answer.get("validated_status") != val_status:
+                f_errors.append("independent validator replay from raw HTTP body did not reproduce observed validated_status")
 
         failures.extend(f"{scenario_name}[{idx}]: {e}" for e in f_errors)
         per_finding_details.append({
@@ -1112,6 +1201,7 @@ def _inspect_primary_scenario(
                     scan_manifest=s_man,
                     run_manifest=manifest,
                     require_zero_rejected=True,
+                    allow_scripted_events=allow_mock_primary,
                 )
             )
             if len(ing_db_state["warnings"]) != expected_findings or any(w["state"] != "OPEN" for w in ing_db_state["warnings"]):
@@ -1137,6 +1227,7 @@ def _inspect_primary_scenario(
                 scan_manifest=s_man,
                 run_manifest=manifest,
                 require_zero_rejected=True,
+                allow_scripted_events=allow_mock_primary,
             )
         )
         if ing_db_state is not None:
@@ -1170,6 +1261,7 @@ def _inspect_primary_scenario(
                         scan_manifest=s_man,
                         run_manifest=manifest,
                         require_zero_rejected=True,
+                        allow_scripted_events=allow_mock_primary,
                     )
                 )
                 if [w["state"] for w in af_db_state["warnings"]] != ["CONFIRMED_FALSE"]:
@@ -1214,6 +1306,26 @@ def _inspect_primary_scenario(
         "r02_errors": r02_errors,
         "r03_errors": r03_errors,
         "findings": per_finding_details,
+        "run_provenance": {
+            "scenario_dir_name": Path(scenario_dir).name,
+            "recorded_at": manifest.get("recorded_at"),
+            "model": manifest.get("model"),
+            "prompt_contract": manifest.get("prompt_contract"),
+            "prompt_version": manifest.get("prompt_version"),
+            "rules_sha256": manifest.get("rules_sha256"),
+            "pre_scan_sources_sha256": manifest.get("pre_scan_sources_sha256"),
+            "post_triage_sources_sha256": manifest.get("post_triage_sources_sha256"),
+            "opengrep_version": s_man.get("opengrep_version") if isinstance(s_man, dict) else None,
+            "source_hashes": {
+                str(rec.get("path")): {
+                    p: snap.get("sha256")
+                    for p, snap in (rec.get("snapshots") or {}).items()
+                    if isinstance(snap, dict)
+                }
+                for rec in records
+                if isinstance(rec, dict)
+            },
+        },
         "post_ingestion_sqlite": {
             "present": ing_db_state is not None,
             "db_sha256": ing_db_state["db_sha256"] if ing_db_state else None,
@@ -1719,6 +1831,158 @@ def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
     }
 
 
+_EXACT_CWE89_RE = re.compile(r"^CWE-89(?::\s*\S[^\r\n]*)?\Z")
+
+
+def _is_exact_cwe89_identifier(value: Any) -> bool:
+    """Return True iff value is exact 'CWE-89' or 'CWE-89: <description>' without other CWE IDs."""
+    if not isinstance(value, str) or _EXACT_CWE89_RE.match(value) is None:
+        return False
+    if value.startswith("CWE-89:") and re.search(r"\bCWE-\d+\b", value[len("CWE-89:"):], re.IGNORECASE):
+        return False
+    return True
+
+
+def _verify_allowlisted_fp_scenario_identity(scenario_dir: Path) -> list[str]:
+    """Verify allowlisted_fp_dir holds the exact approved CWE-89 AllowlistedQuery fixture, hash, and throwing guard."""
+    approved_fixture = Path(__file__).resolve().parent / "demo_fixtures" / "AllowlistedQuery.java"
+    if not _is_safe_regular_file(approved_fixture):
+        return [f"allowlisted_query_fp_control: missing or unsafe approved repo fixture: {approved_fixture}"]
+    expected_bytes = approved_fixture.read_bytes()
+    expected_sha = digest(expected_bytes)
+    expected_size = len(expected_bytes)
+
+    errors: list[str] = []
+    ev_path = Path(scenario_dir).resolve() / "triage" / "evidence.json"
+    if not _is_safe_regular_file(ev_path):
+        return [f"allowlisted_query_fp_control: missing or unsafe triage/evidence.json: {ev_path}"]
+    try:
+        ev = strict_json(ev_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, EvidenceError) as exc:
+        return [f"allowlisted_query_fp_control: invalid triage/evidence.json: {exc}"]
+    records = ev.get("records") if isinstance(ev, dict) else None
+    if not isinstance(records, list) or len(records) != 1:
+        return [f"allowlisted_query_fp_control: expected 1 evidence record, got {len(records) if isinstance(records, list) else None}"]
+    rec = records[0]
+    if not isinstance(rec, dict):
+        return ["allowlisted_query_fp_control: evidence record[0] is not a JSON object"]
+
+    raw_rec_path = str(rec.get("path") or "")
+    norm_rec_path = raw_rec_path.replace("\\", "/")
+    raw_parts = PurePosixPath(norm_rec_path).parts
+    if not norm_rec_path.strip() or ".." in raw_parts or PurePosixPath(norm_rec_path).name != "AllowlistedQuery.java":
+        errors.append(
+            f"allowlisted_query_fp_control: expected path naming exact 'AllowlistedQuery.java' without traversal, got {norm_rec_path!r}"
+        )
+
+    expected_snap_key = norm_rec_path
+    raw_root = rec.get("root")
+    if isinstance(raw_root, str) and raw_root.strip():
+        try:
+            expected_snap_key = Path(raw_rec_path).relative_to(Path(raw_root)).as_posix()
+        except ValueError:
+            if norm_rec_path.startswith("/") or (len(norm_rec_path) >= 2 and norm_rec_path[1] == ":"):
+                errors.append(
+                    f"allowlisted_query_fp_control: target path {norm_rec_path!r} lies outside declared root {raw_root!r}"
+                )
+    if (
+        not expected_snap_key.strip()
+        or expected_snap_key.startswith("/")
+        or (len(expected_snap_key) >= 2 and expected_snap_key[1] == ":")
+        or ".." in PurePosixPath(expected_snap_key).parts
+        or PurePosixPath(expected_snap_key).name != "AllowlistedQuery.java"
+    ):
+        errors.append(
+            f"allowlisted_query_fp_control: invalid relative snapshot key {expected_snap_key!r} (expected 'AllowlistedQuery.java' relative path)"
+        )
+
+    rule_id = str(rec.get("rule_id") or "")
+    if not rule_id.endswith("ntk.g1.java.cwe89.sql-injection"):
+        errors.append(
+            f"allowlisted_query_fp_control: expected rule_id ending with 'ntk.g1.java.cwe89.sql-injection', got {rule_id!r}"
+        )
+
+    raw_cwe = rec.get("cwe")
+    if (
+        not isinstance(raw_cwe, list)
+        or not raw_cwe
+        or not all(isinstance(c, str) and c == c.strip() and _is_exact_cwe89_identifier(c) for c in raw_cwe)
+    ):
+        errors.append(f"allowlisted_query_fp_control: expected exact CWE-89 finding, got cwe={raw_cwe!r}")
+
+    snapshots = rec.get("snapshots")
+    if not isinstance(snapshots, dict) or not snapshots:
+        errors.append("allowlisted_query_fp_control: missing verified snapshots map bound to AllowlistedQuery.java")
+    else:
+        if len(snapshots) != 1:
+            errors.append(
+                f"allowlisted_query_fp_control: expected single-file snapshot map for AllowlistedQuery.java, got {sorted(snapshots)!r}"
+            )
+        snap = snapshots.get(expected_snap_key)
+        if not isinstance(snap, dict):
+            errors.append(
+                f"allowlisted_query_fp_control: snapshots missing exact target entry {expected_snap_key!r} "
+                f"(present={sorted(snapshots)!r})"
+            )
+        else:
+            if snap.get("sha256") != expected_sha or snap.get("size") != expected_size:
+                errors.append(
+                    "allowlisted_query_fp_control: snapshot hash/size mismatch against approved repo AllowlistedQuery.java "
+                    f"(expected sha256={expected_sha} size={expected_size}, got sha256={snap.get('sha256')!r} size={snap.get('size')!r})"
+                )
+
+    snippets = rec.get("snippets")
+    if not isinstance(snippets, list) or not snippets:
+        errors.append("allowlisted_query_fp_control: missing snippet evidence for AllowlistedQuery")
+        return errors
+
+    ordered_lines: dict[int, str] = {}
+    for snip in snippets:
+        if not isinstance(snip, dict):
+            continue
+        snip_path = str(snip.get("path") or "").replace("\\", "/")
+        if (
+            snip_path != expected_snap_key
+            or PurePosixPath(snip_path).name != "AllowlistedQuery.java"
+            or snip.get("sha256") != expected_sha
+        ):
+            errors.append(
+                f"allowlisted_query_fp_control: snippet path/sha256 mismatch (path={snip_path!r}, expected_key={expected_snap_key!r}, sha256={snip.get('sha256')!r})"
+            )
+        for ln in (snip.get("lines") or []):
+            if not isinstance(ln, dict):
+                continue
+            ln_no = ln.get("line")
+            if isinstance(ln_no, int):
+                ordered_lines[ln_no] = str(ln.get("text") or "").strip()
+
+    sorted_items = sorted(ordered_lines.items())
+    source_lines = [ln for ln, txt in sorted_items if txt == 'String query = req.getParameter("q");']
+    guard_lines = [ln for ln, txt in sorted_items if txt == 'if (!"SELECT 1".equals(query)) {']
+    sink_lines = [ln for ln, txt in sorted_items if txt == "stmt.executeQuery(query);"]
+    matched_guard_block = False
+    if source_lines and guard_lines and sink_lines:
+        src_ln = source_lines[0]
+        for g_ln in guard_lines:
+            if (
+                g_ln > src_ln
+                and ordered_lines.get(g_ln + 1) == 'throw new IllegalArgumentException("Only SELECT 1 is allowed");'
+                and ordered_lines.get(g_ln + 2) == "}"
+                and any(s_ln > g_ln + 2 for s_ln in sink_lines)
+            ):
+                s_ln = next(s for s in sink_lines if s > g_ln + 2)
+                between = [txt for ln, txt in sorted_items if g_ln + 2 < ln < s_ln]
+                if not any(re.search(r"\bquery\s*=", b) for b in between):
+                    matched_guard_block = True
+                    break
+    if not matched_guard_block:
+        errors.append(
+            "allowlisted_query_fp_control: snippet evidence missing ordered throwing exact-literal guard "
+            '(!SELECT-1.equals(query) -> throw IllegalArgumentException -> } -> stmt.executeQuery(query)) without bypass'
+        )
+    return errors
+
+
 def evaluate_acceptance(
     *,
     demo1_dir: Path,
@@ -1727,8 +1991,19 @@ def evaluate_acceptance(
     m1_dir: Path,
     demo4_dir: Path,
     demo3b_dir: Path | None = None,
+    allowlisted_fp_dir: Path | None = None,
+    r03_fp_mode: str = "locked-demo2",
     allow_mock_primary: bool = False,
 ) -> dict[str, Any]:
+    if r03_fp_mode not in ("locked-demo2", "proposed-allowlisted-fp"):
+        raise ValueError(f"unsupported r03_fp_mode={r03_fp_mode!r}")
+    if r03_fp_mode == "locked-demo2" and allowlisted_fp_dir is not None:
+        raise ValueError("allowlisted_fp_dir requires r03_fp_mode='proposed-allowlisted-fp'")
+    if r03_fp_mode == "proposed-allowlisted-fp" and allowlisted_fp_dir is None:
+        raise ValueError("allowlisted_fp_dir is required when r03_fp_mode='proposed-allowlisted-fp'")
+
+    use_proposed_fp = r03_fp_mode == "proposed-allowlisted-fp"
+
     d1 = _inspect_primary_scenario(
         "demo1_true_positive",
         demo1_dir,
@@ -1742,8 +2017,22 @@ def evaluate_acceptance(
         expected_findings=1,
         expected_polarity="REFUTED",
         allow_mock_primary=allow_mock_primary,
-        require_after_confirm_false=True,
+        require_after_confirm_false=not use_proposed_fp,
     )
+    d_fp: dict[str, Any] | None = None
+    if use_proposed_fp:
+        assert allowlisted_fp_dir is not None
+        d_fp = _inspect_primary_scenario(
+            "allowlisted_query_fp_control",
+            allowlisted_fp_dir,
+            expected_findings=1,
+            expected_polarity="OBSERVED_VALID_TRIAGE",
+            allow_mock_primary=allow_mock_primary,
+            require_after_confirm_false=True,
+        )
+        id_errs = _verify_allowlisted_fp_scenario_identity(allowlisted_fp_dir)
+        if id_errs:
+            d_fp.setdefault("r03_errors", []).extend(id_errs)
     d3a = _inspect_primary_scenario(
         "demo3a_missing_helper",
         demo3a_dir,
@@ -1755,56 +2044,106 @@ def evaluate_acceptance(
     d3b = _inspect_demo3b_mock_control(demo3b_dir)
     d4 = _inspect_demo4_stale_control(demo4_dir)
 
-    # R01 decision: record observed FAIL even if another check is BLOCKED (per checklist false_pass_guards!)
-    r01_failures = [*d1.get("failures", []), *d2.get("failures", []), *d3a.get("failures", []), *d3b.get("errors", [])]
-    r01_blockers = [*d1.get("blockers", []), *d2.get("blockers", []), *d3a.get("blockers", [])]
-    real_findings_total = sum(x.get("findings_count", 0) for x in (d1, d2, d3a))
-    if real_findings_total != 4 and not r01_blockers:
-        r01_failures.append(f"R01 real-Qwen denominator must equal 4 (2+1+1), observed {real_findings_total}")
+    # R01 decision: strictly evaluates the 4 historical G1-C5 inferences (Demo1=2, Demo2=1, Demo3a=1) + Demo3b control.
+    # Supplementary R03 control runs never alter the historical R01 denominator or pass/fail outcome.
+    historical_primary_items = [d1, d2, d3a]
+    r01_failures = [
+        *d1.get("failures", []),
+        *d2.get("failures", []),
+        *d3a.get("failures", []),
+        *d3b.get("errors", []),
+    ]
+    r01_blockers = [e for item in historical_primary_items for e in item.get("blockers", [])]
+    expected_real_total = 4
+    real_findings_total = sum(x.get("findings_count", 0) for x in historical_primary_items)
+    if real_findings_total != expected_real_total and not r01_blockers:
+        r01_failures.append(
+            f"R01 real-Qwen denominator must equal {expected_real_total}, observed {real_findings_total}"
+        )
     r01_status = "FAIL" if r01_failures else ("BLOCKED" if r01_blockers else "PASS")
 
-    # R02 decision
+    # R02 decision (historical M1 + Demo1/Demo2/Demo3a pipeline parity)
     r02_failures = [
         *m1.get("errors", []),
-        *d1.get("r02_errors", []),
-        *d2.get("r02_errors", []),
-        *d3a.get("r02_errors", []),
+        *[e for item in historical_primary_items for e in item.get("r02_errors", [])],
     ]
-    r02_blockers = [*m1.get("blockers", []), *d1.get("blockers", []), *d2.get("blockers", []), *d3a.get("blockers", [])]
+    r02_blockers = [*m1.get("blockers", []), *r01_blockers]
     r02_status = "FAIL" if r02_failures else ("BLOCKED" if r02_blockers else "PASS")
 
-    # R03 decision (Demo1 confirm-true + Demo2 confirm-false -> reopen + Demo3a untouched OPEN + Demo4 STALE_SOURCE)
+    # R03 decision (Demo1 confirm-true + FP control confirm-false -> reopen + Demo3a untouched OPEN + Demo4 STALE_SOURCE)
     r03_failures: list[str] = [
         *d4.get("errors", []),
-        *d1.get("r03_errors", []),
-        *d2.get("r03_errors", []),
-        *d3a.get("r03_errors", []),
+        *[e for item in historical_primary_items for e in item.get("r03_errors", [])],
     ]
     r03_blockers: list[str] = [
         *d4.get("blockers", []),
-        *d1.get("blockers", []),
-        *d2.get("blockers", []),
-        *d3a.get("blockers", []),
+        *r01_blockers,
     ]
+    if d_fp is not None:
+        r03_failures.extend(d_fp.get("failures", []))
+        r03_failures.extend(d_fp.get("r02_errors", []))
+        r03_failures.extend(d_fp.get("r03_errors", []))
+        r03_blockers.extend(d_fp.get("blockers", []))
 
     d1_sql = d1.get("current_sqlite")
     if d1_sql is not None:
         if "CONFIRMED_TRUE" not in d1_sql["states"] or "OPEN" not in d1_sql["states"]:
             r03_failures.append(f"Demo1 expected one CONFIRMED_TRUE and one OPEN warning, got {d1_sql['states']}")
         d1_events = d1_sql["events"]
-        if len(d1_events) != 1 or d1_events[0]["action"] != "confirm-true" or not d1_events[0]["actor"].strip() or not d1_events[0]["reason"].strip():
+        if len(d1_events) != 1 or d1_events[0]["action"] != "confirm-true" or not str(d1_events[0].get("actor", "")).strip() or not str(d1_events[0].get("reason", "")).strip():
             r03_failures.append(f"Demo1 expected 1 confirm-true event with actor/reason, got {d1_events}")
+        elif not allow_mock_primary:
+            marker = _find_non_human_review_marker(d1_events[0].get("actor"), d1_events[0].get("reason"))
+            if marker is not None:
+                r03_failures.append(
+                    f"Demo1 event carries non-human/scripted/mock/replay marker ({marker}); rejected under official human-review evaluation"
+                )
 
     d2_sql = d2.get("current_sqlite")
     if d2_sql is not None:
-        if d2_sql["states"] != ["OPEN"]:
-            r03_failures.append(f"Demo2 expected final state ['OPEN'] after reopen, got {d2_sql['states']}")
-        d2_actions = [e["action"] for e in d2_sql["events"]]
-        if d2_actions != ["confirm-false", "reopen"]:
-            r03_failures.append(f"Demo2 expected events ['confirm-false', 'reopen'], got {d2_actions}")
-        for ev in d2_sql["events"]:
-            if not str(ev.get("actor", "")).strip() or not str(ev.get("reason", "")).strip():
-                r03_failures.append(f"Demo2 event missing actor or reason: {ev}")
+        if use_proposed_fp:
+            if d2_sql["states"] != ["OPEN"] or d2_sql["events"] or d2_sql["rejected_count"] != 0:
+                r03_failures.append(
+                    "Demo2 (retained for security-limit analysis under proposed-allowlisted-fp) must remain untouched OPEN "
+                    f"with 0 events/rejections, got states={d2_sql['states']} events={d2_sql['events']} rejected={d2_sql['rejected_count']}"
+                )
+        else:
+            if d2_sql["states"] != ["OPEN"]:
+                r03_failures.append(f"Demo2 expected final state ['OPEN'] after reopen, got {d2_sql['states']}")
+            d2_actions = [e["action"] for e in d2_sql["events"]]
+            if d2_actions != ["confirm-false", "reopen"]:
+                r03_failures.append(f"Demo2 expected events ['confirm-false', 'reopen'], got {d2_actions}")
+            for ev in d2_sql["events"]:
+                if not str(ev.get("actor", "")).strip() or not str(ev.get("reason", "")).strip():
+                    r03_failures.append(f"Demo2 event missing actor or reason: {ev}")
+                elif not allow_mock_primary:
+                    marker = _find_non_human_review_marker(ev.get("actor"), ev.get("reason"))
+                    if marker is not None:
+                        r03_failures.append(
+                            f"Demo2 event carries non-human/scripted/mock/replay marker ({marker}); rejected under official human-review evaluation"
+                        )
+
+    if d_fp is not None:
+        d_fp_sql = d_fp.get("current_sqlite")
+        if d_fp_sql is not None:
+            if d_fp_sql["states"] != ["OPEN"]:
+                r03_failures.append(
+                    f"AllowlistedQuery expected final state ['OPEN'] after reopen, got {d_fp_sql['states']}"
+                )
+            d_fp_actions = [e["action"] for e in d_fp_sql["events"]]
+            if d_fp_actions != ["confirm-false", "reopen"]:
+                r03_failures.append(
+                    f"AllowlistedQuery expected events ['confirm-false', 'reopen'], got {d_fp_actions}"
+                )
+            for ev in d_fp_sql["events"]:
+                if not str(ev.get("actor", "")).strip() or not str(ev.get("reason", "")).strip():
+                    r03_failures.append(f"AllowlistedQuery event missing actor or reason: {ev}")
+                elif not allow_mock_primary:
+                    marker = _find_non_human_review_marker(ev.get("actor"), ev.get("reason"))
+                    if marker is not None:
+                        r03_failures.append(
+                            f"AllowlistedQuery event carries non-human/scripted/mock/replay marker ({marker}); rejected under official human-review evaluation"
+                        )
 
     d3a_sql = d3a.get("current_sqlite")
     if d3a_sql is not None:
@@ -1821,39 +2160,124 @@ def evaluate_acceptance(
         else ("BLOCKED" if "BLOCKED" in (r01_status, r02_status, r03_status) else "PASS")
     )
 
-    return {
+    breakdown: dict[str, int] = {
+        "demo1_true_positive": d1.get("findings_count", 0),
+        "demo2_protected_false_positive": d2.get("findings_count", 0),
+        "demo3a_missing_helper": d3a.get("findings_count", 0),
+    }
+    excluded_aux = ["m1_scan_only", "demo3b_malformed_json_mock", "demo4_stale_source"]
+    scenarios_out: dict[str, Any] = {
+        "m1_scan_only": m1,
+        "demo1_true_positive": d1,
+        "demo2_protected_false_positive": d2,
+    }
+    supplementary_r03_control: dict[str, Any] | None = None
+    if d_fp is not None:
+        excluded_aux.append("allowlisted_query_fp_control")
+        scenarios_out["allowlisted_query_fp_control"] = d_fp
+        fp_findings = d_fp.get("findings") or []
+        fp_f0 = fp_findings[0] if fp_findings and isinstance(fp_findings[0], dict) else {}
+        fp_raw_status = fp_f0.get("raw_model_status")
+        fp_val_status = fp_f0.get("validated_status")
+        fp_integrity_ok = (
+            d_fp.get("findings_count") == 1
+            and not d_fp.get("failures")
+            and not d_fp.get("r02_errors")
+            and not id_errs
+            and fp_f0.get("passed", True) is True
+        )
+        if not fp_integrity_ok or fp_val_status not in ("SUPPORTED", "REFUTED", "UNDETERMINED"):
+            fp_concurrence = "EVIDENCE_OR_CONTRACT_FAILURE"
+            fp_impact = (
+                "Supplementary AllowlistedQuery triage/identity failed evidence or contract validation; "
+                "historical R01 (4 inferences) and R02 remain unaffected, while R03 fails closed."
+            )
+        elif fp_val_status == "REFUTED":
+            fp_concurrence = "CONCURRED_REFUTED"
+            fp_impact = (
+                "Supplementary AllowlistedQuery run validly produced REFUTED concurring with human FP review; "
+                "kept separate from historical 4-call R01/R02 session."
+            )
+        elif fp_val_status == "SUPPORTED":
+            fp_concurrence = "DISAGREED_SUPPORTED"
+            fp_impact = (
+                "Model validly judged AllowlistedQuery as SUPPORTED (preserved without coercing to REFUTED); "
+                "historical R01 (4 inferences) and R02 remain unaffected and R03 human lifecycle is evaluated independently, "
+                "but acceptance documentation must report that Qwen did not concur on FP and confirm human-override policy."
+            )
+        else:
+            fp_concurrence = "ABSTAINED_UNDETERMINED"
+            fp_impact = (
+                "Model validly abstained as UNDETERMINED on AllowlistedQuery (preserved without coercing to REFUTED); "
+                "historical R01 (4 inferences) and R02 remain unaffected and R03 human lifecycle is evaluated independently, "
+                "but acceptance documentation must report Qwen abstention on the FP control and confirm human-override policy."
+            )
+        supplementary_r03_control = {
+            "scenario": "allowlisted_query_fp_control",
+            "run_separation": "SEPARATE_SUPPLEMENTARY_RUN_NOT_MERGED_WITH_G1_C5_PRIMARY_4",
+            "merged_with_g1_c5_session": False,
+            "expected_findings": 1,
+            "observed_findings": d_fp.get("findings_count", 0),
+            "triage_policy": "OBSERVED_VALID_TRIAGE",
+            "raw_model_status": fp_raw_status,
+            "validated_status": fp_val_status,
+            "model_fp_concurrence": fp_concurrence,
+            "qwen_concurred_fp": fp_val_status == "REFUTED" and fp_integrity_ok,
+            "acceptance_impact": fp_impact,
+            "run_provenance": d_fp.get("run_provenance"),
+        }
+    scenarios_out.update({
+        "demo3a_missing_helper": d3a,
+        "demo3b_malformed_json_mock": d3b,
+        "demo4_stale_source": d4,
+    })
+
+    caveats = [
+        "Read-only SQLite URI (?mode=ro) inspection only; writable ReviewStore was not used.",
+        "Human actor actions in R03 test operational lifecycle, not Ground Truth labels.",
+        "SQLite --actor strings are local unauthenticated operational identifiers (not cryptographic identity attestation); official mode rejects scripted/mock/replay markers.",
+        "HTTP 200 and raw HTTP body hashes prove client-observed transport bytes, not cryptographic model weight attestation.",
+    ]
+    if use_proposed_fp:
+        caveats.append(
+            "PROPOSED R03 FP REPLACEMENT MODE (requires operator/advisor approval to supersede locked G1-C5 Demo2 R03 contract): "
+            "Historical R01/R02 (4 G1-C5 inferences including Demo2 REFUTED) remain strictly unchanged and separate; supplementary R03 confirm-false/reopen runs on AllowlistedQuery.java without coercing Qwen to REFUTED."
+        )
+
+    out_doc: dict[str, Any] = {
         "schema": "ntk-g1-r01-r03-evaluation-1",
+        "r03_fp_mode": r03_fp_mode,
         "allow_mock_primary_test_mode": allow_mock_primary,
+        "actor_identity_model": {
+            "mechanism": "LOCAL_UNAUTHENTICATED_OPERATOR_IDENTIFIER",
+            "cryptographic_identity_verified": False,
+            "scripted_mock_replay_markers_rejected_in_official_mode": not allow_mock_primary,
+            "enforced_when_official": [
+                "non-empty stripped actor and reason required",
+                "scripted/mock/synthetic/replay actor tokens and tags rejected when allow_mock_primary=False",
+                "live Ollama HTTP capture and unmodified source hashes required when allow_mock_primary=False",
+            ],
+        },
         "overall_status": overall,
         "real_qwen_denominator": {
-            "expected": 4,
+            "expected": expected_real_total,
             "observed": real_findings_total,
-            "breakdown": {
-                "demo1_true_positive": d1.get("findings_count", 0),
-                "demo2_protected_false_positive": d2.get("findings_count", 0),
-                "demo3a_missing_helper": d3a.get("findings_count", 0),
-            },
-            "excluded_auxiliary_controls": ["m1_scan_only", "demo3b_malformed_json_mock", "demo4_stale_source"],
+            "breakdown": breakdown,
+            "excluded_auxiliary_controls": excluded_aux,
         },
         "criteria": {
             "R01": {"status": r01_status, "failures": r01_failures, "blockers": r01_blockers},
             "R02": {"status": r02_status, "failures": r02_failures, "blockers": r02_blockers},
             "R03": {"status": r03_status, "failures": r03_failures, "blockers": r03_blockers},
         },
-        "scenarios": {
-            "m1_scan_only": m1,
-            "demo1_true_positive": d1,
-            "demo2_protected_false_positive": d2,
-            "demo3a_missing_helper": d3a,
-            "demo3b_malformed_json_mock": d3b,
-            "demo4_stale_source": d4,
-        },
-        "caveats": [
-            "Read-only SQLite URI (?mode=ro) inspection only; writable ReviewStore was not used.",
-            "Human actor actions in R03 test operational lifecycle, not Ground Truth labels.",
-            "HTTP 200 and raw HTTP body hashes prove client-observed transport bytes, not cryptographic model weight attestation.",
-        ],
+        "scenarios": scenarios_out,
+        "caveats": caveats,
     }
+    if use_proposed_fp:
+        out_doc["real_qwen_denominator"]["historical_g1_c5_expected"] = 4
+        out_doc["supplementary_r03_control"] = supplementary_r03_control
+        out_doc["proposed_contract_status"] = "PROPOSED_AWAITING_OPERATOR_APPROVAL"
+    return out_doc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1864,9 +2288,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--m1-dir", type=Path, required=True)
     parser.add_argument("--demo4-dir", type=Path, required=True)
     parser.add_argument("--demo3b-dir", type=Path, default=None)
+    parser.add_argument(
+        "--r03-fp-mode",
+        choices=("locked-demo2", "proposed-allowlisted-fp"),
+        default="locked-demo2",
+        help="locked-demo2 preserves G1-C5 Demo2 R03 lifecycle; proposed-allowlisted-fp shifts R03 FP confirm-false/reopen to AllowlistedQuery.java",
+    )
+    parser.add_argument(
+        "--allowlisted-fp-dir",
+        type=Path,
+        default=None,
+        help="Scenario directory for AllowlistedQuery.java (required with --r03-fp-mode proposed-allowlisted-fp)",
+    )
     parser.add_argument("--output", type=Path, required=True, help="Output JSON file (must lie outside scenario directories)")
     parser.add_argument("--allow-mock-primary", action="store_true", help="Offline unit-test flag only; never set in real acceptance")
     args = parser.parse_args(argv)
+
+    if args.r03_fp_mode == "locked-demo2" and args.allowlisted_fp_dir is not None:
+        parser.error("--allowlisted-fp-dir requires --r03-fp-mode proposed-allowlisted-fp")
+    if args.r03_fp_mode == "proposed-allowlisted-fp" and args.allowlisted_fp_dir is None:
+        parser.error("--r03-fp-mode proposed-allowlisted-fp requires --allowlisted-fp-dir")
 
     try:
         raw_out = _validate_lexical_dir_path(args.output, label="--output")
@@ -1882,6 +2323,8 @@ def main(argv: list[str] | None = None) -> int:
     protected_dirs = [args.demo1_dir, args.demo2_dir, args.demo3a_dir, args.m1_dir, args.demo4_dir]
     if args.demo3b_dir is not None:
         protected_dirs.append(args.demo3b_dir)
+    if args.allowlisted_fp_dir is not None:
+        protected_dirs.append(args.allowlisted_fp_dir)
     for p_dir in protected_dirs:
         if os.path.lexists(p_dir):
             abs_p = Path(os.path.abspath(p_dir))
@@ -1901,6 +2344,8 @@ def main(argv: list[str] | None = None) -> int:
         m1_dir=args.m1_dir,
         demo4_dir=args.demo4_dir,
         demo3b_dir=args.demo3b_dir,
+        allowlisted_fp_dir=args.allowlisted_fp_dir,
+        r03_fp_mode=args.r03_fp_mode,
         allow_mock_primary=args.allow_mock_primary,
     )
     try:

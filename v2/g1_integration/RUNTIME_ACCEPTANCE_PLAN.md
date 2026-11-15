@@ -467,3 +467,100 @@ if ($PostHead -ne $ExpectedCommit -or $PostTree -ne $ExpectedTree -or $PostStatu
 - **`R01 = FAIL`** nếu phát sinh `INVALID_CITATION` hoặc thiếu kết luận dứt khoát hợp lệ trên Demo1/Demo2, hoặc Demo3a trả `SUPPORTED` / `REFUTED` (kể cả khi bị validator chặn xuống `UNDETERMINED`) hay chỉ thành `UNDETERMINED` do lỗi JSON/timeout. Giữ nguyên toàn bộ hiện vật lần chạy thất bại; **cấm chạy đè hoặc xóa lần lỗi**.
 - **`R02 = PASS`** khi và chỉ khi M1 `--scan-only` không tạo `triage/` và khớp byte với báo cáo legacy, `triage_subprocess_invocations == 0` ở cả ba lượt G1, mã băm nguồn trước/sau khớp tuyệt đối, và đối chiếu đa tập JSON/SARIF (`contracts.compare_sarif`) đạt.
 - **`R03 = PASS`** khi và chỉ khi kiểm tra SQLite chỉ-đọc (`?mode=ro`) xác nhận đầy đủ chuyển trạng thái `OPEN -> CONFIRMED_TRUE` (Demo1), `OPEN -> CONFIRMED_FALSE` (ẩn khỏi `queue`, còn trong `queue --all`) `-> OPEN` (Demo2), và từ chối `STALE_SOURCE` mã thoát `2` trên `Demo4` (`OPEN`, `0` accepted events, `1` `rejected_decisions`).
+
+---
+
+## 12. Bản Đề Xuất Điều Chỉnh Ca Xác Nhận FP Cho R03 (`PROPOSED` — Chờ Phê Duyệt)
+
+> [!WARNING]
+> **CHƯA THAY THẾ HỢP ĐỒNG KHÓA G1-C5 TRƯỚC KHI ĐƯỢC PHÊ DUYỆT.**
+> Các bước dưới đây chỉ áp dụng khi người vận hành / giảng viên phê duyệt chuyển ca xác nhận False Positive (`confirm-false -> reopen`) trong `R03` từ `Demo2ProtectedFalsePositive.java` sang `AllowlistedQuery.java`. Toàn bộ kết quả `R01`/`R02` đã ghi nhận và bằng chứng `Demo2` (`REFUTED` lịch sử) được giữ nguyên vẹn để phân tích giới hạn bảo mật (`TOCTOU`/symlink trên `getCanonicalPath().startsWith("/srv/reports/")`), không xóa hay ghi đè dữ liệu G1-C5 cũ.
+
+### 12.1. Lý Do Đề Xuất & Phạm Vi Thay Đổi
+
+1. **`Demo2ProtectedFalsePositive.java` giữ nguyên cho phân tích giới hạn bảo mật:** mẫu `File.getCanonicalPath().startsWith("/srv/reports/")` trước `new FileInputStream(candidate)` có rủi ro `TOCTOU`/symlink giữa thời điểm kiểm tra đường dẫn và thời điểm mở tệp, nên người kiểm duyệt con người có cơ sở bảo mật hợp lý để không xác nhận FP đối với `Demo2`.
+2. **Ca FP thay thế `v2/g1_integration/demo_fixtures/AllowlistedQuery.java` (`sha256=abc630a66432797904d5f81d69a80b14e73dbea55cad80beddcc505d41e2ea43`):** tái sử dụng mẫu `SAFE_JAVA` từ `v2/triage/demo_queue.py`. Đầu vào SQL không tin cậy `req.getParameter("q")` đi qua rule `CWE-89`, nhưng nhánh phòng vệ `if (!"SELECT 1".equals(query)) { throw new IllegalArgumentException("Only SELECT 1 is allowed"); }` chỉ cho phép đúng hằng chuỗi `"SELECT 1"` tới `stmt.executeQuery(query)`, hoàn toàn trong bộ nhớ, không phụ thuộc hệ thống tệp/symlink/`TOCTOU`.
+3. **Tách biệt tuyệt đối phiên G1-C5 lịch sử và lượt bổ sung `AllowlistedQuery` (`R01`/`R02` bất biến):**
+   - `R01` giữ nguyên tuyệt đối **đúng 4 lượt Qwen thật lịch sử của G1-C5 (`Demo1=2 + Demo2=1 + Demo3a=1`)**; `R02`, `M1`, `Demo3b` (`SYNTHETIC_MOCK_HTTP`) và `Demo4` (`STALE_SOURCE`, exit code `2`) giữ nguyên toàn bộ tiêu chí và kết quả lịch sử.
+   - `Demo2` giữ nguyên trạng thái `OPEN` (`0` sự kiện xác nhận FP) trong chế độ `proposed-allowlisted-fp`.
+   - Lượt chạy `AllowlistedQuery` được ghi vào thư mục riêng và vùng báo cáo tách biệt (`supplementary_r03_control`), **không cộng vào mẫu số R01 (`4`, không đổi thành `5`)** và **không gộp chung hai phiên chạy khác nhau thành một phiên thực nghiệm đồng nhất**.
+4. **Phân biệt ba lớp đối với kiểm duyệt người dùng:**
+   - (1) **Chức năng vòng đời SQLite hoạt động đúng** (`confirm-true`, `confirm-false`, `queue`, `queue --all`, `reopen`, `history`, `STALE_SOURCE`), có thể kiểm chứng kỹ thuật bằng dữ liệu kiểm thử tách biệt (`--allow-mock-primary` cho test tự động).
+   - (2) **Quyết định thực sự được người vận hành phê duyệt** tại nghiệm thu chính thức (`allow_mock_primary=False`): mọi sự kiện gắn nhãn `SCRIPTED_TEST_ONLY`, `mock`, `synthetic`, `replay` hoặc thiếu HTTP capture thật đều bị từ chối.
+   - (3) **Giới hạn kiểm chứng danh tính ở mức hệ thống:** tham số `--actor` chỉ lưu chuỗi định danh vận hành cục bộ (được kiểm tra khác rỗng, không chứa dấu hiệu kiểm thử giả/mock/scripted), **không phải xác thực danh tính bằng mật mã**.
+
+### 12.2. Thực Thi Bổ Sung Trên `ADMIN-PC` Sau Khi Được Phê Duyệt (`1` Lượt Qwen Thật Bổ Sung + Vòng Đời R03)
+
+Sử dụng thư mục chạy mới hoàn toàn cho riêng phần bổ sung và **tuyệt đối không sửa** thư mục đã kiểm toán của `G1-C5` (dùng `$OperatorActor` và `$LeadActor` thật của phiên vận hành; không dùng `SCRIPTED_TEST_ONLY`):
+
+```powershell
+# Khởi tạo thư mục con mới cho AllowlistedQuery (không ghi đè run G1-C5 đã khóa)
+$AllowQDir = "$SessionRoot\allowlisted_query_fp"
+Assert-FreshAbsent -TargetPath $AllowQDir
+
+# 1. Quét OpenGrep + Qwen cục bộ (--prompt-contract blind, raw HTTP capture) trên AllowlistedQuery.java
+Invoke-ReceiptStep -Step "P1_allowq_scan_qwen" -CommandArgv @(
+    $VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "scan",
+    "$CheckoutDir\v2\g1_integration\demo_fixtures\AllowlistedQuery.java",
+    "--rules-path", "$CheckoutDir\v2\g1_integration\rules\java_g1_cwe22_cwe89.yml",
+    "--output-dir", $AllowQDir,
+    "--executable", $OpenGrepExe,
+    "--local-triage",
+    "--endpoint", "http://127.0.0.1:11434",
+    "--model", "qwen3.5:9b-q4_K_M",
+    "--prompt-contract", "blind",
+    "--timeout", "180"
+)
+Copy-Item -LiteralPath "$AllowQDir\triage\review.sqlite" -Destination "$AllowQDir\triage\review.post_ingestion.sqlite"
+
+# 2. Xác minh HTTP capture thật và trạng thái OPEN trước khi con người kiểm duyệt
+Invoke-ReceiptStep -Step "P2_allowq_verify_http" -CommandArgv @(
+    $VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture",
+    "$AllowQDir\triage", "--require-live-chat", "--minimum-findings", "1",
+    "--output", "$AuditOut\allowlisted_query-http.json"
+)
+$AllowQDb = "$AllowQDir\triage\review.sqlite"
+$AllowQQueueRaw = Invoke-ReceiptStep -Step "P3_allowq_queue_initial" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "queue", "--db", $AllowQDb)
+$AllowQJson = $AllowQQueueRaw.stdout | ConvertFrom-Json
+$AllowQId = $AllowQJson.warnings[0].id
+
+# 3. Người kiểm duyệt con người thực hiện R03 lifecycle: confirm-false -> queue (ẩn) -> queue --all -> reopen -> history
+Invoke-ReceiptStep -Step "P4_allowq_show" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "show", $AllowQId, "--db", $AllowQDb)
+Invoke-ReceiptStep -Step "P5_allowq_confirm_false" -CommandArgv @(
+    $VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "confirm-false", $AllowQId,
+    "--db", $AllowQDb, "--actor", $OperatorActor,
+    "--reason", "Verified in-memory exact literal allowlist !SELECT-1.equals(query) throws before executeQuery; no TOCTOU risk"
+)
+Copy-Item -LiteralPath $AllowQDb -Destination "$AllowQDir\triage\review.after_confirm_false.sqlite"
+Invoke-ReceiptStep -Step "P6_allowq_queue_hidden" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "queue", "--db", $AllowQDb)
+Invoke-ReceiptStep -Step "P7_allowq_queue_all" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "queue", "--db", $AllowQDb, "--all")
+Invoke-ReceiptStep -Step "P8_allowq_reopen" -CommandArgv @(
+    $VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "reopen", $AllowQId,
+    "--db", $AllowQDb, "--actor", $LeadActor,
+    "--reason", "R03 reopen lifecycle verification on AllowlistedQuery control"
+)
+Invoke-ReceiptStep -Step "P9_allowq_queue_reopened" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "queue", "--db", $AllowQDb)
+Invoke-ReceiptStep -Step "P10_allowq_history" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "history", $AllowQId, "--db", $AllowQDb, "--include-rejected")
+
+# 4. Đánh giá bằng chế độ opt-in đề xuất (chỉ dùng sau khi chế độ proposed-allowlisted-fp được phê duyệt)
+Invoke-ReceiptStep -Step "P11_evaluate_r01_r03_proposed" -CommandArgv @(
+    $VenvPython, "-X", "utf8", "-B", "-m", "v2.g1_integration.evaluate_r01_r03",
+    "--demo1-dir", $Demo1Dir,
+    "--demo2-dir", $Demo2Dir,
+    "--demo3a-dir", $Demo3aDir,
+    "--m1-dir", $M1Dir,
+    "--demo3b-dir", "$ControlsDir\demo3b_malformed_llm_synthetic_mock",
+    "--demo4-dir", "$ControlsDir\demo4_stale_source",
+    "--r03-fp-mode", "proposed-allowlisted-fp",
+    "--allowlisted-fp-dir", $AllowQDir,
+    "--output", "$AuditOut\r01_r03_proposed_evaluation.json"
+)
+```
+
+### 12.3. Tiêu Chí Chế Độ Đề Xuất (`--r03-fp-mode proposed-allowlisted-fp`)
+
+- Mặc định (`--r03-fp-mode locked-demo2`) vẫn giữ nguyên toàn bộ hợp đồng `G1-C5` đã khóa.
+- Ở chế độ `proposed-allowlisted-fp`, bộ đánh giá chỉ-đọc `v2.g1_integration.evaluate_r01_r03`:
+  - Giữ nguyên tuyệt đối `R01` (**4** lượt Qwen thật G1-C5: `Demo1=2`, `Demo2=1`, `Demo3a=1`, cộng `Demo3b` mock control) và `R02` (`M1` + parity 4 lượt lịch sử), không thay đổi kết quả hay mẫu số `R01`.
+  - Xác minh riêng `allowlisted_query_fp_control` trong phạm vi `R03` (`supplementary_r03_control` tách biệt): đúng định danh/SHA-256 fixture `AllowlistedQuery.java` và guard `throw`, HTTP capture thật, prompt `blind`, validator/replay không bị hạ cấp (`validator_downgraded == false`, `failure_kind == "NONE"`, citation hợp lệ khi có kết luận hoặc trích dẫn), cùng chuỗi `review.post_ingestion.sqlite` (`OPEN`) -> `review.after_confirm_false.sqlite` (`CONFIRMED_FALSE`) -> `reopen` (`OPEN`) bởi actor không mang nhãn `SCRIPTED_TEST_ONLY`/mock/replay.
+  - **Không ép trạng thái Qwen thành `REFUTED`:** `OBSERVED_VALID_TRIAGE` chấp nhận kết luận hợp lệ (`REFUTED`, `SUPPORTED`, hoặc `UNDETERMINED`) miễn là qua validator/replay và citation hợp lệ. Nếu Qwen trả `SUPPORTED` hoặc `UNDETERMINED` hợp lệ, bộ đánh giá giữ nguyên trạng thái quan sát được trong `supplementary_r03_control`, ghi rõ `model_fp_concurrence` (`DISAGREED_SUPPORTED` / `ABSTAINED_UNDETERMINED`) và `acceptance_impact` để người kiểm duyệt / giảng viên xác nhận chính sách ngoại lệ FP thay vì chạy lại hoặc che giấu kết quả. Nếu Qwen hỏng định dạng/JSON hoặc citation sai chuẩn (`INVALID_CITATION`, fallback/downgrade), `R03 = FAIL` (vẫn không làm đổi `R01`).
