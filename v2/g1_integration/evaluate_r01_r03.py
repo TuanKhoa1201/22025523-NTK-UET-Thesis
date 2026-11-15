@@ -590,12 +590,492 @@ def _verify_sqlite_against_triage(
     return errors
 
 
+def _roots_overlap_or_nest(path_a: Path, path_b: Path) -> bool:
+    """Return True when two resolved directories are identical or nested inside one another."""
+    return path_a == path_b or path_a.is_relative_to(path_b) or path_b.is_relative_to(path_a)
+
+
+def _collect_safe_rel_files(
+    root: Path,
+    *,
+    prefix: str,
+    allow_subdirs: bool = True,
+    excluded_top_dirs: frozenset[str] = frozenset(),
+) -> tuple[dict[str, Path] | None, list[str]]:
+    """Walk root safely without following symlinks/junctions and return relative-POSIX file map."""
+    if not _is_safe_dir(root):
+        return None, [f"{prefix}: unsafe, missing, or reparse-linked directory: {root}"]
+    root_resolved = root.resolve(strict=True)
+    rel_files: dict[str, Path] = {}
+    errors: list[str] = []
+    stack: list[Path] = [root_resolved]
+    while stack:
+        cur = stack.pop()
+        try:
+            entries = sorted(cur.iterdir(), key=lambda p: p.name)
+        except OSError as exc:
+            errors.append(f"{prefix}: cannot list directory {cur}: {exc}")
+            continue
+        for entry in entries:
+            rel_posix = entry.relative_to(root_resolved).as_posix()
+            if is_reparse_link(entry):
+                errors.append(f"{prefix}: forbidden symlink/junction entry: {rel_posix}")
+                continue
+            try:
+                st = os.lstat(entry)
+            except OSError as exc:
+                errors.append(f"{prefix}: cannot lstat entry {rel_posix}: {exc}")
+                continue
+            if stat.S_ISDIR(st.st_mode):
+                if cur == root_resolved and entry.name in excluded_top_dirs:
+                    continue
+                if not allow_subdirs:
+                    errors.append(f"{prefix}: unexpected subdirectory {rel_posix}")
+                    continue
+                if not _is_safe_dir(entry):
+                    errors.append(f"{prefix}: unsafe subdirectory {rel_posix}")
+                    continue
+                stack.append(entry)
+            elif stat.S_ISREG(st.st_mode):
+                if not _is_safe_regular_file(entry):
+                    errors.append(f"{prefix}: unsafe regular file {rel_posix}")
+                    continue
+                rel_files[rel_posix] = entry
+            else:
+                errors.append(f"{prefix}: unsupported non-regular entry {rel_posix}")
+    return rel_files, errors
+
+
+def _compare_safe_file_maps(
+    prefix: str,
+    label: str,
+    *,
+    orig_files: dict[str, Path],
+    review_files: dict[str, Path],
+) -> list[str]:
+    """Compare relative file keys, raw bytes, and SHA-256 digests between original and review copy."""
+    errors: list[str] = []
+    orig_keys = set(orig_files)
+    rev_keys = set(review_files)
+    missing_in_rev = sorted(orig_keys - rev_keys)
+    extra_in_rev = sorted(rev_keys - orig_keys)
+    if missing_in_rev:
+        errors.append(f"{prefix}: {label} missing in relocated review copy: {missing_in_rev}")
+    if extra_in_rev:
+        errors.append(f"{prefix}: {label} unexpected extra file(s) in relocated review copy: {extra_in_rev}")
+    for rel_key in sorted(orig_keys & rev_keys):
+        orig_bytes = orig_files[rel_key].read_bytes()
+        rev_bytes = review_files[rel_key].read_bytes()
+        if rev_bytes != orig_bytes or digest(rev_bytes) != digest(orig_bytes):
+            errors.append(f"{prefix}: relocated {label} {rel_key!r} diverges from pinned original")
+    return errors
+
+
+def _verify_relocated_capture_parity(
+    prefix: str,
+    *,
+    review_capture_dir: Path,
+    original_capture_dir: Path,
+    review_manifest: dict[str, Any] | None,
+) -> list[str]:
+    """Verify full file-inventory and byte-for-byte parity between relocated capture and pinned original capture."""
+    errors: list[str] = []
+    orig_top, orig_top_errs = _collect_safe_rel_files(
+        original_capture_dir,
+        prefix=f"{prefix} original capture",
+        allow_subdirs=False,
+        excluded_top_dirs=frozenset({"legacy_reports"}),
+    )
+    rev_top, rev_top_errs = _collect_safe_rel_files(
+        review_capture_dir,
+        prefix=f"{prefix} review capture",
+        allow_subdirs=False,
+        excluded_top_dirs=frozenset({"legacy_reports"}),
+    )
+    errors.extend(orig_top_errs)
+    errors.extend(rev_top_errs)
+    if orig_top is not None and rev_top is not None:
+        for fixed_name in ("cli-origin.json", "scan-manifest.json"):
+            if fixed_name not in orig_top or fixed_name not in rev_top:
+                errors.append(
+                    f"{prefix}: missing or unsafe {fixed_name} during relocated capture parity check"
+                )
+        errors.extend(
+            _compare_safe_file_maps(
+                prefix,
+                "capture file",
+                orig_files=orig_top,
+                review_files=rev_top,
+            )
+        )
+
+    orig_legacy = original_capture_dir / "legacy_reports"
+    rev_legacy = review_capture_dir / "legacy_reports"
+    orig_legacy_exists = os.path.lexists(orig_legacy)
+    rev_legacy_exists = os.path.lexists(rev_legacy)
+    orig_leg_files: dict[str, Path] | None = None
+    if orig_legacy_exists:
+        orig_leg_files, orig_leg_errs = _collect_safe_rel_files(
+            orig_legacy, prefix=f"{prefix} original capture/legacy_reports", allow_subdirs=True
+        )
+        errors.extend(orig_leg_errs)
+    if rev_legacy_exists:
+        rev_leg_files, rev_leg_errs = _collect_safe_rel_files(
+            rev_legacy, prefix=f"{prefix} review capture/legacy_reports", allow_subdirs=True
+        )
+        errors.extend(rev_leg_errs)
+        if not orig_legacy_exists:
+            errors.append(
+                f"{prefix}: relocated review copy contains legacy_reports/ absent from pinned original capture"
+            )
+        elif orig_leg_files is not None and rev_leg_files is not None:
+            errors.extend(
+                _compare_safe_file_maps(
+                    prefix,
+                    "capture/legacy_reports file",
+                    orig_files=orig_leg_files,
+                    review_files=rev_leg_files,
+                )
+            )
+
+    if isinstance(review_manifest, dict) and isinstance(review_manifest.get("artifacts"), dict):
+        for art_name in sorted(review_manifest["artifacts"]):
+            if (
+                not isinstance(art_name, str)
+                or Path(art_name).name != art_name
+                or "/" in art_name
+                or "\\" in art_name
+                or ":" in art_name
+                or art_name in (".", "..")
+            ):
+                continue
+            rev_art = review_capture_dir / art_name
+            orig_art = original_capture_dir / art_name
+            if not _is_safe_regular_file(rev_art) or not _is_safe_regular_file(orig_art):
+                errors.append(
+                    f"{prefix}: missing or unsafe relocated artifact {art_name!r} in review copy or pinned original capture"
+                )
+            elif rev_art.read_bytes() != orig_art.read_bytes():
+                errors.append(
+                    f"{prefix}: relocated review artifact {art_name!r} bytes differ from pinned original capture"
+                )
+    return errors
+
+
+_TRIAGE_IMMUTABLE_CORE = frozenset({
+    "evidence.json",
+    "assessments.jsonl",
+    "input.opengrep.json",
+    "review.post_ingestion.sqlite",
+})
+_TRIAGE_IMMUTABLE_LLM_OPTIONAL = frozenset({
+    "live-protocol-check.json",
+    "ollama-tags-check.json",
+})
+
+
+def _collect_safe_triage_top_entries(
+    triage_dir: Path,
+    *,
+    prefix: str,
+    expect_llm: bool,
+    allow_after_confirm_false: bool,
+) -> tuple[dict[str, Path] | None, list[str]]:
+    """Inspect direct entries of triage/ for symlink safety, expected files, and zero rogue extras."""
+    if not _is_safe_dir(triage_dir):
+        return None, [f"{prefix}: unsafe, missing, or reparse-linked triage dir: {triage_dir}"]
+    errors: list[str] = []
+    immutable_files: dict[str, Path] = {}
+    required_immutable = set(_TRIAGE_IMMUTABLE_CORE)
+    if expect_llm:
+        required_immutable.add("http-capture-check.json")
+    allowed_immutable = set(required_immutable)
+    if expect_llm:
+        allowed_immutable.update(_TRIAGE_IMMUTABLE_LLM_OPTIONAL)
+
+    allowed_sqlite_mutable = {
+        "review.sqlite",
+        "review.sqlite-wal",
+        "review.sqlite-shm",
+    }
+    if allow_after_confirm_false:
+        allowed_sqlite_mutable.update({
+            "review.after_confirm_false.sqlite",
+            "review.after_confirm_false.sqlite-wal",
+            "review.after_confirm_false.sqlite-shm",
+        })
+
+    saw_llm_io = False
+    try:
+        entries = sorted(triage_dir.iterdir(), key=lambda p: p.name)
+    except OSError as exc:
+        return None, [f"{prefix}: cannot list triage dir {triage_dir}: {exc}"]
+
+    for entry in entries:
+        name = entry.name
+        if is_reparse_link(entry):
+            errors.append(f"{prefix}: triage contains symlink/junction entry: {name}")
+            continue
+        try:
+            st = os.lstat(entry)
+        except OSError as exc:
+            errors.append(f"{prefix}: cannot lstat triage entry {name}: {exc}")
+            continue
+        if stat.S_ISDIR(st.st_mode):
+            if name == "llm_io" and expect_llm:
+                saw_llm_io = True
+                if not _is_safe_dir(entry):
+                    errors.append(f"{prefix}: unsafe triage/llm_io directory")
+            else:
+                errors.append(f"{prefix}: unexpected triage subdirectory {name!r}")
+        elif stat.S_ISREG(st.st_mode):
+            if not _is_safe_regular_file(entry):
+                errors.append(f"{prefix}: unsafe triage regular file {name}")
+                continue
+            if name in ("review.post_ingestion.sqlite-wal", "review.post_ingestion.sqlite-shm"):
+                errors.append(f"{prefix}: forbidden ingestion snapshot SQLite sidecar in triage/: {name!r}")
+            elif name in allowed_immutable:
+                immutable_files[name] = entry
+            elif name in allowed_sqlite_mutable:
+                if name.endswith("-wal") and st.st_size > 0:
+                    errors.append(f"{prefix}: non-empty uncheckpointed SQLite WAL present: {name}")
+            else:
+                errors.append(f"{prefix}: unexpected extra file in triage/: {name!r}")
+        else:
+            errors.append(f"{prefix}: non-regular entry in triage/: {name!r}")
+
+    missing_req = sorted(required_immutable - set(immutable_files))
+    if missing_req:
+        errors.append(f"{prefix}: missing mandatory triage file(s): {missing_req}")
+    if expect_llm and not saw_llm_io:
+        errors.append(f"{prefix}: missing mandatory triage/llm_io directory")
+    return immutable_files, errors
+
+
+def _verify_relocated_scenario_provenance(
+    prefix: str,
+    *,
+    review_scenario_dir: Path,
+    review_capture_dir: Path,
+    trusted_original_scenario_dir: Path | None,
+    trusted_original_capture_dir: Path | None,
+    expect_llm: bool,
+    expect_live_source_current: bool,
+    require_after_confirm_false: bool,
+) -> tuple[list[str], list[str], Path | None]:
+    """Verify full original scenario vs relocated review copy provenance, inventory, and pre-review byte parity."""
+    if trusted_original_scenario_dir is None and trusted_original_capture_dir is None:
+        return [], [], None
+    if trusted_original_scenario_dir is None or trusted_original_capture_dir is None:
+        msg = (
+            f"{prefix}: relocation pinning requires BOTH trusted_original_scenario_dir and "
+            "trusted_original_capture_dir to be provided together"
+        )
+        return [msg], [msg], None
+
+    capture_errors: list[str] = []
+    triage_manifest_errors: list[str] = []
+
+    raw_orig_scen = Path(trusted_original_scenario_dir)
+    raw_orig_cap = Path(trusted_original_capture_dir)
+    if _has_parent_traversal(raw_orig_scen) or not _is_safe_dir(raw_orig_scen):
+        capture_errors.append(
+            f"{prefix}: unsafe, missing, or reparse-linked trusted_original_scenario_dir: {raw_orig_scen}"
+        )
+    if _has_parent_traversal(raw_orig_cap) or not _is_safe_dir(raw_orig_cap):
+        capture_errors.append(
+            f"{prefix}: unsafe, missing, or reparse-linked trusted_original_capture_dir: {raw_orig_cap}"
+        )
+    if capture_errors:
+        return capture_errors, list(capture_errors), None
+
+    orig_scen = raw_orig_scen.resolve(strict=True)
+    orig_cap = raw_orig_cap.resolve(strict=True)
+    rev_scen = review_scenario_dir.resolve(strict=True)
+    rev_cap = review_capture_dir.resolve(strict=True)
+
+    if _roots_overlap_or_nest(orig_scen, rev_scen):
+        msg = (
+            f"{prefix}: trusted_original_scenario_dir ({orig_scen}) cannot equal or nest with "
+            f"review scenario_dir ({rev_scen}) (self-pinning rejected)"
+        )
+        capture_errors.append(msg)
+        triage_manifest_errors.append(msg)
+    if _roots_overlap_or_nest(orig_cap, rev_cap):
+        msg = (
+            f"{prefix}: trusted_original_capture_dir ({orig_cap}) cannot equal or nest with "
+            f"review capture_dir ({rev_cap}) (self-pinning rejected)"
+        )
+        capture_errors.append(msg)
+        triage_manifest_errors.append(msg)
+
+    expected_orig_cap_path = orig_scen / "capture"
+    if os.path.lexists(expected_orig_cap_path) and is_reparse_link(expected_orig_cap_path):
+        msg = f"{prefix}: original scenario capture/ is a symlink/junction: {expected_orig_cap_path}"
+        capture_errors.append(msg)
+        triage_manifest_errors.append(msg)
+    elif not _is_safe_dir(expected_orig_cap_path) or orig_cap != expected_orig_cap_path.resolve(strict=True):
+        msg = (
+            f"{prefix}: trusted_original_capture_dir ({orig_cap}) is not bound to "
+            f"trusted_original_scenario_dir/capture ({expected_orig_cap_path})"
+        )
+        capture_errors.append(msg)
+        triage_manifest_errors.append(msg)
+
+    # Top-level scenario inventory & manifest byte parity
+    allowed_top = {"capture", "triage", "g1-run-manifest.json", "g1-cli-summary.json"}
+    try:
+        orig_top_entries = {p.name: p for p in orig_scen.iterdir()}
+        rev_top_entries = {p.name: p for p in rev_scen.iterdir()}
+    except OSError as exc:
+        msg = f"{prefix}: cannot inspect top-level scenario entries during relocation check: {exc}"
+        return capture_errors + [msg], triage_manifest_errors + [msg], orig_cap
+
+    for side_label, entries in (("original scenario", orig_top_entries), ("relocated review copy", rev_top_entries)):
+        for name, entry in sorted(entries.items()):
+            if is_reparse_link(entry):
+                triage_manifest_errors.append(f"{prefix}: {side_label} top-level entry is symlink/junction: {name}")
+            if name not in allowed_top:
+                triage_manifest_errors.append(f"{prefix}: {side_label} contains unexpected top-level entry: {name!r}")
+
+    if set(orig_top_entries) != set(rev_top_entries):
+        triage_manifest_errors.append(
+            f"{prefix}: top-level scenario inventory differs between pinned original "
+            f"({sorted(orig_top_entries)}) and review copy ({sorted(rev_top_entries)})"
+        )
+    for top_json_name in ("g1-run-manifest.json", "g1-cli-summary.json"):
+        orig_in = top_json_name in orig_top_entries
+        rev_in = top_json_name in rev_top_entries
+        if not orig_in and not rev_in:
+            if top_json_name == "g1-run-manifest.json":
+                triage_manifest_errors.append(f"{prefix}: missing mandatory g1-run-manifest.json")
+            continue
+        orig_f = orig_scen / top_json_name
+        rev_f = rev_scen / top_json_name
+        if not _is_safe_regular_file(orig_f) or not _is_safe_regular_file(rev_f):
+            triage_manifest_errors.append(f"{prefix}: missing or unsafe {top_json_name} during relocation parity check")
+        else:
+            ob = orig_f.read_bytes()
+            rb = rev_f.read_bytes()
+            if ob != rb or digest(ob) != digest(rb):
+                triage_manifest_errors.append(
+                    f"{prefix}: relocated {top_json_name} diverges from pinned original scenario"
+                )
+
+    # Independent verification of original scenario pre-review triage integrity
+    orig_triage = orig_scen / "triage"
+    rev_triage = rev_scen / "triage"
+    orig_man_path = orig_scen / "g1-run-manifest.json"
+    orig_man: dict[str, Any] | None = None
+    if _is_safe_regular_file(orig_man_path):
+        try:
+            parsed_om = strict_json(orig_man_path.read_text(encoding="utf-8"))
+            if isinstance(parsed_om, dict) and parsed_om.get("schema") == "ntk-g1-run-manifest-1":
+                orig_man = parsed_om
+            else:
+                triage_manifest_errors.append(f"{prefix}: original g1-run-manifest schema invalid")
+        except (OSError, UnicodeError, EvidenceError) as exc:
+            triage_manifest_errors.append(f"{prefix}: original g1-run-manifest invalid JSON: {exc}")
+
+    if isinstance(orig_man, dict):
+        orig_artifacts = orig_man.get("artifacts")
+        expected_pairs: list[tuple[str, Path, str | None]] = [
+            ("opengrep_json", orig_cap / "opengrep.json", None),
+            ("opengrep_sarif", orig_cap / "opengrep.sarif", None),
+            ("scan_manifest", orig_cap / "scan-manifest.json", None),
+            ("cli_origin", orig_cap / "cli-origin.json", None),
+            ("evidence_json", orig_triage / "evidence.json", None),
+            ("assessments_jsonl", orig_triage / "assessments.jsonl", None),
+            ("review_sqlite", orig_triage / "review.post_ingestion.sqlite", "review.sqlite"),
+        ]
+        if expect_llm:
+            expected_pairs.append(("http_capture_check", orig_triage / "http-capture-check.json", None))
+        for akey, apath, exp_base in expected_pairs:
+            _, art_errs = _verify_manifest_artifact_hash(
+                f"{prefix} original",
+                orig_artifacts,
+                akey,
+                apath,
+                expected_basename=exp_base,
+            )
+            triage_manifest_errors.extend(art_errs)
+        if expect_llm:
+            orig_http = verify_run_http_captures(orig_triage, require_live_chat=False, minimum_findings=1)
+            if not orig_http["capture_integrity_ok"]:
+                triage_manifest_errors.append(
+                    f"{prefix}: original triage raw HTTP capture integrity failed: {orig_http['errors']}"
+                )
+        else:
+            http_entry = orig_artifacts.get("http_capture_check") if isinstance(orig_artifacts, dict) else None
+            if not isinstance(http_entry, dict) or http_entry.get("sha256") is not None:
+                triage_manifest_errors.append(
+                    f"{prefix}: original --no-llm artifacts.http_capture_check must have sha256=null"
+                )
+        if _is_safe_regular_file(orig_cap / "opengrep.json") and _is_safe_regular_file(orig_triage / "input.opengrep.json"):
+            if (orig_cap / "opengrep.json").read_bytes() != (orig_triage / "input.opengrep.json").read_bytes():
+                triage_manifest_errors.append(
+                    f"{prefix}: original triage/input.opengrep.json differs from original capture/opengrep.json"
+                )
+
+    # Strict triage/ inventory and raw-byte parity (only post-review review.sqlite / after_confirm_false may diverge)
+    orig_imm, orig_triage_errs = _collect_safe_triage_top_entries(
+        orig_triage,
+        prefix=f"{prefix} original triage",
+        expect_llm=expect_llm,
+        allow_after_confirm_false=require_after_confirm_false,
+    )
+    rev_imm, rev_triage_errs = _collect_safe_triage_top_entries(
+        rev_triage,
+        prefix=f"{prefix} review triage",
+        expect_llm=expect_llm,
+        allow_after_confirm_false=require_after_confirm_false,
+    )
+    triage_manifest_errors.extend(orig_triage_errs)
+    triage_manifest_errors.extend(rev_triage_errs)
+    if orig_imm is not None and rev_imm is not None:
+        triage_manifest_errors.extend(
+            _compare_safe_file_maps(
+                prefix,
+                "triage pre-review artifact",
+                orig_files=orig_imm,
+                review_files=rev_imm,
+            )
+        )
+
+    if expect_llm:
+        orig_llm_files, orig_llm_errs = _collect_safe_rel_files(
+            orig_triage / "llm_io", prefix=f"{prefix} original triage/llm_io", allow_subdirs=True
+        )
+        rev_llm_files, rev_llm_errs = _collect_safe_rel_files(
+            rev_triage / "llm_io", prefix=f"{prefix} review triage/llm_io", allow_subdirs=True
+        )
+        triage_manifest_errors.extend(orig_llm_errs)
+        triage_manifest_errors.extend(rev_llm_errs)
+        if orig_llm_files is not None and rev_llm_files is not None:
+            if not orig_llm_files:
+                triage_manifest_errors.append(f"{prefix}: original triage/llm_io contains zero captured files")
+            else:
+                triage_manifest_errors.extend(
+                    _compare_safe_file_maps(
+                        prefix,
+                        "triage/llm_io raw capture file",
+                        orig_files=orig_llm_files,
+                        review_files=rev_llm_files,
+                    )
+                )
+
+    # Also ensure capture verification uses original capture directory when expect_live_source_current varies cleanly
+    _ = expect_live_source_current
+    return capture_errors, triage_manifest_errors, orig_cap
+
+
 def _verify_capture_dir_integrity(
     prefix: str,
     capture_dir: Path,
     *,
     expected_cli_mode: str,
     expect_live_source_current: bool,
+    trusted_original_capture_dir: Path | None = None,
 ) -> tuple[list[str], dict[str, Any] | None]:
     errors: list[str] = []
     if not _is_safe_dir(capture_dir):
@@ -608,6 +1088,35 @@ def _verify_capture_dir_integrity(
     for entry in entries:
         if is_reparse_link(entry):
             errors.append(f"{prefix}: capture contains symlink/junction entry: {entry.name}")
+    legacy_copy_dir = capture_dir / "legacy_reports"
+    if os.path.lexists(legacy_copy_dir) and not _is_safe_dir(legacy_copy_dir):
+        errors.append(f"{prefix}: unsafe or reparse-linked legacy_reports directory in capture dir: {legacy_copy_dir}")
+
+    orig_capture_resolved: Path | None = None
+    if trusted_original_capture_dir is not None:
+        raw_orig = Path(trusted_original_capture_dir)
+        cap_resolved = capture_dir.resolve(strict=True)
+        if _has_parent_traversal(raw_orig) or not _is_safe_dir(raw_orig):
+            errors.append(
+                f"{prefix}: unsafe, missing, or reparse-linked trusted_original_capture_dir: {raw_orig}"
+            )
+        else:
+            orig_cap = raw_orig.resolve(strict=True)
+            orig_capture_resolved = orig_cap
+            if _roots_overlap_or_nest(orig_cap, cap_resolved):
+                errors.append(
+                    f"{prefix}: trusted_original_capture_dir ({orig_cap}) cannot equal or nest with "
+                    f"review capture_dir ({cap_resolved}) (self-pinning rejected)"
+                )
+            else:
+                orig_errors, _ = _verify_capture_dir_integrity(
+                    f"{prefix} original capture",
+                    orig_cap,
+                    expected_cli_mode=expected_cli_mode,
+                    expect_live_source_current=expect_live_source_current,
+                    trusted_original_capture_dir=None,
+                )
+                errors.extend(orig_errors)
 
     origin_path = capture_dir / "cli-origin.json"
     if not _is_safe_regular_file(origin_path):
@@ -699,6 +1208,16 @@ def _verify_capture_dir_integrity(
         if digest(rules_snap.read_bytes()) != rules_before:
             errors.append(f"{prefix}: rules.snapshot.yml SHA-256 differs from rules_before_sha256")
 
+    if orig_capture_resolved is not None and orig_capture_resolved != capture_dir.resolve(strict=True):
+        errors.extend(
+            _verify_relocated_capture_parity(
+                prefix,
+                review_capture_dir=capture_dir,
+                original_capture_dir=orig_capture_resolved,
+                review_manifest=s_man,
+            )
+        )
+
     runs = s_man.get("runs")
     if not isinstance(runs, dict):
         errors.append(f"{prefix}: scan-manifest missing runs dict")
@@ -755,10 +1274,16 @@ def _verify_capture_dir_integrity(
                     errors.append(f"{prefix}: invalid file output flags for {label}")
                 else:
                     legacy_path = Path(str(r_meta.get("engine_output_path", "")))
+                    containment_root = (
+                        orig_capture_resolved if orig_capture_resolved is not None else capture_dir.resolve()
+                    )
                     if _has_parent_traversal(legacy_path) or not _is_safe_regular_file(legacy_path):
                         errors.append(f"{prefix}: missing or unsafe engine_output_path for {label}")
-                    elif not legacy_path.resolve().is_relative_to(capture_dir.resolve()):
-                        errors.append(f"{prefix}: engine_output_path escapes capture dir for {label}")
+                    elif not legacy_path.resolve().is_relative_to(containment_root):
+                        if orig_capture_resolved is None:
+                            errors.append(f"{prefix}: engine_output_path escapes capture dir for {label}")
+                        else:
+                            errors.append(f"{prefix}: engine_output_path escapes pinned original capture dir for {label}")
                     elif legacy_path.read_bytes() != cap_bytes:
                         errors.append(f"{prefix}: legacy output bytes != opengrep.{label} bytes")
             elif mode == "stdout":
@@ -816,6 +1341,8 @@ def _inspect_primary_scenario(
     expected_polarity: str,
     allow_mock_primary: bool,
     require_after_confirm_false: bool = False,
+    trusted_original_scenario_dir: Path | None = None,
+    trusted_original_capture_dir: Path | None = None,
 ) -> dict[str, Any]:
     raw_scenario_dir = Path(scenario_dir)
     failures: list[str] = []
@@ -986,8 +1513,26 @@ def _inspect_primary_scenario(
         capture_dir,
         expected_cli_mode="local-triage",
         expect_live_source_current=True,
+        trusted_original_capture_dir=trusted_original_capture_dir,
     )
     r02_errors.extend(cap_errors)
+
+    scen_cap_errs, scen_triage_errs, _ = _verify_relocated_scenario_provenance(
+        scenario_name,
+        review_scenario_dir=scenario_dir,
+        review_capture_dir=capture_dir,
+        trusted_original_scenario_dir=trusted_original_scenario_dir,
+        trusted_original_capture_dir=trusted_original_capture_dir,
+        expect_llm=True,
+        expect_live_source_current=True,
+        require_after_confirm_false=require_after_confirm_false,
+    )
+    if scen_cap_errs:
+        r02_errors.extend(scen_cap_errs)
+    if scen_triage_errs:
+        failures.extend(scen_triage_errs)
+        r02_errors.extend(scen_triage_errs)
+        r03_errors.extend(scen_triage_errs)
 
     if s_man is not None:
         if manifest.get("pre_scan_sources_sha256") != s_man.get("sources_before"):
@@ -1303,6 +1848,17 @@ def _inspect_primary_scenario(
         "findings_count": len(rows),
         "http_capture": http_check,
         "live_protocol": proto,
+        "capture_relocation": {
+            "relocated_mode": (
+                trusted_original_capture_dir is not None or trusted_original_scenario_dir is not None
+            ),
+            "pinned_original_scenario_dir": (
+                str(trusted_original_scenario_dir) if trusted_original_scenario_dir is not None else None
+            ),
+            "pinned_original_capture_dir": (
+                str(trusted_original_capture_dir) if trusted_original_capture_dir is not None else None
+            ),
+        },
         "r02_errors": r02_errors,
         "r03_errors": r03_errors,
         "findings": per_finding_details,
@@ -1344,7 +1900,83 @@ def _inspect_primary_scenario(
     return result_obj
 
 
-def _inspect_m1_scan_only(m1_dir: Path) -> dict[str, Any]:
+def _verify_relocated_m1_provenance(
+    *,
+    review_m1_dir: Path,
+    review_cap_dir: Path,
+    trusted_original_scenario_dir: Path | None,
+    trusted_original_capture_dir: Path | None,
+) -> list[str]:
+    """Verify M1 scan-only relocated review copy against operator-pinned original scenario and capture dirs."""
+    if trusted_original_scenario_dir is None and trusted_original_capture_dir is None:
+        return []
+    if trusted_original_scenario_dir is None or trusted_original_capture_dir is None:
+        return [
+            "M1: relocation pinning requires BOTH trusted_original_scenario_dir and "
+            "trusted_original_capture_dir to be provided together"
+        ]
+    errors: list[str] = []
+    raw_orig_m1 = Path(trusted_original_scenario_dir)
+    raw_orig_cap = Path(trusted_original_capture_dir)
+    if _has_parent_traversal(raw_orig_m1) or not _is_safe_dir(raw_orig_m1):
+        errors.append(f"M1: unsafe, missing, or reparse-linked trusted_original_scenario_dir: {raw_orig_m1}")
+    if _has_parent_traversal(raw_orig_cap) or not _is_safe_dir(raw_orig_cap):
+        errors.append(f"M1: unsafe, missing, or reparse-linked trusted_original_capture_dir: {raw_orig_cap}")
+    if errors:
+        return errors
+
+    orig_m1 = raw_orig_m1.resolve(strict=True)
+    orig_cap = raw_orig_cap.resolve(strict=True)
+    rev_m1 = review_m1_dir.resolve(strict=True)
+    rev_cap = review_cap_dir.resolve(strict=True)
+    if _roots_overlap_or_nest(orig_m1, rev_m1):
+        errors.append(
+            f"M1: trusted_original_scenario_dir ({orig_m1}) cannot equal or nest with review dir ({rev_m1})"
+        )
+    if _roots_overlap_or_nest(orig_cap, rev_cap):
+        errors.append(
+            f"M1: trusted_original_capture_dir ({orig_cap}) cannot equal or nest with review capture dir ({rev_cap})"
+        )
+
+    for forbidden_rel in ("triage", "g1-run-manifest.json", "llm_io", "assessments.jsonl", "review.sqlite"):
+        if os.path.lexists(orig_m1 / forbidden_rel):
+            errors.append(f"M1 original scenario unexpectedly contains {forbidden_rel}")
+
+    if os.path.lexists(orig_m1 / "scan-manifest.json"):
+        if orig_cap != orig_m1:
+            errors.append(
+                f"M1: trusted_original_capture_dir ({orig_cap}) must equal original flat scenario dir ({orig_m1})"
+            )
+    else:
+        orig_cap_child = orig_m1 / "capture"
+        if os.path.lexists(orig_cap_child) and is_reparse_link(orig_cap_child):
+            errors.append(f"M1: original scenario capture/ is a symlink/junction: {orig_cap_child}")
+        elif not _is_safe_dir(orig_cap_child) or orig_cap != orig_cap_child.resolve(strict=True):
+            errors.append(
+                f"M1: trusted_original_capture_dir ({orig_cap}) is not bound to original scenario/capture ({orig_cap_child})"
+            )
+        try:
+            orig_top = {p.name for p in orig_m1.iterdir()}
+            if orig_top != {"capture"}:
+                errors.append(f"M1: unexpected top-level entries in original scenario dir: {sorted(orig_top)}")
+        except OSError as exc:
+            errors.append(f"M1: cannot list original scenario dir: {exc}")
+    if rev_cap != rev_m1:
+        try:
+            rev_top = {p.name for p in rev_m1.iterdir()}
+            if rev_top != {"capture"}:
+                errors.append(f"M1: unexpected top-level entries in relocated review dir: {sorted(rev_top)}")
+        except OSError as exc:
+            errors.append(f"M1: cannot list relocated review dir: {exc}")
+    return errors
+
+
+def _inspect_m1_scan_only(
+    m1_dir: Path,
+    *,
+    trusted_original_scenario_dir: Path | None = None,
+    trusted_original_capture_dir: Path | None = None,
+) -> dict[str, Any]:
     raw_m1 = Path(m1_dir)
     errors: list[str] = []
     blockers: list[str] = []
@@ -1368,11 +2000,21 @@ def _inspect_m1_scan_only(m1_dir: Path) -> dict[str, Any]:
         if os.path.lexists(m1_dir / forbidden_rel):
             errors.append(f"M1 --scan-only unexpectedly produced {forbidden_rel}")
 
+    errors.extend(
+        _verify_relocated_m1_provenance(
+            review_m1_dir=m1_dir,
+            review_cap_dir=cap_dir,
+            trusted_original_scenario_dir=trusted_original_scenario_dir,
+            trusted_original_capture_dir=trusted_original_capture_dir,
+        )
+    )
+
     cap_errors, _ = _verify_capture_dir_integrity(
         "M1",
         cap_dir,
         expected_cli_mode="scan-only",
         expect_live_source_current=True,
+        trusted_original_capture_dir=trusted_original_capture_dir,
     )
     errors.extend(cap_errors)
 
@@ -1399,7 +2041,12 @@ def _inspect_m1_scan_only(m1_dir: Path) -> dict[str, Any]:
     }
 
 
-def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
+def _inspect_demo3b_mock_control(
+    demo3b_dir: Path | None,
+    *,
+    trusted_original_scenario_dir: Path | None = None,
+    trusted_original_capture_dir: Path | None = None,
+) -> dict[str, Any]:
     if demo3b_dir is None:
         return {"present": False, "excluded_from_real_denominator": True, "errors": []}
     raw_d3b = Path(demo3b_dir)
@@ -1446,8 +2093,22 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
         capture_dir,
         expected_cli_mode="local-triage",
         expect_live_source_current=True,
+        trusted_original_capture_dir=trusted_original_capture_dir,
     )
     errors.extend(cap_errors)
+
+    d3b_scen_cap_errs, d3b_scen_triage_errs, _ = _verify_relocated_scenario_provenance(
+        "Demo3b",
+        review_scenario_dir=demo3b_dir,
+        review_capture_dir=capture_dir,
+        trusted_original_scenario_dir=trusted_original_scenario_dir,
+        trusted_original_capture_dir=trusted_original_capture_dir,
+        expect_llm=True,
+        expect_live_source_current=True,
+        require_after_confirm_false=False,
+    )
+    errors.extend(d3b_scen_cap_errs)
+    errors.extend(d3b_scen_triage_errs)
 
     d3b_artifacts = d3b_manifest.get("artifacts") if isinstance(d3b_manifest, dict) else None
     for akey, apath in (
@@ -1583,7 +2244,12 @@ def _inspect_demo3b_mock_control(demo3b_dir: Path | None) -> dict[str, Any]:
     }
 
 
-def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
+def _inspect_demo4_stale_control(
+    demo4_dir: Path,
+    *,
+    trusted_original_scenario_dir: Path | None = None,
+    trusted_original_capture_dir: Path | None = None,
+) -> dict[str, Any]:
     raw_d4 = Path(demo4_dir)
     if not _is_safe_dir(raw_d4):
         if _is_missing_clean_path(raw_d4):
@@ -1631,8 +2297,22 @@ def _inspect_demo4_stale_control(demo4_dir: Path) -> dict[str, Any]:
         capture_dir,
         expected_cli_mode="local-triage",
         expect_live_source_current=False,
+        trusted_original_capture_dir=trusted_original_capture_dir,
     )
     errors.extend(cap_errors)
+
+    d4_scen_cap_errs, d4_scen_triage_errs, _ = _verify_relocated_scenario_provenance(
+        "Demo4",
+        review_scenario_dir=demo4_dir,
+        review_capture_dir=capture_dir,
+        trusted_original_scenario_dir=trusted_original_scenario_dir,
+        trusted_original_capture_dir=trusted_original_capture_dir,
+        expect_llm=False,
+        expect_live_source_current=False,
+        require_after_confirm_false=False,
+    )
+    errors.extend(d4_scen_cap_errs)
+    errors.extend(d4_scen_triage_errs)
 
     ev_path = triage_dir / "evidence.json"
     assess_path = triage_dir / "assessments.jsonl"
@@ -2115,6 +2795,48 @@ def _verify_allowlisted_fp_scenario_identity(
     return errors
 
 
+def _validate_capture_relocation_args(
+    *,
+    capture_relocation_mode: str,
+    r03_fp_mode: str,
+    demo3b_dir: Path | None,
+    scenario_roots: dict[str, Path | None],
+    capture_roots: dict[str, Path | None],
+) -> tuple[dict[str, Path], dict[str, Path]]:
+    if capture_relocation_mode not in ("strict-in-place", "pinned-original-capture"):
+        raise ValueError(f"unsupported capture_relocation_mode={capture_relocation_mode!r}")
+    provided_scenarios = {key: val for key, val in scenario_roots.items() if val is not None}
+    provided_captures = {key: val for key, val in capture_roots.items() if val is not None}
+    if capture_relocation_mode == "strict-in-place" and (provided_scenarios or provided_captures):
+        raise ValueError(
+            "trusted scenario/capture root arguments require capture_relocation_mode='pinned-original-capture'"
+        )
+    if capture_relocation_mode == "pinned-original-capture":
+        if not provided_scenarios and not provided_captures:
+            raise ValueError(
+                "operator-pinned trusted scenario and capture roots are required in capture_relocation_mode='pinned-original-capture'"
+            )
+        all_keys = sorted(set(scenario_roots) | set(capture_roots))
+        for key in all_keys:
+            has_scen = key in provided_scenarios
+            has_cap = key in provided_captures
+            if has_scen != has_cap:
+                raise ValueError(
+                    f"relocated scenario {key!r} requires BOTH {key}_trusted_scenario_root and {key}_trusted_capture_root"
+                )
+    if r03_fp_mode == "locked-demo2" and (
+        scenario_roots.get("allowlisted") is not None or capture_roots.get("allowlisted") is not None
+    ):
+        raise ValueError(
+            "allowlisted_trusted_scenario_root and allowlisted_trusted_capture_root are only valid in proposed-allowlisted-fp mode"
+        )
+    if demo3b_dir is None and (
+        scenario_roots.get("demo3b") is not None or capture_roots.get("demo3b") is not None
+    ):
+        raise ValueError("demo3b_trusted_scenario_root and demo3b_trusted_capture_root require demo3b_dir")
+    return provided_scenarios, provided_captures
+
+
 def evaluate_acceptance(
     *,
     demo1_dir: Path,
@@ -2126,6 +2848,21 @@ def evaluate_acceptance(
     allowlisted_fp_dir: Path | None = None,
     allowlisted_trusted_source_root: Path | None = None,
     r03_fp_mode: str = "locked-demo2",
+    capture_relocation_mode: str = "strict-in-place",
+    demo1_trusted_scenario_root: Path | None = None,
+    demo2_trusted_scenario_root: Path | None = None,
+    demo3a_trusted_scenario_root: Path | None = None,
+    m1_trusted_scenario_root: Path | None = None,
+    demo4_trusted_scenario_root: Path | None = None,
+    demo3b_trusted_scenario_root: Path | None = None,
+    allowlisted_trusted_scenario_root: Path | None = None,
+    demo1_trusted_capture_root: Path | None = None,
+    demo2_trusted_capture_root: Path | None = None,
+    demo3a_trusted_capture_root: Path | None = None,
+    m1_trusted_capture_root: Path | None = None,
+    demo4_trusted_capture_root: Path | None = None,
+    demo3b_trusted_capture_root: Path | None = None,
+    allowlisted_trusted_capture_root: Path | None = None,
     allow_mock_primary: bool = False,
 ) -> dict[str, Any]:
     if r03_fp_mode not in ("locked-demo2", "proposed-allowlisted-fp"):
@@ -2139,6 +2876,32 @@ def evaluate_acceptance(
     if r03_fp_mode == "proposed-allowlisted-fp" and allowlisted_trusted_source_root is None:
         raise ValueError("operator-pinned allowlisted_trusted_source_root is required in proposed-allowlisted-fp mode")
 
+    scenario_roots_map: dict[str, Path | None] = {
+        "demo1": demo1_trusted_scenario_root,
+        "demo2": demo2_trusted_scenario_root,
+        "demo3a": demo3a_trusted_scenario_root,
+        "m1": m1_trusted_scenario_root,
+        "demo4": demo4_trusted_scenario_root,
+        "demo3b": demo3b_trusted_scenario_root,
+        "allowlisted": allowlisted_trusted_scenario_root,
+    }
+    capture_roots_map: dict[str, Path | None] = {
+        "demo1": demo1_trusted_capture_root,
+        "demo2": demo2_trusted_capture_root,
+        "demo3a": demo3a_trusted_capture_root,
+        "m1": m1_trusted_capture_root,
+        "demo4": demo4_trusted_capture_root,
+        "demo3b": demo3b_trusted_capture_root,
+        "allowlisted": allowlisted_trusted_capture_root,
+    }
+    provided_scenario_roots, provided_capture_roots = _validate_capture_relocation_args(
+        capture_relocation_mode=capture_relocation_mode,
+        r03_fp_mode=r03_fp_mode,
+        demo3b_dir=demo3b_dir,
+        scenario_roots=scenario_roots_map,
+        capture_roots=capture_roots_map,
+    )
+
     use_proposed_fp = r03_fp_mode == "proposed-allowlisted-fp"
 
     d1 = _inspect_primary_scenario(
@@ -2147,6 +2910,8 @@ def evaluate_acceptance(
         expected_findings=2,
         expected_polarity="SUPPORTED",
         allow_mock_primary=allow_mock_primary,
+        trusted_original_scenario_dir=demo1_trusted_scenario_root,
+        trusted_original_capture_dir=demo1_trusted_capture_root,
     )
     d2 = _inspect_primary_scenario(
         "demo2_protected_false_positive",
@@ -2155,8 +2920,11 @@ def evaluate_acceptance(
         expected_polarity="REFUTED",
         allow_mock_primary=allow_mock_primary,
         require_after_confirm_false=not use_proposed_fp,
+        trusted_original_scenario_dir=demo2_trusted_scenario_root,
+        trusted_original_capture_dir=demo2_trusted_capture_root,
     )
     d_fp: dict[str, Any] | None = None
+    id_errs: list[str] = []
     if use_proposed_fp:
         assert allowlisted_fp_dir is not None
         d_fp = _inspect_primary_scenario(
@@ -2166,10 +2934,32 @@ def evaluate_acceptance(
             expected_polarity="OBSERVED_VALID_TRIAGE",
             allow_mock_primary=allow_mock_primary,
             require_after_confirm_false=True,
+            trusted_original_scenario_dir=allowlisted_trusted_scenario_root,
+            trusted_original_capture_dir=allowlisted_trusted_capture_root,
         )
         id_errs = _verify_allowlisted_fp_scenario_identity(
             allowlisted_fp_dir, trusted_source_root=allowlisted_trusted_source_root,
         )
+        if allowlisted_trusted_source_root is not None and _is_safe_dir(Path(allowlisted_trusted_source_root)):
+            src_resolved = Path(allowlisted_trusted_source_root).resolve(strict=True)
+            for label_check, cand_dir in (
+                ("allowlisted_fp_dir", allowlisted_fp_dir),
+                ("allowlisted_trusted_scenario_root", allowlisted_trusted_scenario_root),
+                ("allowlisted_trusted_capture_root", allowlisted_trusted_capture_root),
+            ):
+                if cand_dir is not None and _is_safe_dir(Path(cand_dir)):
+                    if _roots_overlap_or_nest(src_resolved, Path(cand_dir).resolve(strict=True)):
+                        id_errs.append(
+                            f"allowlisted_query_fp_control: allowlisted_trusted_source_root ({src_resolved}) "
+                            f"cannot equal or nest with {label_check}"
+                        )
+        if allowlisted_trusted_scenario_root is not None and _is_safe_dir(Path(allowlisted_trusted_scenario_root)):
+            id_errs.extend(
+                _verify_allowlisted_fp_scenario_identity(
+                    Path(allowlisted_trusted_scenario_root),
+                    trusted_source_root=allowlisted_trusted_source_root,
+                )
+            )
         if id_errs:
             d_fp.setdefault("r03_errors", []).extend(id_errs)
     d3a = _inspect_primary_scenario(
@@ -2178,10 +2968,24 @@ def evaluate_acceptance(
         expected_findings=1,
         expected_polarity="UNDETERMINED_ABSTAIN",
         allow_mock_primary=allow_mock_primary,
+        trusted_original_scenario_dir=demo3a_trusted_scenario_root,
+        trusted_original_capture_dir=demo3a_trusted_capture_root,
     )
-    m1 = _inspect_m1_scan_only(m1_dir)
-    d3b = _inspect_demo3b_mock_control(demo3b_dir)
-    d4 = _inspect_demo4_stale_control(demo4_dir)
+    m1 = _inspect_m1_scan_only(
+        m1_dir,
+        trusted_original_scenario_dir=m1_trusted_scenario_root,
+        trusted_original_capture_dir=m1_trusted_capture_root,
+    )
+    d3b = _inspect_demo3b_mock_control(
+        demo3b_dir,
+        trusted_original_scenario_dir=demo3b_trusted_scenario_root,
+        trusted_original_capture_dir=demo3b_trusted_capture_root,
+    )
+    d4 = _inspect_demo4_stale_control(
+        demo4_dir,
+        trusted_original_scenario_dir=demo4_trusted_scenario_root,
+        trusted_original_capture_dir=demo4_trusted_capture_root,
+    )
 
     # R01 decision: strictly evaluates the 4 historical G1-C5 inferences (Demo1=2, Demo2=1, Demo3a=1) + Demo3b control.
     # Supplementary R03 control runs never alter the historical R01 denominator or pass/fail outcome.
@@ -2382,10 +3186,21 @@ def evaluate_acceptance(
             "PROPOSED R03 FP REPLACEMENT MODE (requires operator/advisor approval to supersede locked G1-C5 Demo2 R03 contract): "
             "Historical R01/R02 (4 G1-C5 inferences including Demo2 REFUTED) remain strictly unchanged and separate; supplementary R03 confirm-false/reopen runs on AllowlistedQuery.java without coercing Qwen to REFUTED."
         )
+    if capture_relocation_mode == "pinned-original-capture":
+        caveats.append(
+            "PINNED SCENARIO/CAPTURE RELOCATION MODE: Relocated review copies are verified against operator-pinned original "
+            "scenario and capture directories (independent original scenario & capture integrity, legacy_reports containment inside "
+            "original capture, full pre-review byte parity of g1-run-manifest, capture/, triage/evidence.json, assessments.jsonl, "
+            "input.opengrep.json, http-capture-check.json, recursive llm_io/, and review.post_ingestion.sqlite); "
+            "only post-review SQLite review.sqlite / review.after_confirm_false.sqlite may diverge, and manifest paths are never self-authenticating."
+        )
 
     out_doc: dict[str, Any] = {
         "schema": "ntk-g1-r01-r03-evaluation-1",
         "r03_fp_mode": r03_fp_mode,
+        "capture_relocation_mode": capture_relocation_mode,
+        "pinned_original_scenario_roots": {k: str(v) for k, v in provided_scenario_roots.items()},
+        "pinned_original_capture_roots": {k: str(v) for k, v in provided_capture_roots.items()},
         "allow_mock_primary_test_mode": allow_mock_primary,
         "actor_identity_model": {
             "mechanism": "LOCAL_UNAUTHENTICATED_OPERATOR_IDENTIFIER",
@@ -2443,6 +3258,26 @@ def main(argv: list[str] | None = None) -> int:
         "--allowlisted-trusted-source-root", type=Path, default=None,
         help="Original AllowlistedQuery scan source root pinned by the operator, independent of evidence JSON/manifest",
     )
+    parser.add_argument(
+        "--capture-relocation-mode",
+        choices=("strict-in-place", "pinned-original-capture"),
+        default="strict-in-place",
+        help="strict-in-place requires legacy_reports inside scenario capture dir; pinned-original-capture pairs relocated review copies with operator-pinned original scenario and capture dirs",
+    )
+    parser.add_argument("--demo1-trusted-scenario-root", type=Path, default=None, help="Original Demo1 scenario root (containing g1-run-manifest.json, capture/, triage/) pinned by the operator")
+    parser.add_argument("--demo2-trusted-scenario-root", type=Path, default=None, help="Original Demo2 scenario root pinned by the operator")
+    parser.add_argument("--demo3a-trusted-scenario-root", type=Path, default=None, help="Original Demo3a scenario root pinned by the operator")
+    parser.add_argument("--m1-trusted-scenario-root", type=Path, default=None, help="Original M1 scan-only scenario root pinned by the operator")
+    parser.add_argument("--demo4-trusted-scenario-root", type=Path, default=None, help="Original Demo4 scenario root pinned by the operator")
+    parser.add_argument("--demo3b-trusted-scenario-root", type=Path, default=None, help="Original Demo3b scenario root pinned by the operator")
+    parser.add_argument("--allowlisted-trusted-scenario-root", type=Path, default=None, help="Original AllowlistedQuery scenario root pinned by the operator")
+    parser.add_argument("--demo1-trusted-capture-root", type=Path, default=None, help="Original Demo1 capture dir (containing scan-manifest.json and legacy_reports/) pinned by the operator")
+    parser.add_argument("--demo2-trusted-capture-root", type=Path, default=None, help="Original Demo2 capture dir pinned by the operator")
+    parser.add_argument("--demo3a-trusted-capture-root", type=Path, default=None, help="Original Demo3a capture dir pinned by the operator")
+    parser.add_argument("--m1-trusted-capture-root", type=Path, default=None, help="Original M1 capture dir pinned by the operator")
+    parser.add_argument("--demo4-trusted-capture-root", type=Path, default=None, help="Original Demo4 capture dir pinned by the operator")
+    parser.add_argument("--demo3b-trusted-capture-root", type=Path, default=None, help="Original Demo3b capture dir pinned by the operator")
+    parser.add_argument("--allowlisted-trusted-capture-root", type=Path, default=None, help="Original AllowlistedQuery capture dir pinned by the operator")
     parser.add_argument("--output", type=Path, required=True, help="Output JSON file (must lie outside scenario directories)")
     parser.add_argument("--allow-mock-primary", action="store_true", help="Offline unit-test flag only; never set in real acceptance")
     args = parser.parse_args(argv)
@@ -2455,6 +3290,35 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--r03-fp-mode proposed-allowlisted-fp requires --allowlisted-trusted-source-root")
     if args.r03_fp_mode == "locked-demo2" and args.allowlisted_trusted_source_root is not None:
         parser.error("--allowlisted-trusted-source-root requires --r03-fp-mode proposed-allowlisted-fp")
+
+    cli_scenario_roots: dict[str, Path | None] = {
+        "demo1": args.demo1_trusted_scenario_root,
+        "demo2": args.demo2_trusted_scenario_root,
+        "demo3a": args.demo3a_trusted_scenario_root,
+        "m1": args.m1_trusted_scenario_root,
+        "demo4": args.demo4_trusted_scenario_root,
+        "demo3b": args.demo3b_trusted_scenario_root,
+        "allowlisted": args.allowlisted_trusted_scenario_root,
+    }
+    cli_capture_roots: dict[str, Path | None] = {
+        "demo1": args.demo1_trusted_capture_root,
+        "demo2": args.demo2_trusted_capture_root,
+        "demo3a": args.demo3a_trusted_capture_root,
+        "m1": args.m1_trusted_capture_root,
+        "demo4": args.demo4_trusted_capture_root,
+        "demo3b": args.demo3b_trusted_capture_root,
+        "allowlisted": args.allowlisted_trusted_capture_root,
+    }
+    try:
+        provided_cli_scenarios, provided_cli_captures = _validate_capture_relocation_args(
+            capture_relocation_mode=args.capture_relocation_mode,
+            r03_fp_mode=args.r03_fp_mode,
+            demo3b_dir=args.demo3b_dir,
+            scenario_roots=cli_scenario_roots,
+            capture_roots=cli_capture_roots,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     try:
         raw_out = _validate_lexical_dir_path(args.output, label="--output")
@@ -2472,6 +3336,10 @@ def main(argv: list[str] | None = None) -> int:
         protected_dirs.append(args.demo3b_dir)
     if args.allowlisted_fp_dir is not None:
         protected_dirs.append(args.allowlisted_fp_dir)
+    if args.allowlisted_trusted_source_root is not None:
+        protected_dirs.append(args.allowlisted_trusted_source_root)
+    protected_dirs.extend(provided_cli_scenarios.values())
+    protected_dirs.extend(provided_cli_captures.values())
     for p_dir in protected_dirs:
         if os.path.lexists(p_dir):
             abs_p = Path(os.path.abspath(p_dir))
@@ -2494,6 +3362,21 @@ def main(argv: list[str] | None = None) -> int:
         allowlisted_fp_dir=args.allowlisted_fp_dir,
         allowlisted_trusted_source_root=args.allowlisted_trusted_source_root,
         r03_fp_mode=args.r03_fp_mode,
+        capture_relocation_mode=args.capture_relocation_mode,
+        demo1_trusted_scenario_root=args.demo1_trusted_scenario_root,
+        demo2_trusted_scenario_root=args.demo2_trusted_scenario_root,
+        demo3a_trusted_scenario_root=args.demo3a_trusted_scenario_root,
+        m1_trusted_scenario_root=args.m1_trusted_scenario_root,
+        demo4_trusted_scenario_root=args.demo4_trusted_scenario_root,
+        demo3b_trusted_scenario_root=args.demo3b_trusted_scenario_root,
+        allowlisted_trusted_scenario_root=args.allowlisted_trusted_scenario_root,
+        demo1_trusted_capture_root=args.demo1_trusted_capture_root,
+        demo2_trusted_capture_root=args.demo2_trusted_capture_root,
+        demo3a_trusted_capture_root=args.demo3a_trusted_capture_root,
+        m1_trusted_capture_root=args.m1_trusted_capture_root,
+        demo4_trusted_capture_root=args.demo4_trusted_capture_root,
+        demo3b_trusted_capture_root=args.demo3b_trusted_capture_root,
+        allowlisted_trusted_capture_root=args.allowlisted_trusted_capture_root,
         allow_mock_primary=args.allow_mock_primary,
     )
     try:

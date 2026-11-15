@@ -489,16 +489,19 @@ if ($PostHead -ne $ExpectedCommit -or $PostTree -ne $ExpectedTree -or $PostStatu
    - (2) **Quyết định thực sự được người vận hành phê duyệt** tại nghiệm thu chính thức (`allow_mock_primary=False`): mọi sự kiện gắn nhãn `SCRIPTED_TEST_ONLY`, `mock`, `synthetic`, `replay` hoặc thiếu HTTP capture thật đều bị từ chối.
    - (3) **Giới hạn kiểm chứng danh tính ở mức hệ thống:** tham số `--actor` chỉ lưu chuỗi định danh vận hành cục bộ (được kiểm tra khác rỗng, không chứa dấu hiệu kiểm thử giả/mock/scripted), **không phải xác thực danh tính bằng mật mã**.
 
-### 12.2. Thực Thi Bổ Sung Trên `ADMIN-PC` Sau Khi Được Phê Duyệt (`1` Lượt Qwen Thật Bổ Sung + Vòng Đời R03)
+### 12.2. Tham Chiếu Lịch Sử Quy Trình Tạo Phiên Mới (P1–P10 — Chỉ Tham Chiếu, Không Chạy Lại Trong P11)
+
+> [!NOTE]
+> Phần 12.2 dưới đây chỉ lưu lại quy trình **P1–P10** khi tạo mới một lượt chạy `AllowlistedQuery.java` (ví dụ phiên lịch sử `P1–P4` và `P5–P6`). **Không** chạy lại P1–P10 và **không** sử dụng biến `$Demo1Dir` hay `$AllowQDir` của quy trình tạo mới khi thực hiện nghiệm thu lịch sử `P11_HISTORICAL_READ_ONLY_ACCEPTANCE` ở mục 12.3.
 
 Sử dụng thư mục chạy mới hoàn toàn cho riêng phần bổ sung và **tuyệt đối không sửa** thư mục đã kiểm toán của `G1-C5` (dùng `$OperatorActor` và `$LeadActor` thật của phiên vận hành; không dùng `SCRIPTED_TEST_ONLY`):
 
 ```powershell
-# Khởi tạo thư mục con mới cho AllowlistedQuery (không ghi đè run G1-C5 đã khóa)
+# [THAM CHIẾU LỊCH SỬ P1-P10] Khởi tạo thư mục con mới cho AllowlistedQuery khi tạo lượt chạy mới
 $AllowQDir = "$SessionRoot\allowlisted_query_fp"
 Assert-FreshAbsent -TargetPath $AllowQDir
 
-# 1. Quét OpenGrep + Qwen cục bộ (--prompt-contract blind, raw HTTP capture) trên AllowlistedQuery.java
+# P1. Quét OpenGrep + Qwen cục bộ (--prompt-contract blind, raw HTTP capture) trên AllowlistedQuery.java
 Invoke-ReceiptStep -Step "P1_allowq_scan_qwen" -CommandArgv @(
     $VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "scan",
     "$CheckoutDir\v2\g1_integration\demo_fixtures\AllowlistedQuery.java",
@@ -513,7 +516,7 @@ Invoke-ReceiptStep -Step "P1_allowq_scan_qwen" -CommandArgv @(
 )
 Copy-Item -LiteralPath "$AllowQDir\triage\review.sqlite" -Destination "$AllowQDir\triage\review.post_ingestion.sqlite"
 
-# 2. Xác minh HTTP capture thật và trạng thái OPEN trước khi con người kiểm duyệt
+# P2-P3. Xác minh HTTP capture thật và trạng thái OPEN trước khi con người kiểm duyệt
 Invoke-ReceiptStep -Step "P2_allowq_verify_http" -CommandArgv @(
     $VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture",
     "$AllowQDir\triage", "--require-live-chat", "--minimum-findings", "1",
@@ -524,7 +527,7 @@ $AllowQQueueRaw = Invoke-ReceiptStep -Step "P3_allowq_queue_initial" -CommandArg
 $AllowQJson = $AllowQQueueRaw.stdout | ConvertFrom-Json
 $AllowQId = $AllowQJson.warnings[0].id
 
-# 3. Người kiểm duyệt con người thực hiện R03 lifecycle: confirm-false -> queue (ẩn) -> queue --all -> reopen -> history
+# P4-P10. Người kiểm duyệt con người thực hiện R03 lifecycle: confirm-false -> queue (ẩn) -> queue --all -> reopen -> history
 Invoke-ReceiptStep -Step "P4_allowq_show" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "show", $AllowQId, "--db", $AllowQDb)
 Invoke-ReceiptStep -Step "P5_allowq_confirm_false" -CommandArgv @(
     $VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "confirm-false", $AllowQId,
@@ -541,26 +544,300 @@ Invoke-ReceiptStep -Step "P8_allowq_reopen" -CommandArgv @(
 )
 Invoke-ReceiptStep -Step "P9_allowq_queue_reopened" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "queue", "--db", $AllowQDb)
 Invoke-ReceiptStep -Step "P10_allowq_history" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "history", $AllowQId, "--db", $AllowQDb, "--include-rejected")
-
-# 4. Đánh giá bằng chế độ opt-in đề xuất (chỉ dùng sau khi chế độ proposed-allowlisted-fp được phê duyệt)
-Invoke-ReceiptStep -Step "P11_evaluate_r01_r03_proposed" -CommandArgv @(
-    $VenvPython, "-X", "utf8", "-B", "-m", "v2.g1_integration.evaluate_r01_r03",
-    "--demo1-dir", $Demo1Dir,
-    "--demo2-dir", $Demo2Dir,
-    "--demo3a-dir", $Demo3aDir,
-    "--m1-dir", $M1Dir,
-    "--demo3b-dir", "$ControlsDir\demo3b_malformed_llm_synthetic_mock",
-    "--demo4-dir", "$ControlsDir\demo4_stale_source",
-    "--r03-fp-mode", "proposed-allowlisted-fp",
-    "--allowlisted-fp-dir", $AllowQDir,
-    "--allowlisted-trusted-source-root", "$CheckoutDir\v2\g1_integration\demo_fixtures",
-    "--output", "$AuditOut\r01_r03_proposed_evaluation.json"
-)
 ```
 
-### 12.3. Tiêu Chí Chế Độ Đề Xuất (`--r03-fp-mode proposed-allowlisted-fp`)
+### 12.3. Nghiệm Thu Lịch Sử Chỉ-Đọc (`P11_HISTORICAL_READ_ONLY_ACCEPTANCE` — Độc Lập Hoàn Toàn Với P1–P10)
 
-- Mặc định (`--r03-fp-mode locked-demo2`) vẫn giữ nguyên toàn bộ hợp đồng `G1-C5` đã khóa.
+Khối `P11_HISTORICAL_READ_ONLY_ACCEPTANCE` dưới đây **tự hoàn chỉnh và có thể thực thi độc lập** trong một phiên PowerShell mới:
+
+- **Không** kế thừa bất kỳ biến nào từ các mục 4–11 hoặc P1–P10 (không dùng `$Demo1Dir`, `$AllowQDir`, `$SessionRoot`, `$CheckoutDir`).
+- **Không** chạy lại OpenGrep (`scan`), **không** gọi Ollama, **không** chạy lệnh kiểm duyệt (`confirm-true`/`confirm-false`/`reopen`), và **không** sửa bất kỳ thư mục bằng chứng gốc hay bản sao human-review nào.
+- Phân tách rạch ròi:
+  - `$Demo1OriginalDir` vs `$Demo1ReviewDir` (bản sao `demo1-human-review-3981a91-20261115T141033Z`).
+  - `$AllowQOriginalDir` vs `$AllowQReviewDir` (bản sao `p5-human-review-3981a91-20261115-203321623`).
+  - `$AllowQOriginalSourceRoot` (checkout `g1-r03-2c9f92f-acceptance`) vs `$EvaluatorCheckoutDir` (checkout evaluator hiện tại).
+
+```powershell
+# ==============================================================================
+# P11_HISTORICAL_READ_ONLY_ACCEPTANCE (Standalone, Read-Only, Fail-Closed)
+# ==============================================================================
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+function Assert-P11LastExit {
+    param([Parameter(Mandatory=$true)][string]$Step, [int[]]$Allowed = @(0))
+    $code = $LASTEXITCODE
+    if ($Allowed -notcontains $code) {
+        throw "FAIL-FAST [P11_$Step]: unexpected exit code $code (allowed: $($Allowed -join ','))"
+    }
+}
+
+function Assert-P11NoTraversal {
+    param([Parameter(Mandatory=$true)][string]$PathValue, [Parameter(Mandatory=$true)][string]$Label)
+    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+        throw "FAIL-FAST [P11_EMPTY_PATH]: $Label must not be empty"
+    }
+    if ($PathValue -match '(^|[\\/])\.\.([\\/]|$)') {
+        throw "FAIL-FAST [P11_TRAVERSAL]: parent traversal '..' forbidden in $Label ($PathValue)"
+    }
+}
+
+function Assert-P11SafeDirChain {
+    param([Parameter(Mandatory=$true)][string]$DirPath, [Parameter(Mandatory=$true)][string]$Label)
+    Assert-P11NoTraversal -PathValue $DirPath -Label $Label
+    if (-not (Test-Path -LiteralPath $DirPath -PathType Container)) {
+        throw "FAIL-FAST [P11_MISSING_DIR]: $Label missing or not a directory: $DirPath"
+    }
+    $full = ([System.IO.Path]::GetFullPath($DirPath)).TrimEnd("\")
+    $root = ([System.IO.Path]::GetPathRoot($full)).TrimEnd("\")
+    $cur  = $full
+    while ($cur.Length -gt $root.Length) {
+        $item = Get-Item -LiteralPath $cur -Force
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "FAIL-FAST [P11_REPARSE_LINK]: reparse point forbidden on $Label segment $cur"
+        }
+        $parent = Split-Path -Path $cur -Parent
+        if ([string]::IsNullOrEmpty($parent) -or $parent -eq $cur) { break }
+        $cur = $parent.TrimEnd("\")
+    }
+    return $full
+}
+
+function Assert-P11SafeFile {
+    param([Parameter(Mandatory=$true)][string]$FilePath, [Parameter(Mandatory=$true)][string]$Label)
+    Assert-P11NoTraversal -PathValue $FilePath -Label $Label
+    if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf)) {
+        throw "FAIL-FAST [P11_MISSING_FILE]: $Label missing or not a regular file: $FilePath"
+    }
+    $parentDir = Split-Path -Path $FilePath -Parent
+    $null = Assert-P11SafeDirChain -DirPath $parentDir -Label "$Label parent"
+    $item = Get-Item -LiteralPath $FilePath -Force
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "FAIL-FAST [P11_REPARSE_FILE]: reparse point forbidden on $Label ($FilePath)"
+    }
+    return ([System.IO.Path]::GetFullPath($FilePath))
+}
+
+function Assert-P11FreshAbsent {
+    param([Parameter(Mandatory=$true)][string]$TargetPath, [Parameter(Mandatory=$true)][string]$Label)
+    Assert-P11NoTraversal -PathValue $TargetPath -Label $Label
+    if (Test-Path -LiteralPath $TargetPath) {
+        throw "FAIL-FAST [P11_FRESHNESS]: output path already exists, refusing overwrite: $TargetPath"
+    }
+}
+
+function Assert-P11NonOverlapping {
+    param(
+        [Parameter(Mandatory=$true)][string]$PathA,
+        [Parameter(Mandatory=$true)][string]$LabelA,
+        [Parameter(Mandatory=$true)][string]$PathB,
+        [Parameter(Mandatory=$true)][string]$LabelB
+    )
+    $a = ([System.IO.Path]::GetFullPath($PathA)).TrimEnd("\")
+    $b = ([System.IO.Path]::GetFullPath($PathB)).TrimEnd("\")
+    if ($a.Equals($b, [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $a.StartsWith("$b\", [System.StringComparison]::OrdinalIgnoreCase) `
+        -or $b.StartsWith("$a\", [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "FAIL-FAST [P11_OVERLAP]: $LabelA ($a) overlaps or nests with $LabelB ($b)"
+    }
+}
+
+# 1. Khai báo đầy đủ toàn bộ đường dẫn evaluator, Python venv, nguồn gốc lịch sử, bản sao review và output
+$EvaluatorCheckoutDir     = "C:\NTK-G1\candidates\g1-r03-3981a91-relocation"
+$P11PythonExe             = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\venv-g1-c5\Scripts\python.exe"
+
+# Nhóm G1-C5 lịch sử (e9c93349a0fbfef76e00ffe91558cdfc73da5bf3)
+$G1C5SourceRoot           = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\checkout-detached\v2\g1_integration\demo_fixtures"
+$Demo1OriginalDir         = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\acceptance-01\primary\demo1_true_positive"
+$Demo1OriginalCaptureDir  = "$Demo1OriginalDir\capture"
+$Demo1ReviewDir           = "C:\NTK-G1-Private\G1-R03\runs\demo1-human-review-3981a91-20261115T141033Z\demo1_true_positive"
+
+$Demo2OriginalDir         = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\acceptance-01\primary\demo2_protected_fp"
+$Demo3aOriginalDir        = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\acceptance-01\primary\demo3a_missing_helper"
+$M1OriginalDir            = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\acceptance-01\auxiliary\m1_scan_only"
+$Demo3bOriginalDir        = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\acceptance-01\auxiliary\controls_suite\demo3b_malformed_llm_synthetic_mock"
+$Demo4OriginalDir         = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\acceptance-01\auxiliary\controls_suite\demo4_stale_source"
+$Demo4WorkspaceSourceRoot = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\acceptance-01\auxiliary\controls_suite\demo4_workspace"
+
+# Nhóm G1-R03 AllowlistedQuery lịch sử (P1-P4 gốc: 2c9f92f1209a654e0cc957a7bf8b7f1c7e13d19f; P5-P6 review: 3981a9139e7860498a7e24c617663c34ac9f187c)
+$AllowQOriginalSourceRoot = "C:\NTK-G1\candidates\g1-r03-2c9f92f-acceptance\v2\g1_integration\demo_fixtures"
+$AllowQOriginalDir        = "C:\NTK-G1-Private\G1-R03\runs\g1-r03-2c9f92f-p1-p4-20261115T114845Z\allowlisted_query"
+$AllowQOriginalCaptureDir = "$AllowQOriginalDir\capture"
+$AllowQReviewDir          = "C:\NTK-G1-Private\G1-R03\runs\p5-human-review-3981a91-20261115-203321623\allowlisted_query"
+
+# Output độc lập của riêng P11 (nằm ngoài mọi vùng bằng chứng, bản sao review, nguồn gốc và evaluator checkout)
+$P11RunId                 = "p11-historical-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+$P11OutputRoot            = "C:\NTK-G1-Private\G1-R03\runs\$P11RunId"
+$P11ReceiptsDir           = "$P11OutputRoot\process-receipts"
+$P11EvalJson              = "$P11OutputRoot\r01_r03_p11_evaluation.json"
+
+# 2. Kiểm tra an toàn đường dẫn, không traversal, không symlink/junction, tách biệt không lồng nhau
+$ResolvedEvaluatorCheckout = Assert-P11SafeDirChain -DirPath $EvaluatorCheckoutDir -Label "EvaluatorCheckoutDir"
+$null = Assert-P11SafeFile -FilePath $P11PythonExe -Label "P11PythonExe"
+$null = Assert-P11SafeFile -FilePath (Join-Path $ResolvedEvaluatorCheckout "v2\g1_integration\evaluate_r01_r03.py") -Label "EvaluatorScript"
+
+$ResolvedG1C5Src    = Assert-P11SafeDirChain -DirPath $G1C5SourceRoot -Label "G1C5SourceRoot"
+$ResolvedAllowQSrc  = Assert-P11SafeDirChain -DirPath $AllowQOriginalSourceRoot -Label "AllowQOriginalSourceRoot"
+$ResolvedDemo4Src   = Assert-P11SafeDirChain -DirPath $Demo4WorkspaceSourceRoot -Label "Demo4WorkspaceSourceRoot"
+
+$AllScenarioDirs = @(
+    @{ Name = "Demo1OriginalDir";  Path = $Demo1OriginalDir },
+    @{ Name = "Demo1ReviewDir";    Path = $Demo1ReviewDir },
+    @{ Name = "Demo2OriginalDir";  Path = $Demo2OriginalDir },
+    @{ Name = "Demo3aOriginalDir"; Path = $Demo3aOriginalDir },
+    @{ Name = "M1OriginalDir";     Path = $M1OriginalDir },
+    @{ Name = "Demo3bOriginalDir"; Path = $Demo3bOriginalDir },
+    @{ Name = "Demo4OriginalDir";  Path = $Demo4OriginalDir },
+    @{ Name = "AllowQOriginalDir"; Path = $AllowQOriginalDir },
+    @{ Name = "AllowQReviewDir";   Path = $AllowQReviewDir }
+)
+foreach ($entry in $AllScenarioDirs) {
+    $resolved = Assert-P11SafeDirChain -DirPath $entry.Path -Label $entry.Name
+    Assert-P11NonOverlapping -PathA $resolved -LabelA $entry.Name -PathB $ResolvedEvaluatorCheckout -LabelB "EvaluatorCheckoutDir"
+    Assert-P11NonOverlapping -PathA $P11OutputRoot -LabelA "P11OutputRoot" -PathB $resolved -LabelB $entry.Name
+}
+Assert-P11NonOverlapping -PathA $ResolvedAllowQSrc -LabelA "AllowQOriginalSourceRoot" -PathB $ResolvedEvaluatorCheckout -LabelB "EvaluatorCheckoutDir"
+Assert-P11NonOverlapping -PathA $P11OutputRoot -LabelA "P11OutputRoot" -PathB $ResolvedEvaluatorCheckout -LabelB "EvaluatorCheckoutDir"
+Assert-P11NonOverlapping -PathA $P11OutputRoot -LabelA "P11OutputRoot" -PathB $ResolvedG1C5Src -LabelB "G1C5SourceRoot"
+Assert-P11NonOverlapping -PathA $P11OutputRoot -LabelA "P11OutputRoot" -PathB $ResolvedAllowQSrc -LabelB "AllowQOriginalSourceRoot"
+Assert-P11NonOverlapping -PathA $P11OutputRoot -LabelA "P11OutputRoot" -PathB $ResolvedDemo4Src -LabelB "Demo4WorkspaceSourceRoot"
+Assert-P11FreshAbsent -TargetPath $P11OutputRoot -Label "P11OutputRoot"
+Assert-P11FreshAbsent -TargetPath $P11EvalJson -Label "P11EvalJson"
+
+# 3. Kiểm tra source hashes độc lập trên đĩa
+$ExpectedSourceHashes = @(
+    @{ File = (Join-Path $ResolvedG1C5Src "Demo1TruePositive.java");              Sha = "934fff73bb2053c1160f296e2e9747f87349eafdaae77145039d6d20668f24af" },
+    @{ File = (Join-Path $ResolvedG1C5Src "Demo2ProtectedFalsePositive.java");    Sha = "51ca2bd23cb4134f93c1c59095240744ab9eb78184408a08eb5cd560de06a7b0" },
+    @{ File = (Join-Path $ResolvedG1C5Src "Demo3ExternalHelperUndetermined.java"); Sha = "9945d19bd2aa007e99e37d3495c401684e467cfe8ef83489be793dd88a01f601" },
+    @{ File = (Join-Path $ResolvedAllowQSrc "AllowlistedQuery.java");             Sha = "abc630a66432797904d5f81d69a80b14e73dbea55cad80beddcc505d41e2ea43" }
+)
+foreach ($srcItem in $ExpectedSourceHashes) {
+    $safeSrc = Assert-P11SafeFile -FilePath $srcItem.File -Label $srcItem.File
+    $actualSha = (Get-FileHash -LiteralPath $safeSrc -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha -ne $srcItem.Sha) {
+        throw "FAIL-FAST [P11_SOURCE_HASH]: $($srcItem.File) expected $($srcItem.Sha), got $actualSha"
+    }
+}
+$Demo4DiskJava = Assert-P11SafeFile -FilePath (Join-Path $ResolvedDemo4Src "Demo4MutableCopy.java") -Label "Demo4MutableCopy.java"
+$Demo4ActualSha = (Get-FileHash -LiteralPath $Demo4DiskJava -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($Demo4ActualSha -eq "51ca2bd23cb4134f93c1c59095240744ab9eb78184408a08eb5cd560de06a7b0") {
+    throw "FAIL-FAST [P11_DEMO4_DRIFT]: Demo4MutableCopy.java on disk unexpectedly matches pre-scan hash"
+}
+
+# 4. Kiểm tra từng cặp Original/Review (không lồng nhau, capture=<orig>\capture, không sidecar post_ingestion, byte-parity, SQLite state)
+$RelocatedPairs = @(
+    @{ Name = "Demo1";  Orig = $Demo1OriginalDir;  Cap = $Demo1OriginalCaptureDir;  Rev = $Demo1ReviewDir;  RequireAfterFalse = $false },
+    @{ Name = "AllowQ"; Orig = $AllowQOriginalDir; Cap = $AllowQOriginalCaptureDir; Rev = $AllowQReviewDir; RequireAfterFalse = $true }
+)
+foreach ($pair in $RelocatedPairs) {
+    $resOrig = Assert-P11SafeDirChain -DirPath $pair.Orig -Label "$($pair.Name)OriginalDir"
+    $resCap  = Assert-P11SafeDirChain -DirPath $pair.Cap  -Label "$($pair.Name)OriginalCaptureDir"
+    $resRev  = Assert-P11SafeDirChain -DirPath $pair.Rev  -Label "$($pair.Name)ReviewDir"
+    if ($resCap -ne "$resOrig\capture") {
+        throw "FAIL-FAST [P11_CAPTURE_BIND]: $($pair.Name)OriginalCaptureDir ($resCap) != $resOrig\capture"
+    }
+    Assert-P11NonOverlapping -PathA $resOrig -LabelA "$($pair.Name)OriginalDir" -PathB $resRev -LabelB "$($pair.Name)ReviewDir"
+
+    foreach ($reqRel in @(
+        "g1-run-manifest.json",
+        "capture\cli-origin.json",
+        "capture\scan-manifest.json",
+        "capture\opengrep.json",
+        "capture\opengrep.sarif",
+        "capture\legacy_reports\semgrep.json",
+        "capture\legacy_reports\semgrep.sarif",
+        "triage\evidence.json",
+        "triage\assessments.jsonl",
+        "triage\input.opengrep.json",
+        "triage\http-capture-check.json",
+        "triage\review.post_ingestion.sqlite"
+    )) {
+        $origFile = Assert-P11SafeFile -FilePath (Join-Path $resOrig $reqRel) -Label "$($pair.Name)Orig/$reqRel"
+        $revFile  = Assert-P11SafeFile -FilePath (Join-Path $resRev  $reqRel) -Label "$($pair.Name)Rev/$reqRel"
+        $hOrig = (Get-FileHash -LiteralPath $origFile -Algorithm SHA256).Hash.ToLowerInvariant()
+        $hRev  = (Get-FileHash -LiteralPath $revFile  -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hOrig -ne $hRev) {
+            throw "FAIL-FAST [P11_SESSION_MISMATCH]: $($pair.Name) $reqRel hash differs between original ($hOrig) and review ($hRev)"
+        }
+    }
+    foreach ($sideBase in @($resOrig, $resRev)) {
+        foreach ($forbiddenSidecar in @("triage\review.post_ingestion.sqlite-wal", "triage\review.post_ingestion.sqlite-shm")) {
+            $sidePath = Join-Path $sideBase $forbiddenSidecar
+            if (Test-Path -LiteralPath $sidePath) {
+                throw "FAIL-FAST [P11_POST_INGESTION_SIDECAR]: forbidden SQLite sidecar present at $sidePath"
+            }
+        }
+    }
+    $null = Assert-P11SafeFile -FilePath (Join-Path $resRev "triage\review.sqlite") -Label "$($pair.Name)Rev/review.sqlite"
+    if ($pair.RequireAfterFalse) {
+        $null = Assert-P11SafeFile -FilePath (Join-Path $resRev "triage\review.after_confirm_false.sqlite") -Label "$($pair.Name)Rev/review.after_confirm_false.sqlite"
+    }
+}
+
+# 5. Kiểm tra nhanh trạng thái SQLite lịch sử bằng ?mode=ro trước khi gọi evaluator chính thức
+& $P11PythonExe -X utf8 -B -c @"
+import sqlite3, sys
+from pathlib import Path
+def check_db(path, exp_states, exp_actions, exp_rej=0):
+    p = Path(path)
+    conn = sqlite3.connect(f'{p.resolve().as_uri()}?mode=ro', uri=True)
+    try:
+        states = [r[0] for r in conn.execute('SELECT state FROM warnings ORDER BY rowid')]
+        actions = [r[0] for r in conn.execute('SELECT action FROM events ORDER BY sequence, rowid')]
+        rejs = [r[0] for r in conn.execute('SELECT rejection_code FROM rejected_decisions ORDER BY sequence, rowid')]
+    finally:
+        conn.close()
+    assert states == exp_states, f'{p}: states={states} != {exp_states}'
+    assert actions == exp_actions, f'{p}: actions={actions} != {exp_actions}'
+    assert len(rejs) == exp_rej, f'{p}: rejected={rejs} len != {exp_rej}'
+check_db(r'$Demo1ReviewDir\triage\review.sqlite', ['CONFIRMED_TRUE', 'OPEN'], ['confirm-true'])
+check_db(r'$Demo2OriginalDir\triage\review.sqlite', ['OPEN'], [])
+check_db(r'$Demo3aOriginalDir\triage\review.sqlite', ['OPEN'], [])
+check_db(r'$Demo4OriginalDir\triage\review.sqlite', ['OPEN'], [], exp_rej=1)
+check_db(r'$AllowQReviewDir\triage\review.after_confirm_false.sqlite', ['CONFIRMED_FALSE'], ['confirm-false'])
+check_db(r'$AllowQReviewDir\triage\review.sqlite', ['OPEN'], ['confirm-false', 'reopen'])
+"@
+Assert-P11LastExit -Step "sqlite_ro_precheck"
+
+# 6. Khởi tạo thư mục output của riêng P11 và chạy evaluate_r01_r03 chỉ-đọc với exec_receipt
+New-Item -ItemType Directory -Path $P11OutputRoot | Out-Null
+New-Item -ItemType Directory -Path $P11ReceiptsDir | Out-Null
+
+$env:PYTHONUTF8 = "1"
+$env:PYTHONDONTWRITEBYTECODE = "1"
+$env:PYTHONPATH = $ResolvedEvaluatorCheckout
+$env:NTK_G1_REPO_ROOT = $ResolvedEvaluatorCheckout
+
+& $P11PythonExe -X utf8 -B -m v2.g1_integration.exec_receipt `
+    --receipt-dir $P11ReceiptsDir `
+    --step "P11_historical_read_only_evaluate_r01_r03" `
+    --cwd $ResolvedEvaluatorCheckout `
+    --expect-exit 0 `
+    -- $P11PythonExe -X utf8 -B -m v2.g1_integration.evaluate_r01_r03 `
+        --demo1-dir $Demo1ReviewDir `
+        --demo2-dir $Demo2OriginalDir `
+        --demo3a-dir $Demo3aOriginalDir `
+        --m1-dir $M1OriginalDir `
+        --demo3b-dir $Demo3bOriginalDir `
+        --demo4-dir $Demo4OriginalDir `
+        --r03-fp-mode proposed-allowlisted-fp `
+        --allowlisted-fp-dir $AllowQReviewDir `
+        --allowlisted-trusted-source-root $AllowQOriginalSourceRoot `
+        --capture-relocation-mode pinned-original-capture `
+        --demo1-trusted-scenario-root $Demo1OriginalDir `
+        --demo1-trusted-capture-root $Demo1OriginalCaptureDir `
+        --allowlisted-trusted-scenario-root $AllowQOriginalDir `
+        --allowlisted-trusted-capture-root $AllowQOriginalCaptureDir `
+        --output $P11EvalJson | Out-Null
+Assert-P11LastExit -Step "evaluate_r01_r03"
+```
+
+### 12.4. Tiêu Chí Chế Độ Đề Xuất (`--r03-fp-mode proposed-allowlisted-fp`) & Chế Độ Relocation (`--capture-relocation-mode`)
+
+- Mặc định (`--r03-fp-mode locked-demo2` và `--capture-relocation-mode strict-in-place`) vẫn giữ nguyên toàn bộ hợp đồng `G1-C5` đã khóa; mọi `engine_output_path` nằm ngoài `capture/` hiện tại đều fail closed.
+- Khi các bản sao review nhân duyệt (`review copy`, chỉ cập nhật `triage/review.sqlite` và nếu cần `triage/review.after_confirm_false.sqlite`) được tách khỏi thư mục chạy gốc (`original scenario`, nơi OpenGrep thật + Qwen cục bộ đã chạy và ghi `capture/legacy_reports/semgrep.{json,sarif}`):
+  - Phải truyền `--capture-relocation-mode pinned-original-capture` cùng cặp neo kép độc lập do người vận hành chỉ định cho MỖI kịch bản bị dời chỗ: cả `--<scenario>-trusted-scenario-root` VÀ `--<scenario>-trusted-capture-root` (ví dụ `--demo1-trusted-scenario-root` + `--demo1-trusted-capture-root`, `--allowlisted-trusted-scenario-root` + `--allowlisted-trusted-capture-root`). Thiếu một trong hai hoặc tự neo vào review copy / lồng thư mục sẽ dừng an toàn (fail closed).
+  - Bộ đánh giá kiểm chứng độc lập hai phía: `original scenario` + `original capture` phải tự vượt qua toàn bộ kiểm tra không-dời-chỗ (gồm ràng buộc `<scenario_root>\capture == <capture_root>`, `legacy_reports/semgrep.{json,sarif}` nằm trong `original capture`, khớp byte với `opengrep.{json,sarif}`, chuỗi thư mục sạch không symlink/junction/traversal, `verify_receipt`, `g1-run-manifest.json`, và `verify_run_http_captures`), đồng thời kiểm tra tồn kho đầy đủ và khớp từng byte giữa `review copy` và `original scenario` trên toàn bộ hiện vật bất biến trước khi kiểm duyệt (`g1-run-manifest.json`, `g1-cli-summary.json` nếu có, toàn bộ `capture/` kể cả `legacy_reports/` nếu được giữ lại, `triage/evidence.json`, `triage/assessments.jsonl`, `triage/input.opengrep.json`, `triage/http-capture-check.json`, `triage/live-protocol-check.json`, `triage/ollama-tags-check.json`, toàn bộ cây `triage/llm_io/` gồm `_tags/`, và `triage/review.post_ingestion.sqlite`); chỉ cho phép khác biệt sau kiểm duyệt ở `triage/review.sqlite` (và `triage/review.after_confirm_false.sqlite` theo hợp đồng R03). Tuyệt đối không tự tin đường dẫn trong manifest và không tái chuẩn hóa JSON raw HTTP body.
 - Ở chế độ `proposed-allowlisted-fp`, bộ đánh giá chỉ-đọc `v2.g1_integration.evaluate_r01_r03`:
   - Giữ nguyên tuyệt đối `R01` (**4** lượt Qwen thật G1-C5: `Demo1=2`, `Demo2=1`, `Demo3a=1`, cộng `Demo3b` mock control) và `R02` (`M1` + parity 4 lượt lịch sử), không thay đổi kết quả hay mẫu số `R01`.
   - Xác minh riêng `allowlisted_query_fp_control` trong phạm vi `R03` (`supplementary_r03_control` tách biệt): đúng định danh/SHA-256 fixture `AllowlistedQuery.java` và guard `throw`, HTTP capture thật, prompt `blind`, validator/replay không bị hạ cấp (`validator_downgraded == false`, `failure_kind == "NONE"`, citation hợp lệ khi có kết luận hoặc trích dẫn), cùng chuỗi `review.post_ingestion.sqlite` (`OPEN`) -> `review.after_confirm_false.sqlite` (`CONFIRMED_FALSE`) -> `reopen` (`OPEN`) bởi actor không mang nhãn `SCRIPTED_TEST_ONLY`/mock/replay.
