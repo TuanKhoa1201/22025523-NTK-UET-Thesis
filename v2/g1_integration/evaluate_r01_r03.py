@@ -1843,8 +1843,33 @@ def _is_exact_cwe89_identifier(value: Any) -> bool:
     return True
 
 
-def _verify_allowlisted_fp_scenario_identity(scenario_dir: Path) -> list[str]:
-    """Verify allowlisted_fp_dir holds the exact approved CWE-89 AllowlistedQuery fixture, hash, and throwing guard."""
+def _extract_allowlisted_path_mappings(ev: dict[str, Any], rec: dict[str, Any]) -> list[Any]:
+    """Extract and structurally validate path_mappings from evidence bundle / record without synthesizing guesses."""
+    has_rec_maps = "path_mappings" in rec
+    has_ev_maps = "path_mappings" in ev
+    if has_rec_maps and has_ev_maps and rec.get("path_mappings") != ev.get("path_mappings"):
+        raise EvidenceError("record path_mappings disagrees with evidence bundle path_mappings")
+    raw_maps = rec.get("path_mappings") if has_rec_maps else ev.get("path_mappings")
+    if raw_maps is None:
+        return []
+    if not isinstance(raw_maps, list):
+        raise EvidenceError(f"path_mappings must be a JSON array, got {type(raw_maps).__name__}")
+    for entry in raw_maps:
+        if isinstance(entry, dict):
+            if set(entry) != {"from", "to"} or not isinstance(entry["from"], str) or not isinstance(entry["to"], str):
+                raise EvidenceError("path_mappings entries must be {from, to} string objects")
+        elif isinstance(entry, str):
+            if "=" not in entry:
+                raise EvidenceError("string path_mappings entry must be FROM=TO")
+        else:
+            raise EvidenceError(f"unsupported path_mappings entry type {type(entry).__name__}")
+    return list(raw_maps)
+
+
+def _verify_allowlisted_fp_scenario_identity(
+    scenario_dir: Path, *, trusted_source_root: Path | None = None,
+) -> list[str]:
+    """Verify AllowlistedQuery against an operator-pinned root, never an evidence-declared root alone."""
     approved_fixture = Path(__file__).resolve().parent / "demo_fixtures" / "AllowlistedQuery.java"
     if not _is_safe_regular_file(approved_fixture):
         return [f"allowlisted_query_fp_control: missing or unsafe approved repo fixture: {approved_fixture}"]
@@ -1852,8 +1877,21 @@ def _verify_allowlisted_fp_scenario_identity(scenario_dir: Path) -> list[str]:
     expected_sha = digest(expected_bytes)
     expected_size = len(expected_bytes)
 
+    # A root claimed by evidence.json or g1-run-manifest.json is NOT an authority.
+    # The caller must pin the original scan root independently (CLI/operator input).
+    if trusted_source_root is None:
+        return ["allowlisted_query_fp_control: missing independent trusted_source_root; fail closed"]
+    try:
+        trusted_root_path = Path(trusted_source_root)
+        if not _is_safe_dir(trusted_root_path):
+            raise EvidenceError("trusted_source_root missing, unsafe or reparse-linked")
+        pinned_root = trusted_root_path.resolve(strict=True)
+    except (OSError, ValueError, RuntimeError, EvidenceError, TypeError) as exc:
+        return [f"allowlisted_query_fp_control: invalid independent trusted_source_root: {exc}"]
+
     errors: list[str] = []
-    ev_path = Path(scenario_dir).resolve() / "triage" / "evidence.json"
+    scenario_resolved = Path(scenario_dir).resolve()
+    ev_path = scenario_resolved / "triage" / "evidence.json"
     if not _is_safe_regular_file(ev_path):
         return [f"allowlisted_query_fp_control: missing or unsafe triage/evidence.json: {ev_path}"]
     try:
@@ -1867,34 +1905,122 @@ def _verify_allowlisted_fp_scenario_identity(scenario_dir: Path) -> list[str]:
     if not isinstance(rec, dict):
         return ["allowlisted_query_fp_control: evidence record[0] is not a JSON object"]
 
-    raw_rec_path = str(rec.get("path") or "")
-    norm_rec_path = raw_rec_path.replace("\\", "/")
-    raw_parts = PurePosixPath(norm_rec_path).parts
-    if not norm_rec_path.strip() or ".." in raw_parts or PurePosixPath(norm_rec_path).name != "AllowlistedQuery.java":
+    raw_rec_path = rec.get("path")
+    norm_rec_path = raw_rec_path.replace("\\", "/") if isinstance(raw_rec_path, str) else ""
+    lexical_path_ok = (
+        isinstance(raw_rec_path, str)
+        and bool(raw_rec_path.strip())
+        and raw_rec_path == raw_rec_path.strip()
+        and "\x00" not in raw_rec_path
+        and not any(ord(ch) < 32 for ch in raw_rec_path)
+        and not raw_rec_path.lower().startswith("file:")
+        and not norm_rec_path.startswith("//")
+        and not (raw_rec_path.startswith("/") and "\\" in raw_rec_path)
+        and not (":" in norm_rec_path and not re.match(r"^[A-Za-z]:/", norm_rec_path))
+        and ".." not in PurePosixPath(norm_rec_path).parts
+        and ".." not in Path(raw_rec_path).parts
+        and PurePosixPath(norm_rec_path).name == "AllowlistedQuery.java"
+    )
+    if not lexical_path_ok:
         errors.append(
-            f"allowlisted_query_fp_control: expected path naming exact 'AllowlistedQuery.java' without traversal, got {norm_rec_path!r}"
+            f"allowlisted_query_fp_control: expected path naming exact 'AllowlistedQuery.java' without traversal, got {raw_rec_path!r}"
         )
 
-    expected_snap_key = norm_rec_path
     raw_root = rec.get("root")
-    if isinstance(raw_root, str) and raw_root.strip():
-        try:
-            expected_snap_key = Path(raw_rec_path).relative_to(Path(raw_root)).as_posix()
-        except ValueError:
-            if norm_rec_path.startswith("/") or (len(norm_rec_path) >= 2 and norm_rec_path[1] == ":"):
-                errors.append(
-                    f"allowlisted_query_fp_control: target path {norm_rec_path!r} lies outside declared root {raw_root!r}"
-                )
-    if (
-        not expected_snap_key.strip()
-        or expected_snap_key.startswith("/")
-        or (len(expected_snap_key) >= 2 and expected_snap_key[1] == ":")
-        or ".." in PurePosixPath(expected_snap_key).parts
-        or PurePosixPath(expected_snap_key).name != "AllowlistedQuery.java"
-    ):
+    is_posix_rec_path = isinstance(raw_rec_path, str) and norm_rec_path.startswith("/")
+    try:
+        validated_maps = _extract_allowlisted_path_mappings(ev, rec)
+    except EvidenceError as exc:
+        validated_maps = []
+        errors.append(f"allowlisted_query_fp_control: invalid path_mappings: {exc}")
+
+    expected_snap_key: str | None = None
+    tree: SourceTree | None = None
+    if not isinstance(raw_root, str) or not raw_root.strip() or "\x00" in raw_root:
+        errors.append(f"allowlisted_query_fp_control: missing or invalid declared source root {raw_root!r}")
+    elif not _is_safe_dir(Path(raw_root)):
+        errors.append(f"allowlisted_query_fp_control: declared source root is missing or unsafe/reparse-linked: {raw_root!r}")
+    elif Path(raw_root).resolve(strict=True) != pinned_root:
         errors.append(
-            f"allowlisted_query_fp_control: invalid relative snapshot key {expected_snap_key!r} (expected 'AllowlistedQuery.java' relative path)"
+            "allowlisted_query_fp_control: declared source root disagrees with independently pinned "
+            f"trusted_source_root (declared={raw_root!r}, pinned={str(pinned_root)!r})"
         )
+    elif lexical_path_ok:
+        try:
+            if is_posix_rec_path:
+                if not validated_maps:
+                    raise EvidenceError("POSIX/WSL source path requires explicit path_mappings")
+                # JSON maps (including manifest copies) are evidence, not an authority.
+                # Re-derive the Windows/WSL2 mount mapping from the on-disk root,
+                # with no caller-supplied extra path maps, then require exact equality.
+                from v2.g1_integration.bridge import derive_trusted_path_maps
+
+                os_derived_maps = derive_trusted_path_maps(pinned_root)
+                if not os_derived_maps:
+                    raise EvidenceError("cannot independently derive a WSL mapping from this host source root")
+                canonical_tree = SourceTree(pinned_root, path_maps=os_derived_maps)
+                evidence_tree = SourceTree(pinned_root, path_maps=validated_maps)
+                if evidence_tree.path_maps != canonical_tree.path_maps:
+                    raise EvidenceError("untrusted path_mappings: do not match OS-derived source-root mapping")
+                tree = canonical_tree
+            else:
+                tree = SourceTree(pinned_root)
+            resolved_source = tree.resolve(raw_rec_path)
+            if not _is_safe_regular_file(resolved_source):
+                raise EvidenceError(f"resolved source traverses unsafe symlink/junction: {resolved_source}")
+            rel_key, disk_bytes, _ = tree.read(raw_rec_path)
+            if digest(disk_bytes) != expected_sha or len(disk_bytes) != expected_size:
+                errors.append(
+                    "allowlisted_query_fp_control: source drift or disk fixture mismatch "
+                    f"(expected sha256={expected_sha} size={expected_size}, got sha256={digest(disk_bytes)} size={len(disk_bytes)})"
+                )
+            if (
+                not rel_key.strip()
+                or rel_key.startswith("/")
+                or (len(rel_key) >= 2 and rel_key[1] == ":")
+                or ".." in PurePosixPath(rel_key).parts
+                or PurePosixPath(rel_key).name != "AllowlistedQuery.java"
+            ):
+                errors.append(
+                    f"allowlisted_query_fp_control: invalid relative snapshot key {rel_key!r} (expected 'AllowlistedQuery.java' relative path)"
+                )
+            else:
+                expected_snap_key = rel_key
+        except (EvidenceError, OSError, UnicodeError, ValueError, RuntimeError) as exc:
+            errors.append(f"allowlisted_query_fp_control: source root/mapping verification failed for {norm_rec_path!r}: {exc}")
+
+    manifest_path = scenario_resolved / "g1-run-manifest.json"
+    if os.path.lexists(manifest_path):
+        if not _is_safe_regular_file(manifest_path):
+            errors.append("allowlisted_query_fp_control: unsafe g1-run-manifest.json")
+        else:
+            try:
+                run_manifest = strict_json(manifest_path.read_text(encoding="utf-8"))
+                if isinstance(run_manifest, dict):
+                    man_root = run_manifest.get("source_root")
+                    if isinstance(man_root, str) and man_root.strip() and isinstance(raw_root, str) and raw_root.strip():
+                        if _is_safe_dir(Path(man_root)) and _is_safe_dir(Path(raw_root)):
+                            if Path(man_root).resolve() != pinned_root:
+                                errors.append(
+                                    "allowlisted_query_fp_control: g1-run-manifest source_root "
+                                    f"{man_root!r} disagrees with independently pinned trusted_source_root {str(pinned_root)!r}"
+                                )
+                        else:
+                            errors.append(
+                                f"allowlisted_query_fp_control: g1-run-manifest source_root {man_root!r} missing or unsafe"
+                            )
+                    if is_posix_rec_path and tree is not None and "trusted_path_maps" in run_manifest:
+                        man_maps = run_manifest.get("trusted_path_maps")
+                        if not isinstance(man_maps, list):
+                            errors.append("allowlisted_query_fp_control: g1-run-manifest trusted_path_maps must be a list")
+                        else:
+                            man_tree = SourceTree(pinned_root, path_maps=man_maps)
+                            if man_tree.path_maps != tree.path_maps:
+                                errors.append(
+                                    "allowlisted_query_fp_control: evidence path_mappings disagrees with g1-run-manifest trusted_path_maps"
+                                )
+            except (OSError, UnicodeError, EvidenceError, ValueError, RuntimeError) as exc:
+                errors.append(f"allowlisted_query_fp_control: invalid g1-run-manifest root/path_mappings check: {exc}")
 
     rule_id = str(rec.get("rule_id") or "")
     if not rule_id.endswith("ntk.g1.java.cwe89.sql-injection"):
@@ -1918,18 +2044,24 @@ def _verify_allowlisted_fp_scenario_identity(scenario_dir: Path) -> list[str]:
             errors.append(
                 f"allowlisted_query_fp_control: expected single-file snapshot map for AllowlistedQuery.java, got {sorted(snapshots)!r}"
             )
-        snap = snapshots.get(expected_snap_key)
-        if not isinstance(snap, dict):
+        if expected_snap_key is None:
             errors.append(
-                f"allowlisted_query_fp_control: snapshots missing exact target entry {expected_snap_key!r} "
+                "allowlisted_query_fp_control: cannot bind snapshots to unverified target path "
                 f"(present={sorted(snapshots)!r})"
             )
         else:
-            if snap.get("sha256") != expected_sha or snap.get("size") != expected_size:
+            snap = snapshots.get(expected_snap_key)
+            if not isinstance(snap, dict):
                 errors.append(
-                    "allowlisted_query_fp_control: snapshot hash/size mismatch against approved repo AllowlistedQuery.java "
-                    f"(expected sha256={expected_sha} size={expected_size}, got sha256={snap.get('sha256')!r} size={snap.get('size')!r})"
+                    f"allowlisted_query_fp_control: snapshots missing exact target entry {expected_snap_key!r} "
+                    f"(present={sorted(snapshots)!r})"
                 )
+            else:
+                if snap.get("sha256") != expected_sha or snap.get("size") != expected_size:
+                    errors.append(
+                        "allowlisted_query_fp_control: snapshot hash/size mismatch against approved repo AllowlistedQuery.java "
+                        f"(expected sha256={expected_sha} size={expected_size}, got sha256={snap.get('sha256')!r} size={snap.get('size')!r})"
+                    )
 
     snippets = rec.get("snippets")
     if not isinstance(snippets, list) or not snippets:
@@ -1942,7 +2074,7 @@ def _verify_allowlisted_fp_scenario_identity(scenario_dir: Path) -> list[str]:
             continue
         snip_path = str(snip.get("path") or "").replace("\\", "/")
         if (
-            snip_path != expected_snap_key
+            (expected_snap_key is not None and snip_path != expected_snap_key)
             or PurePosixPath(snip_path).name != "AllowlistedQuery.java"
             or snip.get("sha256") != expected_sha
         ):
@@ -1992,6 +2124,7 @@ def evaluate_acceptance(
     demo4_dir: Path,
     demo3b_dir: Path | None = None,
     allowlisted_fp_dir: Path | None = None,
+    allowlisted_trusted_source_root: Path | None = None,
     r03_fp_mode: str = "locked-demo2",
     allow_mock_primary: bool = False,
 ) -> dict[str, Any]:
@@ -2001,6 +2134,10 @@ def evaluate_acceptance(
         raise ValueError("allowlisted_fp_dir requires r03_fp_mode='proposed-allowlisted-fp'")
     if r03_fp_mode == "proposed-allowlisted-fp" and allowlisted_fp_dir is None:
         raise ValueError("allowlisted_fp_dir is required when r03_fp_mode='proposed-allowlisted-fp'")
+    if r03_fp_mode == "locked-demo2" and allowlisted_trusted_source_root is not None:
+        raise ValueError("allowlisted_trusted_source_root is only valid in proposed-allowlisted-fp mode")
+    if r03_fp_mode == "proposed-allowlisted-fp" and allowlisted_trusted_source_root is None:
+        raise ValueError("operator-pinned allowlisted_trusted_source_root is required in proposed-allowlisted-fp mode")
 
     use_proposed_fp = r03_fp_mode == "proposed-allowlisted-fp"
 
@@ -2030,7 +2167,9 @@ def evaluate_acceptance(
             allow_mock_primary=allow_mock_primary,
             require_after_confirm_false=True,
         )
-        id_errs = _verify_allowlisted_fp_scenario_identity(allowlisted_fp_dir)
+        id_errs = _verify_allowlisted_fp_scenario_identity(
+            allowlisted_fp_dir, trusted_source_root=allowlisted_trusted_source_root,
+        )
         if id_errs:
             d_fp.setdefault("r03_errors", []).extend(id_errs)
     d3a = _inspect_primary_scenario(
@@ -2300,6 +2439,10 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Scenario directory for AllowlistedQuery.java (required with --r03-fp-mode proposed-allowlisted-fp)",
     )
+    parser.add_argument(
+        "--allowlisted-trusted-source-root", type=Path, default=None,
+        help="Original AllowlistedQuery scan source root pinned by the operator, independent of evidence JSON/manifest",
+    )
     parser.add_argument("--output", type=Path, required=True, help="Output JSON file (must lie outside scenario directories)")
     parser.add_argument("--allow-mock-primary", action="store_true", help="Offline unit-test flag only; never set in real acceptance")
     args = parser.parse_args(argv)
@@ -2308,6 +2451,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--allowlisted-fp-dir requires --r03-fp-mode proposed-allowlisted-fp")
     if args.r03_fp_mode == "proposed-allowlisted-fp" and args.allowlisted_fp_dir is None:
         parser.error("--r03-fp-mode proposed-allowlisted-fp requires --allowlisted-fp-dir")
+    if args.r03_fp_mode == "proposed-allowlisted-fp" and args.allowlisted_trusted_source_root is None:
+        parser.error("--r03-fp-mode proposed-allowlisted-fp requires --allowlisted-trusted-source-root")
+    if args.r03_fp_mode == "locked-demo2" and args.allowlisted_trusted_source_root is not None:
+        parser.error("--allowlisted-trusted-source-root requires --r03-fp-mode proposed-allowlisted-fp")
 
     try:
         raw_out = _validate_lexical_dir_path(args.output, label="--output")
@@ -2345,6 +2492,7 @@ def main(argv: list[str] | None = None) -> int:
         demo4_dir=args.demo4_dir,
         demo3b_dir=args.demo3b_dir,
         allowlisted_fp_dir=args.allowlisted_fp_dir,
+        allowlisted_trusted_source_root=args.allowlisted_trusted_source_root,
         r03_fp_mode=args.r03_fp_mode,
         allow_mock_primary=args.allow_mock_primary,
     )

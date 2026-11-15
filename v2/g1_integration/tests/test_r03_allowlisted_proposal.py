@@ -509,6 +509,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             demo1_dir=d1_b, demo2_dir=d2_b, demo3a_dir=d3a_b,
             m1_dir=m1_b, demo4_dir=d4_b, demo3b_dir=d3b_b,
             allowlisted_fp_dir=aq_b,
+            allowlisted_trusted_source_root=self.fixtures,
             r03_fp_mode="proposed-allowlisted-fp",
             allow_mock_primary=False,
         )
@@ -521,6 +522,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             demo1_dir=d1_dir, demo2_dir=d2_dir, demo3a_dir=d3a_dir,
             m1_dir=m1_dir, demo4_dir=d4_dir, demo3b_dir=d3b_dir,
             allowlisted_fp_dir=aq_dir,
+            allowlisted_trusted_source_root=self.fixtures,
             r03_fp_mode="proposed-allowlisted-fp",
             allow_mock_primary=False,
         )
@@ -541,6 +543,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             "--demo4-dir", str(d4_dir),
             "--r03-fp-mode", "proposed-allowlisted-fp",
             "--allowlisted-fp-dir", str(aq_dir),
+            "--allowlisted-trusted-source-root", str(self.fixtures),
             "--output", str(eval_out),
             "--allow-mock-primary",
         ])
@@ -575,6 +578,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             demo1_dir=d1_dir, demo2_dir=d2_dir, demo3a_dir=d3a_dir,
             m1_dir=m1_dir, demo4_dir=d4_dir, demo3b_dir=d3b_dir,
             allowlisted_fp_dir=d2_dir,
+            allowlisted_trusted_source_root=self.fixtures,
             r03_fp_mode="proposed-allowlisted-fp",
             allow_mock_primary=True,
         )
@@ -591,6 +595,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
                 demo1_dir=d1_dir, demo2_dir=d2_dir, demo3a_dir=d3a_dir,
                 m1_dir=m1_dir, demo4_dir=d4_dir, demo3b_dir=d3b_dir,
                 allowlisted_fp_dir=aq_dir,
+                allowlisted_trusted_source_root=self.fixtures,
                 r03_fp_mode="proposed-allowlisted-fp",
                 allow_mock_primary=True,
             )
@@ -606,6 +611,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             demo1_dir=d1_d, demo2_dir=d2_d, demo3a_dir=d3a_d,
             m1_dir=m1_d, demo4_dir=d4_d, demo3b_dir=d3b_d,
             allowlisted_fp_dir=aq_d,
+            allowlisted_trusted_source_root=self.fixtures,
             r03_fp_mode="proposed-allowlisted-fp",
             allow_mock_primary=True,
         )
@@ -619,6 +625,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             demo1_dir=d1_c, demo2_dir=d2_c, demo3a_dir=d3a_c,
             m1_dir=m1_c, demo4_dir=d4_c, demo3b_dir=d3b_c,
             allowlisted_fp_dir=aq_c,
+            allowlisted_trusted_source_root=self.fixtures,
             r03_fp_mode="proposed-allowlisted-fp",
             allow_mock_primary=True,
         )
@@ -660,6 +667,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
                     demo1_dir=d1_d, demo2_dir=d2_d, demo3a_dir=d3a_d,
                     m1_dir=m1_d, demo4_dir=d4_d, demo3b_dir=d3b_d,
                     allowlisted_fp_dir=aq_d,
+                    allowlisted_trusted_source_root=self.fixtures,
                     r03_fp_mode="proposed-allowlisted-fp",
                     allow_mock_primary=True,
                 )
@@ -684,6 +692,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             demo1_dir=d1_m, demo2_dir=d2_m, demo3a_dir=d3a_m,
             m1_dir=m1_m, demo4_dir=d4_m, demo3b_dir=d3b_m,
             allowlisted_fp_dir=aq_m,
+            allowlisted_trusted_source_root=self.fixtures,
             r03_fp_mode="proposed-allowlisted-fp",
             allow_mock_primary=True,
         )
@@ -776,7 +785,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
         endpoint = self._start_mock_server(allowq_mode="valid_refuted")
         root = self.tmp_root / "identity_hardening"
         _, _, _, aq_d, _, _, _ = self._build_full_proposed_run(root, endpoint)
-        self.assertEqual(_verify_allowlisted_fp_scenario_identity(aq_d), [])
+        self.assertEqual(_verify_allowlisted_fp_scenario_identity(aq_d, trusted_source_root=self.fixtures), [])
 
         base_ev = strict_json((aq_d / "triage" / "evidence.json").read_text(encoding="utf-8"))
 
@@ -795,7 +804,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
                 }],
             }],
         }), encoding="utf-8")
-        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce1))
+        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce1, trusted_source_root=self.fixtures))
 
         # 2) Same basename AllowlistedQuery.java, forged snapshot SHA-256
         ce2 = self.tmp_root / "id_ce_hash"
@@ -804,7 +813,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
         snap_key = next(iter(ev2["records"][0]["snapshots"]))
         ev2["records"][0]["snapshots"][snap_key]["sha256"] = "0" * 64
         (ce2 / "triage" / "evidence.json").write_text(json.dumps(ev2), encoding="utf-8")
-        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce2))
+        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce2, trusted_source_root=self.fixtures))
 
         # 3) Same basename AllowlistedQuery.java + valid CWE-89, log-only branch instead of throwing guard
         ce3 = self.tmp_root / "id_ce_log_only"
@@ -815,7 +824,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
                 if "throw new IllegalArgumentException" in ln["text"]:
                     ln["text"] = 'System.out.println("rejected");'
         (ce3 / "triage" / "evidence.json").write_text(json.dumps(ev3), encoding="utf-8")
-        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce3))
+        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce3, trusted_source_root=self.fixtures))
 
         # 4) Wrong rule_id even with AllowlistedQuery path
         ce4 = self.tmp_root / "id_ce_rule"
@@ -823,7 +832,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
         ev4 = json.loads(json.dumps(base_ev))
         ev4["records"][0]["rule_id"] = "java.custom.wrong-rule"
         (ce4 / "triage" / "evidence.json").write_text(json.dumps(ev4), encoding="utf-8")
-        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce4))
+        self.assertTrue(_verify_allowlisted_fp_scenario_identity(ce4, trusted_source_root=self.fixtures))
 
         # 5) Reassigned query bypass between guard closing brace and sink
         ce5 = self.tmp_root / "id_ce_reassign"
@@ -835,7 +844,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
                     ln["line"] += 1
             snip["lines"].append({"line": 22, "text": '        query = req.getParameter("q");'})
         (ce5 / "triage" / "evidence.json").write_text(json.dumps(ev5), encoding="utf-8")
-        errs5 = _verify_allowlisted_fp_scenario_identity(ce5)
+        errs5 = _verify_allowlisted_fp_scenario_identity(ce5, trusted_source_root=self.fixtures)
         self.assertTrue(any("without bypass" in e for e in errs5), errs5)
 
         # 6) Positive & negative CWE-89 exact identifier controls (reject CWE-890/891/189/forged/bad-type)
@@ -849,7 +858,7 @@ class R03AllowlistedProposalTests(unittest.TestCase):
             ev_pos = json.loads(json.dumps(base_ev))
             ev_pos["records"][0]["cwe"] = valid_cwe
             (ce_pos / "triage" / "evidence.json").write_text(json.dumps(ev_pos), encoding="utf-8")
-            self.assertEqual(_verify_allowlisted_fp_scenario_identity(ce_pos), [], f"valid cwe={valid_cwe!r} failed")
+            self.assertEqual(_verify_allowlisted_fp_scenario_identity(ce_pos, trusted_source_root=self.fixtures), [], f"valid cwe={valid_cwe!r} failed")
 
         for idx_cwe, bad_cwe in enumerate((
             ["CWE-890"],
@@ -880,11 +889,384 @@ class R03AllowlistedProposalTests(unittest.TestCase):
                 else:
                     ev_neg["records"][0]["cwe"] = bad_cwe
                 (ce_neg / "triage" / "evidence.json").write_text(json.dumps(ev_neg), encoding="utf-8")
-                cwe_errs = _verify_allowlisted_fp_scenario_identity(ce_neg)
+                cwe_errs = _verify_allowlisted_fp_scenario_identity(ce_neg, trusted_source_root=self.fixtures)
                 self.assertTrue(
                     any("expected exact CWE-89 finding" in e for e in cwe_errs),
                     f"expected CWE-89 rejection for cwe={bad_cwe!r}, got {cwe_errs!r}",
                 )
+
+    def test_07_wsl2_path_mapping_and_security_controls(self):
+        allow_bytes = self.allowq.read_bytes()
+        allow_sha = digest(allow_bytes)
+
+        def _make_wsl_forwarding_wrapper(src_java: Path, wsl_file: str) -> Path:
+            bin_dir = self.tmp_root / f"wsl_wrap_{abs(hash((str(src_java), wsl_file)))}"
+            bin_dir.mkdir(parents=True, exist_ok=True)
+            helper_py = bin_dir / "rewrite_opengrep.py"
+            helper_code = "\n".join([
+                "import json, pathlib, subprocess, sys",
+                f"REAL = {self.opengrep!r}",
+                f"TARGET = pathlib.Path({str(src_java)!r}).resolve()",
+                f"WSL_FILE = {wsl_file!r}",
+                "WSL_URI = 'file://' + WSL_FILE",
+                "TARGETS_LOWER = {str(TARGET).lower(), TARGET.as_posix().lower()}",
+                "TARGET_URIS_LOWER = {TARGET.as_uri().lower(), 'file://' + TARGET.as_posix().lower()}",
+                "def _rewrite(val):",
+                "    if isinstance(val, dict):",
+                "        return {k: _rewrite(v) for k, v in val.items()}",
+                "    if isinstance(val, list):",
+                "        return [_rewrite(v) for v in val]",
+                "    if isinstance(val, str):",
+                "        lo = val.lower()",
+                "        if lo in TARGETS_LOWER:",
+                "            return WSL_FILE",
+                "        if lo in TARGET_URIS_LOWER:",
+                "            return WSL_URI",
+                "        if val.endswith('AllowlistedQuery.java'):",
+                "            norm = val.replace('\\\\', '/')",
+                "            if norm.lower().endswith('/allowlistedquery.java') and TARGET.name == 'AllowlistedQuery.java':",
+                "                if '://' in norm:",
+                "                    return WSL_URI",
+                "    return val",
+                "args = sys.argv[1:]",
+                "proc = subprocess.run([REAL, *args], capture_output=True, text=True, encoding='utf-8')",
+                "out_file = None",
+                "for idx, tok in enumerate(args):",
+                "    if tok in ('-o', '--output') and idx + 1 < len(args):",
+                "        out_file = pathlib.Path(args[idx + 1])",
+                "    elif tok.startswith('--output='):",
+                "        out_file = pathlib.Path(tok.split('=', 1)[1])",
+                "if out_file and out_file.is_file():",
+                "    txt = out_file.read_text(encoding='utf-8')",
+                "    if txt.lstrip().startswith('{'):",
+                "        out_file.write_text(json.dumps(_rewrite(json.loads(txt))), encoding='utf-8')",
+                "stdout = proc.stdout",
+                "if stdout.lstrip().startswith('{'):",
+                "    stdout = json.dumps(_rewrite(json.loads(stdout)))",
+                "sys.stdout.write(stdout)",
+                "sys.stderr.write(proc.stderr)",
+                "raise SystemExit(proc.returncode)",
+            ])
+            helper_py.write_text(helper_code + "\n", encoding="utf-8")
+            if os.name == "nt":
+                wrapper = bin_dir / "opengrep_wsl_allowq.cmd"
+                wrapper.write_text(
+                    f'@echo off\r\n"{sys.executable}" "{helper_py}" %*\r\n',
+                    encoding="utf-8",
+                )
+            else:
+                wrapper = bin_dir / "opengrep_wsl_allowq"
+                wrapper.write_text(
+                    f'#!/usr/bin/env sh\nexec "{sys.executable}" "{helper_py}" "$@"\n',
+                    encoding="utf-8",
+                )
+                os.chmod(wrapper, 0o755)
+            return wrapper
+
+        def _to_wsl(p: Path) -> str:
+            res = p.resolve()
+            if res.drive:
+                drv = res.drive[0].lower()
+                rel_p = res.relative_to(res.anchor).as_posix().strip("/")
+                return f"/mnt/{drv}/{rel_p}"
+            return f"/mnt/host/{res.as_posix().strip('/')}"
+
+        # Case 1 + Case 8 first: real CLI scan producing genuine OpenGrep evidence + WSL2 E2E SUPPORTED evaluation
+        ep = self._start_mock_server(allowq_mode="supported_wrong")
+        e2e_root = self.tmp_root / "wsl2_e2e_supported"
+        m1_d, d1_d, d2_d, native_aq_d, d3a_d, d3b_d, d4_d = self._build_full_proposed_run(e2e_root, ep)
+
+        wsl_cand_root = self.tmp_root / "candidates" / "g1-r03-wsl-acceptance"
+        wsl_fix_dir = wsl_cand_root / "v2" / "g1_integration" / "demo_fixtures"
+        wsl_fix_dir.mkdir(parents=True, exist_ok=True)
+        wsl_target = wsl_fix_dir / "AllowlistedQuery.java"
+        wsl_target.write_bytes(allow_bytes)
+
+        wsl_fix_prefix = _to_wsl(wsl_fix_dir)
+        wsl_file_path = f"{wsl_fix_prefix}/AllowlistedQuery.java"
+        wrapper = _make_wsl_forwarding_wrapper(wsl_target, wsl_file_path)
+
+        wsl_aq_d = e2e_root / "allowlisted_query_wsl_fp"
+        scan_args = [
+            "scan", str(wsl_target),
+            "--rules-path", str(self.rules),
+            "--output-dir", str(wsl_aq_d),
+            "--executable", str(wrapper),
+            "--local-triage",
+            "--endpoint", ep,
+            "--model", "qwen3.5:9b-q4_K_M",
+            "--prompt-contract", "blind",
+            "--runtime-origin", "mock",
+        ]
+        if os.name != "nt":
+            scan_args.extend(["--path-map", f"{wsl_fix_prefix}={wsl_fix_dir}"])
+        scan_res = _run_cli(self.prepared_source, scan_args)
+        self.assertEqual(scan_res.returncode, 0, scan_res.stderr)
+        shutil.copy2(wsl_aq_d / "triage" / "review.sqlite", wsl_aq_d / "triage" / "review.post_ingestion.sqlite")
+
+        aq_db = str(wsl_aq_d / "triage" / "review.sqlite")
+        aq_id = json.loads(_run_cli(self.prepared_source, ["queue", "--db", aq_db]).stdout)["warnings"][0]["id"]
+        self.assertEqual(_run_cli(self.prepared_source, [
+            "confirm-false", aq_id, "--db", aq_db,
+            "--actor", "SCRIPTED_TEST_ONLY-op",
+            "--reason", "SCRIPTED_TEST_ONLY: WSL2 allowlist check",
+        ]).returncode, 0)
+        shutil.copy2(wsl_aq_d / "triage" / "review.sqlite", wsl_aq_d / "triage" / "review.after_confirm_false.sqlite")
+        self.assertEqual(_run_cli(self.prepared_source, [
+            "reopen", aq_id, "--db", aq_db,
+            "--actor", "SCRIPTED_TEST_ONLY-lead",
+            "--reason", "SCRIPTED_TEST_ONLY: WSL2 reopen check",
+        ]).returncode, 0)
+
+        wsl_aq_ev = json.loads((wsl_aq_d / "triage" / "evidence.json").read_text(encoding="utf-8"))
+        self.assertEqual(wsl_aq_ev["records"][0]["path"], wsl_file_path)
+        self.assertEqual(_verify_allowlisted_fp_scenario_identity(wsl_aq_d, trusted_source_root=wsl_fix_dir), [])
+
+        rep = evaluate_acceptance(
+            demo1_dir=d1_d, demo2_dir=d2_d, demo3a_dir=d3a_d,
+            m1_dir=m1_d, demo4_dir=d4_d, demo3b_dir=d3b_d,
+            allowlisted_fp_dir=wsl_aq_d,
+            allowlisted_trusted_source_root=wsl_fix_dir,
+            r03_fp_mode="proposed-allowlisted-fp",
+            allow_mock_primary=True,
+        )
+        self.assertEqual(rep["criteria"]["R01"]["status"], "PASS")
+        self.assertEqual(rep["criteria"]["R02"]["status"], "PASS")
+        self.assertEqual(rep["criteria"]["R03"]["status"], "PASS")
+        self.assertEqual(rep["overall_status"], "PASS")
+        self.assertEqual(rep["real_qwen_denominator"]["expected"], 4)
+        self.assertEqual(rep["real_qwen_denominator"]["observed"], 4)
+        supp = rep["supplementary_r03_control"]
+        self.assertEqual(supp["raw_model_status"], "SUPPORTED")
+        self.assertEqual(supp["validated_status"], "SUPPORTED")
+        self.assertEqual(supp["model_fp_concurrence"], "DISAGREED_SUPPORTED")
+        self.assertFalse(supp["qwen_concurred_fp"])
+
+        base_ev = json.loads((native_aq_d / "triage" / "evidence.json").read_text(encoding="utf-8"))
+
+        def _check_bundle(case_name: str, ev_mutator, *, manifest_doc=None, before_check=None, trusted_root=None) -> list[str]:
+            cdir = self.tmp_root / f"wsl_case_{case_name}"
+            (cdir / "triage").mkdir(parents=True, exist_ok=True)
+            ev_doc = json.loads(json.dumps(base_ev))
+            ev_mutator(ev_doc)
+            (cdir / "triage" / "evidence.json").write_text(json.dumps(ev_doc), encoding="utf-8")
+            if manifest_doc is not None:
+                (cdir / "g1-run-manifest.json").write_text(json.dumps(manifest_doc), encoding="utf-8")
+            if before_check is not None:
+                before_check(cdir)
+            return _verify_allowlisted_fp_scenario_identity(
+                cdir, trusted_source_root=wsl_fix_dir if trusted_root is None else trusted_root,
+            )
+
+        # Case 2: Valid Windows absolute path, relative path, and repo-root WSL2 mapped path
+        def _win_abs(d):
+            d["root"] = str(wsl_fix_dir)
+            d.pop("path_mappings", None)
+            r = d["records"][0]
+            r["root"] = str(wsl_fix_dir)
+            r.pop("path_mappings", None)
+            r["path"] = str(wsl_target)
+            for s in r["snippets"]:
+                s["path"] = "AllowlistedQuery.java"
+                s["raw_path"] = str(wsl_target)
+
+        self.assertEqual(_check_bundle("valid_win_abs", _win_abs), [])
+
+        def _rel_path(d):
+            _win_abs(d)
+            d["records"][0]["path"] = "AllowlistedQuery.java"
+            for s in d["records"][0]["snippets"]:
+                s["raw_path"] = "AllowlistedQuery.java"
+
+        self.assertEqual(_check_bundle("valid_rel", _rel_path), [])
+
+        repo_rel_key = "v2/g1_integration/demo_fixtures/AllowlistedQuery.java"
+        wsl_cand_prefix = _to_wsl(wsl_cand_root)
+        wsl_repo_file = f"{wsl_cand_prefix}/{repo_rel_key}"
+
+        def _wsl_repo_root(d):
+            d["root"] = str(wsl_cand_root)
+            d["path_mappings"] = [{"from": wsl_cand_prefix, "to": str(wsl_cand_root)}]
+            r = d["records"][0]
+            r["root"] = str(wsl_cand_root)
+            r["path_mappings"] = [{"from": wsl_cand_prefix, "to": str(wsl_cand_root)}]
+            r["path"] = wsl_repo_file
+            r["snapshots"] = {repo_rel_key: dict(r["snapshots"]["AllowlistedQuery.java"])}
+            for s in r["snippets"]:
+                s["path"] = repo_rel_key
+                s["raw_path"] = wsl_repo_file
+
+        self.assertEqual(_check_bundle("valid_wsl_repo_root", _wsl_repo_root, trusted_root=wsl_cand_root), [])
+
+        # Case 3 & 4: Missing/invalid/disagreeing/outside-root/sibling-prefix path_mappings & manifest mismatches
+        outside_dir = self.tmp_root / "outside_allowq"
+        outside_dir.mkdir(parents=True, exist_ok=True)
+        outside_file = outside_dir / "AllowlistedQuery.java"
+        outside_file.write_bytes(allow_bytes)
+
+        sibling_dir = self.tmp_root / "candidates" / "g1-r03-wsl-acceptance-evil" / "v2" / "g1_integration" / "demo_fixtures"
+        sibling_dir.mkdir(parents=True, exist_ok=True)
+        (sibling_dir / "AllowlistedQuery.java").write_bytes(allow_bytes)
+
+        def _wsl_base(d):
+            d["root"] = str(wsl_fix_dir)
+            d["path_mappings"] = [{"from": wsl_fix_prefix, "to": str(wsl_fix_dir)}]
+            r = d["records"][0]
+            r["root"] = str(wsl_fix_dir)
+            r["path_mappings"] = [{"from": wsl_fix_prefix, "to": str(wsl_fix_dir)}]
+            r["path"] = wsl_file_path
+            for s in r["snippets"]:
+                s["path"] = "AllowlistedQuery.java"
+                s["raw_path"] = wsl_file_path
+
+        mapping_rejects = []
+        mapping_rejects.append(("missing_maps", lambda d: (_wsl_base(d), d.pop("path_mappings"), d["records"][0].pop("path_mappings")), None))
+        mapping_rejects.append(("empty_maps", lambda d: (_wsl_base(d), d.__setitem__("path_mappings", []), d["records"][0].__setitem__("path_mappings", [])), None))
+        mapping_rejects.append(("wrong_from_key", lambda d: (_wsl_base(d), d.__setitem__("path_mappings", [{"from": "/mnt/c/unmatched", "to": str(wsl_fix_dir)}]), d["records"][0].__setitem__("path_mappings", [{"from": "/mnt/c/unmatched", "to": str(wsl_fix_dir)}])), None))
+        mapping_rejects.append(("outside_to_root", lambda d: (_wsl_base(d), d.__setitem__("path_mappings", [{"from": wsl_fix_prefix, "to": str(outside_dir)}]), d["records"][0].__setitem__("path_mappings", [{"from": wsl_fix_prefix, "to": str(outside_dir)}])), None))
+        mapping_rejects.append(("sibling_prefix", lambda d: (_wsl_base(d), d["records"][0].__setitem__("path", f"{wsl_fix_prefix}-evil/AllowlistedQuery.java")), None))
+        mapping_rejects.append(("ev_rec_map_disagree", lambda d: (_wsl_base(d), d["records"][0].__setitem__("path_mappings", [{"from": "/mnt/c/other", "to": str(wsl_fix_dir)}])), None))
+        mapping_rejects.append(("manifest_maps_disagree", _wsl_base, {"source_root": str(wsl_fix_dir), "trusted_path_maps": [f"/mnt/c/other={wsl_fix_dir}"]}))
+        mapping_rejects.append(("manifest_root_disagree", _wsl_base, {"source_root": str(outside_dir), "trusted_path_maps": [f"{wsl_fix_prefix}={wsl_fix_dir}"]}))
+        for cname, mut, man in mapping_rejects:
+            with self.subTest(mapping_case=cname):
+                errs = _check_bundle(cname, mut, manifest_doc=man)
+                self.assertTrue(errs, f"expected rejection for {cname}")
+
+        # Codex trust-boundary counterexample: two mutually consistent JSON maps
+        # must not rebind a WSL path outside the checkout to approved fixture bytes.
+        forged_prefix = _to_wsl(outside_dir)
+        forged_maps = [{"from": forged_prefix, "to": str(wsl_fix_dir)}]
+
+        def _forged_consistent_maps(d):
+            _wsl_base(d)
+            d["path_mappings"] = list(forged_maps)
+            r = d["records"][0]
+            r["path_mappings"] = list(forged_maps)
+            r["path"] = f"{forged_prefix}/AllowlistedQuery.java"
+            for s in r["snippets"]:
+                s["raw_path"] = r["path"]
+
+        forged_manifest = {
+            "source_root": str(wsl_fix_dir),
+            "trusted_path_maps": [f"{forged_prefix}={wsl_fix_dir}"],
+        }
+        forged_errors = _check_bundle(
+            "forged_consistent_maps", _forged_consistent_maps,
+            manifest_doc=forged_manifest,
+        )
+        self.assertTrue(
+            any("untrusted path_mappings" in error for error in forged_errors),
+            f"matching forged JSON mappings must fail closed: {forged_errors!r}",
+        )
+
+        # Independent root authority: two JSONs can agree on a copied source,
+        # but an operator-pinned scan root remains immutable for this evaluation.
+        copied_root = self.tmp_root / "forged_copy_of_scan_root"
+        copied_root.mkdir()
+        (copied_root / "AllowlistedQuery.java").write_bytes(allow_bytes)
+        copied_prefix = _to_wsl(copied_root)
+        copied_maps = [{"from": copied_prefix, "to": str(copied_root)}]
+
+        def _forge_declared_root(d):
+            _wsl_base(d)
+            d["root"] = str(copied_root)
+            d["path_mappings"] = list(copied_maps)
+            d["records"][0]["root"] = str(copied_root)
+            d["records"][0]["path_mappings"] = list(copied_maps)
+            d["records"][0]["path"] = f"{copied_prefix}/AllowlistedQuery.java"
+
+        copied_manifest = {
+            "source_root": str(copied_root),
+            "trusted_path_maps": [f"{copied_prefix}={copied_root}"],
+        }
+        root_errors = _check_bundle(
+            "forged_consistent_root", _forge_declared_root, manifest_doc=copied_manifest,
+            trusted_root=wsl_fix_dir,
+        )
+        self.assertTrue(
+            any("disagrees with independently pinned" in e for e in root_errors),
+            f"forged evidence+manifest source root must be rejected: {root_errors!r}",
+        )
+
+        # Case 5: Traversal, spoofed basenames, outside paths, and junction/symlink escape
+        path_rejects = [
+            ("rel_traversal", "../outside_allowq/AllowlistedQuery.java"),
+            ("wsl_traversal", f"{wsl_fix_prefix}/../outside_allowq/AllowlistedQuery.java"),
+            ("outside_win", str(outside_file)),
+            ("outside_wsl", f"{_to_wsl(outside_dir)}/AllowlistedQuery.java"),
+            ("wrong_basename", f"{wsl_fix_prefix}/NotAllowlistedQuery.java"),
+            ("file_uri", f"file://{wsl_file_path}"),
+            ("unc_prefix", f"//{wsl_fix_prefix.lstrip('/')}/AllowlistedQuery.java"),
+            ("mixed_slash", f"{wsl_fix_prefix}\\AllowlistedQuery.java"),
+        ]
+        for cname, bad_path in path_rejects:
+            with self.subTest(path_case=cname):
+                errs = _check_bundle(cname, lambda d, bp=bad_path: (_wsl_base(d), d["records"][0].__setitem__("path", bp)))
+                self.assertTrue(errs, f"expected rejection for path {bad_path!r}")
+
+        esc_dir = wsl_fix_dir / "esc_link"
+        link_created = False
+        try:
+            if os.name == "nt":
+                import _winapi
+                _winapi.CreateJunction(str(outside_dir), str(esc_dir))
+                link_created = True
+            else:
+                os.symlink(outside_dir, esc_dir, target_is_directory=True)
+                link_created = True
+        except OSError:
+            link_created = False
+        if link_created:
+            try:
+                for lname, lp in (
+                    ("junction_rel", "esc_link/AllowlistedQuery.java"),
+                    ("junction_wsl", f"{wsl_fix_prefix}/esc_link/AllowlistedQuery.java"),
+                ):
+                    with self.subTest(link_case=lname):
+                        errs = _check_bundle(lname, lambda d, p=lp: (
+                            _wsl_base(d),
+                            d["records"][0].__setitem__("path", p),
+                            d["records"][0].__setitem__("snapshots", {"esc_link/AllowlistedQuery.java": {"sha256": allow_sha, "size": len(allow_bytes)}}),
+                        ))
+                        self.assertTrue(errs, f"expected symlink/junction escape rejection for {lp!r}")
+            finally:
+                if esc_dir.is_symlink() or os.path.lexists(esc_dir):
+                    try:
+                        esc_dir.rmdir()
+                    except OSError:
+                        esc_dir.unlink(missing_ok=True)
+
+        # Case 6: Wrong hash, CWE-890, wrong rule_id
+        with self.subTest(meta="wrong_sha"):
+            errs = _check_bundle("wrong_sha", lambda d: (_wsl_base(d), d["records"][0]["snapshots"]["AllowlistedQuery.java"].__setitem__("sha256", "0" * 64)))
+            self.assertTrue(any("snapshot hash/size mismatch" in e for e in errs), errs)
+        with self.subTest(meta="cwe890"):
+            errs = _check_bundle("cwe890", lambda d: (_wsl_base(d), d["records"][0].__setitem__("cwe", ["CWE-890"])))
+            self.assertTrue(any("expected exact CWE-89 finding" in e for e in errs), errs)
+        with self.subTest(meta="wrong_rule"):
+            errs = _check_bundle("wrong_rule", lambda d: (_wsl_base(d), d["records"][0].__setitem__("rule_id", "java.lang.security.sql-injection")))
+            self.assertTrue(any("rule_id" in e for e in errs), errs)
+
+        # Case 7: Source drift on disk fails closed
+        drift_dir = self.tmp_root / "drift_fixtures"
+        drift_dir.mkdir(parents=True, exist_ok=True)
+        drift_file = drift_dir / "AllowlistedQuery.java"
+        drift_file.write_bytes(allow_bytes + b"\n// post-scan drift\n")
+        drift_wsl = _to_wsl(drift_dir)
+        errs = _check_bundle(
+            "source_drift",
+            lambda d: (
+                _wsl_base(d),
+                d.__setitem__("root", str(drift_dir)),
+                d.__setitem__("path_mappings", [{"from": drift_wsl, "to": str(drift_dir)}]),
+                d["records"][0].__setitem__("root", str(drift_dir)),
+                d["records"][0].__setitem__("path_mappings", [{"from": drift_wsl, "to": str(drift_dir)}]),
+                d["records"][0].__setitem__("path", f"{drift_wsl}/AllowlistedQuery.java"),
+            ),
+            trusted_root=drift_dir,
+        )
+        self.assertTrue(any("source drift or disk fixture mismatch" in e for e in errs), errs)
 
 
 if __name__ == "__main__":

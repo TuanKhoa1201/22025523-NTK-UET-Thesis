@@ -553,6 +553,7 @@ Invoke-ReceiptStep -Step "P11_evaluate_r01_r03_proposed" -CommandArgv @(
     "--demo4-dir", "$ControlsDir\demo4_stale_source",
     "--r03-fp-mode", "proposed-allowlisted-fp",
     "--allowlisted-fp-dir", $AllowQDir,
+    "--allowlisted-trusted-source-root", "$CheckoutDir\v2\g1_integration\demo_fixtures",
     "--output", "$AuditOut\r01_r03_proposed_evaluation.json"
 )
 ```
