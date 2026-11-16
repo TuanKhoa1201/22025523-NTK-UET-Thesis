@@ -2258,6 +2258,373 @@ class _RelocationTestMixin:
             rep_mix_aq["criteria"]["R03"]["failures"],
         )
 
+    def test_09_allowlisted_native_posix_and_path_mapping_security_boundaries(self):
+        """Verify native POSIX paths inside pinned_root without mappings pass on Linux,
+        any un-derived/self-declared non-empty path_mappings fail closed on Linux
+        (even when evidence and manifest agree), Windows keeps strict OS-derived
+        WSL mapping enforcement, and prefix/sibling/traversal/hash/drift fail specifically."""
+        from v2.g1_integration.bridge import derive_trusted_path_maps
+        from v2.g1_integration.evaluate_r01_r03 import _verify_allowlisted_fp_scenario_identity
+        from v2.triage.evidence import EvidenceError, SourceTree
+
+        self.assertEqual(
+            _verify_allowlisted_fp_scenario_identity(self.aq_orig_pristine, trusted_source_root=self.fixtures),
+            [],
+        )
+        base_ev = strict_json((self.aq_orig_pristine / "triage" / "evidence.json").read_text(encoding="utf-8"))
+        allow_bytes = (self.fixtures / "AllowlistedQuery.java").read_bytes()
+
+        outside_dir = self.tmp_root / "outside_allowq_sec"
+        outside_dir.mkdir()
+        (outside_dir / "AllowlistedQuery.java").write_bytes(allow_bytes)
+
+        fixtures_copy = self.tmp_root / "fixtures_copy_sec"
+        fixtures_copy.mkdir()
+        (fixtures_copy / "AllowlistedQuery.java").write_bytes(allow_bytes)
+
+        sibling_fixtures = self.tmp_root / f"{fixtures_copy.name}-evil"
+        sibling_fixtures.mkdir()
+        (sibling_fixtures / "AllowlistedQuery.java").write_bytes(allow_bytes)
+
+        def _check(name: str, ev_mut, *, manifest_doc=None, root_override=None) -> list[str]:
+            scen = self.tmp_root / f"pathmap_sec_{name}"
+            (scen / "triage").mkdir(parents=True, exist_ok=True)
+            ev_doc = json.loads(json.dumps(base_ev))
+            ev_mut(ev_doc)
+            (scen / "triage" / "evidence.json").write_text(json.dumps(ev_doc), encoding="utf-8")
+            if manifest_doc is not None:
+                (scen / "g1-run-manifest.json").write_text(json.dumps(manifest_doc), encoding="utf-8")
+            return _verify_allowlisted_fp_scenario_identity(
+                scen, trusted_source_root=self.fixtures if root_override is None else root_override,
+            )
+
+        # Positive baseline on fixtures_copy (identical fixture bytes, no mapping) before negative mutations
+        self.assertEqual(
+            _check(
+                "baseline_valid_copy",
+                lambda d: (
+                    d.__setitem__("root", str(fixtures_copy)),
+                    d.__setitem__("path_mappings", []),
+                    d["records"][0].__setitem__("root", str(fixtures_copy)),
+                    d["records"][0].__setitem__("path_mappings", []),
+                    d["records"][0].__setitem__("path", str((fixtures_copy / "AllowlistedQuery.java").resolve())),
+                ),
+                root_override=fixtures_copy,
+            ),
+            [],
+        )
+
+        # Common negative security boundaries with exact expected root-cause error assertions
+        errs_outside = _check(
+            "outside_direct",
+            lambda d: (
+                d.__setitem__("root", str(fixtures_copy)),
+                d.__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("root", str(fixtures_copy)),
+                d["records"][0].__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("path", str((outside_dir / "AllowlistedQuery.java").resolve())),
+            ),
+            root_override=fixtures_copy,
+        )
+        self.assertTrue(
+            any("source path outside configured root" in e for e in errs_outside),
+            errs_outside,
+        )
+
+        errs_sibling_native = _check(
+            "sibling_native_direct",
+            lambda d: (
+                d.__setitem__("root", str(fixtures_copy)),
+                d.__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("root", str(fixtures_copy)),
+                d["records"][0].__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("path", str((sibling_fixtures / "AllowlistedQuery.java").resolve())),
+            ),
+            root_override=fixtures_copy,
+        )
+        self.assertTrue(
+            any("source path outside configured root" in e for e in errs_sibling_native),
+            errs_sibling_native,
+        )
+
+        # Paired SourceTree segment-boundary & unmatched-prefix check against real files on disk
+        mapped_root_prefix = "/mnt/sim" if os.name == "nt" else fixtures_copy.resolve().as_posix()
+        valid_tree = SourceTree(fixtures_copy, path_maps=[f"{mapped_root_prefix}={fixtures_copy}"])
+        self.assertEqual(
+            valid_tree.resolve(f"{mapped_root_prefix}/AllowlistedQuery.java"),
+            (fixtures_copy / "AllowlistedQuery.java").resolve(),
+        )
+        if os.name == "nt":
+            with self.assertRaisesRegex(EvidenceError, "requires an explicit --path-map"):
+                valid_tree.resolve(f"{mapped_root_prefix}-evil/AllowlistedQuery.java")
+            with self.assertRaisesRegex(EvidenceError, "requires an explicit --path-map"):
+                SourceTree(fixtures_copy, path_maps=[f"/mnt/other={fixtures_copy}"]).resolve(
+                    f"{mapped_root_prefix}/AllowlistedQuery.java"
+                )
+        else:
+            with self.assertRaisesRegex(EvidenceError, "source path outside configured root"):
+                valid_tree.resolve(f"{mapped_root_prefix}-evil/AllowlistedQuery.java")
+
+        errs_outside_to = _check(
+            "outside_to_target",
+            lambda d: (
+                d.__setitem__("path_mappings", [{"from": "/mnt/c/ntk_wsl_sim", "to": str(outside_dir)}]),
+                d["records"][0].__setitem__("path_mappings", [{"from": "/mnt/c/ntk_wsl_sim", "to": str(outside_dir)}]),
+                d["records"][0].__setitem__("path", "/mnt/c/ntk_wsl_sim/AllowlistedQuery.java"),
+            ),
+        )
+        expected_outside_to_msg = (
+            "mapped directory must stay inside configured source-root"
+            if os.name == "nt"
+            else "untrusted path_mappings: POSIX/Linux host has no independent mapping authority"
+        )
+        self.assertTrue(any(expected_outside_to_msg in e for e in errs_outside_to), errs_outside_to)
+
+        errs_traversal = _check(
+            "traversal_path",
+            lambda d: (
+                d.__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("path", "../outside_allowq_sec/AllowlistedQuery.java"),
+            ),
+        )
+        self.assertTrue(any("without traversal" in e for e in errs_traversal), errs_traversal)
+
+        errs_bad_hash = _check(
+            "wrong_snapshot_sha",
+            lambda d: d["records"][0]["snapshots"]["AllowlistedQuery.java"].__setitem__("sha256", "0" * 64),
+        )
+        self.assertTrue(any("snapshot hash/size mismatch" in e for e in errs_bad_hash), errs_bad_hash)
+
+        if os.name != "nt":
+            native_file = str((fixtures_copy / "AllowlistedQuery.java").resolve())
+            self.assertEqual(
+                _check(
+                    "posix_native_valid",
+                    lambda d: (
+                        d.__setitem__("root", str(fixtures_copy)),
+                        d.__setitem__("path_mappings", []),
+                        d["records"][0].__setitem__("root", str(fixtures_copy)),
+                        d["records"][0].__setitem__("path_mappings", []),
+                        d["records"][0].__setitem__("path", native_file),
+                    ),
+                    manifest_doc={"source_root": str(fixtures_copy), "trusted_path_maps": []},
+                    root_override=fixtures_copy,
+                ),
+                [],
+            )
+
+            errs_manifest_disagree = _check(
+                "manifest_maps_disagree",
+                lambda d: (
+                    d.__setitem__("root", str(fixtures_copy)),
+                    d.__setitem__("path_mappings", []),
+                    d["records"][0].__setitem__("root", str(fixtures_copy)),
+                    d["records"][0].__setitem__("path_mappings", []),
+                    d["records"][0].__setitem__("path", native_file),
+                ),
+                manifest_doc={"source_root": str(fixtures_copy), "trusted_path_maps": [f"/mnt/c/other={fixtures_copy}"]},
+                root_override=fixtures_copy,
+            )
+            self.assertTrue(
+                any("disagrees with g1-run-manifest trusted_path_maps" in e for e in errs_manifest_disagree),
+                errs_manifest_disagree,
+            )
+
+            # Codex counterexamples: forged outside -> trusted mappings MUST FAIL CLOSED on Linux
+            # whether evidence + manifest agree, manifest is absent, or manifest omits trusted_path_maps
+            forged_maps = [{"from": "/tmp/evil_outside", "to": str(fixtures_copy)}]
+            for case_tag, man_doc in (
+                ("consistent_manifest", {"source_root": str(fixtures_copy), "trusted_path_maps": [f"/tmp/evil_outside={fixtures_copy}"]}),
+                ("no_manifest", None),
+                ("manifest_without_maps", {"source_root": str(fixtures_copy)}),
+            ):
+                with self.subTest(posix_forged_case=case_tag):
+                    errs_forged = _check(
+                        f"posix_forged_{case_tag}",
+                        lambda d: (
+                            d.__setitem__("root", str(fixtures_copy)),
+                            d.__setitem__("path_mappings", list(forged_maps)),
+                            d["records"][0].__setitem__("root", str(fixtures_copy)),
+                            d["records"][0].__setitem__("path_mappings", list(forged_maps)),
+                            d["records"][0].__setitem__("path", "/tmp/evil_outside/AllowlistedQuery.java"),
+                        ),
+                        manifest_doc=man_doc,
+                        root_override=fixtures_copy,
+                    )
+                    self.assertTrue(
+                        any("untrusted path_mappings: POSIX/Linux host has no independent mapping authority" in e for e in errs_forged),
+                        f"{case_tag}: forged mapping must fail closed on Linux, got {errs_forged!r}",
+                    )
+            errs_posix_rel_with_map = _check(
+                "posix_relative_with_forged_map",
+                lambda d: (
+                    d.__setitem__("root", str(fixtures_copy)),
+                    d.__setitem__("path_mappings", list(forged_maps)),
+                    d["records"][0].__setitem__("root", str(fixtures_copy)),
+                    d["records"][0].__setitem__("path_mappings", list(forged_maps)),
+                    d["records"][0].__setitem__("path", "AllowlistedQuery.java"),
+                ),
+                root_override=fixtures_copy,
+            )
+            self.assertTrue(
+                any("untrusted path_mappings: POSIX/Linux host has no independent mapping authority" in e for e in errs_posix_rel_with_map),
+                errs_posix_rel_with_map,
+            )
+        else:
+            os_maps = derive_trusted_path_maps(fixtures_copy)
+            self.assertTrue(os_maps)
+            wsl_prefix = os_maps[0].split("=", 1)[0]
+            self.assertEqual(
+                _check(
+                    "win_wsl_valid",
+                    lambda d: (
+                        d.__setitem__("root", str(fixtures_copy)),
+                        d.__setitem__("path_mappings", [{"from": wsl_prefix, "to": str(fixtures_copy)}]),
+                        d["records"][0].__setitem__("root", str(fixtures_copy)),
+                        d["records"][0].__setitem__("path_mappings", [{"from": wsl_prefix, "to": str(fixtures_copy)}]),
+                        d["records"][0].__setitem__("path", f"{wsl_prefix}/AllowlistedQuery.java"),
+                    ),
+                    manifest_doc={"source_root": str(fixtures_copy), "trusted_path_maps": os_maps},
+                    root_override=fixtures_copy,
+                ),
+                [],
+            )
+            # Paired Windows wrong-prefix & sibling-prefix attacks under otherwise valid copy + fixture bytes
+            errs_win_wrong_prefix = _check(
+                "win_wrong_prefix",
+                lambda d: (
+                    d.__setitem__("root", str(fixtures_copy)),
+                    d.__setitem__("path_mappings", [{"from": "/mnt/c/unmatched", "to": str(fixtures_copy)}]),
+                    d["records"][0].__setitem__("root", str(fixtures_copy)),
+                    d["records"][0].__setitem__("path_mappings", [{"from": "/mnt/c/unmatched", "to": str(fixtures_copy)}]),
+                    d["records"][0].__setitem__("path", f"{wsl_prefix}/AllowlistedQuery.java"),
+                ),
+                root_override=fixtures_copy,
+            )
+            self.assertTrue(
+                any("untrusted path_mappings: do not match OS-derived source-root mapping" in e for e in errs_win_wrong_prefix),
+                errs_win_wrong_prefix,
+            )
+
+            errs_win_sibling_prefix = _check(
+                "win_sibling_prefix",
+                lambda d: (
+                    d.__setitem__("root", str(fixtures_copy)),
+                    d.__setitem__("path_mappings", [{"from": wsl_prefix, "to": str(fixtures_copy)}]),
+                    d["records"][0].__setitem__("root", str(fixtures_copy)),
+                    d["records"][0].__setitem__("path_mappings", [{"from": wsl_prefix, "to": str(fixtures_copy)}]),
+                    d["records"][0].__setitem__("path", f"{wsl_prefix}-evil/AllowlistedQuery.java"),
+                ),
+                manifest_doc={"source_root": str(fixtures_copy), "trusted_path_maps": os_maps},
+                root_override=fixtures_copy,
+            )
+            self.assertTrue(
+                any("POSIX/WSL source path requires an explicit --path-map" in e for e in errs_win_sibling_prefix),
+                errs_win_sibling_prefix,
+            )
+
+            errs_win_missing = _check(
+                "win_wsl_missing_maps",
+                lambda d: (
+                    d.__setitem__("root", str(fixtures_copy)),
+                    d.__setitem__("path_mappings", []),
+                    d["records"][0].__setitem__("root", str(fixtures_copy)),
+                    d["records"][0].__setitem__("path_mappings", []),
+                    d["records"][0].__setitem__("path", f"{wsl_prefix}/AllowlistedQuery.java"),
+                ),
+                root_override=fixtures_copy,
+            )
+            self.assertTrue(any("requires explicit path_mappings" in e for e in errs_win_missing), errs_win_missing)
+
+            for case_tag, man_doc in (
+                ("consistent_manifest", {"source_root": str(fixtures_copy), "trusted_path_maps": [f"/mnt/z/forged_outside={fixtures_copy}"]}),
+                ("no_manifest", None),
+                ("manifest_without_maps", {"source_root": str(fixtures_copy)}),
+            ):
+                with self.subTest(win_forged_case=case_tag):
+                    errs_win_forged = _check(
+                        f"win_wsl_forged_{case_tag}",
+                        lambda d: (
+                            d.__setitem__("root", str(fixtures_copy)),
+                            d.__setitem__("path_mappings", [{"from": "/mnt/z/forged_outside", "to": str(fixtures_copy)}]),
+                            d["records"][0].__setitem__("root", str(fixtures_copy)),
+                            d["records"][0].__setitem__("path_mappings", [{"from": "/mnt/z/forged_outside", "to": str(fixtures_copy)}]),
+                            d["records"][0].__setitem__("path", "/mnt/z/forged_outside/AllowlistedQuery.java"),
+                        ),
+                        manifest_doc=man_doc,
+                        root_override=fixtures_copy,
+                    )
+                    self.assertTrue(
+                        any("untrusted path_mappings: do not match OS-derived source-root mapping" in e for e in errs_win_forged),
+                        errs_win_forged,
+                    )
+
+        # Mutate fixtures_copy ONLY at the end to verify source drift detection cleanly
+        (fixtures_copy / "AllowlistedQuery.java").write_text("// drifted\n", encoding="utf-8")
+        errs_drift = _check(
+            "source_drift",
+            lambda d: (
+                d.__setitem__("root", str(fixtures_copy)),
+                d.__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("root", str(fixtures_copy)),
+                d["records"][0].__setitem__("path_mappings", []),
+                d["records"][0].__setitem__("path", str(fixtures_copy / "AllowlistedQuery.java")),
+            ),
+            root_override=fixtures_copy,
+        )
+        self.assertTrue(any("source drift or disk fixture mismatch" in e for e in errs_drift), errs_drift)
+
+    def test_09b_allowlisted_symlink_escape_rejected_or_explicitly_skipped(self):
+        """Verify real outside-root file symlink fails closed on POSIX/WSL2 (mandatory)
+        and either fails closed or explicitly reports SkipTest on unprivileged Windows hosts."""
+        from v2.g1_integration.evaluate_r01_r03 import _verify_allowlisted_fp_scenario_identity
+
+        base_ev = strict_json((self.aq_orig_pristine / "triage" / "evidence.json").read_text(encoding="utf-8"))
+        allow_bytes = (self.fixtures / "AllowlistedQuery.java").read_bytes()
+
+        outside_dir = self.tmp_root / "outside_sym_target"
+        outside_dir.mkdir()
+        outside_java = outside_dir / "AllowlistedQuery.java"
+        outside_java.write_bytes(allow_bytes)
+
+        sym_root = self.tmp_root / "sym_fixtures_root"
+        sym_root.mkdir()
+        sym_file = sym_root / "AllowlistedQuery.java"
+        sym_file.write_bytes(allow_bytes)
+
+        scen = self.tmp_root / "sym_allowq_scen"
+        (scen / "triage").mkdir(parents=True)
+        ev_doc = json.loads(json.dumps(base_ev))
+        ev_doc["root"] = str(sym_root)
+        ev_doc["path_mappings"] = []
+        ev_doc["records"][0]["root"] = str(sym_root)
+        ev_doc["records"][0]["path_mappings"] = []
+        ev_doc["records"][0]["path"] = str(sym_file.resolve())
+        (scen / "triage" / "evidence.json").write_text(json.dumps(ev_doc), encoding="utf-8")
+
+        # Paired valid regular-file control must pass first
+        self.assertEqual(_verify_allowlisted_fp_scenario_identity(scen, trusted_source_root=sym_root), [])
+
+        sym_file.unlink()
+        link_created = _make_file_link(sym_file, outside_java)
+        if not link_created:
+            if os.name != "nt":
+                self.fail("POSIX/Linux host must support creating real file symlinks for symlink security tests")
+            self.skipTest("BLOCKED/SKIP: host Windows privilege prevented creating file symlink for allowlisted symlink check")
+        try:
+            self.assertTrue(sym_file.is_symlink(), "Expected real OS symlink on disk before verification")
+            errs_sym = _verify_allowlisted_fp_scenario_identity(scen, trusted_source_root=sym_root)
+            self.assertTrue(
+                any(
+                    "source path outside configured root" in e or "unsafe symlink/junction" in e
+                    for e in errs_sym
+                ),
+                errs_sym,
+            )
+        finally:
+            _remove_file_link(sym_file)
+
 
 class R03RelocationTests(_RelocationTestMixin, unittest.TestCase):
     """Real-OpenGrep relocation tests (skipped cleanly when OpenGrep binary is not installed on host)."""

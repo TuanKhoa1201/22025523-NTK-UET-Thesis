@@ -2627,7 +2627,7 @@ def _verify_allowlisted_fp_scenario_identity(
         )
     elif lexical_path_ok:
         try:
-            if is_posix_rec_path:
+            if is_posix_rec_path and os.name == "nt":
                 if not validated_maps:
                     raise EvidenceError("POSIX/WSL source path requires explicit path_mappings")
                 # JSON maps (including manifest copies) are evidence, not an authority.
@@ -2643,6 +2643,11 @@ def _verify_allowlisted_fp_scenario_identity(
                 if evidence_tree.path_maps != canonical_tree.path_maps:
                     raise EvidenceError("untrusted path_mappings: do not match OS-derived source-root mapping")
                 tree = canonical_tree
+            elif os.name != "nt" and validated_maps:
+                # On Linux/POSIX there is no independent OS drive-mount mapping authority
+                # (derive_trusted_path_maps returns []); fail closed on any non-empty
+                # evidence/manifest path_mappings instead of trusting self-declared maps.
+                raise EvidenceError("untrusted path_mappings: POSIX/Linux host has no independent mapping authority")
             else:
                 tree = SourceTree(pinned_root)
             resolved_source = tree.resolve(raw_rec_path)
