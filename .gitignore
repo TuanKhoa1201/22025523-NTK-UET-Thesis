@@ -26,3 +26,10 @@ node_modules/
 *.zip
 *.tar.gz
 *.partial
+
+# Private LLM raw HTTP transport captures (never publish to GitHub)
+**/llm_io/
+*.request.body.bin
+*.response.body.bin
+*.response.incomplete.bin
+*.http-capture.json

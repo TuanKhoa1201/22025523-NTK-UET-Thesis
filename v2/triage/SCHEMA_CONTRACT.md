@@ -142,13 +142,35 @@ Each new assessment has `runtime`:
 | --- | --- |
 | origin | `disabled`, `mock`, or `unverified`; default endpoint is never implicitly trusted |
 | request_attempted | Actual HTTP request method entered; false for skipped inference or a mocked request method |
+| request_payload_sha256 / request_payload_bytes | SHA-256 and byte length of exact UTF-8 payload bytes passed to `urllib.request.Request` |
+| request_raw_artifact | Relative path (`llm_io/<id>.request.body.bin`) of exact client-sent HTTP request payload bytes |
 | http_response_received / http_status | Response observed by the real urllib transport, including real HTTP from a fake server |
-| response_body_sha256 | Hash of exact bounded HTTP response bytes, before JSON parsing; null if no complete bounded body |
+| response_body_sha256 / response_body_bytes | Hash and byte length of exact bounded HTTP response body bytes, before UTF-8/JSON parsing; null if no complete bounded body |
+| response_raw_artifact | Relative path (`llm_io/<id>.response.body.bin`) of exact complete bounded HTTP response body bytes (including HTTP 4xx/5xx error bodies and malformed JSON/invalid UTF-8 HTTP 200 bodies) |
+| response_incomplete_raw_artifact | Relative path (`llm_io/<id>.response.incomplete.bin`) when transfer truncated early or exceeded `1_000_000` bytes (prefix only; `response_body_sha256` remains null) |
+| response_json_sha256 | Canonical sorted-key UTF-8 JSON hash of parsed `raw_response` envelope when strict JSON parsing succeeded |
+| http_capture_receipt / http_capture_completeness / http_capture_complete / http_capture_error | Per-call receipt (`llm_io/<id>.http-capture.json`, schema `ntk-ollama-http-capture-1`) and capture integrity state |
 | response_complete | Server JSON reports done=true and non-truncated completion |
 | model_identity_matched | Server-reported model string equals requested tag |
 | reported_eval_count / reported_eval_duration_ns | Server-reported counters, not independent measurements of inference |
-| answer_validated | Model JSON/schema/citations/current-version checks succeeded |
+| answer_validated | Model JSON/schema/citations/current-version AND mandatory evidence capture writes succeeded |
 | model_runtime_verified | False: this adapter has no independent server-run attestation |
+
+### Same-call raw HTTP body capture (`ntk-ollama-http-capture-1`)
+
+When `io_log_dir` is configured (`<run>/triage/llm_io`), `OllamaClient.request` writes
+raw binary artifacts using exclusive (`xb`) file creation during the **same** HTTP call
+(never issuing a second Qwen call and never JSON re-serializing response bytes):
+
+- `llm_io/<id>.request.body.bin` — exact bytes passed to `Request(..., data=data)`; SHA-256 equals `runtime.request_payload_sha256`.
+- `llm_io/<id>.response.body.bin` — exact bounded HTTP response body bytes (`<= 1,000,000` bytes) persisted **prior** to `.decode("utf-8")` and `strict_json`, preserving CRLF, whitespace, key order, `\uXXXX` escapes, malformed JSON, invalid UTF-8, and HTTP error bodies; SHA-256 equals `runtime.response_body_sha256`.
+- `llm_io/<id>.response.incomplete.bin` — bounded partial/prefix bytes when a socket truncates mid-body or exceeds `1,000,000` bytes (`complete: false`, `response_body_sha256: null`). Timeout prior to receiving body bytes records `completeness: "no_body_received"` without fabricating a response binary.
+- `llm_io/<id>.http-capture.json` — structured receipt (`schema: "ntk-ollama-http-capture-1"`, `capture_scope: "http_body_and_client_metadata_not_tcp_wire"`) binding `call_id`, `finding_id`, `scan_sha256`, `finding_index`, `rule_id`, `method`, `path`, `http_status`, `response_headers`, timestamps, byte lengths, and SHA-256 digests.
+- `llm_io/_tags/tags-NNNN.{response.body.bin,http-capture.json}` — isolated capture for `GET /api/tags` probes so tag checks never collide with `/api/chat` finding artifacts.
+- Compatibility JSON sidecars (`<id>.prompt.json`, `<id>.request.json`, `<id>.response.json`) remain preserved; `<id>.response.json["raw_response"]` is explicitly documented as the parsed JSON envelope (or `null` on parse/transport failure), distinct from `<id>.response.body.bin`.
+- Scope boundary: captures client-sent HTTP request payload bytes and client-received HTTP response body bytes, **not** raw TCP/chunked wire framing or server-side weight attestation.
+- Fail-closed write guard: any collision or OS write error raises `CaptureWriteError`, setting `failure_kind: "EVIDENCE_CAPTURE_WRITE_FAILED"`, `validated_status: "UNDETERMINED"`, `answer_validated: false` (preserving `raw_model_status` without HTTP retry) while keeping the warning `OPEN` in SQLite.
+- Independent verifier: `python -m v2.triage.verify_http_capture <triage_dir> [--require-live-chat] [--minimum-findings N] [--output <PATH> | --no-write]` verifies byte lengths, SHA-256 digests, unique `call_id`s, and tamper/orphan absence without altering `live_check.py` semantics.
 
 Pass `--runtime-origin mock` for a simulated endpoint. The known fixture marker
 `mock_test_fixture: true` also forces origin=mock. A fake HTTP server can copy all

@@ -29,6 +29,7 @@ from v2.g1_integration.finding_identity import compare_findings
 from v2.g1_integration.fork_support.scanner_config import validate_opengrep_binary
 from v2.triage import cli as triage_cli
 from v2.triage import live_check
+from v2.triage import verify_http_capture
 from v2.triage.evidence import EvidenceError, SourceTree, digest, now, strict_json
 from v2.triage.ollama import DEFAULT_PROMPT_CONTRACT, PROMPT_CONTRACTS, PROMPT_VERSION, OllamaClient
 from v2.triage.runtime import SCHEMA_VERSION
@@ -410,10 +411,18 @@ def run_local_triage_from_cli(
     handoff_checks = _verify_handoff_records(raw_json_bytes, evidence_bundle, queue_all)
 
     protocol_check = None
+    http_capture_check = None
     if not no_llm:
         protocol_check = live_check.inspect(assessments_rows, minimum=max(1, len(assessments_rows)))
         (triage_dir / "live-protocol-check.json").write_text(
             json.dumps(protocol_check, indent=2), encoding="utf-8"
+        )
+        http_capture_check = verify_http_capture.verify_run_http_captures(
+            triage_dir, require_live_chat=False
+        )
+        (triage_dir / "http-capture-check.json").write_text(
+            json.dumps(http_capture_check, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
         )
 
     version_txt = (capture_dir / "version.stdout.txt").read_text(encoding="utf-8", errors="replace").strip() if (capture_dir / "version.stdout.txt").is_file() else None
@@ -451,9 +460,13 @@ def run_local_triage_from_cli(
     if no_llm:
         qwen_status = "DISABLED"
         validator_status = "NOT_APPLICABLE"
+        http_capture_status = "DISABLED"
+        http_capture_ok = True
     elif not assessments_list:
         qwen_status = "NO_FINDINGS"
         validator_status = "NOT_APPLICABLE"
+        http_capture_status = http_capture_check["capture_status"] if http_capture_check else "NO_FINDINGS"
+        http_capture_ok = bool(http_capture_check is None or http_capture_check.get("capture_integrity_ok") is True)
     else:
         http_ok_count = sum(
             1 for a in assessments_list
@@ -465,14 +478,20 @@ def run_local_triage_from_cli(
         validated_count = sum(1 for a in assessments_list if a.get("runtime", {}).get("answer_validated") is True)
         qwen_status = "ALL_HTTP_COMPLETED" if http_ok_count == len(assessments_list) else "PARTIAL_OR_FAILED"
         validator_status = "ALL_VALIDATED" if validated_count == len(assessments_list) else "DOWNGRADED_TO_UNDETERMINED"
+        http_capture_status = http_capture_check["capture_status"] if http_capture_check else "FAILED"
+        http_capture_ok = bool(http_capture_check and http_capture_check.get("capture_integrity_ok") is True)
 
-    wrapper_exit_code = 0 if (triage_exit == 0 and scanner_ok and source_ok and parity_ok and handoff_ok) else 2
+    wrapper_exit_code = 0 if (triage_exit == 0 and scanner_ok and source_ok and parity_ok and handoff_ok and http_capture_ok) else 2
     all_stages_succeeded = bool(
         wrapper_exit_code == 0
         and (
             no_llm
             or not assessments_list
-            or (qwen_status == "ALL_HTTP_COMPLETED" and validator_status == "ALL_VALIDATED")
+            or (
+                qwen_status == "ALL_HTTP_COMPLETED"
+                and validator_status == "ALL_VALIDATED"
+                and http_capture_status in ("VERIFIED_COMPLETE", "MOCKED_REQUEST_METHOD")
+            )
         )
     )
 
@@ -484,6 +503,7 @@ def run_local_triage_from_cli(
         "evidence_json": triage_dir / "evidence.json",
         "assessments_jsonl": triage_dir / "assessments.jsonl",
         "review_sqlite": triage_dir / "review.sqlite",
+        "http_capture_check": triage_dir / "http-capture-check.json",
     }
     artifact_hashes = {
         key: digest(p.read_bytes()) if p.is_file() else None
@@ -522,6 +542,7 @@ def run_local_triage_from_cli(
             "source_integrity_status": "VERIFIED" if source_ok else "FAILED",
             "json_sarif_parity_status": "MATCHED" if parity_ok else "MISMATCH",
             "handoff_status": "VERIFIED" if handoff_ok else "DEGRADED",
+            "http_capture_status": http_capture_status,
             "qwen_inference_status": qwen_status,
             "validator_status": validator_status,
             "queue_status": "OPEN_READY" if handoff_checks["queue_count_matches_findings"] and handoff_checks["all_queue_states_open"] else "DEGRADED",
@@ -544,6 +565,7 @@ def run_local_triage_from_cli(
             "tags_inventory": triage_summary.get("model_inventory"),
             "runtime_summary": triage_summary.get("runtime_summary"),
             "live_protocol_check": protocol_check,
+            "http_capture_check": http_capture_check,
         },
         "artifacts": {
             key: {"path": str(p), "sha256": artifact_hashes[key]}

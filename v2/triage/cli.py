@@ -42,6 +42,7 @@ def run(args):
             args.timeout,
             args.runtime_origin,
             io_log_dir=output / "llm_io",
+            capture_root=output,
         )
         if use_llm
         else None
