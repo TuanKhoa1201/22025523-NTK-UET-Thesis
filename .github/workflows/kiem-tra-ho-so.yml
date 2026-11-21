@@ -25,9 +25,12 @@ jobs:
           test -f docs/trang-thai-hien-tai.md
           test -f docs/quy-trinh-cap-nhat-github.md
 
-      - name: Kiem tra noi dung cu da duoc luu tru
+      - name: Kiem tra cau truc tich hop backend va frontend
         shell: bash
         run: |
-          test ! -d apps
+          test -f apps/22025523-thesis/package.json
+          test -f apps/22025523-thesis/package-lock.json
+          test -f v2/api/server.py
+          test -f v2/api/service.py
           test ! -d backend
-          echo "Chi kiem tra ho so chuyen doi; khong nghiem thu backend."
+          echo "Chi kiem tra cau truc tich hop; khong nghiem thu E2E backend."
