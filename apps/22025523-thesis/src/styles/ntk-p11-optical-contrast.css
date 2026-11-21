@@ -1,0 +1,184 @@
+/*
+ * NTK P0.11 - optical contrast pass, visual layer only.
+ * Sharp monochrome rim-light instead of wide desaturated haze.
+ * No changes to layout, data, API, routing, scoring or backend.
+ * The original UET logo keeps its untouched blue-and-white colors.
+ */
+:root {
+  --ntk-canvas: #0b0b0e;
+  --ntk-paper: #202024;
+  --ntk-paper-soft: #252529;
+  --ntk-ink: #f7f7f9;
+  --ntk-subtle: #d3d3d9;
+  --ntk-line: #686870;
+  --ntk-shadow: 0 13px 29px rgba(0, 0, 0, .40), inset 0 1px 0 rgba(255, 255, 255, .085);
+}
+
+html, body { background: #0b0b0d; }
+.main-area {
+  background-color: #0b0b0e;
+  background-image: linear-gradient(132deg, #0a0a0c 0%, #0c0c0f 58%, #101014 100%);
+}
+.main-area::before {
+  background-image: url('/ntk-p11-specular-waves.svg');
+  background-position: center top;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: .66;
+}
+.app-shell:has(.hero) .main-area::before { opacity: 1; }
+
+/* Keep the trail artwork behind interactive UI, including forms and dialogs. */
+.topbar, .content-area { position: relative; z-index: 1; }
+.topbar {
+  background: rgba(13, 13, 16, .93);
+  border-bottom: 1px solid #727279;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .045);
+  backdrop-filter: blur(4px);
+}
+.sidebar {
+  background: linear-gradient(160deg, #171719 0%, #111114 100%);
+  border-right: 1px solid #65656c;
+  box-shadow: 1px 0 0 rgba(255, 255, 255, .035), 8px 0 25px rgba(0, 0, 0, .30);
+}
+.brand { border-bottom-color: #55555b; }
+.brand b { color: #fff; }
+.brand small, .nav-group-title { color: #ceced3; }
+.sidebar-bottom { border-top-color: #55555b; }
+.nav-item { color: #e2e2e7; }
+.nav-item svg { color: #e3e3e8; }
+.nav-item:hover { color: #fff; background: #303034; }
+.nav-item.active {
+  color: #fff;
+  border-color: #e2e2e7;
+  background: linear-gradient(112deg, #434348 0%, #27272c 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22),
+              0 0 0 2px #171719,
+              0 0 0 3px rgba(239,239,242,.85);
+}
+
+/* White type has a true black reference, not a medium-grey wash. */
+.content-area { color: #f5f5f7; }
+.hero h1, .page-header h1, .section-title h2, .section-block > h2,
+.section-block > h3, .card h2, .card h3, .card h4,
+.pillar-card h3, .history-source-link, .thesis-grid strong { color: #fcfcfd; }
+.hero h1 em {
+  background: linear-gradient(180deg, #fcfcfd 1%, #e8e8ec 43%, #aaaab3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hero-copy > p, .page-header p, .section-title p { color: #e1e1e5; }
+.pillar-card p, .journey-card p, .stat-card small,
+.history-time-grid dt, .history-input-mode { color: #d4d4da; }
+.breadcrumbs strong, .footer a { color: #fff; }
+.breadcrumbs, .footer, .footer span { color: #bebec6; }
+
+/* Thin illuminated edges around calm dark surfaces; no glowing cards. */
+.card, .stat-card, .pillar-card, .journey-card, .dataset-stat,
+.table-card, .ntk-p05-workflow, .architecture-explanation,
+.ntk-p05-distribution, .formula-card, .worked-example,
+.scoring-concept, .decision-card, .university-card,
+.thesis-card, .contribution, .history-dialog,
+.scanner-input-card, .scanner-aside > .card, .research-banner {
+  color: #f4f4f6;
+  border-color: #787880;
+  background: linear-gradient(148deg, rgba(38,38,42,.96), rgba(27,27,31,.98));
+  box-shadow: var(--ntk-shadow);
+}
+.pillar-card, .stat-card, .dataset-stat {
+  background: linear-gradient(150deg, rgba(40,40,44,.97), rgba(28,28,32,.97));
+  border-color: #85858d;
+}
+.pillar-card h3, .card-heading h3, .stat-card strong { color: #fff; }
+.pillar-icon, .pillar-1, .pillar-2, .pillar-3 {
+  color: #fff;
+  border-color: #9c9ca4;
+  background: linear-gradient(145deg, #55555a 0%, #2c2c30 80%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25);
+}
+.pillar-index { color: #d0d0d6; }
+.history-compact-row {
+  border-color: #84848b;
+  border-left-color: #f0f0f2;
+  background: linear-gradient(142deg, rgba(42,42,46,.97), rgba(28,28,32,.98));
+}
+
+/* The illustration has its own precise white rim and clean charcoal core. */
+.hero-visual {
+  background: radial-gradient(circle at 51% 46%, #303034 0%, #1a1a1e 47%, #101013 100%);
+  border-color: #e5e5e9;
+  box-shadow: 0 16px 44px rgba(0,0,0,.50),
+              inset 0 1px 0 rgba(255,255,255,.22),
+              inset 0 0 22px rgba(255,255,255,.022);
+}
+.hero-visual .visual-orbit { border-color: rgba(232,232,238,.57); }
+.hero-visual .orbit-two { border-color: rgba(215,215,223,.37); }
+.hero-visual .visual-node {
+  color: #fdfdfe;
+  background: linear-gradient(144deg, #303034, #19191c);
+  border-color: #a7a7ae;
+  box-shadow: 0 10px 25px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.13);
+}
+.hero-visual .visual-core {
+  color: #fff;
+  border-color: #f7f7fa;
+  background: radial-gradient(circle at 42% 27%, #424247, #1c1c20 76%);
+  box-shadow: 0 0 16px rgba(255,255,255,.23),
+              0 0 2px rgba(255,255,255,.88),
+              inset 0 0 18px rgba(255,255,255,.045);
+}
+.hero-visual .visual-caption, .hero-visual .visual-caption span { color: #e9e9ed; }
+
+/* Buttons look cut from brushed silver rather than softly airbrushed. */
+.button-primary {
+  color: #101013;
+  border-color: #f7f7f9;
+  background: linear-gradient(155deg, #fff 0%, #ebebee 43%, #b2b2ba 100%);
+  box-shadow: inset 0 1px 0 #fff, 0 9px 24px rgba(0,0,0,.40);
+}
+.button-primary:hover:not(:disabled) {
+  background: linear-gradient(155deg, #fff 0%, #f8f8fa 45%, #d0d0d6 100%);
+  box-shadow: inset 0 1px 0 #fff, 0 12px 26px rgba(0,0,0,.46);
+}
+.button-secondary, .pagination button, .guided-actions button {
+  color: #f1f1f3;
+  background: linear-gradient(140deg,#303034,#202024);
+  border-color: #8c8c93;
+}
+.button-secondary:hover:not(:disabled), .pagination button:hover:not(:disabled) {
+  background: #36363b;
+  border-color: #e3e3e9;
+}
+.connection-pill { border-color: #babac1; background: #232327; }
+.status-dot.online, .connection-pill.connected i {
+  background: #f8f8fa;
+  box-shadow: 0 0 9px rgba(255,255,255,.45);
+}
+
+/* Leave the supplied original UET logo PNG untouched and in full color. */
+.uet-image-tile, .uet-image-tile img {
+  filter: none !important;
+  -webkit-filter: none !important;
+  mix-blend-mode: normal;
+}
+
+@media (max-width: 1150px) {
+  .main-area::before { left: 238px; }
+  .sidebar-collapsed .main-area::before { left: 76px; }
+}
+@media (max-width: 800px) {
+  .main-area::before, .sidebar-collapsed .main-area::before { left: 0; opacity: .35; }
+  .app-shell:has(.hero) .main-area::before { opacity: .68; }
+}
+@media (max-width: 560px) {
+  .main-area::before, .sidebar-collapsed .main-area::before { opacity: .2; }
+  .app-shell:has(.hero) .main-area::before { opacity: .4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .main-area::before { animation: none; }
+}
+@media print {
+  .main-area { background: #fff; }
+  .main-area::before { display: none; }
+}

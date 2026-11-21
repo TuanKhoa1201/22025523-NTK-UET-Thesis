@@ -1,0 +1,231 @@
+/* NTK P0.15. Presentation-only refinements, with dark monochrome styling. */
+
+/* Scanner: compact single field, clear advanced disclosure, balanced spacing. */
+.content-area .scanner-input-card:has(.ntk-p15-repo-section) {
+  padding: 22px 24px 20px;
+  overflow: visible;
+}
+.content-area .ntk-p15-repo-section { display: flex; flex-direction: column; min-width: 0; }
+.content-area .ntk-p15-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.content-area .ntk-p15-field-header label {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #f3f3f6;
+}
+.content-area .ntk-p15-field-meta {
+  display: inline-flex;
+  border: 1px solid #777780;
+  border-radius: 6px;
+  background: #34343a;
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+  color: #d6d6de;
+}
+.content-area .ntk-p15-repo-input {
+  display: flex;
+  align-items: center;
+  height: 54px;
+  min-width: 0;
+  gap: 12px;
+  padding: 0 16px;
+  background: linear-gradient(145deg,#1c1c20,#242428);
+  border: 1px solid #8b8b94;
+  border-radius: 11px;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.content-area .ntk-p15-repo-input:focus-within {
+  border-color: #f1f1f5;
+  box-shadow: 0 0 0 3px rgba(225,225,233,.13);
+}
+.content-area .ntk-p15-repo-input > svg {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  color: #e3e3ea;
+}
+.content-area .ntk-p15-repo-input > input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  height: 50px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  color: #fafafd;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.content-area .ntk-p15-repo-input > input::placeholder { color: #a8a8b2; opacity: 1; }
+.content-area .ntk-p15-repo-input > input:disabled { opacity: .65; cursor: not-allowed; }
+.content-area .ntk-p15-repo-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #c2c2cc;
+}
+.content-area .ntk-p15-repo-hint > svg { flex: 0 0 14px; width: 14px; height: 14px; }
+.content-area .scanner-advanced.ntk-p15-advanced {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 1px solid #62626b;
+  border-radius: 10px;
+  background: rgba(18,18,22,.42);
+  overflow: hidden;
+}
+.content-area .ntk-p15-advanced > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: none;
+  padding: 12px 15px;
+  margin: 0;
+  list-style: none;
+  cursor: pointer;
+  color: #e3e3e9;
+  font-size: 12px;
+  font-weight: 660;
+  transition: background .18s ease;
+}
+.content-area .ntk-p15-advanced > summary::-webkit-details-marker { display: none; }
+.content-area .ntk-p15-advanced > summary:hover { background: rgba(255,255,255,.065); color: #fff; }
+.content-area .ntk-p15-advanced > summary:focus-visible { outline: 2px solid #f2f2f5; outline-offset: -3px; }
+.content-area .ntk-p15-advanced-title { display: inline-flex; align-items: center; gap: 10px; }
+.content-area .ntk-p15-advanced-title > svg { flex-shrink: 0; width: 16px; height: 16px; }
+.content-area .ntk-p15-advanced > summary > svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: #c1c1c9;
+  transition: transform .18s ease;
+}
+.content-area .ntk-p15-advanced[open] > summary > svg { transform: rotate(180deg); }
+.content-area .ntk-p15-advanced-body { padding: 13px 16px 15px; border-top: 1px solid #55555d; }
+.content-area .ntk-p15-advanced .ntk-p15-fresh-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin: 0;
+  cursor: pointer;
+}
+.content-area .ntk-p15-fresh-option input {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: #d9d9e0;
+}
+.content-area .ntk-p15-fresh-option span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.content-area .ntk-p15-fresh-option strong { color: #f0f0f4; font-size: 12px; font-weight: 660; line-height: 1.5; }
+.content-area .ntk-p15-fresh-option small { color: #b7b7c1; font-size: 11px; line-height: 1.5; }
+.content-area .scanner-input-card:has(.ntk-p15-repo-section) .scanner-submit--minimal {
+  margin-top: 18px;
+  padding-top: 17px;
+  border-top: 1px solid #575760;
+}
+.content-area .scanner-input-card:has(.ntk-p15-repo-section) .scanner-submit--minimal button { min-height: 48px; }
+
+/* Replay: independent toolbar between selector card and stage visualization. */
+.content-area .ntk-p15-replay-lookup-card { padding: 19px 22px; }
+.content-area .ntk-p15-replay-lookup { display: flex; align-items: center; gap: 12px; margin: 0; flex-wrap: wrap; }
+.content-area .ntk-p15-replay-lookup > input { flex: 1 1 340px; min-width: 0; height: 47px; }
+.content-area .ntk-p15-replay-lookup > button,
+.content-area .ntk-p15-replay-lookup > a { min-height: 46px; white-space: nowrap; }
+.content-area .guided-actions.ntk-p15-replay-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 13px 20px;
+  margin: 24px 0 24px;
+  padding: 14px 16px;
+  border: 1px solid #696971;
+  border-radius: 13px;
+  background: linear-gradient(152deg,rgba(39,39,44,.97),rgba(26,26,30,.97));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+.content-area .ntk-p15-replay-transport,
+.content-area .ntk-p15-replay-speed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.content-area .ntk-p15-replay-speed { gap: 7px; }
+.content-area .ntk-p15-replay-speed > span {
+  margin-right: 4px;
+  font-size: 12px;
+  color: #c6c6cf;
+  font-weight: 610;
+}
+.content-area .ntk-p15-replay-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  gap: 7px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #313137;
+  border: 1px solid #82828a;
+  color: #eeeef3;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+.content-area .ntk-p15-replay-controls button svg { width: 14px; height: 14px; flex-shrink: 0; }
+.content-area .ntk-p15-replay-controls button:hover:not(:disabled) { background: #414148; border-color: #eeeef2; color: #fff; }
+.content-area .ntk-p15-replay-controls button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.content-area .ntk-p15-replay-controls button:disabled { opacity: .45; cursor: not-allowed; }
+.content-area .ntk-p15-replay-controls button.active,
+.content-area .ntk-p15-replay-controls button[aria-pressed="true"] {
+  color: #19191d;
+  border-color: #e7e7ed;
+  background: #d8d8df;
+}
+.content-area .ntk-p15-replay-controls .ntk-p15-play-button {
+  border-color: #e6e6ea;
+  background: #d8d8df;
+  color: #17171b;
+}
+.content-area .ntk-p15-replay-controls .ntk-p15-play-button[aria-pressed="true"] { background: #bfc0ca; }
+
+@media (max-width: 800px) {
+  .content-area .guided-actions.ntk-p15-replay-controls { align-items: flex-start; }
+  .content-area .ntk-p15-replay-transport { width: 100%; }
+  .content-area .ntk-p15-replay-speed { width: 100%; border-top: 1px solid #515159; padding-top: 12px; }
+}
+@media (max-width: 560px) {
+  .content-area .scanner-input-card:has(.ntk-p15-repo-section) { padding: 16px; }
+  .content-area .ntk-p15-field-header { align-items: flex-start; }
+  .content-area .ntk-p15-field-meta { font-size: 9px; }
+  .content-area .ntk-p15-repo-input { padding: 0 12px; gap: 8px; }
+  .content-area .ntk-p15-repo-input > input { font-size: 12px; }
+  .content-area .ntk-p15-replay-lookup { align-items: stretch; }
+  .content-area .ntk-p15-replay-lookup > input { flex: 1 1 100%; }
+  .content-area .ntk-p15-replay-lookup > button,
+  .content-area .ntk-p15-replay-lookup > a { flex: 1 1 auto; }
+  .content-area .guided-actions.ntk-p15-replay-controls { padding: 12px; margin: 18px 0 20px; }
+  .content-area .ntk-p15-replay-transport button { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .content-area .ntk-p15-repo-input,
+  .content-area .ntk-p15-advanced > summary,
+  .content-area .ntk-p15-advanced > summary > svg { transition: none; }
+}
