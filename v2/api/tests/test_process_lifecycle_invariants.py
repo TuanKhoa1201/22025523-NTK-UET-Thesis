@@ -274,6 +274,7 @@ class UnifiedProcessLifecycleTests(unittest.TestCase):
         self.popen_patch = patch.object(intake.subprocess.Popen, "__init__", tracked_popen_init)
         self.popen_patch.start()
 
+        self._watch_lock = threading.Lock()
         self.procs: dict[int, _Proc] = {}
         self.child_pids: set[int] = set()
         self._stop = threading.Event()
@@ -287,22 +288,37 @@ class UnifiedProcessLifecycleTests(unittest.TestCase):
 
     def _absorb(self, path: Path | None = None):
         pf = path or self.pid_file
-        if not pf.is_file():
-            return
-        try:
-            text = pf.read_text(encoding="utf-8")
-        except OSError:
-            return
-        for line in text.splitlines():
-            toks = [int(t) for t in line.split()]
-            for i, pid in enumerate(toks):
-                if pid not in self.procs:
-                    proc = _Proc(pid)
-                    self.procs[pid] = proc
-                    if proc.handle is not None:
-                        (self.root / f"ack_{pid}").write_text("1", encoding="utf-8")
-                if len(toks) == 2 and i == 1:
-                    self.child_pids.add(pid)
+        with self._watch_lock:
+            if not pf.is_file():
+                return
+            try:
+                text = pf.read_text(encoding="utf-8")
+            except OSError:
+                return
+            for line in text.splitlines():
+                toks = [int(t) for t in line.split()]
+                for i, pid in enumerate(toks):
+                    if pid not in self.procs:
+                        proc = _Proc(pid)
+                        self.procs[pid] = proc
+                        if proc.handle is not None:
+                            (self.root / f"ack_{pid}").write_text("1", encoding="utf-8")
+                    if len(toks) == 2 and i == 1:
+                        self.child_pids.add(pid)
+
+    def _reset_observed_pids(self) -> None:
+        with self._watch_lock:
+            for p in self.procs.values():
+                p.close()
+            self.procs.clear()
+            self.child_pids.clear()
+            if self.pid_file.exists():
+                self.pid_file.unlink()
+            for ack_f in self.root.glob("ack_*"):
+                try:
+                    ack_f.unlink()
+                except OSError:
+                    pass
 
     def tearDown(self):
         self._stop.set()
@@ -582,10 +598,7 @@ class UnifiedProcessLifecycleTests(unittest.TestCase):
     def test_root_exits_early_with_live_child_terminates_child_before_return(self):
         for code in (0, 4):
             with self.subTest(exit_code=code):
-                self.procs.clear()
-                self.child_pids.clear()
-                if self.pid_file.exists():
-                    self.pid_file.unlink()
+                self._reset_observed_pids()
                 os.environ["NTK_LC_MODE"] = "exit_early_with_live_child"
                 os.environ["NTK_LC_TARGET_STEP"] = "version"
                 os.environ["NTK_LC_EXIT"] = str(code)

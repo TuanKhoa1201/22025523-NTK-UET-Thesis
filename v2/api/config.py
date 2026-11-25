@@ -3,16 +3,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import ipaddress
+import math
 import os
 from pathlib import Path
+import re
 from typing import Sequence
 
 from v2.api import DEFAULT_API_HOST, DEFAULT_API_PORT, FORBIDDEN_PORTS
+from v2.api.java_context_v2 import DEFAULT_MAX_PROMPT_BYTES
 from v2.g1_integration.bridge import DEFAULT_G1_RULES
 from v2.g1_integration.fork_support.scanner_config import validate_opengrep_binary
 from v2.triage.ollama import DEFAULT_PROMPT_CONTRACT, PROMPT_CONTRACTS, OllamaClient
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_BACKEND_RULES_CANDIDATE = Path(__file__).resolve().parent / "rules" / "java_cwe22_cwe89.yml"
+DEFAULT_BACKEND_RULES = _BACKEND_RULES_CANDIDATE if _BACKEND_RULES_CANDIDATE.is_file() else DEFAULT_G1_RULES
 SEALED_SUBTREES = (
     REPO_ROOT / "v2" / "baseline",
     REPO_ROOT / "v2" / "triage",
@@ -100,6 +105,12 @@ class IntakeLimits:
         }
 
 
+def default_opengrep_jobs() -> int:
+    """Bounded default OpenGrep worker count (1..4) leaving CPU headroom for local Ollama."""
+    cores = os.cpu_count() or 2
+    return min(4, max(1, cores // 2))
+
+
 @dataclass(frozen=True)
 class ApiConfig:
     host: str = DEFAULT_API_HOST
@@ -112,16 +123,25 @@ class ApiConfig:
     read_auth_mode: str = "required"  # "required" | "write-only"
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
     opengrep_binary: str = "opengrep"
-    rules_path: Path = field(default_factory=lambda: DEFAULT_G1_RULES.resolve())
+    rules_path: Path = field(default_factory=lambda: DEFAULT_BACKEND_RULES.resolve())
     ollama_endpoint: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.5:9b-q4_K_M"
     prompt_contract: str = DEFAULT_PROMPT_CONTRACT
     ollama_timeout_seconds: float = 90.0
-    opengrep_timeout_seconds: int = 60
+    opengrep_timeout_seconds: int = 90
+    opengrep_jobs: int = field(default_factory=default_opengrep_jobs)
     git_clone_timeout_seconds: int = 60
     job_timeout_seconds: float = 300.0
+    opengrep_health_probe_enabled: bool = True
+    opengrep_health_probe_ttl_seconds: float = 300.0
+    opengrep_health_probe_failure_ttl_seconds: float = 30.0
+    opengrep_health_probe_timeout_seconds: float = 30.0
+    opengrep_min_version: str = "1.25.0"
+    opengrep_max_major: int = 1
     max_concurrent_scans: int = 1
     max_queued_jobs: int = 4
+    max_prompt_bytes: int = DEFAULT_MAX_PROMPT_BYTES
+    enable_qwen_cache: bool = False
     runtime_origin: str = "unverified"  # "unverified" | "mock"
     limits: IntakeLimits = field(default_factory=IntakeLimits)
 
@@ -184,8 +204,53 @@ class ApiConfig:
             raise ValueError("max_concurrent_scans must be between 1 and 4")
         if self.max_queued_jobs < 1 or self.max_queued_jobs > 32:
             raise ValueError("max_queued_jobs must be between 1 and 32")
-        if self.job_timeout_seconds <= 0 or self.ollama_timeout_seconds <= 0 or self.opengrep_timeout_seconds <= 0:
-            raise ValueError("timeouts must be positive")
+        for timeout_name, timeout_val in (
+            ("job_timeout_seconds", self.job_timeout_seconds),
+            ("ollama_timeout_seconds", self.ollama_timeout_seconds),
+            ("opengrep_health_probe_ttl_seconds", self.opengrep_health_probe_ttl_seconds),
+            ("opengrep_health_probe_failure_ttl_seconds", self.opengrep_health_probe_failure_ttl_seconds),
+            ("opengrep_health_probe_timeout_seconds", self.opengrep_health_probe_timeout_seconds),
+        ):
+            if (
+                isinstance(timeout_val, bool)
+                or not isinstance(timeout_val, (int, float))
+                or not math.isfinite(float(timeout_val))
+                or float(timeout_val) <= 0.0
+            ):
+                raise ValueError(f"{timeout_name} must be a finite positive number, got {timeout_val!r}")
+            object.__setattr__(self, timeout_name, float(timeout_val))
+        if type(self.opengrep_health_probe_enabled) is not bool:
+            raise ValueError("opengrep_health_probe_enabled must be a boolean")
+        if not isinstance(self.opengrep_min_version, str) or not re.fullmatch(
+            r"\d+\.\d+\.\d+", self.opengrep_min_version.strip()
+        ):
+            raise ValueError(
+                f"opengrep_min_version must be a strict semantic version X.Y.Z, got {self.opengrep_min_version!r}"
+            )
+        cleaned_min_ver = self.opengrep_min_version.strip()
+        object.__setattr__(self, "opengrep_min_version", cleaned_min_ver)
+        min_major = int(cleaned_min_ver.split(".", 1)[0])
+        if type(self.opengrep_max_major) is not int or self.opengrep_max_major < min_major:
+            raise ValueError(
+                f"opengrep_max_major must be an integer >= {min_major}, got {self.opengrep_max_major!r}"
+            )
+        for timeout_name, timeout_val in (
+            ("opengrep_timeout_seconds", self.opengrep_timeout_seconds),
+            ("git_clone_timeout_seconds", self.git_clone_timeout_seconds),
+        ):
+            if type(timeout_val) is not int or timeout_val <= 0:
+                raise ValueError(f"{timeout_name} must be a positive integer, got {timeout_val!r}")
+        if type(self.opengrep_jobs) is not int or not (1 <= self.opengrep_jobs <= 8):
+            raise ValueError(f"opengrep_jobs must be an integer between 1 and 8, got {self.opengrep_jobs!r}")
+        if type(self.max_prompt_bytes) is not int or not (4096 <= self.max_prompt_bytes <= DEFAULT_MAX_PROMPT_BYTES):
+            raise ValueError(f"max_prompt_bytes must be an integer between 4096 and {DEFAULT_MAX_PROMPT_BYTES}")
+        if type(self.enable_qwen_cache) is not bool:
+            raise ValueError("enable_qwen_cache must be a boolean")
+        if self.enable_qwen_cache:
+            raise ValueError(
+                "Qwen verdict cache is safely disabled (SAFELY_DISABLED); "
+                "set enable_qwen_cache=False / NTK_ENABLE_QWEN_CACHE=0 to run direct local Qwen HTTP."
+            )
 
     @classmethod
     def from_env(cls, overrides: dict | None = None) -> "ApiConfig":
@@ -205,16 +270,26 @@ class ApiConfig:
             "read_auth_mode": env.get("NTK_API_READ_AUTH", default_read_mode).strip().lower(),
             "cors_origins": cors,
             "opengrep_binary": env.get("OPENGREP_BINARY", "opengrep"),
-            "rules_path": Path(env["NTK_RULES_PATH"]) if env.get("NTK_RULES_PATH") else DEFAULT_G1_RULES.resolve(),
+            "rules_path": Path(env["NTK_RULES_PATH"]) if env.get("NTK_RULES_PATH") else DEFAULT_BACKEND_RULES.resolve(),
             "ollama_endpoint": env.get("NTK_OLLAMA_ENDPOINT", "http://127.0.0.1:11434"),
             "ollama_model": env.get("NTK_OLLAMA_MODEL", "qwen3.5:9b-q4_K_M"),
             "prompt_contract": env.get("NTK_PROMPT_CONTRACT", DEFAULT_PROMPT_CONTRACT),
             "ollama_timeout_seconds": float(env.get("NTK_OLLAMA_TIMEOUT", "90")),
-            "opengrep_timeout_seconds": int(env.get("NTK_OPENGREP_TIMEOUT", "60")),
+            "opengrep_timeout_seconds": int(env.get("NTK_OPENGREP_TIMEOUT", "90")),
+            "opengrep_jobs": int(env.get("NTK_OPENGREP_JOBS", str(default_opengrep_jobs()))),
             "git_clone_timeout_seconds": int(env.get("NTK_GIT_CLONE_TIMEOUT", "60")),
             "job_timeout_seconds": float(env.get("NTK_JOB_TIMEOUT", "300")),
+            "opengrep_health_probe_enabled": env.get("NTK_OPENGREP_HEALTH_PROBE", "1").strip().lower()
+            not in ("0", "false", "no", "off"),
+            "opengrep_health_probe_ttl_seconds": float(env.get("NTK_OPENGREP_HEALTH_TTL", "300")),
+            "opengrep_health_probe_failure_ttl_seconds": float(env.get("NTK_OPENGREP_HEALTH_FAILURE_TTL", "30")),
+            "opengrep_health_probe_timeout_seconds": float(env.get("NTK_OPENGREP_HEALTH_TIMEOUT", "30")),
+            "opengrep_min_version": env.get("NTK_OPENGREP_MIN_VERSION", "1.25.0"),
+            "opengrep_max_major": int(env.get("NTK_OPENGREP_MAX_MAJOR", "1")),
             "max_concurrent_scans": int(env.get("NTK_MAX_CONCURRENT_SCANS", "1")),
             "max_queued_jobs": int(env.get("NTK_MAX_QUEUED_JOBS", "4")),
+            "max_prompt_bytes": int(env.get("NTK_MAX_PROMPT_BYTES", str(DEFAULT_MAX_PROMPT_BYTES))),
+            "enable_qwen_cache": env.get("NTK_ENABLE_QWEN_CACHE", "").strip().lower() in ("1", "true", "yes", "on"),
             "runtime_origin": env.get("NTK_RUNTIME_ORIGIN", "unverified"),
             "limits": IntakeLimits(
                 max_zip_upload_bytes=int(env.get("NTK_MAX_ZIP_BYTES", str(25 * 1024 * 1024))),

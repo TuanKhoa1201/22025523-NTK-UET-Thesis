@@ -637,16 +637,19 @@ class ApiAdapterTestSuite(unittest.TestCase):
             ollama_endpoint=f"http://127.0.0.1:{ollama_port}",
             runtime_origin="mock",
         )
-        _, base2 = self._start_server(cfg_e2e)
+        srv2, base2 = self._start_server(cfg_e2e)
 
-        # Health stays DEGRADED with OPENGREP_NOT_VERIFIED because /api/health never executes OpenGrep subprocesses
+        # Wait for the bounded active OpenGrep health probe to evaluate the mock stub:
+        # _write_fake_opengrep_cmd emits CWE-22 on the SQLi line rather than the canary FileInputStream sink,
+        # so the strict canary oracle MUST reject it and keep /api/health DEGRADED (fail-closed, never OK).
+        self.assertTrue(srv2.service.wait_for_opengrep_probe(timeout=10.0))
         code, h_ok, _ = self._http(f"{base2}/api/health")
         self.assertEqual(code, 200)
         self.assertEqual(h_ok["status"], "DEGRADED")
-        self.assertIn("OPENGREP_NOT_VERIFIED", h_ok["degraded_reasons"])
+        self.assertIn("OPENGREP_UNAVAILABLE", h_ok["degraded_reasons"])
         self.assertFalse(h_ok["opengrep"]["available"])
-        self.assertEqual(h_ok["opengrep"]["probe_status"], "NOT_VERIFIED")
-        self.assertIsNone(h_ok["opengrep"]["version"])
+        self.assertFalse(h_ok["opengrep"]["runtime_verified"])
+        self.assertEqual(h_ok["opengrep"]["probe_status"], "CANARY_FAILED")
         self.assertTrue(h_ok["ollama"]["reachable"])
         self.assertTrue(h_ok["ollama"]["model_installed"])
 

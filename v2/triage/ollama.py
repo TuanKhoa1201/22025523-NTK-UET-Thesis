@@ -39,7 +39,8 @@ SCHEMA = {
                            "quote": {"type": "string", "minLength": 1},
                            "sha256": {"type": "string"}}}}}}
 
-PROMPT_VERSION = "v2.2.2-cwe22-cwe89-canonical-citations"
+PROMPT_VERSION = "v2.2.4-cwe22-cwe89-minimal-singleline-citations"
+PREVIOUS_CANONICAL_PROMPT_VERSION = "v2.2.2-cwe22-cwe89-canonical-citations"
 PREVIOUS_NEUTRAL_PROMPT_VERSION = "v2.2-cwe22-cwe89-neutral"
 LEGACY_STEERED_PROMPT_VERSION = "v2.1-cwe22-cwe89-grounded"
 
@@ -831,15 +832,23 @@ def prompt(record):
          "If evidence_signals is present it only lists neutral structural positions (source_line, sink_line, "
          "source_kind) and calls whose implementation is absent from snippets (unresolved_external_calls); "
          "it never contains a verdict. "
-         "CRITICAL CITATION RULE: Cite executable Java code directly from the supplied snippets. "
-         "Copy citation path exactly from the canonical snippets[].path and sha256 from that same snippet. "
-         "Take start_line and end_line from the supplied lines[].line numbers; the range is inclusive. "
-         "For a multiline citation, quote must contain EVERY lines[].text from start_line through end_line, "
-         "in order, joined with the newline character (\\n), preserving all whitespace character-for-character. "
-         "Prefer a single executable line with start_line = end_line when it proves the relevant detail. "
-         "Never cite comments, blank lines, or lines absent from the prompt. Never invent missing lines, trim quote "
-         "whitespace, or substitute a path or hash. Invalid citations are rejected; they cannot establish SUPPORTED "
-         "or REFUTED. Use UNDETERMINED when the supplied evidence cannot support valid citations. "
+         "CRITICAL CITATION RULE: Every citation must quote executable Java code directly from the supplied snippets. "
+         "Copy citation path verbatim from canonical snippets[].path and sha256 from that same snippet. "
+         "Cite ONLY the minimal essential lines that directly prove this specific finding's flow or sanitizer/constant "
+         "rebuttal (typically the untrusted source line, the sink or sanitizer/guard line, and any intermediate line "
+         "directly used by that sink; do NOT add unrelated parameters, statements, or other sinks from the same method). "
+         "STRONGLY PREFER separate SINGLE-LINE citations with start_line == end_line rather than multi-line ranges. "
+         "For each single-line citation, read the exact integer from the matching {\"line\": N, \"text\": \"...\"} entry "
+         "in snippets[].lines (prefer the dedicated source/sink snippets when present; never count or guess line numbers), "
+         "set start_line = N and end_line = N, and copy that entry's text verbatim character-for-character (preserving all "
+         "leading spaces and trailing punctuation). Do NOT bundle multiple statements or braces into a multi-line range "
+         "when separate single-line citations prove the flow. Only if a single Java statement spans multiple lines and "
+         "requires end_line > start_line, the range is strictly inclusive: quote MUST contain EVERY lines[].text from "
+         "start_line through end_line in order joined by \\n, so the number of lines in quote MUST equal "
+         "(end_line - start_line + 1) with no omitted final line or brace. Never cite comments, blank lines, or lines "
+         "absent from the prompt. Never invent missing lines, trim quote whitespace, or substitute a path or hash. "
+         "Invalid citations are rejected and cannot establish SUPPORTED or REFUTED. "
+         "Use UNDETERMINED when the supplied evidence cannot support valid citations. "
          "Write explanation and fix_suggestion concisely in Vietnamese (1-2 sentences each) for human review."},
         {"role": "user", "content": json.dumps(evidence, ensure_ascii=False)}]
 

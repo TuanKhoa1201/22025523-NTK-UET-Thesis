@@ -1,4 +1,5 @@
-"""Tests verifying /api/health never spawns OpenGrep/WSL2 probes while preserving auth, CORS, /api/model, and scan jobs."""
+"""Tests verifying /api/health stays non-blocking and snapshot-only (never spawning inline subprocesses)
+while preserving auth, CORS, /api/model, real scan jobs, and clean bounded shutdown."""
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -136,7 +137,24 @@ class HealthDecoupledOpenGrepTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.rules_file = self.root / "rules.yml"
-        self.rules_file.write_text("rules: []\n", encoding="utf-8")
+        self.rules_file.write_text(
+            "rules:\n"
+            "  - id: test.cwe89.sqli\n"
+            "    mode: taint\n"
+            "    languages: [java]\n"
+            "    severity: ERROR\n"
+            "    message: test sqli\n"
+            "    metadata:\n"
+            "      cwe: ['CWE-89: SQL Injection']\n"
+            "  - id: test.cwe22.path\n"
+            "    mode: taint\n"
+            "    languages: [java]\n"
+            "    severity: ERROR\n"
+            "    message: test path\n"
+            "    metadata:\n"
+            "      cwe: ['CWE-22: Path Traversal']\n",
+            encoding="utf-8",
+        )
         self.ol_srv, self.ol_th, self.ollama_url = _make_mock_ollama_server()
         self.addCleanup(lambda: (self.ol_srv.shutdown(), self.ol_th.join(timeout=2.0), self.ol_srv.server_close()))
 
@@ -191,11 +209,20 @@ class HealthDecoupledOpenGrepTests(unittest.TestCase):
         wdir = self.root / "stub_slow"
         wdir.mkdir(parents=True, exist_ok=True)
         log_file = wdir / "invocations.log"
-        # Even if wrapper sleeps 30s on --version, /api/health must NEVER execute it!
+        # Startup launches ONE single-flight background probe (slow 30s wrapper);
+        # concurrent GET /api/health requests MUST stay fast, spawn 0 subprocesses/threads inline,
+        # and remain DEGRADED / OPENGREP_NOT_VERIFIED while the probe has not completed!
         og_cmd = _write_opengrep_wrapper(wdir, log_file, sleep_on_version=30.0)
         srv, base = self._start_api(str(og_cmd))
+        # Wait briefly until the single startup probe enters the wrapper before patching subprocess around GET /api/health
+        deadline = time.monotonic() + 5.0
+        while not log_file.is_file() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertTrue(log_file.is_file(), "Expected single startup background probe to launch")
+        startup_invocations = len(log_file.read_text(encoding="utf-8").splitlines())
+        self.assertEqual(startup_invocations, 1)
 
-        # Spy on subprocess.Popen, subprocess.run, and threading.Thread during /api/health
+        # Spy on subprocess.Popen, subprocess.run, and threading.Thread during 8 concurrent GET /api/health calls
         orig_thread_init = threading.Thread.__init__
         spawned_thread_names: list[str | None] = []
 
@@ -204,7 +231,7 @@ class HealthDecoupledOpenGrepTests(unittest.TestCase):
             return orig_thread_init(t_self, *args, **kwargs)
 
         def forbid_subprocess(*args, **kwargs):
-            raise AssertionError(f"/api/health must NEVER spawn subprocesses! args={args}")
+            raise AssertionError(f"/api/health must NEVER spawn subprocesses inline! args={args}")
 
         results: list[tuple[int, dict, dict, float]] = []
         lock = threading.Lock()
@@ -235,11 +262,11 @@ class HealthDecoupledOpenGrepTests(unittest.TestCase):
             self.assertIsNone(og["version"])
             self.assertEqual(og["probe_status"], "NOT_VERIFIED")
             self.assertFalse(og["runtime_verified"])
-            self.assertEqual(og["resolved_path"], str(og_cmd))
+            self.assertEqual(Path(og["resolved_path"]).resolve(), og_cmd.resolve())
             self.assertNotEqual(og["probe_status"], "VERIFIED")
 
-        self.assertFalse(log_file.exists(), "OpenGrep wrapper must NOT be invoked by /api/health!")
-        self.assertNotIn("opengrep-version-probe", spawned_thread_names)
+        self.assertEqual(len(log_file.read_text(encoding="utf-8").splitlines()), 1)
+        self.assertNotIn("ntk-opengrep-health-probe", spawned_thread_names)
 
     def test_2_missing_and_invalid_binary_auth_cors_and_model_preserved(self) -> None:
         _, base = self._start_api("opengrep-nonexistent-xyz")
@@ -294,11 +321,11 @@ class HealthDecoupledOpenGrepTests(unittest.TestCase):
         og_cmd = _write_opengrep_wrapper(wdir, log_file, sleep_on_version=0.0)
         srv, base = self._start_api(str(og_cmd), runtime_origin="unverified")
 
-        # Calling /api/health does NOT execute og_cmd
+        # Wait for the single bounded startup probe to complete before submitting the scan job
+        self.assertTrue(srv.service.wait_for_opengrep_probe(timeout=10.0))
         c_h, d_h, _, _ = self._http(f"{base}/api/health")
         self.assertEqual(c_h, 200)
-        self.assertEqual(d_h["opengrep"]["probe_status"], "NOT_VERIFIED")
-        self.assertFalse(log_file.exists())
+        self.assertIn(d_h["opengrep"]["probe_status"], ("VERIFIED", "CANARY_FAILED"))
 
         # Submitting a scan job DOES execute og_cmd via SemgrepScanner (--version, --json, --sarif)
         ct, body = _make_multipart_zip("app.zip", _make_java_zip())

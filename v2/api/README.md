@@ -5,8 +5,12 @@ Lớp HTTP API mỏng kết nối giao diện web React/Vite với pipeline phâ
 ## Nguyên tắc bất biến
 
 1. **Không viết lại logic lõi:** Toàn bộ kiểm chứng biên nhận quét, trích xuất bằng chứng Java (`v2.triage.evidence`), kiểm chứng trích dẫn & SHA-256 (`v2.triage.ollama`), chốt chặn `STALE_SOURCE` và hàng đợi SQLite (`v2.triage.store.ReviewStore`) được gọi trực tiếp từ gói `v2/triage`, `v2/baseline/fork`, và `v2/g1_integration` mà không sửa đổi tệp đã niêm phong.
-2. **Đọc không gây đột biến (Zero-Mutation Read):** Tất cả các endpoint `GET` mở `review.sqlite` qua URI chỉ-đọc `?mode=ro`, bảo đảm không thay đổi byte gốc và không sinh tệp journal trên các thư mục scan chỉ-đọc.
-3. **Bảo mật biên mạng & dữ liệu:**
+2. **Tập luật Java CWE-22/CWE-89 và ngữ cảnh nâng cao trong `v2/api`:**
+   - Mặc định dùng tập luật cục bộ `v2/api/rules/java_cwe22_cwe89.yml` (có thể ghi đè bằng `--rules-path` hoặc `NTK_RULES_PATH`), bật `taint_intrafile: true`, hỗ trợ nguồn Servlet/Spring/JAX-RS, sink SQL có ràng buộc kiểu để tránh dương tính giả `.execute()` phi-SQL và tránh báo nhầm `PreparedStatement`/`JdbcTemplate` dùng tham số `?`.
+   - Làm giàu ngữ cảnh phương thức Java cân bằng ngoặc (`v2/api/java_context_v2.py`) cho annotation Spring lồng ngoặc, đính kèm helper cùng tệp ở xa đã xác minh SHA-256, nén đoạn mã trùng lặp và giới hạn prompt `<= 32_000` byte trước khi chuyển cho `OllamaClient`.
+   - Bộ nhớ đệm tái sử dụng kết luận Qwen (`v2/api/qwen_cache.py`) **đã khóa an toàn (`SAFELY_DISABLED`)**: mặc định tắt (`NTK_ENABLE_QWEN_CACHE=0`), cấu hình bật cache bị từ chối rõ ràng và mọi phiên phân tích đều gọi Qwen cục bộ qua HTTP trực tiếp với raw capture từng lượt.
+3. **Đọc không gây đột biến (Zero-Mutation Read):** Tất cả các endpoint `GET` mở `review.sqlite` qua URI chỉ-đọc `?mode=ro`, kết hợp bộ nhớ đệm đọc `assessments.jsonl` khóa theo SHA-256 nội dung để phát hiện tức thời mọi thay đổi dù chỉ 1 byte trên đĩa mà không sinh tệp journal.
+4. **Bảo mật biên mạng & dữ liệu:**
    - Mặc định lắng nghe trên `127.0.0.1:8780` (hoặc IP riêng Tailscale `100.64.0.0/10` khi cấu hình tường minh).
    - Cấm tuyệt đối cổng `8765` và địa chỉ wildcard `0.0.0.0` mặc định.
    - Hạn chế `Access-Control-Allow-Origin` theo danh sách trắng cấu hình (`NTK_CORS_ORIGINS`), không dùng `*`.

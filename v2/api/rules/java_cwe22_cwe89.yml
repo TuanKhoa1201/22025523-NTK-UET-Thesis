@@ -1,0 +1,460 @@
+# NTK Thesis V2 - Backend Java Taint Ruleset (CWE-22 & CWE-89 Priority)
+# Local offline ruleset for OpenGrep taint mode; zero cloud registry access.
+# Designed for OpenGrep 1.25.0+ with controlled Java web sources, typed SQL sinks
+# (avoiding non-SQL .execute() false positives), parameterized SQL safety via
+# focus-metavariable, and conservative expression-level sanitizers.
+rules:
+  - id: ntk.api.java.cwe22.path-traversal
+    mode: taint
+    options:
+      taint_intrafile: true
+    languages:
+      - java
+    severity: ERROR
+    message: >-
+      [CWE-22] Untrusted HTTP or request input flows to a filesystem path sink; human security review required.
+    metadata:
+      cwe:
+        - "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      owasp:
+        - "A01:2021 - Broken Access Control"
+      category: security
+      technology:
+        - java
+      confidence: MEDIUM
+      provenance: "NTK V2 backend local taint ruleset for Java CWE-22"
+    pattern-sources:
+      # 1. Servlet / Jakarta HTTP request sources
+      - pattern-either:
+          - pattern: $REQ.getParameter(...)
+          - pattern: $REQ.getParameterValues(...)
+          - pattern: $REQ.getParameterMap()
+          - pattern: $REQ.getParameterNames()
+          - pattern: $REQ.getHeader(...)
+          - pattern: $REQ.getHeaders(...)
+          - pattern: $REQ.getHeaderNames()
+          - pattern: $REQ.getCookies()
+          - pattern: $REQ.getQueryString()
+          - pattern: $REQ.getPathInfo()
+          - pattern: $REQ.getRequestURI()
+          - pattern: $REQ.getRequestURL()
+          - pattern: $REQ.getServletPath()
+          - pattern: $REQ.getInputStream()
+          - pattern: $REQ.getReader()
+          - pattern: (org.springframework.web.multipart.MultipartFile $MF).getOriginalFilename()
+          - pattern: $MF.getOriginalFilename()
+      # 2. Spring MVC / JAX-RS annotated handler parameters
+      - patterns:
+          - pattern-either:
+              - pattern: "@RequestParam(...) $TYPE $VAR"
+              - pattern: "@RequestParam $TYPE $VAR"
+              - pattern: "@PathVariable(...) $TYPE $VAR"
+              - pattern: "@PathVariable $TYPE $VAR"
+              - pattern: "@RequestHeader(...) $TYPE $VAR"
+              - pattern: "@RequestHeader $TYPE $VAR"
+              - pattern: "@CookieValue(...) $TYPE $VAR"
+              - pattern: "@CookieValue $TYPE $VAR"
+              - pattern: "@RequestBody(...) $TYPE $VAR"
+              - pattern: "@RequestBody $TYPE $VAR"
+              - pattern: "@QueryParam(...) $TYPE $VAR"
+              - pattern: "@PathParam(...) $TYPE $VAR"
+              - pattern: "@HeaderParam(...) $TYPE $VAR"
+              - pattern: "@CookieParam(...) $TYPE $VAR"
+          - focus-metavariable: $VAR
+      # 3. Unannotated String parameters on Spring web mapping handlers (including throws clauses)
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  @GetMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @GetMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) throws $EX { ... }
+              - pattern: |
+                  @PostMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @PostMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) throws $EX { ... }
+              - pattern: |
+                  @PutMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @DeleteMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @PatchMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @RequestMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @RequestMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) throws $EX { ... }
+          - focus-metavariable: $VAR
+    pattern-propagators:
+      - pattern: $SB.append($FROM)
+        from: $FROM
+        to: $SB
+      - pattern: $OUT = java.nio.file.Paths.get($FROM)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = Paths.get($FROM)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = java.nio.file.Path.of($FROM, ...)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = Path.of($FROM, ...)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = java.nio.file.Paths.get($FROM).$M(...)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = Paths.get($FROM).$M(...)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = java.nio.file.Path.of($FROM).$M(...)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = Path.of($FROM).$M(...)
+        from: $FROM
+        to: $OUT
+      - pattern: $OUT = $BASE.resolve($FROM)
+        from: $FROM
+        to: $OUT
+      - pattern: $LIST.add($FROM)
+        from: $FROM
+        to: $LIST
+      - pattern: $LIST.add($IDX, $FROM)
+        from: $FROM
+        to: $LIST
+      - pattern: $MAP.put($KEY, $FROM)
+        from: $FROM
+        to: $MAP
+      - pattern: $MAP.put($FROM, $VAL)
+        from: $FROM
+        to: $MAP
+    pattern-sanitizers:
+      # Strictly conservative, expression-level numeric/UUID type conversions only.
+      # Basename extractors (FilenameUtils.getName / Path.getFileName) are intentionally NOT unconditional
+      # sanitizers because '..' survives basename extraction and can escape base directories via resolve().
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Short.parseShort(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: Boolean.parseBoolean(...)
+          - pattern: java.util.UUID.fromString(...)
+          - pattern: UUID.fromString(...)
+    pattern-sinks:
+      # Note: new File(...) and Paths.get(...) propagate taint into actual filesystem I/O sinks below
+      # so canonical-path guards placed between path construction and I/O remain visible in the flow.
+      - pattern-either:
+          - pattern: new java.io.FileInputStream(...)
+          - pattern: new java.io.FileOutputStream(...)
+          - pattern: new java.io.FileReader(...)
+          - pattern: new java.io.FileWriter(...)
+          - pattern: new FileInputStream(...)
+          - pattern: new FileOutputStream(...)
+          - pattern: new FileReader(...)
+          - pattern: new FileWriter(...)
+          - pattern: java.nio.file.Files.readAllBytes(...)
+          - pattern: java.nio.file.Files.readString(...)
+          - pattern: java.nio.file.Files.readAllLines(...)
+          - pattern: java.nio.file.Files.lines(...)
+          - pattern: java.nio.file.Files.newInputStream(...)
+          - pattern: java.nio.file.Files.newOutputStream(...)
+          - pattern: java.nio.file.Files.newBufferedReader(...)
+          - pattern: java.nio.file.Files.newBufferedWriter(...)
+          - pattern: java.nio.file.Files.delete(...)
+          - pattern: java.nio.file.Files.deleteIfExists(...)
+          - pattern: java.nio.file.Files.list(...)
+          - pattern: java.nio.file.Files.walk(...)
+          - pattern: java.nio.file.Files.createFile(...)
+          - pattern: java.nio.file.Files.createDirectory(...)
+          - pattern: java.nio.file.Files.createDirectories(...)
+          - pattern: Files.readAllBytes(...)
+          - pattern: Files.readString(...)
+          - pattern: Files.readAllLines(...)
+          - pattern: Files.lines(...)
+          - pattern: Files.newInputStream(...)
+          - pattern: Files.newOutputStream(...)
+          - pattern: Files.newBufferedReader(...)
+          - pattern: Files.newBufferedWriter(...)
+          - pattern: Files.delete(...)
+          - pattern: Files.deleteIfExists(...)
+          - pattern: Files.list(...)
+          - pattern: Files.walk(...)
+          - pattern: Files.createFile(...)
+          - pattern: Files.createDirectory(...)
+          - pattern: Files.createDirectories(...)
+          - pattern: (java.io.File $F).createNewFile()
+          - pattern: (java.io.File $F).delete()
+          - pattern: (java.io.File $F).renameTo(...)
+          - pattern: (java.io.File $F).mkdir()
+          - pattern: (java.io.File $F).mkdirs()
+          # Note: metadata existence pre-checks such as (java.io.File $F).exists(), Files.exists(),
+          # File.isFile(), and File.isDirectory() are intentionally excluded to avoid duplicate
+          # pre-check noise immediately preceding real filesystem read/write/delete/Zip-Slip sinks.
+      # Sinks where only the path/destination argument is a path traversal sink (not written content bytes)
+      - patterns:
+          - pattern-either:
+              - pattern: new java.io.RandomAccessFile($TARGET, ...)
+              - pattern: new RandomAccessFile($TARGET, ...)
+              - pattern: java.nio.file.Files.write($TARGET, ...)
+              - pattern: java.nio.file.Files.writeString($TARGET, ...)
+              - pattern: Files.write($TARGET, ...)
+              - pattern: Files.writeString($TARGET, ...)
+              - pattern: java.nio.file.Files.copy((java.nio.file.Path $TARGET), ...)
+              - pattern: java.nio.file.Files.copy($SRC, (java.nio.file.Path $TARGET), ...)
+              - pattern: Files.copy((java.nio.file.Path $TARGET), ...)
+              - pattern: Files.copy($SRC, (java.nio.file.Path $TARGET), ...)
+              - pattern: java.nio.file.Files.move((java.nio.file.Path $TARGET), ...)
+              - pattern: java.nio.file.Files.move($SRC, (java.nio.file.Path $TARGET), ...)
+              - pattern: Files.move((java.nio.file.Path $TARGET), ...)
+              - pattern: Files.move($SRC, (java.nio.file.Path $TARGET), ...)
+              - pattern: org.springframework.util.FileCopyUtils.copy($DATA, $TARGET)
+              - pattern: FileCopyUtils.copy($DATA, $TARGET)
+              - pattern: (org.springframework.web.multipart.MultipartFile $MF).transferTo($TARGET)
+              - pattern: (javax.servlet.ServletContext $CTX).getResourceAsStream($TARGET)
+              - pattern: (jakarta.servlet.ServletContext $CTX).getResourceAsStream($TARGET)
+              # Direct 1-arg Paths.get($TARGET) inside Files.* sinks (avoids OpenGrep 1.25.0 1-arg .get() taint drop)
+              - pattern: Files.readAllBytes(Paths.get($TARGET))
+              - pattern: Files.readString(Paths.get($TARGET))
+              - pattern: Files.readAllLines(Paths.get($TARGET))
+              - pattern: Files.lines(Paths.get($TARGET))
+              - pattern: Files.newInputStream(Paths.get($TARGET))
+              - pattern: Files.newOutputStream(Paths.get($TARGET))
+              - pattern: Files.newBufferedReader(Paths.get($TARGET))
+              - pattern: Files.newBufferedWriter(Paths.get($TARGET))
+              - pattern: Files.write(Paths.get($TARGET), ...)
+              - pattern: Files.writeString(Paths.get($TARGET), ...)
+              - pattern: Files.delete(Paths.get($TARGET))
+              - pattern: Files.deleteIfExists(Paths.get($TARGET))
+              - pattern: Files.list(Paths.get($TARGET))
+              - pattern: Files.walk(Paths.get($TARGET))
+              - pattern: Files.list($BASE.resolve(Paths.get($TARGET)))
+              - pattern: Files.list($BASE.resolve(Paths.get($TARGET).$M()))
+              - pattern: Files.readString($BASE.resolve(Paths.get($TARGET)))
+              - pattern: Files.readString($BASE.resolve(Paths.get($TARGET).$M()))
+              - pattern: Files.newInputStream($BASE.resolve(Paths.get($TARGET)))
+              - pattern: Files.newInputStream($BASE.resolve(Paths.get($TARGET).$M()))
+              - pattern: java.nio.file.Files.readAllBytes(java.nio.file.Paths.get($TARGET))
+              - pattern: java.nio.file.Files.readString(java.nio.file.Paths.get($TARGET))
+              - pattern: java.nio.file.Files.write(java.nio.file.Paths.get($TARGET), ...)
+              - pattern: java.nio.file.Files.writeString(java.nio.file.Paths.get($TARGET), ...)
+              - pattern: java.nio.file.Files.list(java.nio.file.Paths.get($TARGET))
+              - pattern: java.nio.file.Files.walk(java.nio.file.Paths.get($TARGET))
+          - focus-metavariable: $TARGET
+
+  - id: ntk.api.java.cwe89.sql-injection
+    mode: taint
+    options:
+      taint_intrafile: true
+    languages:
+      - java
+    severity: ERROR
+    message: >-
+      [CWE-89] Untrusted HTTP, request, or desktop UI input flows to a dynamic SQL query or execution sink; human security review required.
+    metadata:
+      cwe:
+        - "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      owasp:
+        - "A03:2021 - Injection"
+      category: security
+      technology:
+        - java
+      confidence: HIGH
+      provenance: "NTK V2 backend local taint ruleset for Java CWE-89"
+    pattern-sources:
+      # 1. Servlet / Jakarta HTTP request sources
+      - pattern-either:
+          - pattern: $REQ.getParameter(...)
+          - pattern: $REQ.getParameterValues(...)
+          - pattern: $REQ.getParameterMap()
+          - pattern: $REQ.getParameterNames()
+          - pattern: $REQ.getHeader(...)
+          - pattern: $REQ.getHeaders(...)
+          - pattern: $REQ.getHeaderNames()
+          - pattern: $REQ.getCookies()
+          - pattern: $REQ.getQueryString()
+          - pattern: $REQ.getPathInfo()
+          - pattern: $REQ.getRequestURI()
+          - pattern: $REQ.getRequestURL()
+          - pattern: $REQ.getServletPath()
+          - pattern: $REQ.getInputStream()
+          - pattern: $REQ.getReader()
+      # 2. Spring MVC / JAX-RS annotated handler parameters
+      - patterns:
+          - pattern-either:
+              - pattern: "@RequestParam(...) $TYPE $VAR"
+              - pattern: "@RequestParam $TYPE $VAR"
+              - pattern: "@PathVariable(...) $TYPE $VAR"
+              - pattern: "@PathVariable $TYPE $VAR"
+              - pattern: "@RequestHeader(...) $TYPE $VAR"
+              - pattern: "@RequestHeader $TYPE $VAR"
+              - pattern: "@CookieValue(...) $TYPE $VAR"
+              - pattern: "@CookieValue $TYPE $VAR"
+              - pattern: "@RequestBody(...) $TYPE $VAR"
+              - pattern: "@RequestBody $TYPE $VAR"
+              - pattern: "@QueryParam(...) $TYPE $VAR"
+              - pattern: "@PathParam(...) $TYPE $VAR"
+              - pattern: "@HeaderParam(...) $TYPE $VAR"
+              - pattern: "@CookieParam(...) $TYPE $VAR"
+          - focus-metavariable: $VAR
+      # 3. Unannotated String parameters on Spring web mapping handlers (including throws clauses)
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  @GetMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @GetMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) throws $EX { ... }
+              - pattern: |
+                  @PostMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @PostMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) throws $EX { ... }
+              - pattern: |
+                  @PutMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @DeleteMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @PatchMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @RequestMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) { ... }
+              - pattern: |
+                  @RequestMapping(...)
+                  public $RET $METHOD(..., String $VAR, ...) throws $EX { ... }
+          - focus-metavariable: $VAR
+      # 4. Desktop Swing / AWT text input sources (strictly typed to avoid matching custom app getText() helpers)
+      - pattern-either:
+          - pattern: (javax.swing.JTextField $C).getText()
+          - pattern: (javax.swing.JPasswordField $C).getPassword()
+          - pattern: (javax.swing.JPasswordField $C).getText()
+          - pattern: (javax.swing.JTextArea $C).getText()
+          - pattern: (javax.swing.JTextPane $C).getText()
+          - pattern: (javax.swing.JEditorPane $C).getText()
+          - pattern: (javax.swing.text.JTextComponent $C).getText()
+          - pattern: (java.awt.TextField $C).getText()
+          - pattern: (java.awt.TextArea $C).getText()
+          - pattern: (java.awt.TextComponent $C).getText()
+    pattern-propagators:
+      - pattern: $SB.append($FROM)
+        from: $FROM
+        to: $SB
+      - pattern: $LIST.add($FROM)
+        from: $FROM
+        to: $LIST
+      - pattern: $LIST.add($IDX, $FROM)
+        from: $FROM
+        to: $LIST
+      - pattern: $MAP.put($KEY, $FROM)
+        from: $FROM
+        to: $MAP
+      - pattern: $MAP.put($FROM, $VAL)
+        from: $FROM
+        to: $MAP
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Short.parseShort(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: Boolean.parseBoolean(...)
+          - pattern: java.util.UUID.fromString(...)
+          - pattern: UUID.fromString(...)
+          # Typed primitive numeric/boolean ResultSet getters cannot carry SQL injection syntax
+          # (unlike ResultSet.getString(...), which stays tainted for second-order SQLi flows).
+          - pattern: (java.sql.ResultSet $RS).getInt(...)
+          - pattern: (java.sql.ResultSet $RS).getLong(...)
+          - pattern: (java.sql.ResultSet $RS).getShort(...)
+          - pattern: (java.sql.ResultSet $RS).getByte(...)
+          - pattern: (java.sql.ResultSet $RS).getDouble(...)
+          - pattern: (java.sql.ResultSet $RS).getFloat(...)
+          - pattern: (java.sql.ResultSet $RS).getBoolean(...)
+    pattern-sinks:
+      # Typed JDBC Statement / Connection / Spring JdbcTemplate / JPA / Hibernate sinks.
+      # Using focus-metavariable: $SQL ensures bound parameters (`?` + setString / JdbcTemplate args)
+      # do NOT trigger false positives, and typed receivers prevent non-SQL .execute() false positives.
+      - patterns:
+          - pattern-either:
+              - pattern: (java.sql.Statement $STMT).executeQuery($SQL)
+              - pattern: (java.sql.Statement $STMT).executeUpdate($SQL, ...)
+              - pattern: (java.sql.Statement $STMT).execute($SQL, ...)
+              - pattern: (java.sql.Statement $STMT).executeLargeUpdate($SQL, ...)
+              - pattern: (java.sql.Statement $STMT).addBatch($SQL)
+              - pattern: (java.sql.Connection $CONN).prepareStatement($SQL, ...)
+              - pattern: (java.sql.Connection $CONN).prepareCall($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).execute($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).query($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).queryForObject($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).queryForList($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).queryForMap($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).queryForRowSet($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).update($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $JT).batchUpdate($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).execute($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).query($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).queryForObject($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).queryForList($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).queryForMap($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).queryForRowSet($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).update($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcOperations $JT).batchUpdate($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).query($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).queryForObject($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).queryForList($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).queryForMap($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).queryForRowSet($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).update($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).batchUpdate($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate $JT).execute($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).query($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).queryForObject($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).queryForList($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).queryForMap($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).queryForRowSet($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).update($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).batchUpdate($SQL, ...)
+              - pattern: (org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations $JT).execute($SQL, ...)
+              - pattern: (javax.persistence.EntityManager $EM).createNativeQuery($SQL, ...)
+              - pattern: (javax.persistence.EntityManager $EM).createQuery($SQL, ...)
+              - pattern: (jakarta.persistence.EntityManager $EM).createNativeQuery($SQL, ...)
+              - pattern: (jakarta.persistence.EntityManager $EM).createQuery($SQL, ...)
+              - pattern: (org.hibernate.Session $SESS).createNativeQuery($SQL, ...)
+              - pattern: (org.hibernate.Session $SESS).createQuery($SQL, ...)
+              - pattern: (org.hibernate.Session $SESS).createSQLQuery($SQL, ...)
+          - focus-metavariable: $SQL
+      # Narrowed fallback ONLY for explicit JdbcTemplate / JdbcOperations receiver identifiers (e.g. inherited
+      # superfields or cross-file static holders whose type OpenGrep OSS intrafile analysis cannot resolve).
+      # Broad `*jdbc*` and untyped `queryFor*` patterns are intentionally omitted so non-SQL receivers such as
+      # `jdbcHealth.update(...)` or `index.queryForList(...)` never produce false positives.
+      # Limitation: cross-file fields not named `*jdbcTemplate`/`*jdbcOperations` require explicit typing/import.
+      - patterns:
+          - pattern-either:
+              - pattern: $JT.execute($SQL, ...)
+              - pattern: $JT.query($SQL, ...)
+              - pattern: $JT.queryForObject($SQL, ...)
+              - pattern: $JT.queryForList($SQL, ...)
+              - pattern: $JT.queryForMap($SQL, ...)
+              - pattern: $JT.queryForRowSet($SQL, ...)
+              - pattern: $JT.update($SQL, ...)
+              - pattern: $JT.batchUpdate($SQL, ...)
+          - metavariable-regex:
+              metavariable: $JT
+              regex: "(?i)^(?:[A-Za-z0-9_]+\\.)*[A-Za-z0-9_]*jdbc(?:template|operations)$"
+          - focus-metavariable: $SQL

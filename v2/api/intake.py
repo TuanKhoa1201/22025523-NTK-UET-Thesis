@@ -10,6 +10,7 @@ Defends against:
 from __future__ import annotations
 
 import io
+import logging
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -24,6 +25,8 @@ import zipfile
 
 from v2.api.config import IntakeLimits
 from v2.triage.evidence import digest
+
+_LOG = logging.getLogger("v2.api.intake")
 
 _GITHUB_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$")
 _COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -150,14 +153,22 @@ def verify_extracted_java_tree(source_root: Path, limits: IntakeLimits, *, empty
         parent_path = Path(parent)
         for dname in dirs:
             dpath = parent_path / dname
-            if dpath.is_symlink() or (hasattr(dpath, "is_junction") and dpath.is_junction()):
+            try:
+                dst = os.lstat(dpath)
+            except OSError as exc:
+                raise IntakeError("SOURCE_TREE_IO_ERROR", f"Không thể kiểm tra thư mục nguồn: {dname}") from exc
+            if _describe_reparse_or_symlink(dst) is not None or dpath.is_symlink() or (hasattr(dpath, "is_junction") and dpath.is_junction()):
                 raise IntakeError("SYMLINK_ESCAPE_DETECTED", f"Thư mục nguồn chứa liên kết tượng trưng/junction bị cấm: {dname}")
             resolved_dir = dpath.resolve(strict=True)
             if not resolved_dir.is_relative_to(resolved_root):
                 raise IntakeError("SYMLINK_ESCAPE_DETECTED", f"Thư mục nguồn thoát khỏi gốc cho phép: {dname}")
         for fname in files:
             fpath = parent_path / fname
-            if fpath.is_symlink() or (hasattr(fpath, "is_junction") and fpath.is_junction()):
+            try:
+                fst = os.lstat(fpath)
+            except OSError as exc:
+                raise IntakeError("SOURCE_TREE_IO_ERROR", f"Không thể kiểm tra tệp nguồn: {fname}") from exc
+            if _describe_reparse_or_symlink(fst) is not None or fpath.is_symlink() or (hasattr(fpath, "is_junction") and fpath.is_junction()):
                 raise IntakeError("SYMLINK_ESCAPE_DETECTED", f"Tệp nguồn là liên kết tượng trưng bị cấm: {fname}")
             resolved_file = fpath.resolve(strict=True)
             if not resolved_file.is_relative_to(resolved_root) or not resolved_file.is_file():
@@ -339,6 +350,15 @@ class _GitStepTimeout(Exception):
         self.step = step
         self.cleanup = cleanup
         self.stderr_bytes = stderr_bytes
+
+
+class _GitStepCancelled(Exception):
+    """The step was cancelled cleanly (e.g., server shutdown) and its process tree was finalized."""
+
+    def __init__(self, step: str, cleanup: dict):
+        super().__init__(step)
+        self.step = step
+        self.cleanup = cleanup
 
 
 _GIT_STEP_TIMEOUT_CODES = {
@@ -528,13 +548,21 @@ def _win_resume_suspended_process(pid: int) -> bool:
 
 
 class _GitStepCleanupFailed(Exception):
-    """The step's own process finished, but termination of its whole tree could not be verified."""
+    """The step's own process finished or was cancelled, but termination of its whole tree could not be verified."""
 
-    def __init__(self, step: str, cleanup: dict, returncode: int | None):
+    def __init__(
+        self,
+        step: str,
+        cleanup: dict,
+        returncode: int | None,
+        *,
+        primary_outcome: str | None = None,
+    ):
         super().__init__(step)
         self.step = step
         self.cleanup = cleanup
         self.returncode = returncode
+        self.primary_outcome = primary_outcome
 
 
 class _GitStepOutputLimit(Exception):
@@ -663,13 +691,15 @@ def _transition(entry: dict, state: str, *, terminal: bool = False) -> bool:
         try:
             _set_state(entry, state)
             return True
-        except Exception:
+        except BaseException as exc:
             _REGISTRY_FAULT = True
             if terminal:
                 try:
                     entry["state_unverified"] = True
                 except Exception:
                     pass
+            if not isinstance(exc, Exception):
+                raise
             return False
 
 
@@ -724,26 +754,109 @@ def _finalize_tree(entry: dict, step: str, deadline: float) -> dict:
     except Exception:
         root_exited = False
     cleanup["root_exited"] = bool(root_exited)
+    cleanup["children_exited"] = bool(remaining == 0)
     cleanup["remaining_processes"] = remaining
     handle_closed = _close_tree_handle(entry) if remaining == 0 else False
     cleanup["handle_closed"] = handle_closed
-    cleanup["clean"] = bool(root_exited and remaining == 0 and handle_closed)
-    if cleanup["clean"]:
-        if _transition(entry, _STATE_CLOSED, terminal=True):
+    cleanup["job_closed"] = bool(handle_closed)
+    raw_clean = bool(root_exited and remaining == 0 and handle_closed)
+    if raw_clean:
+        trans_ok = _transition(entry, _STATE_CLOSED, terminal=True)
+        if trans_ok:
             _unregister(entry)
+            cleanup["registry_state"] = _STATE_CLOSED
+            cleanup["registry_safe"] = not _REGISTRY_FAULT
+            cleanup["clean"] = not _REGISTRY_FAULT
+        else:
+            cleanup["registry_state"] = "FAULT"
+            cleanup["registry_safe"] = False
+            cleanup["clean"] = False
     else:
-        _transition(entry, _STATE_PENDING, terminal=True)
+        trans_ok = _transition(entry, _STATE_PENDING, terminal=True)
+        cleanup["registry_state"] = _STATE_PENDING if trans_ok else "FAULT"
+        cleanup["registry_safe"] = bool(trans_ok and not _REGISTRY_FAULT)
+        cleanup["clean"] = False
     return cleanup
 
 
 def _finalize_tree_safe(entry: dict, step: str, deadline: float) -> dict:
-    """`_finalize_tree` that never raises: an exception inside cleanup marks the (already registered)
-    entry PENDING and is reported as safe metadata, so the caller keeps its own primary error."""
+    """`_finalize_tree` that never raises on `Exception`: marks unverified/interrupted entries PENDING
+    and still ensures `PENDING` fail-closed state before propagating `BaseException` (`SystemExit`/`KeyboardInterrupt`)."""
     try:
         return _finalize_tree(entry, step, deadline)
-    except Exception as exc:
-        _transition(entry, _STATE_PENDING, terminal=True)
-        return {"step": step, "clean": False, "cleanup_error": type(exc).__name__}
+    except BaseException as exc:
+        trans_ok = _transition(entry, _STATE_PENDING, terminal=True)
+        if not isinstance(exc, Exception):
+            raise
+        return {
+            "step": step,
+            "clean": False,
+            "root_exited": False,
+            "children_exited": False,
+            "remaining_processes": None,
+            "handle_closed": False,
+            "job_closed": False,
+            "registry_state": _STATE_PENDING if trans_ok else "FAULT",
+            "registry_safe": bool(trans_ok and not _REGISTRY_FAULT),
+            "cleanup_error": type(exc).__name__,
+        }
+
+
+def inspect_lingering_registry_state(*, step_prefix: str | None = None) -> dict:
+    """Read-only snapshot of lingering process registry state (never touches or kills other jobs)."""
+    with _LINGERING_LOCK:
+        matching = [
+            e for e in _LINGERING_GIT_TREES
+            if step_prefix is None or str(e.get("step") or "").startswith(step_prefix)
+        ]
+        blocking = [e for e in matching if _is_blocking(e)]
+        non_closed = [
+            e for e in matching
+            if e.get("state") != _STATE_CLOSED or e.get("state_unverified") is True
+        ]
+        any_blocking = any(_is_blocking(e) for e in _LINGERING_GIT_TREES)
+        live_process_count = 0
+        for e in non_closed:
+            alive = False
+            root = e.get("proc")
+            if root is not None:
+                try:
+                    if root.poll() is None:
+                        alive = True
+                except Exception:
+                    alive = True
+            if not alive and e.get("kind") == "job" and e.get("job") is not None and not e.get("job_closed"):
+                try:
+                    active_members = _win_job_active_processes(e["job"])
+                    if active_members is None or active_members > 0:
+                        alive = True
+                except Exception:
+                    alive = True
+            if alive:
+                live_process_count += 1
+
+        if _REGISTRY_FAULT:
+            reg_state = "FAULT"
+        elif blocking:
+            reg_state = _STATE_PENDING
+        elif non_closed:
+            states = [str(e.get("state") or _STATE_RUNNING) for e in non_closed]
+            reg_state = _STATE_RUNNING if _STATE_RUNNING in states else states[0]
+        elif matching:
+            reg_state = str(matching[0].get("state") or _STATE_CLOSED)
+        else:
+            reg_state = _STATE_CLOSED
+        return {
+            "registry_fault": bool(_REGISTRY_FAULT),
+            "blocking_count": len(blocking),
+            "non_closed_count": len(non_closed),
+            "matching_count": len(matching),
+            "live_process_count": live_process_count,
+            "active_states": sorted({str(e.get("state") or _STATE_PENDING) for e in non_closed}),
+            "any_blocking": bool(any_blocking),
+            "registry_state": reg_state,
+            "registry_safe": not _REGISTRY_FAULT,
+        }
 
 
 def _reconcile_lingering_git_jobs(budget_seconds: float = 2.0) -> int:
@@ -824,6 +937,7 @@ def _run_git_step(
     timeout_seconds: float,
     env: dict,
     max_output_bytes: int | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> subprocess.CompletedProcess:
     """Run one external step (Git or OpenGrep) with a real wall-clock bound over its whole, provably owned
     process tree.
@@ -866,6 +980,9 @@ def _run_git_step(
         ) from None
 
     out_f = err_f = None
+    cleanup: dict | None = None
+    finalized = False
+    primary_exc: BaseException | None = None
     try:
         if is_nt:
             from ctypes import wintypes
@@ -895,7 +1012,8 @@ def _run_git_step(
         if not is_nt:
             entry["pgid"] = proc.pid
 
-        # From here on the process exists: every path below reaches _finalize_tree_safe.
+        # From here on the process exists: EVERY exit path (including BaseException such as
+        # SystemExit/KeyboardInterrupt) MUST reach `_finalize_tree_safe` before leaving `_run_git_step`.
         outcome, info = "run", None
         try:
             if is_nt:
@@ -927,6 +1045,9 @@ def _run_git_step(
                     if check:
                         outcome, info = "output", check
                         break
+                    if cancel_event is not None and cancel_event.is_set():
+                        outcome = "cancelled"
+                        break
                     if time.monotonic() >= run_deadline:
                         outcome = "timeout"
                         break
@@ -937,6 +1058,12 @@ def _run_git_step(
             outcome, info = "internal", type(exc).__name__
 
         cleanup = _finalize_tree_safe(entry, step, time.monotonic() + CLEANUP_BUDGET_SECONDS)
+        finalized = True
+
+        if outcome == "cancelled":
+            if not cleanup.get("clean"):
+                raise _GitStepCleanupFailed(step, cleanup, proc.returncode, primary_outcome="cancelled")
+            raise _GitStepCancelled(step, cleanup)
 
         if outcome == "pending":
             raise IntakeError(
@@ -972,13 +1099,64 @@ def _run_git_step(
         except _OutputDecision as dec:
             raise _GitStepOutputLimit(step, dec.stream, dec.size, limit, cleanup, verified=(dec.kind == "over")) from None
         return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+    except BaseException as exc:
+        primary_exc = exc
+        if entry["proc"] is not None and not finalized:
+            try:
+                cleanup = _finalize_tree_safe(entry, step, time.monotonic() + CLEANUP_BUDGET_SECONDS)
+                finalized = True
+            except BaseException:
+                _transition(entry, _STATE_PENDING, terminal=True)
+        if isinstance(cleanup, dict) and getattr(exc, "cleanup", None) is None:
+            try:
+                exc.cleanup = cleanup  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        raise
     finally:
-        for fh in (out_f, err_f):
+        if entry["proc"] is not None and not finalized:
+            try:
+                cleanup = _finalize_tree_safe(entry, step, time.monotonic() + CLEANUP_BUDGET_SECONDS)
+                finalized = True
+            except BaseException:
+                _transition(entry, _STATE_PENDING, terminal=True)
+
+        stream_close_errors: list[dict[str, Any]] = []
+        pending_base_exc: BaseException | None = None
+        for stream_name, fh in (("stdout", out_f), ("stderr", err_f)):
             if fh is not None:
                 try:
                     fh.close()
-                except OSError:
-                    pass
+                except BaseException as close_exc:
+                    # Always close remaining streams and record close failures without masking a primary
+                    # cleanup failure; non-Exception BaseException (e.g. KeyboardInterrupt) is re-raised
+                    # below ONLY if process cleanup was clean and no higher-priority cleanup failure exists.
+                    is_base_exc = not isinstance(close_exc, Exception)
+                    stream_close_errors.append(
+                        {
+                            "stream": stream_name,
+                            "error_type": type(close_exc).__name__,
+                            "is_base_exception": is_base_exc,
+                        }
+                    )
+                    _LOG.warning(
+                        "Auxiliary %s temp stream close failed for step %s (%s); primary cleanup state preserved.",
+                        stream_name,
+                        step,
+                        type(close_exc).__name__,
+                    )
+                    if is_base_exc and pending_base_exc is None:
+                        pending_base_exc = close_exc
+        if stream_close_errors:
+            if isinstance(cleanup, dict):
+                cleanup["stream_close_errors"] = list(stream_close_errors)
+            exc_cleanup = getattr(primary_exc, "cleanup", None) if primary_exc is not None else None
+            if isinstance(exc_cleanup, dict):
+                exc_cleanup["stream_close_errors"] = list(stream_close_errors)
+            exc_details = getattr(primary_exc, "details", None) if primary_exc is not None else None
+            if isinstance(exc_details, dict) and isinstance(exc_details.get("process_cleanup"), dict):
+                exc_details["process_cleanup"]["stream_close_errors"] = list(stream_close_errors)
+
         if entry["proc"] is None:
             # No process was created: the owner holds at most an empty Job. Close it once and check the
             # result; a failed/unverified close keeps the entry PENDING for reconciliation, which re-checks
@@ -998,6 +1176,530 @@ def _run_git_step(
             else:
                 _transition(entry, _STATE_PENDING, terminal=True)
 
+        if pending_base_exc is not None:
+            cleanup_failed = (
+                isinstance(primary_exc, _GitStepCleanupFailed)
+                or (isinstance(cleanup, dict) and cleanup.get("clean") is False)
+            )
+            if cleanup_failed or (primary_exc is not None and not isinstance(primary_exc, Exception)):
+                if primary_exc is not None:
+                    try:
+                        primary_exc.stream_close_interrupt = pending_base_exc  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
+                    if primary_exc.__cause__ is None and pending_base_exc is not primary_exc:
+                        try:
+                            primary_exc.__cause__ = pending_base_exc
+                        except Exception:
+                            pass
+            else:
+                if isinstance(cleanup, dict) and getattr(pending_base_exc, "cleanup", None) is None:
+                    try:
+                        pending_base_exc.cleanup = cleanup  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
+                raise pending_base_exc
+
+
+_WIN_FILE_ATTRIBUTE_REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+_WIN_FILE_ATTRIBUTE_READONLY = getattr(stat, "FILE_ATTRIBUTE_READONLY", 0x1)
+_WIN_REPARSE_TAG_MOUNT_POINT = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", 0xA0000003)
+_WIN_REPARSE_TAG_SYMLINK = getattr(stat, "IO_REPARSE_TAG_SYMLINK", 0xA000000C)
+
+
+class _UnsafeCleanupPathError(OSError):
+    """Fail-closed error raised when a cleanup target is a link/reparse point or escapes workspace bounds."""
+
+    def __init__(
+        self,
+        reason: str,
+        message: str,
+        *,
+        reparse_kind: str | None = None,
+        target_rel: str | None = None,
+    ):
+        super().__init__(message)
+        self.reason = reason
+        self.reparse_kind = reparse_kind
+        self.target_rel = target_rel
+
+
+def _describe_reparse_or_symlink(st: os.stat_result) -> str | None:
+    """Return a non-None kind tag when an `os.lstat` result represents a symlink, junction, or reparse point."""
+    if stat.S_ISLNK(st.st_mode):
+        return "SYMLINK"
+    if os.name == "nt":
+        attrs = getattr(st, "st_file_attributes", 0)
+        if attrs & _WIN_FILE_ATTRIBUTE_REPARSE_POINT:
+            tag = getattr(st, "st_reparse_tag", 0)
+            if tag == _WIN_REPARSE_TAG_MOUNT_POINT:
+                return "NTFS_JUNCTION"
+            if tag == _WIN_REPARSE_TAG_SYMLINK:
+                return "NTFS_SYMLINK"
+            return f"NTFS_REPARSE_POINT_{hex(tag)}"
+    return None
+
+
+def _is_norm_within(child_abs: str, parent_abs: str, *, allow_equal: bool = False) -> bool:
+    child_norm = os.path.normcase(os.path.normpath(child_abs))
+    parent_norm = os.path.normcase(os.path.normpath(parent_abs))
+    if child_norm == parent_norm:
+        return allow_equal
+    sep = os.sep
+    prefix = parent_norm if parent_norm.endswith(sep) else (parent_norm + sep)
+    return child_norm.startswith(prefix)
+
+
+def _validate_cleanup_target(root: Path, workspace_root: Path | None = None) -> tuple[Path, str]:
+    """Validate that `root` is a concrete, non-ambiguous path strictly contained in `workspace_root` (if given)."""
+    if not isinstance(root, (Path, os.PathLike)):
+        raise _UnsafeCleanupPathError("INVALID_PATH_TYPE", "Đường dẫn dọn dẹp không hợp lệ.")
+    raw_str = os.fspath(root)
+    if not isinstance(raw_str, str) or not raw_str.strip() or "\x00" in raw_str:
+        raise _UnsafeCleanupPathError("AMBIGUOUS_PATH", "Đường dẫn dọn dẹp rỗng hoặc chứa ký tự không hợp lệ.")
+    raw_path = Path(raw_str)
+    if ".." in raw_path.parts:
+        raise _UnsafeCleanupPathError("AMBIGUOUS_PATH", "Từ chối đường dẫn dọn dẹp có thành phần '..' mơ hồ.")
+
+    abs_str = os.path.abspath(raw_str)
+    abs_path = Path(abs_str)
+    if abs_path == abs_path.parent:
+        raise _UnsafeCleanupPathError("ROOT_PATH_FORBIDDEN", "Từ chối thao tác xóa trên thư mục gốc hệ thống tệp.")
+
+    if workspace_root is not None:
+        ws_raw = os.fspath(workspace_root)
+        if not isinstance(ws_raw, str) or not ws_raw.strip() or "\x00" in ws_raw or ".." in Path(ws_raw).parts:
+            raise _UnsafeCleanupPathError("INVALID_WORKSPACE_ROOT", "Thư mục gốc workspace không hợp lệ.")
+        ws_abs = Path(os.path.abspath(ws_raw))
+        try:
+            ws_st = os.lstat(ws_abs)
+        except OSError as exc:
+            raise _UnsafeCleanupPathError(
+                "WORKSPACE_UNVERIFIABLE",
+                f"Không thể xác minh thư mục workspace: {type(exc).__name__}",
+            ) from exc
+        ws_reparse = _describe_reparse_or_symlink(ws_st)
+        if ws_reparse is not None or not stat.S_ISDIR(ws_st.st_mode):
+            raise _UnsafeCleanupPathError(
+                "WORKSPACE_UNSAFE_ROOT",
+                "Thư mục gốc workspace không phải thư mục thường hợp lệ.",
+                reparse_kind=ws_reparse,
+            )
+        ws_real = ws_abs.resolve(strict=True)
+        ws_real_str = str(ws_real)
+        if not _is_norm_within(abs_str, ws_real_str, allow_equal=False):
+            raise _UnsafeCleanupPathError("OUTSIDE_WORKSPACE", "Đường dẫn mục tiêu thoát khỏi workspace repository.")
+        rel_to_ws = Path(os.path.relpath(abs_str, ws_real_str))
+        if not rel_to_ws.parts or ".." in rel_to_ws.parts:
+            raise _UnsafeCleanupPathError("OUTSIDE_WORKSPACE", "Đường dẫn mục tiêu không nằm trong workspace repository.")
+        cur = ws_real
+        for part in rel_to_ws.parts[:-1]:
+            cur = cur / part
+            try:
+                pst = os.lstat(cur)
+            except OSError as exc:
+                raise _UnsafeCleanupPathError(
+                    "PARENT_UNVERIFIABLE",
+                    f"Không thể xác minh thư mục cha trong workspace: {type(exc).__name__}",
+                ) from exc
+            p_reparse = _describe_reparse_or_symlink(pst)
+            if p_reparse is not None:
+                raise _UnsafeCleanupPathError(
+                    "PARENT_SYMLINK_OR_JUNCTION",
+                    f"Thư mục cha trong workspace là liên kết bị cấm ({p_reparse}).",
+                    reparse_kind=p_reparse,
+                    target_rel=cur.relative_to(ws_real).as_posix(),
+                )
+            if not stat.S_ISDIR(pst.st_mode):
+                raise _UnsafeCleanupPathError("PARENT_NOT_DIRECTORY", "Thành phần cha trong workspace không phải thư mục.")
+        parent_real = abs_path.parent.resolve(strict=True)
+        if not _is_norm_within(str(parent_real), ws_real_str, allow_equal=True):
+            raise _UnsafeCleanupPathError("PARENT_OUTSIDE_WORKSPACE", "Thư mục cha thực tế nằm ngoài workspace repository.")
+        target_safe = parent_real / abs_path.name
+        return target_safe, str(target_safe)
+
+    return abs_path, abs_str
+
+
+def _clear_readonly_if_needed(path: Path, expected_root_abs: str, *, allow_equal_root: bool) -> bool:
+    """Clear read-only bit only on a verified non-reparse regular file/dir strictly within expected_root_abs."""
+    path_abs = os.path.abspath(str(path))
+    if not _is_norm_within(path_abs, expected_root_abs, allow_equal=allow_equal_root):
+        raise _UnsafeCleanupPathError("OUTSIDE_CLEANUP_ROOT", "Từ chối thay đổi quyền đối tượng ngoài phạm vi dọn dẹp.")
+    st = os.lstat(path)
+    reparse_kind = _describe_reparse_or_symlink(st)
+    if reparse_kind is not None:
+        raise _UnsafeCleanupPathError(
+            "REPARSE_POINT_FORBIDDEN",
+            f"Từ chối thay đổi quyền trên liên kết hoặc reparse point ({reparse_kind}).",
+            reparse_kind=reparse_kind,
+        )
+    if not (stat.S_ISREG(st.st_mode) or stat.S_ISDIR(st.st_mode)):
+        raise _UnsafeCleanupPathError("SPECIAL_FILE_FORBIDDEN", "Từ chối thay đổi quyền trên tệp đặc biệt.")
+    if os.name == "nt":
+        is_ro = bool(getattr(st, "st_file_attributes", 0) & _WIN_FILE_ATTRIBUTE_READONLY)
+    else:
+        is_ro = not bool(st.st_mode & stat.S_IWUSR)
+    if not is_ro:
+        return False
+    mode = stat.S_IWRITE | stat.S_IREAD
+    if stat.S_ISDIR(st.st_mode) and os.name != "nt":
+        mode |= stat.S_IXUSR
+    os.chmod(path, mode)
+    return True
+
+
+def _scan_tree_strict_no_reparse(root_path: Path, root_abs: str) -> list[tuple[Path, bool]]:
+    """Pre-validate all entries under `root_path` via non-following os.lstat before mutating anything.
+
+    Returns bottom-up `(path, is_dir)` pairs strictly inside `root_abs`.
+    """
+    to_delete: list[tuple[Path, bool]] = []
+    stack: list[tuple[Path, bool]] = [(root_path, False)]
+    while stack:
+        current, expanded = stack.pop()
+        cur_abs = os.path.abspath(str(current))
+        if not _is_norm_within(cur_abs, root_abs, allow_equal=True):
+            raise _UnsafeCleanupPathError("OUTSIDE_CLEANUP_ROOT", "Phát hiện đường dẫn thoát khỏi gốc dọn dẹp.")
+        if expanded:
+            to_delete.append((current, True))
+            continue
+
+        st = os.lstat(current)
+        reparse_kind = _describe_reparse_or_symlink(st)
+        if reparse_kind is not None:
+            rel = Path(os.path.relpath(cur_abs, root_abs)).as_posix()
+            raise _UnsafeCleanupPathError(
+                "UNSAFE_LINK_IN_METADATA",
+                f"Phát hiện liên kết hoặc reparse point bị cấm trong metadata ({reparse_kind}): {rel}",
+                reparse_kind=reparse_kind,
+                target_rel=rel,
+            )
+        if stat.S_ISDIR(st.st_mode):
+            stack.append((current, True))
+            with os.scandir(current) as it:
+                children = sorted(it, key=lambda e: e.name)
+            for entry in children:
+                child_path = current / entry.name
+                child_abs = os.path.abspath(str(child_path))
+                if not _is_norm_within(child_abs, root_abs, allow_equal=False):
+                    raise _UnsafeCleanupPathError("OUTSIDE_CLEANUP_ROOT", "Phát hiện mục con thoát khỏi gốc dọn dẹp.")
+                cst = os.lstat(child_path)
+                c_reparse = _describe_reparse_or_symlink(cst)
+                if c_reparse is not None:
+                    rel = Path(os.path.relpath(child_abs, root_abs)).as_posix()
+                    raise _UnsafeCleanupPathError(
+                        "UNSAFE_LINK_IN_METADATA",
+                        f"Phát hiện liên kết hoặc reparse point bị cấm trong metadata ({c_reparse}): {rel}",
+                        reparse_kind=c_reparse,
+                        target_rel=rel,
+                    )
+                if stat.S_ISDIR(cst.st_mode):
+                    stack.append((child_path, False))
+                elif stat.S_ISREG(cst.st_mode):
+                    to_delete.append((child_path, False))
+                else:
+                    rel = Path(os.path.relpath(child_abs, root_abs)).as_posix()
+                    raise _UnsafeCleanupPathError(
+                        "SPECIAL_FILE_IN_METADATA",
+                        f"Phát hiện loại tệp đặc biệt bị cấm trong metadata: {rel}",
+                        target_rel=rel,
+                    )
+        elif stat.S_ISREG(st.st_mode):
+            to_delete.append((current, False))
+        else:
+            raise _UnsafeCleanupPathError("SPECIAL_FILE_IN_METADATA", "Phát hiện loại tệp đặc biệt bị cấm.")
+    return to_delete
+
+
+def _rmtree_readonly_safe(root: Path, *, workspace_root: Path | None = None) -> None:
+    """Fail-closed removal of a directory tree (including Windows read-only git packfiles).
+
+    Invariants:
+    - Validates non-ambiguous path bounds (and strict containment in `workspace_root` when given).
+    - Never follows symlinks, NTFS junctions, or reparse points; rejects them fail-closed.
+    - Never uses uncontrolled recursive chmod; clears read-only only on verified regular entries
+      strictly inside `root` when a deletion raises PermissionError.
+    - Never swallows deletion, permission, or I/O errors.
+    - Post-verifies absence via non-following `os.lstat` before returning.
+    """
+    target_path, target_abs = _validate_cleanup_target(root, workspace_root=workspace_root)
+    try:
+        root_st = os.lstat(target_path)
+    except FileNotFoundError:
+        return
+
+    root_reparse = _describe_reparse_or_symlink(root_st)
+    if root_reparse is not None:
+        raise _UnsafeCleanupPathError(
+            "ROOT_REPARSE_OR_SYMLINK",
+            f"Từ chối dọn dẹp liên kết hoặc reparse point tại gốc ({root_reparse}): {target_path.name}",
+            reparse_kind=root_reparse,
+            target_rel=target_path.name,
+        )
+    if not (stat.S_ISDIR(root_st.st_mode) or stat.S_ISREG(root_st.st_mode)):
+        raise _UnsafeCleanupPathError("ROOT_SPECIAL_FILE", f"Từ chối dọn dẹp đối tượng đặc biệt: {target_path.name}")
+
+    entries = _scan_tree_strict_no_reparse(target_path, target_abs)
+
+    for entry_path, is_dir in entries:
+        entry_abs = os.path.abspath(str(entry_path))
+        if not _is_norm_within(entry_abs, target_abs, allow_equal=True):
+            raise _UnsafeCleanupPathError("OUTSIDE_CLEANUP_ROOT", "Đường dẫn xóa thoát khỏi gốc dọn dẹp.")
+        try:
+            st = os.lstat(entry_path)
+        except FileNotFoundError:
+            continue
+        reparse_kind = _describe_reparse_or_symlink(st)
+        if reparse_kind is not None:
+            raise _UnsafeCleanupPathError(
+                "TOCTOU_REPARSE_DETECTED",
+                f"Phát hiện liên kết hoặc reparse point phát sinh khi xóa ({reparse_kind}).",
+                reparse_kind=reparse_kind,
+            )
+        op = os.rmdir if is_dir else os.unlink
+        try:
+            op(entry_path)
+        except PermissionError:
+            cleared = _clear_readonly_if_needed(entry_path, target_abs, allow_equal_root=True)
+            if not cleared and os.name != "nt" and entry_path != target_path:
+                _clear_readonly_if_needed(entry_path.parent, target_abs, allow_equal_root=True)
+            st_retry = os.lstat(entry_path)
+            retry_reparse = _describe_reparse_or_symlink(st_retry)
+            if retry_reparse is not None:
+                raise _UnsafeCleanupPathError(
+                    "TOCTOU_REPARSE_DETECTED",
+                    f"Phát hiện liên kết hoặc reparse point trước khi thử xóa lại ({retry_reparse}).",
+                    reparse_kind=retry_reparse,
+                )
+            op(entry_path)
+
+    try:
+        rem_st = os.lstat(target_path)
+    except FileNotFoundError:
+        return
+    rem_reparse = _describe_reparse_or_symlink(rem_st)
+    raise _UnsafeCleanupPathError(
+        "POSTCHECK_TARGET_REMAINS",
+        f"Đường dẫn vẫn còn tồn tại sau bước dọn dẹp: {target_path.name}",
+        reparse_kind=rem_reparse,
+        target_rel=target_path.name,
+    )
+
+
+def _verify_git_metadata_absent(dest_dir: Path, git_meta: Path) -> None:
+    """Independently prove `.git` does not exist using non-following os.lstat and directory scan."""
+    try:
+        st = os.lstat(git_meta)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise IntakeError(
+            "GITHUB_GIT_METADATA_CLEANUP_FAILED",
+            "Không thể xác minh trạng thái xóa metadata .git do lỗi truy cập hoặc I/O.",
+            http_status=500,
+            details={
+                "stage": "git_metadata_cleanup",
+                "reason": "POSTCHECK_LSTAT_ERROR",
+                "error_type": type(exc).__name__,
+                "errno": exc.errno,
+                "winerror": getattr(exc, "winerror", None),
+            },
+        ) from None
+    else:
+        reparse_kind = _describe_reparse_or_symlink(st)
+        if reparse_kind is not None:
+            raise IntakeError(
+                "SYMLINK_ESCAPE_DETECTED",
+                f"Metadata .git vẫn còn tồn tại dưới dạng liên kết/reparse point ({reparse_kind}); từ chối tiếp tục.",
+                http_status=400,
+                details={
+                    "stage": "git_metadata_cleanup",
+                    "reason": "POSTCHECK_REPARSE_REMAINS",
+                    "reparse_kind": reparse_kind,
+                },
+            )
+        raise IntakeError(
+            "GITHUB_GIT_METADATA_CLEANUP_FAILED",
+            "Metadata .git vẫn còn tồn tại sau khi dọn dẹp; từ chối tiếp tục nạp mã nguồn.",
+            http_status=500,
+            details={
+                "stage": "git_metadata_cleanup",
+                "reason": "POSTCHECK_METADATA_REMAINS",
+                "is_dir": stat.S_ISDIR(st.st_mode),
+                "is_file": stat.S_ISREG(st.st_mode),
+            },
+        )
+
+    try:
+        with os.scandir(dest_dir) as it:
+            for entry in it:
+                if (entry.name.lower() == ".git") if os.name == "nt" else (entry.name == ".git"):
+                    raise IntakeError(
+                        "GITHUB_GIT_METADATA_CLEANUP_FAILED",
+                        "Hậu kiểm thư mục nguồn phát hiện mục .git vẫn còn tồn tại; từ chối tiếp tục.",
+                        http_status=500,
+                        details={
+                            "stage": "git_metadata_cleanup",
+                            "reason": "POSTCHECK_SCANDIR_ENTRY_REMAINS",
+                        },
+                    )
+    except IntakeError:
+        raise
+    except OSError as exc:
+        raise IntakeError(
+            "GITHUB_GIT_METADATA_CLEANUP_FAILED",
+            "Không thể hậu kiểm danh sách thư mục nguồn sau khi xóa metadata .git.",
+            http_status=500,
+            details={
+                "stage": "git_metadata_cleanup",
+                "reason": "POSTCHECK_SCANDIR_ERROR",
+                "error_type": type(exc).__name__,
+                "errno": exc.errno,
+                "winerror": getattr(exc, "winerror", None),
+            },
+        ) from None
+
+
+def _strip_and_verify_git_metadata(dest_dir: Path) -> None:
+    """Safely remove `.git` inside `dest_dir` and fail closed unless absence is proven."""
+    git_meta = dest_dir / ".git"
+    try:
+        _rmtree_readonly_safe(git_meta, workspace_root=dest_dir)
+    except _UnsafeCleanupPathError as exc:
+        if exc.reparse_kind is not None:
+            raise IntakeError(
+                "SYMLINK_ESCAPE_DETECTED",
+                f"Phát hiện liên kết hoặc reparse point không an toàn trong metadata .git ({exc.reparse_kind}); từ chối tiếp tục.",
+                http_status=400,
+                details={
+                    "stage": "git_metadata_cleanup",
+                    "reason": exc.reason,
+                    "reparse_kind": exc.reparse_kind,
+                    "target_rel": exc.target_rel,
+                },
+            ) from None
+        raise IntakeError(
+            "GITHUB_GIT_METADATA_CLEANUP_FAILED",
+            "Không thể dọn dẹp metadata .git an toàn trong phạm vi workspace repository.",
+            http_status=500,
+            details={
+                "stage": "git_metadata_cleanup",
+                "reason": exc.reason,
+                "target_rel": exc.target_rel,
+            },
+        ) from None
+    except OSError as exc:
+        raise IntakeError(
+            "GITHUB_GIT_METADATA_CLEANUP_FAILED",
+            "Không thể xóa hoàn toàn metadata .git của kho nguồn; từ chối tiếp tục nạp mã nguồn.",
+            http_status=500,
+            details={
+                "stage": "git_metadata_cleanup",
+                "reason": "CLEANUP_OSERROR",
+                "error_type": type(exc).__name__,
+                "errno": exc.errno,
+                "winerror": getattr(exc, "winerror", None),
+            },
+        ) from None
+
+    _verify_git_metadata_absent(dest_dir, git_meta)
+
+
+def _cleanup_failed_workspace_safe(dest_dir: Path) -> None:
+    """Best-effort rollback cleanup of a failed clone workspace without following links or masking primary errors.
+
+    Never follows symlinks/junctions/reparse points, never chmods or deletes external targets, and never raises.
+    """
+    try:
+        root_path, root_abs = _validate_cleanup_target(dest_dir, workspace_root=None)
+        st = os.lstat(root_path)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        _LOG.warning("Failed workspace rollback skipped for safety (%s).", type(exc).__name__)
+        return
+
+    if _describe_reparse_or_symlink(st) is not None or not stat.S_ISDIR(st.st_mode):
+        _LOG.warning("Failed workspace rollback refused non-directory or reparse root.")
+        return
+
+    skipped_unsafe = 0
+    errors_seen = 0
+    stack: list[tuple[Path, bool]] = [(root_path, False)]
+    while stack:
+        current, expanded = stack.pop()
+        cur_abs = os.path.abspath(str(current))
+        if not _is_norm_within(cur_abs, root_abs, allow_equal=True):
+            skipped_unsafe += 1
+            continue
+        if expanded:
+            try:
+                cst = os.lstat(current)
+                if _describe_reparse_or_symlink(cst) is not None or not stat.S_ISDIR(cst.st_mode):
+                    skipped_unsafe += 1
+                    continue
+                try:
+                    os.rmdir(current)
+                except PermissionError:
+                    _clear_readonly_if_needed(current, root_abs, allow_equal_root=True)
+                    os.rmdir(current)
+            except OSError:
+                errors_seen += 1
+            continue
+
+        try:
+            cst = os.lstat(current)
+        except OSError:
+            errors_seen += 1
+            continue
+        if _describe_reparse_or_symlink(cst) is not None or not stat.S_ISDIR(cst.st_mode):
+            skipped_unsafe += 1
+            continue
+        stack.append((current, True))
+        try:
+            with os.scandir(current) as it:
+                children = list(it)
+        except OSError:
+            errors_seen += 1
+            continue
+        for entry in children:
+            child_path = current / entry.name
+            child_abs = os.path.abspath(str(child_path))
+            if not _is_norm_within(child_abs, root_abs, allow_equal=False):
+                skipped_unsafe += 1
+                continue
+            try:
+                est = os.lstat(child_path)
+            except OSError:
+                errors_seen += 1
+                continue
+            if _describe_reparse_or_symlink(est) is not None:
+                skipped_unsafe += 1
+                continue
+            if stat.S_ISDIR(est.st_mode):
+                stack.append((child_path, False))
+            elif stat.S_ISREG(est.st_mode):
+                try:
+                    os.unlink(child_path)
+                except PermissionError:
+                    try:
+                        _clear_readonly_if_needed(child_path, root_abs, allow_equal_root=False)
+                        os.unlink(child_path)
+                    except OSError:
+                        errors_seen += 1
+                except OSError:
+                    errors_seen += 1
+            else:
+                skipped_unsafe += 1
+
+    if skipped_unsafe or errors_seen:
+        _LOG.warning(
+            "Failed workspace rollback completed with residuals (skipped_unsafe=%d, errors=%d).",
+            skipped_unsafe,
+            errors_seen,
+        )
+
 
 def clone_github_repo(
     raw_url: str,
@@ -1014,7 +1716,11 @@ def clone_github_repo(
         raise IntakeError("GIT_UNAVAILABLE", "Máy chủ chưa cài đặt git để tải kho GitHub.", http_status=503)
 
     dest_dir = Path(dest_dir).resolve()
-    if dest_dir.exists():
+    try:
+        os.lstat(dest_dir)
+    except FileNotFoundError:
+        pass
+    else:
         raise IntakeError("INTERNAL_WORKSPACE_COLLISION", "Thư mục clone tạm đã tồn tại.", http_status=500)
 
     env = os.environ.copy()
@@ -1077,10 +1783,8 @@ def clone_github_repo(
         )
         resolved_commit = rev.stdout.decode("utf-8", errors="replace").strip() if rev.returncode == 0 else validated_sha
 
-        # Strip .git metadata before inventorying or scanning so git hooks/objects are never retained.
-        git_meta = dest_dir / ".git"
-        if git_meta.exists():
-            shutil.rmtree(git_meta, ignore_errors=True)
+        # Strip .git metadata fail-closed and prove absence before inventorying or scanning.
+        _strip_and_verify_git_metadata(dest_dir)
 
         inventory = verify_extracted_java_tree(dest_dir, limits, empty_code="NO_JAVA_FILES_FOUND")
         return {
@@ -1091,7 +1795,7 @@ def clone_github_repo(
             "resolved_commit": resolved_commit,
         }
     except _GitStepTimeout as exc:
-        shutil.rmtree(dest_dir, ignore_errors=True)
+        _cleanup_failed_workspace_safe(dest_dir)
         code, message = _GIT_STEP_TIMEOUT_CODES[exc.step]
         details = {"git_step": exc.step, "timeout_seconds": timeout_seconds, "process_cleanup": exc.cleanup}
         details["stderr_bytes"] = exc.stderr_bytes
@@ -1100,7 +1804,7 @@ def clone_github_repo(
             message += " Không xác nhận được việc dừng toàn bộ tiến trình Git con của lượt thử."
         raise IntakeError(code, message, http_status=504, details=details) from None
     except _GitStepCleanupFailed as exc:
-        shutil.rmtree(dest_dir, ignore_errors=True)
+        _cleanup_failed_workspace_safe(dest_dir)
         raise IntakeError(
             "GITHUB_GIT_CLEANUP_FAILED",
             "Bước git đã kết thúc nhưng không xác nhận được việc dừng toàn bộ tiến trình con; từ chối tiếp tục.",
@@ -1108,7 +1812,7 @@ def clone_github_repo(
             details={"git_step": exc.step, "cleanup_status": "CLEANUP_FAILED", "process_cleanup": exc.cleanup},
         ) from None
     except _GitStepOutputLimit as exc:
-        shutil.rmtree(dest_dir, ignore_errors=True)
+        _cleanup_failed_workspace_safe(dest_dir)
         details = {"git_step": exc.step, "output_stream": exc.stream, "output_bytes": exc.size,
                    "limit_bytes": exc.limit, "process_cleanup": exc.cleanup}
         if not exc.cleanup.get("clean"):
@@ -1121,7 +1825,7 @@ def clone_github_repo(
             message = f"Không xác minh được kích thước đầu ra của git ({exc.stream}); loại bỏ đầu ra."
         raise IntakeError(code, message, http_status=502, details=details) from None
     except _GitStepInternalError as exc:
-        shutil.rmtree(dest_dir, ignore_errors=True)
+        _cleanup_failed_workspace_safe(dest_dir)
         details = {"git_step": exc.step, "primary_error": exc.error_type, "process_cleanup": exc.cleanup}
         if not exc.cleanup.get("clean"):
             details["cleanup_status"] = "CLEANUP_FAILED"
@@ -1132,5 +1836,5 @@ def clone_github_repo(
             details=details,
         ) from None
     except Exception:
-        shutil.rmtree(dest_dir, ignore_errors=True)
+        _cleanup_failed_workspace_safe(dest_dir)
         raise

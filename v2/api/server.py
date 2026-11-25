@@ -6,10 +6,13 @@ from email.policy import default as email_default_policy
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 import re
 import time
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
+
+_LOG = logging.getLogger("v2.api.server")
 
 from v2.api.config import ApiConfig
 from v2.api.intake import IntakeError
@@ -91,20 +94,41 @@ def _int_qs(qs: dict[str, list[str]], key: str, default: int) -> int:
 
 class ThesisApiServer(ThreadingHTTPServer):
     daemon_threads = True
+    request_queue_size = 64
 
     def __init__(self, config: ApiConfig):
         self.api_config = config
         self.service = TriageApiService(config)
         self.jobs = ScanJobManager(config)
+        self.service.set_scan_busy_check(self.jobs.has_active_opengrep_stage)
+        self.jobs.set_on_opengrep_scan_succeeded(self.service.notify_real_opengrep_scan_completed)
         self.drain_timeout_seconds = DEFAULT_DRAIN_TIMEOUT_SECONDS
         self.body_read_timeout_seconds = DEFAULT_BODY_READ_TIMEOUT_SECONDS
+        self.last_probe_shutdown_status: dict[str, Any] | None = None
         super().__init__((config.host, config.port), ThesisApiRequestHandler)
+        self.service.start_opengrep_probe()
 
     def server_close(self) -> None:
         try:
-            self.jobs.shutdown(wait=False)
+            sd = self.service.shutdown_opengrep_probe(wait_seconds=3.0)
+            self.last_probe_shutdown_status = sd
+            if not sd.get("clean"):
+                _LOG.error("OpenGrep health probe shutdown cleanup failed: %s", sd)
+        except Exception as exc:
+            self.last_probe_shutdown_status = {
+                "clean": False,
+                "status": "CLEANUP_FAILED",
+                "failure_code": "PROBE_SHUTDOWN_EXCEPTION",
+                "worker_stopped": False,
+                "worker_alive": True,
+                "error_type": type(exc).__name__,
+            }
+            _LOG.error("OpenGrep health probe shutdown raised %s", type(exc).__name__)
         finally:
-            super().server_close()
+            try:
+                self.jobs.shutdown(wait=False)
+            finally:
+                super().server_close()
 
 
 class ThesisApiRequestHandler(BaseHTTPRequestHandler):
@@ -205,7 +229,7 @@ class ThesisApiRequestHandler(BaseHTTPRequestHandler):
 
     def _send_json(self, status_code: int, payload: dict[str, Any], cors_origin: str | None) -> None:
         close_after = bool(self.close_connection)
-        if not close_after and status_code >= 400 and not self._drain_small_unread_post_body():
+        if status_code >= 400 and not self._drain_small_unread_post_body():
             close_after = True
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
