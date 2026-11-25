@@ -99,8 +99,15 @@ python -X utf8 -B -m v2.g1_integration.run_g1_demo \
 
 G1-C2 tại `6ebf3ec6668741a346199f860cf349332ad94eae` giữ nguyên
 `G1_C2_RUNTIME_ACCEPTANCE_FAILED`; G1-C3 tại `236439ead654d12448bb2cf711e534a243007afd`
-giữ nguyên `RUNTIME_PLAN_REQUIRES_CORRECTION`. Prompt hiện hành:
-`v2.2.2-cwe22-cwe89-canonical-citations`. Bộ tham chiếu giảng viên: OpenGrep `1.33.1`,
+giữ nguyên `RUNTIME_PLAN_REQUIRES_CORRECTION`. Prompt hiện hành của repository
+(`v2/triage/ollama.py`, hợp đồng mặc định `blind`, ưu tiên trích dẫn từng dòng đơn tối thiểu
+`start_line == end_line`, vẫn giữ metadata đường dẫn/hash chính tắc và quy tắc quote đa dòng
+bao gồm cả hai đầu khi thật sự cần): `v2.2.4-cwe22-cwe89-minimal-singleline-citations`.
+Những lượt thực nghiệm và hiện vật lịch sử đã ghi nhận phiên bản
+`v2.2.2-cwe22-cwe89-canonical-citations` tiếp tục được giữ nguyên với phiên bản đó, không
+quy đổi sang `v2.2.4`. Các hồ sơ sử dụng phiên bản prompt khác giữ nguyên phiên bản thực tế
+đã ghi nhận.
+Bộ tham chiếu giảng viên: OpenGrep `1.33.1`,
 Ollama `0.40.16`, `qwen3.5:9b-q4_K_M`; môi trường `ADMIN-PC` thực tế: OpenGrep `1.25.0`,
 Ollama `0.40.7`, `qwen3.5:9b-q4_K_M` (ghi rõ sai khác, không tự thay đổi môi trường).
 Kết quả offline không chứng thực Qwen runtime. Các lệnh runtime ở mục 2–4 và

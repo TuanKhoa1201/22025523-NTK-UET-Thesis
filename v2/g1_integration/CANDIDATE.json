@@ -95,7 +95,9 @@
     "CLI `--actor` is an unauthenticated operator string for local audit trail, and SQLite does not claim OS-level tamper resistance against privileged local users.",
     "Historical G0 findings and 14 pending errata remain untouched and locked (`G0_ACCEPTANCE=CONDITIONAL`, `READY_FOR_G1=CONDITIONAL`, historical Arm C independent contribution `CONFOUNDED`)."
   ],
-  "prompt_version": "v2.2.2-cwe22-cwe89-canonical-citations",
+  "prompt_version": "v2.2.4-cwe22-cwe89-minimal-singleline-citations",
+  "historical_prompt_version": "v2.2.2-cwe22-cwe89-canonical-citations",
+  "prompt_version_scope_note": "Current repository PROMPT_VERSION in v2/triage/ollama.py is v2.2.4-cwe22-cwe89-minimal-singleline-citations (blind default contract, minimal single-line-first citations while preserving canonical snippet metadata and strict inclusive multiline quotes). Historical G1-C3/G1-C4/G1-C5 runs and locked artifacts recorded under v2.2.2-cwe22-cwe89-canonical-citations remain historical v2.2.2 records and are not reattributed to v2.2.4; G1-C4 REAL_OLLAMA/R01-R03 remains NOT_TESTED.",
   "offline_test_environment": {
     "cwd": "Root of pinned checkout",
     "python": "Prefer Python 3.11.9 for ADMIN-PC parity. Development verification uses an isolated Python 3.12.3 AMD64 venv authorized by the operator; Python 3.11.9 parity remains NOT_TESTED.",

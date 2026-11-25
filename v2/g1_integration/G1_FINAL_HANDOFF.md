@@ -5,9 +5,13 @@
 > có kết luận kiểm toán cổng runtime `RUNTIME_PLAN_REQUIRES_CORRECTION`; giữ nguyên toàn bộ bằng chứng gốc bên ngoài repository.
 > Dòng kiểm tra vệ sinh thiếu entrypoint đã được loại khỏi bảng lệnh bên dưới; claim PASS đó
 > không có căn cứ áp dụng cho commit G1-C2. Không sửa biên nhận gốc.
-> Ứng viên hiện hành là G1-C4 (bổ sung lưu HTTP body bytes cùng lượt gọi B1 và quy trình nghiệm thu chuẩn B2),
-> prompt `v2.2.2-cwe22-cwe89-canonical-citations`; xem `CANDIDATE.json`, `RUNTIME_ACCEPTANCE_PLAN.md`,
-> README mục 5 và manifest commit bên ngoài để pin SHA mới.
+> Ứng viên hiện hành là G1-C4 (bổ sung lưu HTTP body bytes cùng lượt gọi B1 và quy trình nghiệm thu chuẩn B2);
+> prompt hiện hành của repository (`v2/triage/ollama.py`, hợp đồng mặc định `blind`, ưu tiên trích dẫn từng dòng
+> đơn tối thiểu `start_line == end_line`, vẫn giữ metadata đường dẫn/hash chính tắc và quote đa dòng bao gồm cả
+> hai đầu khi cần) là `v2.2.4-cwe22-cwe89-minimal-singleline-citations`. Những lượt thực nghiệm và hiện vật lịch sử
+> đã ghi nhận phiên bản `v2.2.2-cwe22-cwe89-canonical-citations` tiếp tục được giữ nguyên với phiên bản đó, không
+> quy đổi sang `v2.2.4`. Các hồ sơ sử dụng phiên bản prompt khác giữ nguyên phiên bản thực tế đã ghi nhận.
+> Xem `CANDIDATE.json`, `RUNTIME_ACCEPTANCE_PLAN.md`, README mục 5 và manifest commit bên ngoài để pin SHA mới.
 > Bộ tham chiếu giảng viên (OpenGrep `1.33.1`, Ollama `0.40.16`, `qwen3.5:9b-q4_K_M`) khác với
 > `ADMIN-PC` thực tế (OpenGrep `1.25.0`, Ollama `0.40.7`, `qwen3.5:9b-q4_K_M`); ghi rõ sai khác và không tự thay đổi môi trường.
 > REAL_OLLAMA/R01–R03 chưa chạy; kiểm toán độc lập và runtime cần quy trình riêng.
