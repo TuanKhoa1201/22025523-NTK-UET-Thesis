@@ -26,8 +26,8 @@ export function Card({ children, className = '', title, action }) {
   );
 }
 
-export function Badge({ children, tone = 'neutral' }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>;
+export function Badge({ children, tone = 'neutral', className = '', ...props }) {
+  return <span className={`badge badge-${tone}${className ? ` ${className}` : ''}`} {...props}>{children}</span>;
 }
 
 export function StatCard({ label, value, note, icon, tone = 'blue' }) {

@@ -275,11 +275,25 @@ export async function submitReviewDecision({
   }
 
   const requireScanIdOnRefresh = apiClient === api || Boolean(detail);
+  const readScope = typeof apiClient?.getScopeSnapshot === 'function' ? apiClient.getScopeSnapshot : null;
+  const startScope = readScope ? readScope() : null;
+  const isScopeChanged = () => {
+    if (!readScope || !startScope) return false;
+    const current = readScope();
+    return (
+      current.baseUrl !== startScope.baseUrl
+      || current.origin !== startScope.origin
+      || current.sessionScope !== startScope.sessionScope
+    );
+  };
 
   inFlightKeys?.add(lockKey);
   try {
     // Only send {actor, reason}; server enforces auth & SHA-256 source drift checks.
     const mutated = await actionFn(scanId, findingId, {actor: validation.actor, reason: validation.reason});
+    if (isScopeChanged()) {
+      return {ok: false, staleSource: false, abortedByConfigChange: true, errorCode: 'SCOPE_CHANGED', message: ''};
+    }
     if (mutated && typeof mutated === 'object') {
       const mutatedScan = readableId(mutated.scan_id);
       const mutatedFinding = extractFindingId(mutated);
@@ -292,7 +306,25 @@ export async function submitReviewDecision({
       }
     }
     // Always re-read authoritative state from server after mutation.
-    const refreshed = await apiClient.findingDetail(scanId, findingId);
+    let refreshed;
+    try {
+      refreshed = await apiClient.findingDetail(scanId, findingId);
+    } catch (detailError) {
+      if (detailError?.abortedByConfigChange || isScopeChanged()) {
+        return {ok: false, staleSource: false, abortedByConfigChange: true, errorCode: 'SCOPE_CHANGED', message: ''};
+      }
+      return {
+        ok: false,
+        mutatedOnServer: true,
+        refreshFailed: true,
+        status: detailError?.status ?? null,
+        errorCode: 'POST_MUTATION_REFRESH_FAILED',
+        message: `Quyết định đã được gửi tới máy chủ nhưng không thể đọc lại chi tiết xác nhận (${detailError?.message || 'Lỗi kết nối'}). Hãy đồng bộ lại dữ liệu thay vì gửi lại quyết định.`,
+      };
+    }
+    if (isScopeChanged()) {
+      return {ok: false, staleSource: false, abortedByConfigChange: true, errorCode: 'SCOPE_CHANGED', message: ''};
+    }
     const postIdentity = verifyFindingIdentity(refreshed, scanId, findingId, {requireScanId: requireScanIdOnRefresh});
     if (!postIdentity.valid) {
       return {
@@ -303,6 +335,16 @@ export async function submitReviewDecision({
     }
     return {ok: true, detail: refreshed};
   } catch (error) {
+    if (error?.abortedByConfigChange || isScopeChanged()) {
+      return {
+        ok: false,
+        staleSource: false,
+        abortedByConfigChange: true,
+        status: error?.status ?? null,
+        errorCode: 'SCOPE_CHANGED',
+        message: '',
+      };
+    }
     const payload = error?.payload || {};
     const code = error?.code || payload?.error_code || 'API_ERROR';
     if (error?.status === 409 && code === 'STALE_SOURCE') {
@@ -317,25 +359,42 @@ export async function submitReviewDecision({
         };
       }
       let refreshedHistory = null;
+      let historyRefreshFailed = false;
+      let historyRefreshError = '';
       try {
         const candidateHistory = await apiClient.findingHistory(scanId, findingId, {includeRejected: true});
+        if (isScopeChanged()) {
+          return {ok: false, staleSource: false, abortedByConfigChange: true, errorCode: 'SCOPE_CHANGED', message: ''};
+        }
         const histScan = readableId(candidateHistory?.scan_id);
         const histFinding = readableId(candidateHistory?.finding_id);
         if ((!histScan || histScan === readableId(scanId)) && (!histFinding || histFinding === readableId(findingId))) {
           refreshedHistory = candidateHistory;
         }
-      } catch {
-        /* fallback to 409 payload's review_events / rejected_decisions */
+      } catch (histErr) {
+        if (histErr?.abortedByConfigChange || isScopeChanged()) {
+          return {ok: false, staleSource: false, abortedByConfigChange: true, errorCode: 'SCOPE_CHANGED', message: ''};
+        }
+        historyRefreshFailed = true;
+        historyRefreshError = histErr?.message || 'Không đồng bộ được lịch sử kiểm duyệt của cảnh báo.';
       }
+      const fallbackEvents = Array.isArray(payload.review_events)
+        ? payload.review_events
+        : (Array.isArray(detail?.review_events) ? detail.review_events : []);
+      const fallbackRejected = Array.isArray(payload.rejected_decisions)
+        ? payload.rejected_decisions
+        : (Array.isArray(detail?.rejected_decisions) ? detail.rejected_decisions : []);
       return {
         ok: false,
         staleSource: true,
         errorCode: 'STALE_SOURCE',
         message: error.message,
-        humanReviewState: refreshedHistory?.human_review_state || payload.human_review_state || 'OPEN',
+        humanReviewState: refreshedHistory?.human_review_state || payload.human_review_state || detail?.human_review_state || 'OPEN',
         staleDetail: payload.stale_source || null,
-        reviewEvents: refreshedHistory?.events || payload.review_events || [],
-        rejectedDecisions: refreshedHistory?.rejected_decisions || payload.rejected_decisions || [],
+        reviewEvents: Array.isArray(refreshedHistory?.events) ? refreshedHistory.events : fallbackEvents,
+        rejectedDecisions: Array.isArray(refreshedHistory?.rejected_decisions) ? refreshedHistory.rejected_decisions : fallbackRejected,
+        historyRefreshFailed,
+        historyRefreshError,
       };
     }
     return {

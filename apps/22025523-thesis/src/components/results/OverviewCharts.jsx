@@ -84,7 +84,7 @@ function CweColumnChartCard({title, rows, total}) {
 
             {rows.map((item, idx) => {
               const cx = 12 + slotW * idx + slotW / 2;
-              const barH = item.value > 0 ? Math.max(8, (item.value / maxVal) * plotH) : 2;
+              const barH = item.value > 0 ? Math.max(8, (item.value / maxVal) * plotH) : 0;
               const y = padTop + plotH - barH;
               const isHover = hoveredKey === item.key;
               return (
@@ -101,23 +101,19 @@ function CweColumnChartCard({title, rows, total}) {
                     height={plotH + padBottom + 10}
                     fill="transparent"
                   />
-                  <rect
-                    x={cx - barW / 2}
-                    y={y}
-                    width={barW}
-                    height={barH}
-                    rx={item.value > 0 ? 6 : 1}
-                    fill={
-                      item.value === 0
-                        ? 'rgba(221, 224, 230, 0.16)'
-                        : isHover
-                          ? 'url(#v2CweBarActive)'
-                          : 'url(#v2CweBarFill)'
-                    }
-                  />
+                  {barH > 0 && (
+                    <rect
+                      x={cx - barW / 2}
+                      y={y}
+                      width={barW}
+                      height={barH}
+                      rx={6}
+                      fill={isHover ? 'url(#v2CweBarActive)' : 'url(#v2CweBarFill)'}
+                    />
+                  )}
                   <text
                     x={cx}
-                    y={y - 7}
+                    y={(barH > 0 ? y : padTop + plotH) - 7}
                     textAnchor="middle"
                     className="v2-chart-bar-value"
                   >

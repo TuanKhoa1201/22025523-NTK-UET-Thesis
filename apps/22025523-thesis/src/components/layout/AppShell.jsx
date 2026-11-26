@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {NavLink, Outlet, useLocation} from 'react-router-dom';
 import {Icon} from '../common/Ui';
 import UETLogo from '../common/UETLogo';
@@ -15,6 +15,8 @@ import {
   resetApiBaseUrl,
   subscribeApiConfig,
 } from '../../services/api';
+import {classifyBackendHealthState} from '../../services/findingPresentation';
+import {createHealthMonitor, DEFAULT_PROBE_RETRY_DELAYS_MS} from '../../services/healthMonitor';
 
 const SUB_ROUTE_LABELS = Object.freeze({
   '/findings': 'Kết quả phát hiện',
@@ -26,8 +28,17 @@ const SUB_ROUTE_LABELS = Object.freeze({
 export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [backend, setBackend] = useState({status: 'CHECKING', health: null, error: ''});
-  const [probeTick, setProbeTick] = useState(0);
+  const [healthMeta, setHealthMeta] = useState({
+    autoRechecking: false,
+    retryAttempt: 0,
+    maxRetries: DEFAULT_PROBE_RETRY_DELAYS_MS.length,
+    retryExhausted: false,
+    lastCheckedAt: null,
+    inFlight: false,
+  });
+  const monitorRef = useRef(null);
   const [apiConfig, setApiConfig] = useState(() => ({
+    baseUrl: getApiBaseUrl(),
     origin: getApiOrigin(),
     sessionScope: getAuthSessionScope(),
     revision: getApiConfigRevision(),
@@ -55,11 +66,16 @@ export default function AppShell() {
       : SUB_ROUTE_LABELS[location.pathname] || 'Tổng quan');
 
   const refreshBackend = useCallback(() => {
-    setProbeTick((value) => value + 1);
+    monitorRef.current?.checkNow({force: true, preserveStatus: false});
   }, []);
 
   useEffect(() => subscribeApiConfig((event) => {
-    setApiConfig({origin: event.origin, sessionScope: event.sessionScope, revision: event.revision});
+    setApiConfig({
+      baseUrl: getApiBaseUrl(),
+      origin: event.origin,
+      sessionScope: event.sessionScope,
+      revision: event.revision,
+    });
     setTokenActive(event.hasToken);
     if (event.baseUrlChanged || event.originChanged) {
       setApiUrlInput(getApiBaseUrl());
@@ -67,40 +83,48 @@ export default function AppShell() {
   }), []);
 
   useEffect(() => {
-    const controller = new AbortController();
+    const requestBaseUrl = getApiBaseUrl();
     const requestOrigin = getApiOrigin();
     const requestSession = getAuthSessionScope();
-    let active = true;
-    const isStale = () => !active || controller.signal.aborted || getApiOrigin() !== requestOrigin || getAuthSessionScope() !== requestSession;
     setTokenActive(hasSessionToken());
-    setBackend((prev) => ({...prev, status: 'CHECKING', error: ''}));
-    api.health({signal: controller.signal, timeoutMs: 5000})
-      .then((health) => {
-        if (isStale()) return;
-        const rawStatus = String(health?.status || '').toUpperCase();
-        if (rawStatus === 'AUTH_REQUIRED') {
-          setBackend({status: 'AUTH_REQUIRED', health, error: ''});
-          setShowConnPanel(true);
-        } else if (rawStatus === 'OK' || rawStatus === 'DEGRADED') {
-          setBackend({status: rawStatus === 'OK' ? 'CONNECTED' : 'DEGRADED', health, error: ''});
-        } else {
-          setBackend({status: 'ERROR', health, error: 'Phản hồi /api/health không hợp lệ.'});
+    const monitor = createHealthMonitor({
+      fetchHealth: async (opts) => {
+        try {
+          return await api.health(opts);
+        } catch (error) {
+          if (
+            error?.abortedByConfigChange
+            || getApiBaseUrl() !== requestBaseUrl
+            || getApiOrigin() !== requestOrigin
+            || getAuthSessionScope() !== requestSession
+          ) {
+            throw error;
+          }
+          throw error;
         }
-      })
-      .catch((error) => {
-        if (isStale() || error?.abortedByConfigChange) return;
-        if (error?.status === 401) {
-          setBackend({status: 'AUTH_REQUIRED', health: null, error: error?.message || 'Yêu cầu Bearer Token hợp lệ (HTTP 401).'});
+      },
+      onStateChange: (snapshot) => {
+        if (
+          getApiBaseUrl() !== requestBaseUrl
+          || getApiOrigin() !== requestOrigin
+          || getAuthSessionScope() !== requestSession
+        ) return;
+        setBackend(snapshot.backend);
+        setHealthMeta(snapshot.meta);
+        if (snapshot.backend.status === 'AUTH_REQUIRED') {
           setShowConnPanel(true);
-        } else {
-          setBackend({status: 'ERROR', health: null, error: error?.message || 'Không thể kết nối máy chủ API.'});
         }
-      });
+      },
+    });
+    monitorRef.current = monitor;
+    monitor.checkNow({force: true});
     return () => {
-      active = false;
-      controller.abort();
+      if (monitorRef.current === monitor) {
+        monitorRef.current = null;
+      }
+      monitor.dispose();
     };
-  }, [probeTick, apiConfig.revision]);
+  }, [apiConfig.revision]);
 
   const applyConnectionSettings = (event) => {
     event.preventDefault();
@@ -144,43 +168,20 @@ export default function AppShell() {
   };
 
   const connected = backend.status === 'CONNECTED' || backend.status === 'DEGRADED';
-  const degradedReasons = Array.isArray(backend.health?.degraded_reasons) ? backend.health.degraded_reasons : [];
-  const onlyOpengrepHealthUnverified =
-    backend.status === 'DEGRADED' &&
-    degradedReasons.length === 1 &&
-    degradedReasons[0] === 'OPENGREP_NOT_VERIFIED';
+  const healthView = useMemo(() => classifyBackendHealthState(backend), [backend]);
+  const degradedReasons = healthView.degradedReasons;
+  const schemaWarnings = healthView.schemaWarnings || [];
+  const ogInfo = healthView.ogInfo;
 
-  const pillLabel = {
-    CHECKING: 'ĐANG KIỂM TRA API',
-    CONNECTED: 'KẾT NỐI THỰC',
-    DEGRADED: onlyOpengrepHealthUnverified ? 'API SẴN SÀNG · CHƯA PROBE OPENGREP' : 'API HẠN CHẾ',
-    AUTH_REQUIRED: 'CẦN TOKEN PHIÊN',
-    ERROR: 'API KHÔNG KHẢ DỤNG',
-  }[backend.status] || 'CHƯA KẾT NỐI';
-
-  const pillClass = backend.status === 'CONNECTED'
-    ? 'connected'
-    : backend.status === 'DEGRADED' || backend.status === 'AUTH_REQUIRED'
-      ? 'pill-warn'
-      : backend.status === 'ERROR'
-        ? 'pill-error'
-        : '';
-
-  const sidebarDotClass = backend.status === 'CONNECTED'
-    ? 'online'
-    : backend.status === 'DEGRADED' || backend.status === 'AUTH_REQUIRED'
-      ? 'dot-warn'
-      : backend.status === 'ERROR'
-        ? 'dot-error'
-        : '';
-
-  const sidebarStatusLabel = {
-    CHECKING: 'Đang kiểm tra API',
-    CONNECTED: 'API đã sẵn sàng',
-    DEGRADED: onlyOpengrepHealthUnverified ? 'API kết nối (OPENGREP_NOT_VERIFIED)' : 'API hoạt động hạn chế',
-    AUTH_REQUIRED: 'Cần nhập Bearer Token',
-    ERROR: 'API chưa kết nối',
-  }[backend.status] || 'API chưa kết nối';
+  const pillLabel = healthView.pillLabel;
+  const pillClass = healthView.pillClass;
+  const sidebarDotClass = healthView.sidebarDotClass;
+  const sidebarStatusLabel = healthView.sidebarLabel;
+  const pillTitle = [
+    pillLabel,
+    degradedReasons.length ? `degraded_reasons: ${degradedReasons.join(', ')}` : '',
+    healthMeta.autoRechecking ? `Đang tự kiểm tra lại active probe (${healthMeta.retryAttempt}/${healthMeta.maxRetries})` : '',
+  ].filter(Boolean).join(' · ');
 
   return (
     <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
@@ -243,7 +244,7 @@ export default function AppShell() {
             </button>
             <span
               className={`connection-pill ${pillClass}`}
-              title={degradedReasons.length ? `degraded_reasons: ${degradedReasons.join(', ')}` : pillLabel}
+              title={pillTitle}
             >
               <i aria-hidden="true" />{pillLabel}
             </span>
@@ -289,13 +290,21 @@ export default function AppShell() {
                 API đang yêu cầu xác thực. Nhập Bearer Token phiên để đọc dữ liệu và thực hiện thao tác ghi.
               </p>
             )}
+            {schemaWarnings.length > 0 && (
+              <p className="v2-conn-note is-warn" role="status">
+                Cảnh báo định dạng <code>/api/health</code>: {schemaWarnings.join(' ')}
+              </p>
+            )}
             {backend.status === 'DEGRADED' && degradedReasons.length > 0 && (
-              <p className="v2-conn-note is-warn">
+              <p className={`v2-conn-note ${ogInfo?.tone === 'red' ? 'is-error' : 'is-warn'}`}>
                 Cảnh báo từ <code>/api/health</code> (<code>degraded_reasons</code>):{' '}
                 <strong>{degradedReasons.join(', ')}</strong>.
-                {degradedReasons.includes('OPENGREP_NOT_VERIFIED') && (
+                {ogInfo && !ogInfo.isVerified && (
                   <span>
-                    {' '}Lưu ý: <code>OPENGREP_NOT_VERIFIED</code> cho biết health check chủ động không gọi binary OpenGrep; phiên bản OpenGrep được xác minh khi chạy lượt quét thực tế.
+                    {' '}{ogInfo.label}. {ogInfo.detail}
+                    {healthMeta.autoRechecking && (
+                      <span> Đang tự kiểm tra lại có giới hạn ({healthMeta.retryAttempt}/{healthMeta.maxRetries})…</span>
+                    )}
                   </span>
                 )}
               </p>
@@ -310,6 +319,8 @@ export default function AppShell() {
         <main id="ntk-main" className="content-area">
           <Outlet context={{
             backend,
+            healthMeta,
+            healthView,
             refreshBackend,
             openConnectionPanel: () => setShowConnPanel(true),
             connected,

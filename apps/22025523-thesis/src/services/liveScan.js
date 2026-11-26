@@ -1,6 +1,19 @@
 import {useEffect, useMemo, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
-import {api, ApiError, getApiOrigin, getAuthSessionScope, subscribeApiConfig} from './api';
+import {
+  api,
+  ApiError,
+  getApiOrigin,
+  getAuthSessionScope,
+  getWireDuplicateKeyInfo,
+  getWireObjectIntegrity,
+  readStrictWireSafeInt,
+  subscribeApiConfig,
+  safeSessionGet,
+  safeSessionSet,
+  safeSessionRemove,
+  getSessionStorageSafe,
+} from './api';
 import {classifyDataOrigin} from './findingPresentation';
 import {normalizeFinding, saveScanRecord} from './scanData';
 import {clearHistoryCache, upsertHistory} from './scanHistory';
@@ -19,10 +32,10 @@ export function clearStaleActiveScanId(failedScanId, sessionScope = getAuthSessi
   const target = typeof failedScanId === 'string' ? failedScanId.trim() : '';
   if (!target) return false;
   liveDatasetCache.delete(`${sessionScope}|${target}`);
-  if (typeof window === 'undefined' || !window.sessionStorage) return false;
+  if (!getSessionStorageSafe()) return false;
   try {
-    if (window.sessionStorage.getItem(ACTIVE_KEY) === target) {
-      window.sessionStorage.removeItem(ACTIVE_KEY);
+    if (safeSessionGet(ACTIVE_KEY) === target) {
+      safeSessionRemove(ACTIVE_KEY);
       return true;
     }
   } catch {
@@ -38,12 +51,20 @@ subscribeApiConfig((event) => {
   }
 });
 
-function nonNegativeIntOrNull(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+function nonNegativeIntOrNull(value, obj = null, key = '') {
+  if (obj && key) {
+    const check = readStrictWireSafeInt(obj, key);
+    return check.present && check.valid ? check.value : null;
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) return null;
+  return value === 0 ? 0 : value;
 }
 
-function positiveIntOrNull(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : null;
+function positiveIntOrNull(value, obj = null, key = '') {
+  const n = nonNegativeIntOrNull(value, obj, key);
+  return n !== null && n >= 1 ? n : null;
 }
 
 function isPlainObject(value) {
@@ -60,18 +81,33 @@ function inspectCountMap(mapObj, resolvedTotal, requiredKeys = []) {
   if (!isPlainObject(mapObj)) {
     return {valid: false, sum: null, reason: 'INVALID_STATUS_COUNTER_MAP'};
   }
-  const entries = Object.entries(mapObj);
+  const mapWire = getWireObjectIntegrity(mapObj);
+  if (
+    mapWire?.scannerError
+    || (mapWire?.duplicateKeys && mapWire.duplicateKeys.size > 0)
+    || (mapWire?.materialized?.duplicateKeys && Object.keys(mapWire.materialized.duplicateKeys).length > 0)
+  ) {
+    return {valid: false, sum: null, reason: 'DUPLICATE_WIRE_KEY'};
+  }
+  const entries = Object.entries(mapObj).filter(([k]) => k !== '__wireIntegrity');
   if (entries.length === 0) {
     return {valid: true, sum: 0, reason: ''};
   }
-  let sum = 0;
-  for (const [, rawVal] of entries) {
-    const n = nonNegativeIntOrNull(rawVal);
+  let sumBig = 0n;
+  for (const [entryKey, rawVal] of entries) {
+    if (getWireDuplicateKeyInfo(mapObj, entryKey)) {
+      return {valid: false, sum: null, reason: 'DUPLICATE_WIRE_KEY'};
+    }
+    const n = nonNegativeIntOrNull(rawVal, mapObj, entryKey);
     if (n === null) {
       return {valid: false, sum: null, reason: 'INVALID_STATUS_COUNTER'};
     }
-    sum += n;
+    sumBig += BigInt(n);
+    if (sumBig > MAX_SAFE_BIGINT) {
+      return {valid: false, sum: null, reason: 'STATUS_COUNTS_OVERFLOW'};
+    }
   }
+  const sum = Number(sumBig);
   if (resolvedTotal !== null) {
     if (resolvedTotal === 0 && sum > 0) {
       return {valid: false, sum, reason: 'NONZERO_COUNTER_WITH_ZERO_TOTAL'};
@@ -230,15 +266,59 @@ export function computeRefutedOpenFromFindings(rawFindings, {expectedTotal = nul
 }
 
 export function validateScanCountersAndPagination(summary, pagePayload, {isAggregatedAllPages = false} = {}) {
+  const hasSummaryWireAnomaly = Boolean(
+    isPlainObject(summary) && (
+      getWireObjectIntegrity(summary)?.scannerError
+      || [
+        'scan_id',
+        'total_findings',
+        'by_validated_status',
+        'by_human_review_state',
+        'by_cwe',
+        'counts',
+        'data_origin',
+        'findings_with_trace',
+        'validator_downgraded_count',
+        'matched_citation_count',
+        'proposed_refuted_open_count',
+      ].some((k) => Boolean(getWireDuplicateKeyInfo(summary, k)))
+      || (isPlainObject(summary.counts) && (
+        getWireObjectIntegrity(summary.counts)?.scannerError
+        || ['open_count', 'proposed_refuted_open_count'].some((k) => Boolean(getWireDuplicateKeyInfo(summary.counts, k)))
+      ))
+    ),
+  );
+  const hasPageWireAnomaly = Boolean(
+    isPlainObject(pagePayload) && (
+      getWireObjectIntegrity(pagePayload)?.scannerError
+      || [
+        'scan_id',
+        'findings',
+        'total_count',
+        'total_matching',
+        'total_pages',
+        'page',
+        'page_size',
+        'has_more',
+        'truncated',
+        'next_page',
+        'next_cursor',
+        'data_origin',
+      ].some((k) => Boolean(getWireDuplicateKeyInfo(pagePayload, k)))
+    ),
+  );
+  if (hasSummaryWireAnomaly || hasPageWireAnomaly) {
+    return {valid: false, reason: 'DUPLICATE_WIRE_KEY', resolvedTotal: null};
+  }
   const hasFindingsArray = Array.isArray(pagePayload?.findings);
   const rawList = hasFindingsArray ? pagePayload.findings : [];
 
   const summaryTotalRaw = summary?.total_findings;
   const pageTotalRaw = pagePayload?.total_count;
   const pageMatchingRaw = pagePayload?.total_matching;
-  const summaryTotal = nonNegativeIntOrNull(summaryTotalRaw);
-  const pageTotal = nonNegativeIntOrNull(pageTotalRaw);
-  const pageMatching = nonNegativeIntOrNull(pageMatchingRaw);
+  const summaryTotal = nonNegativeIntOrNull(summaryTotalRaw, summary, 'total_findings');
+  const pageTotal = nonNegativeIntOrNull(pageTotalRaw, pagePayload, 'total_count');
+  const pageMatching = nonNegativeIntOrNull(pageMatchingRaw, pagePayload, 'total_matching');
 
   if (summaryTotalRaw !== undefined && summaryTotalRaw !== null && summaryTotal === null) {
     return {valid: false, reason: 'INVALID_TOTAL_FINDINGS', resolvedTotal: null};
@@ -277,7 +357,7 @@ export function validateScanCountersAndPagination(summary, pagePayload, {isAggre
   if (!cweCheck.valid) return {valid: false, reason: cweCheck.reason, resolvedTotal: null};
 
   if (isPlainObject(summary?.counts) && summary.counts.open_count !== undefined && summary.counts.open_count !== null) {
-    const openCount = nonNegativeIntOrNull(summary.counts.open_count);
+    const openCount = nonNegativeIntOrNull(summary.counts.open_count, summary.counts, 'open_count');
     if (openCount === null || openCount > resolvedTotal) {
       return {valid: false, reason: 'INVALID_OPEN_COUNT', resolvedTotal: null};
     }
@@ -329,7 +409,7 @@ export function validateScanCountersAndPagination(summary, pagePayload, {isAggre
   ]) {
     const raw = summary?.[field];
     if (raw !== undefined && raw !== null) {
-      const n = nonNegativeIntOrNull(raw);
+      const n = nonNegativeIntOrNull(raw, summary, field);
       if (n === null || n > resolvedTotal) {
         return {valid: false, reason, resolvedTotal: null};
       }
@@ -341,9 +421,9 @@ export function validateScanCountersAndPagination(summary, pagePayload, {isAggre
     const rawPage = pagePayload.page;
     const rawPageSize = pagePayload.page_size;
     const rawTotalPages = pagePayload.total_pages;
-    const pageNum = rawPage !== undefined && rawPage !== null ? positiveIntOrNull(rawPage) : null;
-    const pageSize = rawPageSize !== undefined && rawPageSize !== null ? positiveIntOrNull(rawPageSize) : null;
-    const totalPages = rawTotalPages !== undefined && rawTotalPages !== null ? nonNegativeIntOrNull(rawTotalPages) : null;
+    const pageNum = rawPage !== undefined && rawPage !== null ? positiveIntOrNull(rawPage, pagePayload, 'page') : null;
+    const pageSize = rawPageSize !== undefined && rawPageSize !== null ? positiveIntOrNull(rawPageSize, pagePayload, 'page_size') : null;
+    const totalPages = rawTotalPages !== undefined && rawTotalPages !== null ? nonNegativeIntOrNull(rawTotalPages, pagePayload, 'total_pages') : null;
 
     if (rawPage !== undefined && rawPage !== null && pageNum === null) {
       return {valid: false, reason: 'INVALID_PAGE_NUMBER', resolvedTotal: null};
@@ -471,7 +551,11 @@ export function buildDataset(scanId, summary, findingsPagePayload) {
   // and exact equality when all rows are present.
   const rawExplicitRefutedOpen = summary?.proposed_refuted_open_count ?? summary?.counts?.proposed_refuted_open_count;
   const hasExplicitRefutedOpen = rawExplicitRefutedOpen !== undefined && rawExplicitRefutedOpen !== null;
-  const explicitRefutedOpen = hasExplicitRefutedOpen ? nonNegativeIntOrNull(rawExplicitRefutedOpen) : null;
+  const explicitRefutedOpen = hasExplicitRefutedOpen
+    ? (summary?.proposed_refuted_open_count !== undefined && summary?.proposed_refuted_open_count !== null
+      ? nonNegativeIntOrNull(summary.proposed_refuted_open_count, summary, 'proposed_refuted_open_count')
+      : nonNegativeIntOrNull(summary?.counts?.proposed_refuted_open_count, summary?.counts, 'proposed_refuted_open_count'))
+    : null;
   const computedFromRows = hasAllRows
     ? computeRefutedOpenFromFindings(list, {expectedTotal: resolvedTotal})
     : {valid: false, value: null, reason: 'NOT_ALL_ROWS', hasDuplicates: inspection.hasDuplicates};
@@ -632,7 +716,7 @@ export async function loadLiveScan(scanId, signal) {
   }
 
   writeCache(scanId, summary, page, requestSession);
-  window.sessionStorage.setItem(ACTIVE_KEY, scanId);
+  safeSessionSet(ACTIVE_KEY, scanId);
   saveScanRecord({
     sessionKey: `${requestSession}|${scanId}`,
     scanId,
@@ -661,7 +745,7 @@ export function useScanSelection(apiRevision = 0) {
   const queryId = params.get('scan_id') || '';
   const currentSession = getAuthSessionScope();
   const storedId = useMemo(
-    () => (queryId ? '' : (typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem(ACTIVE_KEY) || '' : '')),
+    () => (queryId ? '' : (getSessionStorageSafe() ? safeSessionGet(ACTIVE_KEY) || '' : '')),
     [queryId, currentSession, apiRevision],
   );
   const scanId = queryId || storedId;

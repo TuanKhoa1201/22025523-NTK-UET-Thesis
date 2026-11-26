@@ -1,4 +1,4 @@
-import {classifyDataOrigin, clearScanRecords, readScanHistory, removeScanRecord} from './scanData';
+import {classifyDataOrigin, clearScanRecords, readScanHistory, removeScanRecord, resolveJavaFileCounts} from './scanData';
 
 // In-memory (RAM-only) scan history scoped by API origin AND active Auth Session Scope.
 //
@@ -176,13 +176,23 @@ export function historyRecordFromBackend(item, {origin = '', sessionScope} = {})
   const rawJobId = item.job_id;
   const jobId = typeof rawJobId === 'string' && rawJobId.trim() ? rawJobId.trim() : null;
   if (!scanId && !jobId) return null;
-  const status = ['COMPLETED', 'FAILED', 'RUNNING', 'QUEUED'].includes(rawState)
+  const status = ['COMPLETED', 'FAILED', 'RUNNING', 'QUEUED', 'CANCELLED'].includes(rawState)
     ? rawState
-    : scanId
-      ? 'COMPLETED'
-      : undefined;
+    : rawState === 'CANCELED'
+      ? 'CANCELLED'
+      : scanId
+        ? 'COMPLETED'
+        : undefined;
   const orig = normalizeApiOrigin(origin);
   const originInfo = classifyDataOrigin(item);
+  const javaCounts = resolveJavaFileCounts(item);
+  const hasAnyJavaCounts = (
+    javaCounts.inventoryCount !== null
+    || javaCounts.scannedCount !== null
+    || javaCounts.ignoredCount !== null
+    || javaCounts.isInconsistent
+    || javaCounts.hasInvalidFields
+  );
   return {
     scanId: scanId || undefined,
     jobId: jobId || undefined,
@@ -194,7 +204,8 @@ export function historyRecordFromBackend(item, {origin = '', sessionScope} = {})
     startedAt: item.started_at_utc ?? item.started_at ?? item.created_at_utc ?? item.created_at ?? undefined,
     completedAt: item.finished_at_utc ?? item.completed_at ?? item.collected_at ?? item.finished_at ?? undefined,
     backendMs: item.total_e2e_duration_ms ?? undefined,
-    javaFilesScanned: item.java_files_scanned ?? undefined,
+    javaFilesScanned: javaCounts.inventoryCount ?? undefined,
+    javaCounts: hasAnyJavaCounts ? javaCounts : undefined,
     candidates: item.total_findings ?? undefined,
     supported: byValidated.SUPPORTED ?? undefined,
     refuted: byValidated.REFUTED ?? undefined,

@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from 'react';
-import {api, getApiOrigin, getAuthSessionScope} from './api';
+import {api, getApiOrigin, getAuthSessionScope, safeSessionSet} from './api';
 import {
   ACTIVE_KEY,
   clearStaleActiveScanId,
@@ -110,7 +110,7 @@ export function useScanOverview(scanId, apiRevision = 0) {
       });
       if (isStale()) return;
       try {
-        window.sessionStorage.setItem(ACTIVE_KEY, scanId);
+        safeSessionSet(ACTIVE_KEY, scanId);
       } catch {
         /* optional sessionStorage update */
       }

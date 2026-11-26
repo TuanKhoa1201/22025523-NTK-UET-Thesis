@@ -5,8 +5,11 @@ import {AuditTimeline} from '../components/review/HumanReviewPanel';
 import {api, getApiOrigin, getAuthSessionScope} from '../services/api';
 import {
   citationCheckTone,
+  describeDowngradeReason,
   humanReviewMeta,
   NO_FINDINGS_NOTICE,
+  normalizeFailureKind,
+  resolveJavaFileCounts,
   runtimeVerificationMeta,
   validatedStatusMeta,
 } from '../services/findingPresentation';
@@ -263,6 +266,7 @@ export default function ReportsPage() {
   }
 
   const rtMeta = runtimeVerificationMeta(model.qwenStats.runtimeVerified);
+  const javaCounts = resolveJavaFileCounts(model.scanInfo.rawSummary || {java_files_scanned: model.scanInfo.javaFilesScanned});
 
   return (
     <>
@@ -330,7 +334,22 @@ export default function ReportsPage() {
             <div><span>NGUỒN DỮ LIỆU</span><strong>{model.dataOrigin}</strong></div>
             <div><span>NGUỒN MÃ JAVA ({model.scanInfo.inputMode})</span><strong className="mono">{model.scanInfo.sourceTarget}</strong></div>
             {model.scanInfo.resolvedCommit && <div><span>COMMIT SHA</span><strong className="mono">{model.scanInfo.resolvedCommit}</strong></div>}
-            <div><span>SỐ TỆP JAVA ĐÃ QUÉT</span><strong>{model.scanInfo.javaFilesScanned}</strong></div>
+            <div>
+              <span>
+                {javaCounts.isInconsistent
+                  ? 'TỆP JAVA (KHÔNG NHẤT QUÁN)'
+                  : javaCounts.hasExplicitBreakdown
+                    ? 'TỆP JAVA (INVENTORY / QUÉT / BỎ QUA)'
+                    : 'TỆP JAVA TRONG INVENTORY'}
+              </span>
+              <strong>
+                {javaCounts.isInconsistent
+                  ? javaCounts.summaryNote
+                  : (javaCounts.hasExplicitBreakdown || javaCounts.coverageStatus === 'UNVERIFIED')
+                    ? javaCounts.summaryNote
+                    : (javaCounts.inventoryCount !== null ? javaCounts.inventoryCount : 'Chưa có số liệu')}
+              </strong>
+            </div>
             <div><span>OPENGREP VERSION</span><strong className="mono">{model.scanInfo.opengrepVersion}</strong></div>
             <div><span>RULES SHA-256</span><strong className="mono">{model.scanInfo.rulesSha256}</strong></div>
             <div><span>TRẠNG THÁI RUNTIME QWEN</span><strong>{rtMeta.label}</strong></div>
@@ -359,14 +378,19 @@ export default function ReportsPage() {
           <Card><p className="muted-text" style={{margin: 0}}>{NO_FINDINGS_NOTICE}</p></Card>
         ) : (
           <div style={{display: 'grid', gap: '12px'}}>
-            {model.findingRows.map((row) => (
+            {model.findingRows.map((row) => {
+              const cleanFailure = normalizeFailureKind(row.failureKind);
+              const dgInfo = (row.validatorDowngraded || cleanFailure)
+                ? describeDowngradeReason(cleanFailure, row.downgradeReason, row.citationCheck)
+                : null;
+              return (
               <Card key={row.id}>
                 <div style={{display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '8px', marginBottom: '8px'}}>
                   <div style={{display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center'}}>
-                    <Badge tone="blue">{row.cwe}</Badge>
-                    <Badge tone={validatedStatusMeta(row.validatedStatus).tone}>AI: {row.validatedStatus}</Badge>
-                    <Badge tone={humanReviewMeta(row.humanReviewState).tone}>Người duyệt: {row.humanReviewState}</Badge>
-                    <Badge tone={citationCheckTone(row.citationCheck)}>Trích dẫn: {row.citationCheck}</Badge>
+                    <Badge tone="blue" className="v2-status-token">{row.cwe}</Badge>
+                    <Badge tone={validatedStatusMeta(row.validatedStatus).tone} className="v2-status-token">AI: {row.validatedStatus}</Badge>
+                    <Badge tone={humanReviewMeta(row.humanReviewState).tone} className="v2-status-token">Người duyệt: {row.humanReviewState}</Badge>
+                    <Badge tone={citationCheckTone(row.citationCheck)} className="v2-status-token">Trích dẫn: {row.citationCheck}</Badge>
                   </div>
                   <Link to={`/finding/${encodeURIComponent(row.id)}${scanQuery(sel.scanId)}`} className="button-secondary button-compact">
                     Mở chi tiết <Icon name="ArrowRight" />
@@ -375,9 +399,16 @@ export default function ReportsPage() {
                 <p className="mono wrap-value" style={{fontSize: '12px', color: 'var(--v2-text-secondary)', margin: '4px 0'}}>
                   {row.id} · {row.ruleId} · {row.filePath}:{row.startLine}
                 </p>
-                {row.failureKind && (
+                {row.rawModelStatus && String(row.rawModelStatus).toUpperCase() !== row.validatedStatus && (
+                  <p className="mono" style={{fontSize: '12px', color: 'var(--v2-text-secondary)', margin: '4px 0'}}>
+                    Nhận định thô Qwen: {String(row.rawModelStatus).toUpperCase()} → Sau kiểm chứng: {row.validatedStatus}
+                  </p>
+                )}
+                {dgInfo && (
                   <p style={{fontSize: '12px', color: 'var(--v2-warn-text)', margin: '4px 0'}}>
-                    Lý do kiểm chứng / hạ cấp: {row.failureKind}
+                    Lý do kiểm chứng / hạ cấp: {dgInfo.viLabel}
+                    {dgInfo.hasCode ? <> (<code>{dgInfo.code}</code>)</> : ''}
+                    {dgInfo.rawDetail ? ` — ${dgInfo.rawDetail}` : ''}
                   </p>
                 )}
                 {row.citations.length > 0 && (
@@ -399,7 +430,8 @@ export default function ReportsPage() {
                   </p>
                 )}
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

@@ -1,4 +1,94 @@
 // Pure report view-model builder for GET /api/scans/{scan_id}/report.
+const WIRE_INTEGRITY_REGISTRY_SYM = Symbol.for('22025523.restJsonWireIntegrity.v1');
+
+function isWireInvalidSentinel(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && value.__wireInvalid === true);
+}
+
+function getWireObjectIntegrity(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  const reg = globalThis[WIRE_INTEGRITY_REGISTRY_SYM];
+  if (typeof reg?.getWireObjectIntegrity === 'function') return reg.getWireObjectIntegrity(obj);
+  const weak = reg?.objects?.get(obj) || null;
+  const mat = !Array.isArray(obj) && obj.__wireIntegrity && typeof obj.__wireIntegrity === 'object' ? obj.__wireIntegrity : null;
+  if (!weak && !mat) return null;
+  return {
+    scannerError: Boolean(weak?.scannerError || mat?.scannerError),
+    duplicateKeys: weak?.duplicateKeys || null,
+    invalidIntFields: weak?.invalidIntFields || null,
+    materialized: mat,
+  };
+}
+
+function getWireDuplicateKeyInfo(obj, key) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const reg = globalThis[WIRE_INTEGRITY_REGISTRY_SYM];
+  if (typeof reg?.getWireDuplicateKeyInfo === 'function') return reg.getWireDuplicateKeyInfo(obj, key);
+  const meta = reg?.objects?.get(obj);
+  if (meta?.scannerError) return {count: 2, conflicting: true, scannerError: true};
+  if (meta?.duplicateKeys?.get(key)) return meta.duplicateKeys.get(key);
+  const mat = obj.__wireIntegrity && typeof obj.__wireIntegrity === 'object' ? obj.__wireIntegrity : null;
+  if (mat?.scannerError) return {count: 2, conflicting: true, scannerError: true};
+  if (mat?.duplicateKeys && typeof mat.duplicateKeys === 'object' && !Array.isArray(mat.duplicateKeys) && Object.hasOwn(mat.duplicateKeys, key)) {
+    return {count: Number(mat.duplicateKeys[key]?.count) || 2, conflicting: Boolean(mat.duplicateKeys[key]?.conflicting)};
+  }
+  const val = Object.hasOwn(obj, key) ? obj[key] : undefined;
+  if (isWireInvalidSentinel(val) && (val.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY' || val.kind === 'DUPLICATE_WIRE_KEY')) {
+    return {count: 2, conflicting: val.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY'};
+  }
+  return null;
+}
+
+function readStrictWireSafeInt(obj, key) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return {present: false, valid: true, value: null, conflict: false, malformed: false, reason: ''};
+  }
+  const reg = globalThis[WIRE_INTEGRITY_REGISTRY_SYM];
+  if (typeof reg?.readStrictWireSafeInt === 'function') return reg.readStrictWireSafeInt(obj, key);
+  const wire = reg?.objects?.get(obj);
+  if (wire?.scannerError) {
+    return {present: true, valid: false, value: null, conflict: false, malformed: true, reason: 'WIRE_SCANNER_ERROR'};
+  }
+  const dup = getWireDuplicateKeyInfo(obj, key);
+  if (dup) {
+    return {
+      present: true,
+      valid: false,
+      value: null,
+      conflict: Boolean(dup.conflicting),
+      malformed: !dup.conflicting,
+      reason: dup.conflicting ? 'DUPLICATE_CONFLICTING_WIRE_KEY' : 'DUPLICATE_WIRE_KEY',
+    };
+  }
+  const wireInvalid = wire?.invalidIntFields?.get(key);
+  if (wireInvalid) {
+    return {present: true, valid: false, value: null, conflict: false, malformed: true, reason: wireInvalid.reason, raw: wireInvalid.raw};
+  }
+  if (!Object.hasOwn(obj, key)) return {present: false, valid: true, value: null, conflict: false, malformed: false, reason: ''};
+  const value = obj[key];
+  if (isWireInvalidSentinel(value)) {
+    const isConflict = value.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY';
+    return {
+      present: true,
+      valid: false,
+      value: null,
+      conflict: isConflict,
+      malformed: !isConflict,
+      reason: String(value.reason || value.kind || 'INVALID_WIRE_NUMBER'),
+    };
+  }
+  if (value === undefined || value === null) return {present: false, valid: true, value: null, conflict: false, malformed: false, reason: ''};
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) {
+    return {present: true, valid: false, value: null, conflict: false, malformed: true, reason: 'INVALID_SAFE_INTEGER'};
+  }
+  return {present: true, valid: true, value, conflict: false, malformed: false, reason: ''};
+}
+
+function readReportWireIntOrFallback(obj, key, fallback = 0) {
+  const check = readStrictWireSafeInt(obj, key);
+  if (!check.present) return fallback;
+  return check.valid && check.value !== null ? check.value : null;
+}
 
 export function validateReportForScan(reportDoc, expectedScanId) {
   const expected = typeof expectedScanId === 'string' ? expectedScanId.trim() : '';
@@ -18,6 +108,19 @@ export function validateReportForScan(reportDoc, expectedScanId) {
       error: 'Phản hồi báo cáo từ API không hợp lệ.',
     };
   }
+  const hasRootWireDup = Boolean(
+    getWireObjectIntegrity(reportDoc)?.scannerError
+    || ['scan_summary', 'findings', 'report_integrity', 'scan_id', 'audit_trail', 'data_origin', 'scan_provenance']
+      .some((k) => Boolean(getWireDuplicateKeyInfo(reportDoc, k))),
+  );
+  if (hasRootWireDup) {
+    return {
+      valid: false,
+      scanId: '',
+      reason: 'DUPLICATE_WIRE_KEY',
+      error: 'Phản hồi báo cáo chứa khóa JSON trùng lặp tại biên REST; dữ liệu không được hiển thị hoặc tải xuống.',
+    };
+  }
   const summary = reportDoc.scan_summary && typeof reportDoc.scan_summary === 'object' && !Array.isArray(reportDoc.scan_summary)
     ? reportDoc.scan_summary
     : null;
@@ -27,6 +130,30 @@ export function validateReportForScan(reportDoc, expectedScanId) {
       scanId: '',
       reason: 'MISSING_REPORT_SUMMARY',
       error: 'Phản hồi báo cáo thiếu trường scan_summary hợp lệ; dữ liệu không được hiển thị hoặc tải xuống.',
+    };
+  }
+  const hasSummaryWireDup = Boolean(
+    getWireObjectIntegrity(summary)?.scannerError
+    || [
+      'scan_id',
+      'total_findings',
+      'by_validated_status',
+      'by_human_review_state',
+      'by_cwe',
+      'data_origin',
+      'scan_provenance',
+      'findings_with_trace',
+      'validator_downgraded_count',
+      'matched_citation_count',
+      'proposed_refuted_open_count',
+    ].some((k) => Boolean(getWireDuplicateKeyInfo(summary, k))),
+  );
+  if (hasSummaryWireDup) {
+    return {
+      valid: false,
+      scanId: typeof summary.scan_id === 'string' ? summary.scan_id.trim() : '',
+      reason: 'DUPLICATE_WIRE_KEY',
+      error: 'Trường scan_summary của báo cáo chứa khóa JSON trùng lặp tại biên REST; dữ liệu không được hiển thị hoặc tải xuống.',
     };
   }
   if (typeof summary.scan_id !== 'string' || !summary.scan_id.trim()) {
@@ -413,8 +540,8 @@ function inspectReportFindingsForRefutedOpen(findings) {
   return {validIds, hasAllExplicitStatuses, obsRefOpen, obsNonRefOpen, obsRefNonOpen, obsOpenNonRef};
 }
 
-function resolveReportRefutedStillOpen(findings, totalFindings, refutedCount, openCount, rawSummaryRefutedOpen) {
-  if (!Number.isInteger(totalFindings) || totalFindings < 0) return null;
+function resolveReportRefutedStillOpen(findings, totalFindings, refutedCount, openCount, rawSummaryRefutedOpen, summaryObj = null) {
+  if (!Number.isSafeInteger(totalFindings) || totalFindings < 0) return null;
   const insp = inspectReportFindingsForRefutedOpen(findings);
   if (!insp.validIds) return null;
 
@@ -422,7 +549,10 @@ function resolveReportRefutedStillOpen(findings, totalFindings, refutedCount, op
   const computedExact = isFullList && insp.hasAllExplicitStatuses ? insp.obsRefOpen : null;
 
   if (rawSummaryRefutedOpen !== undefined && rawSummaryRefutedOpen !== null) {
-    if (typeof rawSummaryRefutedOpen !== 'number' || !Number.isInteger(rawSummaryRefutedOpen) || rawSummaryRefutedOpen < 0) {
+    const strictRefOpen = summaryObj
+      ? readStrictWireSafeInt(summaryObj, 'proposed_refuted_open_count')
+      : {valid: typeof rawSummaryRefutedOpen === 'number' && Number.isSafeInteger(rawSummaryRefutedOpen) && rawSummaryRefutedOpen >= 0 && !Object.is(rawSummaryRefutedOpen, -0), value: rawSummaryRefutedOpen};
+    if (!strictRefOpen.valid || strictRefOpen.value === null) {
       return null;
     }
     const upperBound = Math.min(
@@ -472,6 +602,7 @@ export function buildReportViewModel(reportDoc, {expectedScanId} = {}) {
     refutedCount,
     openCount,
     summary.proposed_refuted_open_count,
+    summary,
   );
 
   const scanIssues = Array.isArray(summary.scan_issues) ? summary.scan_issues : [];
@@ -496,6 +627,7 @@ export function buildReportViewModel(reportDoc, {expectedScanId} = {}) {
       rawModelStatus: f.raw_model_status || ass.raw_model_status || null,
       validatorDowngraded: Boolean(f.validator_downgraded ?? ass.validator_downgraded),
       failureKind: f.failure_kind || ass.failure_kind || null,
+      downgradeReason: f.downgrade_reason || ass.downgrade_reason || null,
       citationCheck: String(f.citation_check || ass.citation_check || 'NOT_VERIFIED').toUpperCase(),
       humanReviewState: String(f.human_review_state || 'OPEN').toUpperCase(),
       citations: citations.map((c) => ({
@@ -535,6 +667,7 @@ export function buildReportViewModel(reportDoc, {expectedScanId} = {}) {
       sourceTarget: summary.repo_url || summary.file_name || 'Thư mục quét cục bộ',
       resolvedCommit: summary.resolved_commit || null,
       javaFilesScanned: summary.java_files_scanned ?? '-',
+      rawSummary: summary,
       opengrepVersion: summary.opengrep_version || '-',
       rulesSha256: summary.rules_sha256 || '-',
       promptContract: summary.prompt_contract || 'blind',
@@ -544,15 +677,15 @@ export function buildReportViewModel(reportDoc, {expectedScanId} = {}) {
     cweBreakdown: Object.entries(byCwe),
     opengrepStats: {
       totalFindings,
-      findingsWithTrace: Number(summary.findings_with_trace ?? 0),
+      findingsWithTrace: readReportWireIntOrFallback(summary, 'findings_with_trace', 0),
       provenance: summary.scan_provenance || {},
     },
     qwenStats: {
       supported: supportedCount,
       refuted: refutedCount,
       undetermined: undeterminedCount,
-      downgradedCount: Number(summary.validator_downgraded_count ?? 0),
-      matchedCitations: Number(summary.matched_citation_count ?? 0),
+      downgradedCount: readReportWireIntOrFallback(summary, 'validator_downgraded_count', 0),
+      matchedCitations: readReportWireIntOrFallback(summary, 'matched_citation_count', 0),
       runtimeVerified: Boolean(summary.qwen_runtime_verified),
     },
     humanReviewStats: {

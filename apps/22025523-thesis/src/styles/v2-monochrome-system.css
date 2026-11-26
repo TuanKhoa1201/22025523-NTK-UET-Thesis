@@ -617,6 +617,13 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.badge.v2-status-token {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  flex-shrink: 0;
+}
+
 .badge-blue {
   color: var(--v2-info-text);
   background: var(--v2-info-bg);
@@ -2981,6 +2988,10 @@ tbody tr:hover {
   white-space: normal;
 }
 
+.v2-findings-table td.v2-status-col {
+  min-width: 148px;
+}
+
 .status-table .badge {
   max-width: 100%;
   text-align: left;
@@ -4004,6 +4015,29 @@ tbody tr:hover {
   color: #A3D4BA;
 }
 
+.v2-rm-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 245, 246, 0.28);
+  background: rgba(28, 32, 42, 0.92);
+  color: var(--v2-white);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.v2-rm-live-indicator i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #F5F5F6;
+  box-shadow: 0 0 8px rgba(245, 245, 246, 0.8);
+  animation: v2-rm-dot-pulse 1.2s ease-in-out infinite;
+}
+
 .v2-rm-timecode-readout {
   display: inline-flex;
   align-items: center;
@@ -4079,11 +4113,13 @@ tbody tr:hover {
   background: rgba(42, 47, 60, 0.9);
 }
 
-.v2-rm-track-seg.is-cat-skipped {
+.v2-rm-track-seg.is-cat-skipped,
+.v2-rm-track-seg.is-cat-degraded {
   border-top-color: #E2C593;
 }
 
-.v2-rm-track-seg.is-cat-failed {
+.v2-rm-track-seg.is-cat-failed,
+.v2-rm-track-seg.is-cat-cancelled {
   border-top-color: #DF8E95;
   background: rgba(120, 34, 42, 0.26);
 }
@@ -4198,8 +4234,13 @@ tbody tr:hover {
   background: linear-gradient(155deg, rgba(38, 42, 54, 0.94), rgba(18, 20, 27, 0.96));
 }
 
-.v2-stage-item.is-skipped {
-  border-color: rgba(226, 197, 147, 0.32);
+.v2-stage-item.is-skipped,
+.v2-stage-item.is-degraded {
+  border-color: rgba(226, 197, 147, 0.34);
+}
+
+.v2-stage-item.is-cancelled {
+  border-color: rgba(223, 142, 149, 0.38);
 }
 
 .v2-stage-foot {
@@ -4218,6 +4259,18 @@ tbody tr:hover {
   font-weight: 600;
 }
 
+.v2-stage-share-missing {
+  color: var(--v2-text-muted);
+  font-weight: 500;
+}
+
+.v2-rm-timeline-note {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--v2-text-muted);
+}
+
 @media (max-width: 980px) {
   .v2-rm-stage-grid {
     grid-template-columns: 1fr;
@@ -4232,7 +4285,7 @@ tbody tr:hover {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .v2-rm-playhead {
+  .v2-rm-playhead:not(.is-measured) {
     display: none;
   }
 }
@@ -4253,7 +4306,8 @@ tbody tr:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .v2-rm-sync-pill.is-live i {
+  .v2-rm-sync-pill.is-live i,
+  .v2-rm-live-indicator i {
     animation: none !important;
   }
 

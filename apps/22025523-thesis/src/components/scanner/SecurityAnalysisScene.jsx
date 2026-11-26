@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {Badge, Icon} from '../common/Ui';
 import {scanGuide} from '../../data/scanGuide';
 import {resolveStages} from '../../services/jobModel';
@@ -6,12 +6,16 @@ import ScanStageVisual from './ScanStageVisual';
 import {backendStageStatus, isLiveSessionReady} from './liveStagePresentation';
 import {
   TIMELINE_FPS,
+  TIMELINE_MODES,
   TOTAL_COMPOSITION_FRAMES,
   buildStageTimeline,
-  formatCompactDuration,
+  computePlayheadGeometry,
   formatTimecode,
   frameToBackendMs,
+  resolveAuthoritativeE2eMs,
   resolveFrameLocation,
+  resolveStageTrackSubLabel,
+  resolveTimelineMode,
 } from './remotionEngine';
 
 const TOTAL_STAGES = scanGuide.length;
@@ -25,21 +29,22 @@ const SHORT_NAMES = [
   'SQLite',
 ];
 
-function stageClassName(label, isActive, isSelected) {
+function stageClassName(label, cat, isActive, isSelected) {
   const parts = [];
-  if (label.startsWith('Hoàn thành')) parts.push('is-completed');
-  else if (label.startsWith('Thất bại')) parts.push('is-failed');
-  else if (label.startsWith('Bỏ qua')) parts.push('is-skipped');
-  else if (isActive || label.startsWith('Đang')) parts.push('is-running');
+  if (cat === 'COMPLETED' || label.startsWith('Hoàn thành')) parts.push('is-completed');
+  else if (cat === 'DEGRADED' || label.startsWith('Hoàn tất (có hạ cấp)')) parts.push('is-degraded');
+  else if (cat === 'FAILED' || label.startsWith('Thất bại')) parts.push('is-failed');
+  else if (cat === 'SKIPPED' || cat === 'CANCELLED' || label.startsWith('Bỏ qua') || label.startsWith('Đã hủy')) parts.push('is-skipped');
+  else if (isActive || cat === 'RUNNING' || label.startsWith('Đang')) parts.push('is-running');
   if (isSelected) parts.push('is-selected');
   return parts.join(' ');
 }
 
-function stageTone(label) {
-  if (label.startsWith('Hoàn thành')) return 'green';
-  if (label.startsWith('Thất bại')) return 'red';
-  if (label.startsWith('Bỏ qua')) return 'amber';
-  if (label.startsWith('Đang')) return 'blue';
+function stageTone(label, cat) {
+  if (cat === 'COMPLETED' || label.startsWith('Hoàn thành')) return 'green';
+  if (cat === 'FAILED' || label.startsWith('Thất bại')) return 'red';
+  if (cat === 'DEGRADED' || cat === 'SKIPPED' || cat === 'CANCELLED' || label.startsWith('Hoàn tất (có hạ cấp)') || label.startsWith('Bỏ qua') || label.startsWith('Đã hủy')) return 'amber';
+  if (cat === 'RUNNING' || label.startsWith('Đang')) return 'blue';
   return 'neutral';
 }
 
@@ -82,79 +87,106 @@ export default function SecurityAnalysisScene({
     return resolveStages(null);
   }, [liveJob, live?.state, live?.activeStage, live?.stages]);
 
+  const mode = useMemo(
+    () => resolveTimelineMode({liveJob, live, running}),
+    [liveJob, live, running],
+  );
+  const isLiveMode = mode === TIMELINE_MODES.LIVE;
+  const isPlaybackMode = mode === TIMELINE_MODES.PLAYBACK;
+  const isPreviewMode = mode === TIMELINE_MODES.PREVIEW;
+
+  const ready = isLiveSessionReady(live);
+  const jobState = String(liveJob?.state || live?.state || '').toUpperCase();
+  const liveStageStr = String(live?.stage || '').toUpperCase();
+  const isFailed = jobState === 'FAILED' || liveStageStr === 'FAILED';
+  const isCancelled = jobState === 'CANCELLED' || jobState === 'CANCELED' || liveStageStr === 'CANCELLED';
+  const isCompleted = !isLiveMode && !isFailed && !isCancelled && (ready || jobState === 'COMPLETED' || liveStageStr === 'COMPLETED');
+
+  // Authoritative E2E duration strictly from API total_e2e_duration_ms (never job_timeout_seconds)
+  const authoritativeE2eMs = useMemo(
+    () => (isPlaybackMode ? resolveAuthoritativeE2eMs({backendMs, liveJob}) : null),
+    [isPlaybackMode, backendMs, liveJob],
+  );
+
   const timeline = useMemo(
-    () => buildStageTimeline(resolvedStages, {totalFrames: TOTAL_COMPOSITION_FRAMES}),
-    [resolvedStages],
+    () => buildStageTimeline(resolvedStages, {
+      totalFrames: TOTAL_COMPOSITION_FRAMES,
+      totalE2eMs: authoritativeE2eMs,
+      mode,
+    }),
+    [resolvedStages, authoritativeE2eMs, mode],
   );
 
   const backendStage = Number(live?.activeStage);
   const hasBackendStage = Number.isInteger(backendStage) && backendStage >= 1 && backendStage <= TOTAL_STAGES;
-  const ready = isLiveSessionReady(live);
-  const jobState = String(liveJob?.state || live?.state || '').toUpperCase();
-  const liveStageStr = String(live?.stage || '').toUpperCase();
-
-  const isLiveRunning = Boolean(
-    running ||
-    ['SUBMITTING', 'WAITING_FOR_RESPONSE', 'QUEUED', 'RUNNING', 'LOADING_RESULTS'].includes(liveStageStr) ||
-    ['QUEUED', 'RUNNING'].includes(jobState),
-  );
-  const isFailed = jobState === 'FAILED' || liveStageStr === 'FAILED';
-  const isCompleted = ready || jobState === 'COMPLETED' || liveStageStr === 'COMPLETED';
 
   const backendActiveIndex = hasBackendStage
     ? backendStage - 1
     : isCompleted
       ? TOTAL_STAGES - 1
-      : isLiveRunning
+      : isLiveMode
         ? 0
         : -1;
 
-  // Controls whether playhead locks to live backend stage or user is manually scrubbing/replaying
-  const [followLive, setFollowLive] = useState(true);
-  const [playing, setPlaying] = useState(() => !reducedMotion);
+  // In LIVE mode, user can click a stage card to inspect details (read-only) without mutating backend state.
+  const [liveInspectIndex, setLiveInspectIndex] = useState(null);
+  const [playing, setPlaying] = useState(false);
   const [globalFrame, setGlobalFrame] = useState(0);
   const [ambientTick, setAmbientTick] = useState(0);
-  const lastBackendIdxRef = useRef(-1);
+  const lastTerminalSignatureRef = useRef('');
 
-  // When a live scan starts or advances to a new backend stage, snap smoothly when followLive is active
+  // Keep live playhead anchored cleanly to the real backend stage & finding progress (never fake completion)
+  const computeLiveAnchorFrame = useCallback((stageIdx) => {
+    const safeIdx = Math.max(0, Math.min(TOTAL_STAGES - 1, stageIdx));
+    const seg = timeline.segments[safeIdx];
+    if (!seg) return 0;
+    const processed = Number(live?.progress?.processed_findings);
+    const totalFindings = Number(live?.progress?.total_findings);
+    if (safeIdx === 3 && Number.isFinite(processed) && Number.isFinite(totalFindings) && totalFindings > 0) {
+      const ratio = Math.min(0.95, Math.max(0.05, processed / totalFindings));
+      return seg.fromFrame + Math.round(ratio * Math.max(1, seg.durationInFrames - 1));
+    }
+    return seg.fromFrame + Math.round(Math.max(1, seg.durationInFrames - 1) * 0.35);
+  }, [timeline, live?.progress?.processed_findings, live?.progress?.total_findings]);
+
+  // Synchronize mode transitions cleanly
   useEffect(() => {
-    if (isLiveRunning) {
-      if (lastBackendIdxRef.current !== backendActiveIndex) {
-        lastBackendIdxRef.current = backendActiveIndex;
-        if (followLive && backendActiveIndex >= 0) {
+    if (isLiveMode) {
+      setPlaying(false);
+      lastTerminalSignatureRef.current = '';
+      if (backendActiveIndex >= 0) {
+        setGlobalFrame(computeLiveAnchorFrame(backendActiveIndex));
+      }
+      return;
+    }
+    setLiveInspectIndex(null);
+
+    if (isPlaybackMode) {
+      const sig = `${liveJob?.job_id || ''}|${liveJob?.scan_id || ''}|${jobState}|${isCompleted ? 'DONE' : isFailed ? 'FAIL' : isCancelled ? 'CANCEL' : 'TERM'}`;
+      if (lastTerminalSignatureRef.current !== sig) {
+        lastTerminalSignatureRef.current = sig;
+        setPlaying(false);
+        if (isCompleted) {
+          // Exact end of Stage 6 / end of timeline
+          setGlobalFrame(timeline.totalFrames - 1);
+        } else if ((isFailed || isCancelled) && backendActiveIndex >= 0) {
           const seg = timeline.segments[backendActiveIndex];
-          if (seg) {
-            setGlobalFrame(seg.fromFrame);
-          }
+          if (seg) setGlobalFrame(seg.fromFrame + Math.round((seg.durationInFrames - 1) * 0.5));
         }
       }
-    } else if (isFailed && backendActiveIndex >= 0) {
-      const seg = timeline.segments[backendActiveIndex];
-      if (seg) {
-        setGlobalFrame(seg.fromFrame + Math.round(seg.durationInFrames * 0.5));
-      }
-      setPlaying(false);
-    } else if (isCompleted && lastBackendIdxRef.current !== 999) {
-      lastBackendIdxRef.current = 999;
-      // On fresh completion, jump to stage 6 (or stay ready for full proportional replay)
-      const lastSeg = timeline.segments[TOTAL_STAGES - 1];
-      if (lastSeg) setGlobalFrame(lastSeg.fromFrame + Math.round(lastSeg.durationInFrames * 0.65));
-      setPlaying(false);
+      return;
     }
-  }, [isLiveRunning, isFailed, isCompleted, backendActiveIndex, followLive, timeline]);
 
-  // Reset followLive automatically whenever a brand-new live run starts
-  useEffect(() => {
-    if (isLiveRunning) {
-      setFollowLive(true);
-    }
-  }, [isLiveRunning]);
+    // PREVIEW mode: reset terminal ref
+    lastTerminalSignatureRef.current = '';
+  }, [isLiveMode, isPlaybackMode, isCompleted, isFailed, isCancelled, backendActiveIndex, timeline, liveJob?.job_id, liveJob?.scan_id, jobState, computeLiveAnchorFrame]);
 
-  // Remotion 60fps deterministic animation loop
+  // Deterministic 60fps animation loop:
+  // - In LIVE mode: only ticks ambient visual motion; NEVER moves playhead out of active backend stage.
+  // - In PREVIEW / PLAYBACK when playing: advances globalFrame; in PLAYBACK stops cleanly at exact end.
   useEffect(() => {
     if (reducedMotion) return undefined;
-
-    const shouldTick = isLiveRunning || playing;
+    const shouldTick = isLiveMode || playing;
     if (!shouldTick) return undefined;
 
     let rafId = 0;
@@ -167,29 +199,18 @@ export default function SecurityAnalysisScene({
 
       setAmbientTick((prev) => prev + frameDelta);
 
-      if (isLiveRunning && followLive && backendActiveIndex >= 0) {
-        const seg = timeline.segments[backendActiveIndex];
-        if (seg) {
-          // Advance playhead smoothly inside the active backend stage's track segment
-          const processed = Number(live?.progress?.processed_findings);
-          const totalFindings = Number(live?.progress?.total_findings);
-          const hasRealInnerProgress = backendActiveIndex === 3 && Number.isFinite(processed) && Number.isFinite(totalFindings) && totalFindings > 0;
-
-          setGlobalFrame((prev) => {
-            if (hasRealInnerProgress) {
-              const target = seg.fromFrame + Math.min(0.95, Math.max(0.08, processed / totalFindings)) * (seg.durationInFrames - 1);
-              return prev + (target - prev) * Math.min(1, dtSec * 5);
-            }
-            const maxLiveFrame = seg.endFrame - 4;
-            const next = prev + frameDelta * 0.55;
-            if (next < seg.fromFrame) return seg.fromFrame;
-            return next >= maxLiveFrame ? seg.fromFrame + seg.durationInFrames * 0.85 : next;
-          });
-        }
-      } else if (playing) {
+      if (!isLiveMode && playing) {
         setGlobalFrame((prev) => {
+          const maxFrame = timeline.totalFrames - 1;
           const next = prev + frameDelta;
-          return next >= timeline.totalFrames ? 0 : next;
+          if (next >= maxFrame) {
+            if (isPlaybackMode) {
+              setPlaying(false);
+              return maxFrame;
+            }
+            return 0;
+          }
+          return next;
         });
       }
 
@@ -198,17 +219,21 @@ export default function SecurityAnalysisScene({
 
     rafId = window.requestAnimationFrame(loop);
     return () => window.cancelAnimationFrame(rafId);
-  }, [reducedMotion, isLiveRunning, followLive, backendActiveIndex, playing, timeline, live?.progress?.processed_findings, live?.progress?.total_findings]);
+  }, [reducedMotion, isLiveMode, isPlaybackMode, playing, timeline.totalFrames]);
 
-  const frameLoc = resolveFrameLocation(timeline, globalFrame);
-  const displayIndex = isLiveRunning && followLive && backendActiveIndex >= 0
-    ? backendActiveIndex
+  const effectiveGlobalFrame = isLiveMode && backendActiveIndex >= 0
+    ? computeLiveAnchorFrame(backendActiveIndex)
+    : globalFrame;
+
+  const frameLoc = resolveFrameLocation(timeline, effectiveGlobalFrame);
+  const displayIndex = isLiveMode
+    ? (liveInspectIndex !== null ? liveInspectIndex : Math.max(0, backendActiveIndex))
     : frameLoc.stageIndex;
   const displaySegment = timeline.segments[displayIndex] || timeline.segments[0];
   const displayStage = resolvedStages[displayIndex] || null;
   const displayStep = scanGuide[displayIndex] || scanGuide[0];
 
-  // Track stage entrance frame so Remotion spring() triggers crisply every time displayed stage changes
+  // Track stage entrance frame so spring() triggers crisply when displayed stage changes
   const [stageResetTick, setStageResetTick] = useState(0);
   const prevDisplayIdxRef = useRef(displayIndex);
   useEffect(() => {
@@ -218,42 +243,135 @@ export default function SecurityAnalysisScene({
     }
   }, [displayIndex, ambientTick]);
 
-  const localSceneFrame = isLiveRunning && followLive
+  const localSceneFrame = isLiveMode
     ? Math.max(0, ambientTick - stageResetTick)
     : frameLoc.localFrame;
   const motionCycle = reducedMotion ? 0.5 : ((ambientTick / (TIMELINE_FPS * 3.2)) % 1);
+
+  // Measure real DOM segment geometry so playhead aligns accurately across unequal widths, gaps, padding, resize & zoom
+  const tracksRef = useRef(null);
+  const segRefs = useRef([]);
+  const [trackMetrics, setTrackMetrics] = useState({containerWidth: 0, containerHeight: 0, segmentRects: []});
+
+  const measureTracks = useCallback(() => {
+    const container = tracksRef.current;
+    if (!container || typeof container.getBoundingClientRect !== 'function') return;
+    const cRect = container.getBoundingClientRect();
+    if (!cRect || cRect.width <= 0) return;
+    const rects = [];
+    for (let i = 0; i < TOTAL_STAGES; i += 1) {
+      const el = segRefs.current[i];
+      if (!el || typeof el.getBoundingClientRect !== 'function') {
+        rects.push(null);
+        continue;
+      }
+      const r = el.getBoundingClientRect();
+      rects.push({
+        left: r.left - cRect.left,
+        top: r.top - cRect.top,
+        width: r.width,
+        height: r.height,
+      });
+    }
+    setTrackMetrics((prev) => {
+      const same = prev.containerWidth === cRect.width
+        && prev.containerHeight === cRect.height
+        && prev.segmentRects.length === rects.length
+        && rects.every((r, idx) => {
+          const p = prev.segmentRects[idx];
+          if (!r && !p) return true;
+          if (!r || !p) return false;
+          return Math.abs(r.left - p.left) < 0.5
+            && Math.abs(r.top - p.top) < 0.5
+            && Math.abs(r.width - p.width) < 0.5
+            && Math.abs(r.height - p.height) < 0.5;
+        });
+      return same ? prev : {containerWidth: cRect.width, containerHeight: cRect.height, segmentRects: rects};
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    measureTracks();
+  }, [measureTracks, timeline, mode]);
+
+  useEffect(() => {
+    const container = tracksRef.current;
+    if (!container) return undefined;
+    let ro = null;
+    if (typeof ResizeObserver === 'function') {
+      ro = new ResizeObserver(() => measureTracks());
+      ro.observe(container);
+      for (const el of segRefs.current) {
+        if (el) ro.observe(el);
+      }
+    }
+    const onResize = () => measureTracks();
+    window.addEventListener?.('resize', onResize);
+    window.visualViewport?.addEventListener?.('resize', onResize);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener?.('resize', onResize);
+      window.visualViewport?.removeEventListener?.('resize', onResize);
+    };
+  }, [measureTracks, timeline]);
+
+  // Reset detail inspection cleanly whenever switching jobs/sessions.
+  const jobIdentityKey = `${liveJob?.job_id || ''}|${liveJob?.scan_id || ''}`;
+  useEffect(() => {
+    setLiveInspectIndex(null);
+  }, [jobIdentityKey]);
+
+  // Strict separation:
+  // - playheadFrameLoc ALWAYS tracks the backend execution stage in LIVE mode (or playback cursor in PREVIEW/PLAYBACK).
+  // - Opening another stage's detail card updates selectedDetailIndex (`liveInspectIndex`) ONLY and NEVER moves the LIVE playhead.
+  const playheadFrameLoc = frameLoc;
+
+  const playheadGeom = useMemo(
+    () => computePlayheadGeometry({
+      segmentRects: trackMetrics.segmentRects,
+      containerWidth: trackMetrics.containerWidth,
+      containerHeight: trackMetrics.containerHeight,
+      frameLoc: playheadFrameLoc,
+      timeline,
+    }),
+    [trackMetrics, playheadFrameLoc, timeline],
+  );
 
   const jumpToStage = useCallback((idx) => {
     const safeIdx = Math.max(0, Math.min(TOTAL_STAGES - 1, idx));
     const seg = timeline.segments[safeIdx];
     if (!seg) return;
-    if (isLiveRunning && safeIdx !== backendActiveIndex) {
-      setFollowLive(false);
+    if (isLiveMode) {
+      setLiveInspectIndex(safeIdx === backendActiveIndex ? null : safeIdx);
+      setStageResetTick(ambientTick);
+      return;
     }
     const offset = playing
-      ? 2
-      : Math.min(Math.max(48, Math.round(seg.durationInFrames * 0.4)), Math.max(0, seg.durationInFrames - 2));
-    setGlobalFrame(seg.fromFrame + offset);
+      ? 0
+      : (isCompleted && safeIdx === TOTAL_STAGES - 1
+        ? Math.max(0, seg.durationInFrames - 1)
+        : Math.round(Math.max(0, seg.durationInFrames - 1) * 0.5));
+    setGlobalFrame(Math.min(timeline.totalFrames - 1, seg.fromFrame + offset));
     setStageResetTick(ambientTick);
-  }, [timeline, isLiveRunning, backendActiveIndex, ambientTick, playing]);
+  }, [timeline, isLiveMode, backendActiveIndex, ambientTick, playing, isCompleted]);
 
   const handleScrub = (event) => {
-    const nextFrame = Number(event.target.value);
-    if (isLiveRunning) setFollowLive(false);
+    const nextFrame = Math.max(0, Math.min(timeline.totalFrames - 1, Number(event.target.value) || 0));
+    if (isLiveMode) {
+      // In LIVE mode, scrubbing only inspects stages read-only; never overrides real backend progress
+      const loc = resolveFrameLocation(timeline, nextFrame);
+      setLiveInspectIndex(loc.stageIndex === backendActiveIndex ? null : loc.stageIndex);
+      return;
+    }
     setPlaying(false);
     setGlobalFrame(nextFrame);
   };
 
   const handleTogglePlay = () => {
-    if (isLiveRunning && followLive) {
-      // Already locked to live backend; clicking toggles preview replay mode or re-locks
-      setFollowLive(false);
-      setPlaying(true);
-      return;
-    }
+    if (isLiveMode) return;
     setPlaying((prev) => {
       const next = !prev;
-      if (next && globalFrame >= timeline.totalFrames - 8) {
+      if (next && globalFrame >= timeline.totalFrames - 2) {
         setGlobalFrame(0);
       }
       return next;
@@ -261,48 +379,65 @@ export default function SecurityAnalysisScene({
   };
 
   const handleRelockLive = () => {
-    setFollowLive(true);
-    if (backendActiveIndex >= 0 && timeline.segments[backendActiveIndex]) {
-      setGlobalFrame(timeline.segments[backendActiveIndex].fromFrame);
-    }
+    setLiveInspectIndex(null);
   };
 
-  const isIdlePreview = !liveJob && !isLiveRunning && !isCompleted && !isFailed;
-  const stageDisplayLabel = (idx) => (isIdlePreview ? 'Sẵn sàng' : backendStageStatus(idx, live));
+  const stageDisplayLabel = (idx) => (
+    isPreviewMode ? 'Chế độ xem trước' : backendStageStatus(idx, live)
+  );
 
-  // Honest synchronization badge reflecting actual backend state (AGENTS.md compliant)
-  const syncMeta = isLiveRunning && followLive
+  // Honest synchronization badge strictly separating PREVIEW / LIVE / PLAYBACK
+  const syncMeta = isLiveMode
     ? {
-        label: `ĐANG ĐỒNG BỘ BACKEND THỰC · GIAI ĐOẠN ${String(Math.max(1, backendActiveIndex + 1)).padStart(2, '0')}/06`,
+        label: liveInspectIndex !== null
+          ? `LIVE · ĐANG XEM GIAI ĐOẠN ${String(liveInspectIndex + 1).padStart(2, '0')}/06 (BACKEND TẠI ${String(Math.max(1, backendActiveIndex + 1)).padStart(2, '0')}/06)`
+          : `LIVE · ĐANG ĐỒNG BỘ BACKEND THỰC · GIAI ĐOẠN ${String(Math.max(1, backendActiveIndex + 1)).padStart(2, '0')}/06`,
         tone: 'live',
       }
     : isFailed
       ? {
-          label: `BACKEND DỪNG TẠI GIAI ĐOẠN ${String(Math.max(1, backendActiveIndex + 1)).padStart(2, '0')}/06 (FAILED)`,
+          label: `PLAYBACK · BACKEND DỪNG TẠI GIAI ĐOẠN ${String(Math.max(1, backendActiveIndex + 1)).padStart(2, '0')}/06 (FAILED)`,
           tone: 'failed',
         }
-      : isCompleted
+      : isCancelled
         ? {
-            label: timeline.hasRealTiming
-              ? 'ĐỒNG BỘ THỜI LƯỢNG THỰC TỪ API · 6 GIAI ĐOẠN'
-              : 'PHIÊN ĐÃ HOÀN TẤT · DỮ LIỆU TỪ API',
-            tone: 'done',
+            label: `PLAYBACK · PHIÊN ĐÃ HỦY TẠI GIAI ĐOẠN ${String(Math.max(1, backendActiveIndex + 1)).padStart(2, '0')}/06 (CANCELLED)`,
+            tone: 'failed',
           }
-        : {
-            label: 'XEM TRƯỚC PIPELINE 6 GIAI ĐOẠN',
-            tone: 'neutral',
-          };
+        : isCompleted
+          ? {
+              label: authoritativeE2eMs !== null
+                ? 'PLAYBACK · ĐỒNG BỘ THỜI LƯỢNG E2E THỰC TỪ API · 6 GIAI ĐOẠN'
+                : 'PLAYBACK · PHIÊN ĐÃ HOÀN TẤT (CHƯA CÓ TỔNG THỜI LƯỢNG E2E)',
+              tone: 'done',
+            }
+          : {
+              label: 'PREVIEW · XEM TRƯỚC PIPELINE 6 GIAI ĐOẠN (MINH HỌA)',
+              tone: 'neutral',
+            };
 
-  const totalDisplayMs = backendMs ?? (timeline.hasRealTiming ? timeline.totalMeasuredMs : null);
-  const currentDisplayMs = isLiveRunning && followLive
-    ? elapsedMs
-    : frameToBackendMs(timeline, globalFrame);
-
-  const playheadPct = Math.max(0, Math.min(100, (globalFrame / Math.max(1, timeline.totalFrames - 1)) * 100));
+  const playbackCurrentMs = isPlaybackMode
+    ? frameToBackendMs(timeline, effectiveGlobalFrame, {totalE2eMs: authoritativeE2eMs})
+    : null;
+  const previewCurrentMs = isPreviewMode
+    ? frameToBackendMs(timeline, effectiveGlobalFrame)
+    : 0;
   const effectiveNoLlm = Boolean(noLlm || liveJob?.no_llm);
 
+  // Keep slider aligned with backend execution frame during LIVE (inspection stays read-only via liveInspectIndex).
+  const sliderValue = Math.round(effectiveGlobalFrame);
+
+  const playheadStyle = playheadGeom.measured
+    ? {
+        left: `${playheadGeom.leftPx}px`,
+        ...(playheadGeom.isMultiRow && playheadGeom.heightPx !== null
+          ? {top: `${playheadGeom.topPx}px`, height: `${playheadGeom.heightPx}px`, bottom: 'auto'}
+          : {}),
+      }
+    : {left: `${playheadGeom.leftPct}%`};
+
   return (
-    <div id="scan-simulation" className="v2-rm-root" aria-live="polite">
+    <div id="scan-simulation" className="v2-rm-root" data-timeline-mode={mode} aria-live="polite">
       {live?.interrupted && (
         <div className="inline-warning" role="status" style={{marginBottom: '12px'}}>
           <Icon name="AlertTriangle" />Kết nối tạm gián đoạn — đang hiển thị trạng thái đã xác nhận gần nhất từ API.
@@ -315,6 +450,7 @@ export default function SecurityAnalysisScene({
         index={displayIndex}
         stage={displayStage ? {...displayStage, label: stageDisplayLabel(displayIndex)} : null}
         segment={displaySegment}
+        mode={mode}
         localFrame={localSceneFrame}
         cycle={motionCycle}
         syncModeLabel={syncMeta.label}
@@ -325,28 +461,33 @@ export default function SecurityAnalysisScene({
         reducedMotion={reducedMotion}
       />
 
-      {/* 2. Remotion Studio-Style Playback Bar & Proportional 6-Stage Backend Timeline */}
+      {/* 2. Studio Control Deck & 6-Stage Backend Timeline */}
       <div className="v2-rm-studio-deck">
         <div className="v2-rm-controls-row">
           <div className="v2-rm-transport">
-            <button
-              type="button"
-              className="v2-rm-btn v2-rm-btn--primary"
-              onClick={handleTogglePlay}
-              disabled={reducedMotion}
-              aria-label={playing && !(isLiveRunning && followLive) ? 'Tạm dừng mô phỏng' : 'Phát mô phỏng 6 giai đoạn'}
-            >
-              <Icon name={playing && !(isLiveRunning && followLive) ? 'Pause' : 'Play'} />
-              <span>
-                {isLiveRunning && followLive
-                  ? 'Đang chạy thực'
-                  : playing
-                    ? 'Tạm dừng'
-                    : isCompleted
-                      ? 'Phát lại 6 giai đoạn'
-                      : 'Chạy mô phỏng'}
+            {isLiveMode ? (
+              <span className="v2-rm-live-indicator" role="status">
+                <i aria-hidden="true" />
+                <span>LIVE · Đang theo dõi tiến trình backend</span>
               </span>
-            </button>
+            ) : (
+              <button
+                type="button"
+                className="v2-rm-btn v2-rm-btn--primary"
+                onClick={handleTogglePlay}
+                disabled={reducedMotion}
+                aria-label={playing ? 'Tạm dừng phát lại' : isPlaybackMode ? 'Phát lại 6 giai đoạn' : 'Xem trước mô phỏng 6 giai đoạn'}
+              >
+                <Icon name={playing ? 'Pause' : 'Play'} />
+                <span>
+                  {playing
+                    ? 'Tạm dừng'
+                    : isPlaybackMode
+                      ? 'Phát lại 6 giai đoạn'
+                      : 'Chạy xem trước'}
+                </span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -368,48 +509,65 @@ export default function SecurityAnalysisScene({
               <Icon name="ChevronRight" />
             </button>
 
-            {isLiveRunning && !followLive && (
+            {isLiveMode && liveInspectIndex !== null && (
               <button type="button" className="v2-rm-btn v2-rm-btn--sync" onClick={handleRelockLive}>
                 <Icon name="RotateCcw" />
-                <span>Đồng bộ tiến trình thực</span>
+                <span>Quay về tiến trình LIVE</span>
               </button>
             )}
           </div>
 
-          <div className="v2-rm-timecode-readout mono">
+          <div className="v2-rm-timecode-readout mono" data-testid="timeline-clock">
             <Icon name="Clock" />
-            {totalDisplayMs !== null ? (
-              <span>
-                <strong>{formatTimecode(currentDisplayMs)}</strong>
-                <em> / {formatTimecode(totalDisplayMs)}</em>
-                <small> (API thực)</small>
-              </span>
-            ) : isLiveRunning ? (
+            {isLiveMode ? (
               <span>
                 <strong>{formatTimecode(elapsedMs)}</strong>
-                <small> · đang theo dõi</small>
+                <small> · đang theo dõi (LIVE)</small>
               </span>
+            ) : isPlaybackMode ? (
+              authoritativeE2eMs !== null && playbackCurrentMs !== null ? (
+                <span>
+                  <strong>{formatTimecode(playbackCurrentMs)}</strong>
+                  {Math.round(playbackCurrentMs) < Math.round(authoritativeE2eMs) && <small> (nội suy)</small>}
+                  <em> / {formatTimecode(authoritativeE2eMs)}</em>
+                  <small> (E2E thực từ API)</small>
+                </span>
+              ) : (
+                <span>
+                  <strong>Chưa có tổng thời lượng E2E</strong>
+                  <small> · Playback</small>
+                </span>
+              )
             ) : (
               <span>
-                <strong>{formatTimecode(currentDisplayMs)}</strong>
+                <strong>{formatTimecode(previewCurrentMs)}</strong>
                 <em> / {formatTimecode((timeline.totalFrames / TIMELINE_FPS) * 1000)}</em>
-                <small> · 60 FPS</small>
+                <small> · Xem trước</small>
               </span>
             )}
           </div>
         </div>
 
-        {/* Proportional 6-Stage Sequence Track with Playhead Needle */}
+        {/* Proportional 6-Stage Sequence Track with DOM-Measured Playhead Needle */}
         <div className="v2-rm-timeline-wrap">
-          <div className="v2-rm-timeline-tracks" role="tablist" aria-label="Thanh thời gian 6 giai đoạn backend">
+          <div
+            ref={tracksRef}
+            className="v2-rm-timeline-tracks"
+            role="tablist"
+            aria-label="Thanh thời gian 6 giai đoạn backend"
+          >
             {timeline.segments.map((seg) => {
-              const label = backendStageStatus(seg.index, live);
-              const catCls = seg.stage?.cat ? `is-cat-${seg.stage.cat.toLowerCase()}` : 'is-cat-unknown';
+              const label = stageDisplayLabel(seg.index);
+              const catCls = isPreviewMode
+                ? 'is-cat-preview'
+                : (seg.stage?.cat ? `is-cat-${seg.stage.cat.toLowerCase()}` : 'is-cat-unknown');
               const isSelected = seg.index === displayIndex;
-              const isLiveHere = isLiveRunning && seg.index === backendActiveIndex;
+              const isLiveHere = isLiveMode && seg.index === backendActiveIndex;
+              const subLabel = resolveStageTrackSubLabel(seg, mode);
               return (
                 <button
                   key={scanGuide[seg.index].key}
+                  ref={(el) => { segRefs.current[seg.index] = el; }}
                   type="button"
                   role="tab"
                   aria-selected={isSelected}
@@ -422,20 +580,19 @@ export default function SecurityAnalysisScene({
                     <b className="mono">{String(seg.index + 1).padStart(2, '0')}</b>
                     <span>{SHORT_NAMES[seg.index]}</span>
                   </span>
-                  <span className="v2-rm-track-sub mono">
-                    {seg.measuredMs !== null
-                      ? formatCompactDuration(seg.measuredMs)
-                      : seg.stage?.cat === 'RUNNING'
-                        ? 'đang chạy…'
-                        : seg.stage?.cat === 'SKIPPED'
-                          ? 'bỏ qua'
-                          : `${Math.round(seg.visualPct)}%`}
-                  </span>
+                  <span className="v2-rm-track-sub mono">{subLabel}</span>
                 </button>
               );
             })}
 
-            <div className="v2-rm-playhead" style={{left: `${playheadPct}%`}} aria-hidden="true">
+            <div
+              className={`v2-rm-playhead ${playheadGeom.measured ? 'is-measured' : ''} ${playheadGeom.isMultiRow ? 'is-multirow' : ''}`}
+              style={playheadStyle}
+              data-stage-index={playheadFrameLoc.stageIndex}
+              data-backend-stage-index={backendActiveIndex}
+              data-selected-stage-index={displayIndex}
+              aria-hidden="true"
+            >
               <span className="v2-rm-playhead-cap" />
             </div>
           </div>
@@ -446,10 +603,15 @@ export default function SecurityAnalysisScene({
             min={0}
             max={timeline.totalFrames - 1}
             step={1}
-            value={Math.round(globalFrame)}
+            value={sliderValue}
             onChange={handleScrub}
-            aria-label="Tua tiến trình 6 giai đoạn backend"
+            aria-label={isLiveMode ? 'Chọn giai đoạn để xem chi tiết (không thay đổi trạng thái LIVE)' : 'Tua tiến trình 6 giai đoạn backend'}
           />
+          {timeline.isLayoutNormalized && (
+            <p className="v2-rm-timeline-note">
+              Độ rộng ô giai đoạn được chuẩn hóa tối thiểu để dễ quan sát; thời lượng và tỷ trọng E2E chỉ hiển thị khi có số liệu đo thực từ API.
+            </p>
+          )}
         </div>
       </div>
 
@@ -457,11 +619,12 @@ export default function SecurityAnalysisScene({
       <div className="v2-stage-rail" role="list" aria-label="6 giai đoạn xử lý thực tế trên backend">
         {scanGuide.map((item, index) => {
           const label = stageDisplayLabel(index);
-          const isDone = label.startsWith('Hoàn thành');
-          const isBackendCurrent = index === backendActiveIndex && (hasBackendStage || ready || live?.stage === 'LOADING_RESULTS');
-          const isSelected = index === displayIndex;
-          const stateCls = stageClassName(label, isBackendCurrent, isSelected);
           const seg = timeline.segments[index];
+          const cat = isPreviewMode ? 'PREVIEW' : (seg?.stage?.cat || 'UNKNOWN');
+          const isDone = !isPreviewMode && (cat === 'COMPLETED' || label.startsWith('Hoàn thành'));
+          const isBackendCurrent = !isPreviewMode && index === backendActiveIndex && (hasBackendStage || ready || live?.stage === 'LOADING_RESULTS');
+          const isSelected = index === displayIndex;
+          const stateCls = stageClassName(label, cat, isBackendCurrent, isSelected);
 
           return (
             <button
@@ -476,7 +639,7 @@ export default function SecurityAnalysisScene({
                 <span className="v2-stage-num">
                   {isDone ? <Icon name="Check" /> : String(index + 1).padStart(2, '0')}
                 </span>
-                <Badge tone={stageTone(label)}>{label}</Badge>
+                <Badge tone={stageTone(label, cat)}>{label}</Badge>
               </div>
               <div className="v2-stage-title">{item.title}</div>
               <div className="v2-stage-meta">
@@ -484,9 +647,11 @@ export default function SecurityAnalysisScene({
               </div>
               <div className="v2-stage-foot">
                 <span className="mono">{item.key}</span>
-                {seg?.sharePct !== null && seg?.sharePct !== undefined && (
+                {seg?.sharePct !== null && seg?.sharePct !== undefined ? (
                   <span className="mono v2-stage-share">{seg.sharePct.toFixed(1)}% E2E</span>
-                )}
+                ) : !isPreviewMode && (cat === 'COMPLETED' || cat === 'DEGRADED') && !seg?.hasMeasuredDuration ? (
+                  <span className="mono v2-stage-share-missing">Chưa có số liệu thời lượng</span>
+                ) : null}
               </div>
             </button>
           );

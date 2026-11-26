@@ -3,7 +3,7 @@ import {Link, useLocation, useNavigate, useOutletContext, useParams, useSearchPa
 import {Card, PageHeader, Badge, DataNotice, EmptyState, Icon} from '../components/common/Ui';
 import HumanReviewPanel from '../components/review/HumanReviewPanel';
 import {ACTIVE_KEY, clearStaleActiveScanId, scanQuery} from '../services/liveScan';
-import {api, getApiOrigin, getAuthSessionScope} from '../services/api';
+import {api, getApiBaseUrl, getApiOrigin, getAuthSessionScope, safeSessionGet} from '../services/api';
 import {verifyFindingIdentity} from '../services/reviewModel';
 import {LiveFindings as LiveDashboard} from './LiveFindings';
 import {
@@ -11,12 +11,14 @@ import {
   citationCheckMeta,
   citationCheckTone,
   classifyDataOrigin,
+  describeDowngradeReason,
   fileName,
   findReportedId,
   firstText,
   formatShortHash,
   getCweGuide,
   humanReviewMeta,
+  normalizeFailureKind,
   resolveFindingSourceHash,
   resolveSnippetHashStatus,
   runtimeVerificationMeta,
@@ -25,7 +27,7 @@ import {
 
 function useActiveScanId() {
   const [params] = useSearchParams();
-  return params.get('scan_id') || window.sessionStorage.getItem(ACTIVE_KEY) || '';
+  return params.get('scan_id') || safeSessionGet(ACTIVE_KEY) || '';
 }
 
 function useRemote(load, deps) {
@@ -33,10 +35,17 @@ function useRemote(load, deps) {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
+    const requestBaseUrl = getApiBaseUrl();
     const requestOrigin = getApiOrigin();
     const requestSession = getAuthSessionScope();
     let active = true;
-    const isStale = () => !active || controller.signal.aborted || getApiOrigin() !== requestOrigin || getAuthSessionScope() !== requestSession;
+    const isStale = () => (
+      !active
+      || controller.signal.aborted
+      || getApiBaseUrl() !== requestBaseUrl
+      || getApiOrigin() !== requestOrigin
+      || getAuthSessionScope() !== requestSession
+    );
     setState({status: 'loading', data: null, error: '', statusCode: null, errorCode: null});
     load(controller.signal)
       .then((data) => {
@@ -370,7 +379,11 @@ function LiveDetailPage({scanId, id, detailUrl}) {
   const cMeta = citationCheckMeta(citationCheck);
   const rtMeta = runtimeVerificationMeta(assessment.runtime?.model_runtime_verified);
   const downgraded = Boolean(validDetail?.validator_downgraded ?? assessment.validator_downgraded);
-  const failureKind = validDetail?.failure_kind ?? assessment.failure_kind ?? null;
+  const failureKind = normalizeFailureKind(validDetail?.failure_kind ?? assessment.failure_kind);
+  const rawDowngradeReason = validDetail?.downgrade_reason ?? assessment.downgrade_reason ?? '';
+  const downgradeInfo = (downgraded || failureKind)
+    ? describeDowngradeReason(failureKind, rawDowngradeReason, citationCheck)
+    : null;
   const filePath = firstText(validDetail?.file_path, evidence.path, evidence.raw_path);
   const lineNumber = firstText(validDetail?.start_line, evidence?.start?.line);
   const endLineNumber = firstText(validDetail?.end_line, evidence?.end?.line);
@@ -466,7 +479,15 @@ function LiveDetailPage({scanId, id, detailUrl}) {
                 <span>
                   Cảnh báo đang ở trạng thái <strong>UNDETERMINED</strong>
                   {downgraded ? ' (đã bị bộ kiểm chứng hạ cấp)' : ''}
-                  {failureKind ? ` · lý do: ${failureKind}` : ''}. Hệ thống giữ lại cảnh báo để người kiểm duyệt xem xét mã nguồn gốc.
+                  {downgradeInfo ? (
+                    <>
+                      {' '}· {downgradeInfo.viLabel}
+                      {downgradeInfo.hasCode ? <> (<code>{downgradeInfo.code}</code>)</> : ''}
+                    </>
+                  ) : ''}.
+                  {downgradeInfo?.rawDetail ? ` Chi tiết từ backend: ${downgradeInfo.rawDetail}` : ''}
+                  {downgradeInfo?.matchedCitationNote ? ` ${downgradeInfo.matchedCitationNote}` : ''}
+                  {' '}Hệ thống giữ lại cảnh báo để người kiểm duyệt xem xét mã nguồn gốc.
                 </span>
               </div>
             )}
@@ -481,17 +502,22 @@ function LiveDetailPage({scanId, id, detailUrl}) {
 
             <div className="v2-dual-status">
               <div className="v2-status-box">
-                <span className="v2-status-kicker">Nhận định AI (Qwen3.5-9B)</span>
+                <span className="v2-status-kicker">Nhận định AI (Qwen3.5-9B · Đã kiểm chứng)</span>
                 <div className="v2-status-box-row">
-                  <Badge tone={vMeta.tone}>{validatedStatus}</Badge>
+                  <Badge tone={vMeta.tone} className="v2-status-token">{validatedStatus}</Badge>
                   <span className="v2-status-box-title">{vMeta.viLabel}</span>
                 </div>
+                {rawModelStatus && String(rawModelStatus).toUpperCase() !== validatedStatus && (
+                  <p className="mono" style={{fontSize: '12px', marginBottom: '6px'}}>
+                    Nhận định thô Qwen: <strong>{String(rawModelStatus).toUpperCase()}</strong> → Sau kiểm chứng: <strong>{validatedStatus}</strong>
+                  </p>
+                )}
                 <p>{vMeta.summary}</p>
               </div>
               <div className="v2-status-box v2-status-box--human">
                 <span className="v2-status-kicker">Quyết định của người kiểm duyệt</span>
                 <div className="v2-status-box-row">
-                  <Badge tone={hMeta.tone}>{humanState}</Badge>
+                  <Badge tone={hMeta.tone} className="v2-status-token">{humanState}</Badge>
                   <span className="v2-status-box-title">{hMeta.viLabel}</span>
                 </div>
                 <p>{hMeta.summary}</p>
@@ -536,12 +562,16 @@ function LiveDetailPage({scanId, id, detailUrl}) {
               <Badge tone={rtMeta.tone}>{rtMeta.label}</Badge>
             </div>
 
-            {rawModelStatus && rawModelStatus !== validatedStatus && (
+            {rawModelStatus && String(rawModelStatus).toUpperCase() !== validatedStatus && (
               <div className="inline-warning" style={{marginTop: 0, marginBottom: '12px'}}>
                 <Icon name="AlertTriangle" />
                 <span>
-                  Phản hồi thô của Qwen là <strong>{rawModelStatus}</strong> nhưng đã bị bộ kiểm chứng hạ cấp về{' '}
-                  <strong>{validatedStatus}</strong>{failureKind ? ` (${failureKind})` : ''}.
+                  Phản hồi thô của Qwen là <strong>{String(rawModelStatus).toUpperCase()}</strong> nhưng đã bị bộ kiểm chứng hạ cấp về{' '}
+                  <strong>{validatedStatus}</strong>
+                  {downgradeInfo
+                    ? <> — {downgradeInfo.viLabel}{downgradeInfo.hasCode ? <> (<code>{downgradeInfo.code}</code>)</> : ''}</>
+                    : ''}.
+                  {downgradeInfo?.rawDetail ? ` Chi tiết: ${downgradeInfo.rawDetail}` : ''}
                 </span>
               </div>
             )}
@@ -813,10 +843,17 @@ export function Results() {
   useEffect(() => {
     if (scanId) return undefined;
     const controller = new AbortController();
+    const requestBaseUrl = getApiBaseUrl();
     const requestOrigin = getApiOrigin();
     const requestSession = getAuthSessionScope();
     let active = true;
-    const isStale = () => !active || controller.signal.aborted || getApiOrigin() !== requestOrigin || getAuthSessionScope() !== requestSession;
+    const isStale = () => (
+      !active
+      || controller.signal.aborted
+      || getApiBaseUrl() !== requestBaseUrl
+      || getApiOrigin() !== requestOrigin
+      || getAuthSessionScope() !== requestSession
+    );
     setScansState({status: 'loading', items: [], error: '', statusCode: null, incompleteNotice: ''});
     api.listScans({signal: controller.signal})
       .then((res) => {
@@ -876,9 +913,9 @@ export function Results() {
                   </div>
                   <h3 className="mono">{scan.repo_url || scan.file_name || scan.scan_id}</h3>
                   <p>
-                    {scan.total_findings ?? 0} cảnh báo · Qwen: SUPPORTED {scan.by_validated_status?.SUPPORTED ?? 0},
-                    REFUTED {scan.by_validated_status?.REFUTED ?? 0}, UNDETERMINED {scan.by_validated_status?.UNDETERMINED ?? 0} ·
-                    OPEN {scan.by_human_review_state?.OPEN ?? 0}
+                    {scan.total_findings ?? '—'} cảnh báo · Qwen: SUPPORTED {scan.by_validated_status?.SUPPORTED ?? '—'},
+                    REFUTED {scan.by_validated_status?.REFUTED ?? '—'}, UNDETERMINED {scan.by_validated_status?.UNDETERMINED ?? '—'} ·
+                    OPEN {scan.by_human_review_state?.OPEN ?? '—'}
                   </p>
                 </div>
                 <button

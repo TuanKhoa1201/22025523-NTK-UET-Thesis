@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 import {Link, useOutletContext} from 'react-router-dom';
 import {Card, PageHeader, Badge, DataNotice, EmptyState, Icon} from '../components/common/Ui';
 import {ApiError, api, getApiOrigin, getAuthSessionScope} from '../services/api';
-import {formatShortHash} from '../services/findingPresentation';
+import {formatShortHash, resolveJavaFileCounts} from '../services/findingPresentation';
 import {scanQuery} from '../services/liveScan';
 import {
   readHistory,
@@ -54,6 +54,7 @@ function statusMeta(status) {
   const s = String(status || '').toUpperCase();
   if (s === 'COMPLETED') return {tone: 'green', label: 'Hoàn tất'};
   if (s === 'FAILED') return {tone: 'red', label: 'Thất bại'};
+  if (s === 'CANCELLED' || s === 'CANCELED') return {tone: 'amber', label: 'Đã hủy'};
   if (s === 'RUNNING') return {tone: 'amber', label: 'Đang chạy'};
   if (s === 'QUEUED') return {tone: 'amber', label: 'Đang chờ'};
   return {tone: 'neutral', label: 'Chưa xác nhận trạng thái'};
@@ -68,6 +69,23 @@ export function HistoryRow({record, availability, onDelete}) {
   const timestamp = displayHistoryTimestamp(record);
   const hasFindingsCount = record.candidates !== undefined && record.candidates !== null;
   const hasHumanCounts = record.openCount !== undefined || record.confirmedTrue !== undefined || record.confirmedFalse !== undefined;
+  const javaCounts = record.javaCounts || (
+    record.javaFilesScanned !== undefined
+      ? resolveJavaFileCounts({java_files_scanned: record.javaFilesScanned})
+      : null
+  );
+  const showJavaCounts = Boolean(
+    javaCounts && (
+      javaCounts.inventoryCount !== null
+      || javaCounts.scannedCount !== null
+      || javaCounts.ignoredCount !== null
+      || javaCounts.isInconsistent
+      || javaCounts.hasInvalidFields
+    ),
+  );
+  const showJavaBreakdown = Boolean(
+    javaCounts && (javaCounts.scannedCount !== null || javaCounts.ignoredCount !== null || javaCounts.isInconsistent || javaCounts.coverageStatus === 'UNVERIFIED'),
+  );
 
   return (
     <Card className="report-row history-compact-row">
@@ -103,8 +121,41 @@ export function HistoryRow({record, availability, onDelete}) {
           </div>
           <div><dt>{timestamp.label}</dt><dd>{timestamp.value}</dd></div>
           <div><dt>Thời gian</dt><dd>{formatExecutionTime(record.backendMs)}</dd></div>
-          {record.javaFilesScanned !== undefined && (
-            <div><dt>Tệp Java</dt><dd>{record.javaFilesScanned}</dd></div>
+          {showJavaCounts && (
+            <div>
+              <dt>Tệp Java (inventory)</dt>
+              <dd>
+                {javaCounts.inventoryCount !== null
+                  ? javaCounts.inventoryCount
+                  : javaCounts.isInconsistent
+                    ? 'Không nhất quán'
+                    : 'Chưa có số liệu'}
+              </dd>
+            </div>
+          )}
+          {showJavaBreakdown && (
+            javaCounts.isInconsistent ? (
+              <div>
+                <dt>OpenGrep thực quét / bỏ qua</dt>
+                <dd title={javaCounts.inconsistencyReason}>Không nhất quán</dd>
+              </div>
+            ) : javaCounts.coverageStatus === 'UNVERIFIED' ? (
+              <div>
+                <dt>OpenGrep thực quét / bỏ qua</dt>
+                <dd title={javaCounts.summaryNote}>Chưa xác minh</dd>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <dt>OpenGrep thực quét</dt>
+                  <dd>{javaCounts.scannedCount !== null ? javaCounts.scannedCount : 'Chưa có số liệu'}</dd>
+                </div>
+                <div>
+                  <dt>Tệp Java bỏ qua</dt>
+                  <dd>{javaCounts.ignoredCount !== null ? javaCounts.ignoredCount : 'Chưa có số liệu'}</dd>
+                </div>
+              </>
+            )
           )}
         </dl>
 

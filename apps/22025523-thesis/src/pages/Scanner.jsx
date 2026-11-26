@@ -5,15 +5,20 @@ import SecurityAnalysisScene from '../components/scanner/SecurityAnalysisScene';
 import {CoveragePanel, FailureDetails, StageTiming} from '../components/scanner/JobPanels';
 import {
   api,
+  getApiBaseUrl,
   getApiOrigin,
   getAuthSessionScope,
   hasSessionToken,
   inputErrorMessage,
   validateCommitSha,
   validateGithubRepoUrl,
+  safeSessionGet,
+  safeSessionSet,
+  safeSessionRemove,
+  getSessionStorageSafe,
 } from '../services/api';
 import {NO_FINDINGS_NOTICE} from '../services/findingPresentation';
-import {currentStageIndex, resolveStages} from '../services/jobModel';
+import {currentStageIndex, resolveStages, shouldAcceptJobSnapshot} from '../services/jobModel';
 import {
   clearStaleActiveScanId,
   isConfirmedScanNotFoundError,
@@ -23,7 +28,7 @@ import {
 import {readHistory, upsertHistory} from '../services/scanHistory';
 
 const JOB_KEY = '22025523-active-job';
-const TERMINAL_OR_IDLE_JOB_STATES = new Set(['IDLE', 'COMPLETED', 'FAILED', 'RESULTS_ERROR', 'NOT_FOUND']);
+const TERMINAL_OR_IDLE_JOB_STATES = new Set(['IDLE', 'COMPLETED', 'FAILED', 'CANCELLED', 'CANCELED', 'RESULTS_ERROR', 'NOT_FOUND']);
 
 export {validateCommitSha, validateGithubRepoUrl};
 
@@ -130,7 +135,7 @@ export function isJobDiscoveryBlocking({
   return jobDiscovery.status !== 'DONE';
 }
 
-const KNOWN_JOB_STATES = new Set(['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED']);
+const KNOWN_JOB_STATES = new Set(['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'CANCELED']);
 
 export function validateScanJobsListResponse(res) {
   if (!res || typeof res !== 'object') {
@@ -259,6 +264,15 @@ export function classifyJobPollResponse(job, expectedJobId) {
       kind: 'FAILED',
       state,
       trackingState: 'FAILED',
+      clearStoredJob: true,
+      retryPoll: false,
+    };
+  }
+  if (state === 'CANCELLED' || state === 'CANCELED') {
+    return {
+      kind: 'CANCELLED',
+      state: 'CANCELLED',
+      trackingState: 'CANCELLED',
       clearStoredJob: true,
       retryPoll: false,
     };
@@ -479,11 +493,11 @@ export async function runGuardedZipSubmission({
 }
 
 function clearStoredJobIfMatch(targetJobId) {
-  if (!targetJobId || typeof window === 'undefined' || !window.sessionStorage) return;
+  if (!targetJobId || !getSessionStorageSafe()) return;
   try {
-    if (window.sessionStorage.getItem(JOB_KEY) === targetJobId) {
-      window.sessionStorage.removeItem(JOB_KEY);
-      window.sessionStorage.removeItem(`${JOB_KEY}-started`);
+    if (safeSessionGet(JOB_KEY) === targetJobId) {
+      safeSessionRemove(JOB_KEY);
+      safeSessionRemove(`${JOB_KEY}-started`);
     }
   } catch {
     /* optional sessionStorage cleanup */
@@ -510,18 +524,18 @@ export default function Scanner() {
   const [error, setError] = useState('');
   const [elapsedMs, setElapsedMs] = useState(0);
   const [jobId, setJobId] = useState(() => (
-    typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage.getItem(JOB_KEY) || '' : ''
+    getSessionStorageSafe() ? safeSessionGet(JOB_KEY) || '' : ''
   ));
   const [jobTrackingState, setJobTrackingState] = useState(() => (
-    typeof window !== 'undefined' && window.sessionStorage?.getItem(JOB_KEY) ? 'VERIFYING' : 'IDLE'
+    safeSessionGet(JOB_KEY) ? 'VERIFYING' : 'IDLE'
   ));
   const [liveStatus, setLiveStatus] = useState(() => (
-    typeof window !== 'undefined' && window.sessionStorage?.getItem(JOB_KEY)
+    safeSessionGet(JOB_KEY)
       ? 'Đang xác minh trạng thái phiên phân tích đang theo dõi từ máy chủ API…'
       : ''
   ));
   const [liveStage, setLiveStage] = useState(() => (
-    typeof window !== 'undefined' && window.sessionStorage?.getItem(JOB_KEY) ? 'VERIFYING' : 'IDLE'
+    safeSessionGet(JOB_KEY) ? 'VERIFYING' : 'IDLE'
   ));
   const [backendMs, setBackendMs] = useState(null);
   const [liveScanId, setLiveScanId] = useState('');
@@ -542,8 +556,8 @@ export default function Scanner() {
 
   const timerRef = useRef(null);
   const startRef = useRef(
-    typeof window !== 'undefined' && window.sessionStorage
-      ? Number(window.sessionStorage.getItem(`${JOB_KEY}-started`)) || 0
+    getSessionStorageSafe()
+      ? Number(safeSessionGet(`${JOB_KEY}-started`)) || 0
       : 0,
   );
   const requestRef = useRef(null);
@@ -559,6 +573,7 @@ export default function Scanner() {
   const inputRef = useRef(null);
   const statusSectionRef = useRef(null);
   const mountedSessionRef = useRef(authSessionScope);
+  const latestAcceptedJobRef = useRef(null);
 
   useEffect(() => {
     if (mountedSessionRef.current === authSessionScope) return;
@@ -571,6 +586,7 @@ export default function Scanner() {
     requestRef.current?.abort();
     requestRef.current = null;
     pendingRef.current = false;
+    latestAcceptedJobRef.current = null;
     setError('');
     setReadOnlyDetected(false);
     setInterrupted(false);
@@ -626,14 +642,28 @@ export default function Scanner() {
 
   // Poll and verify active/restored jobId. Never unlock scan creation or clear JOB_KEY until API
   // confirms terminal state (COMPLETED / FAILED) or explicit 404 (job no longer exists).
+  // Reject stale/out-of-order snapshots of the same job so the LIVE timeline never moves backward.
   useEffect(() => {
-    if (!jobId) return undefined;
+    if (!jobId) {
+      latestAcceptedJobRef.current = null;
+      return undefined;
+    }
     const controller = new AbortController();
+    const jobBaseUrl = getApiBaseUrl();
     const jobOrigin = getApiOrigin();
     const jobSession = getAuthSessionScope();
     let stopped = false;
     let pollTimer;
-    const isStale = () => stopped || getApiOrigin() !== jobOrigin || getAuthSessionScope() !== jobSession;
+    const isStale = () => (
+      stopped
+      || getApiBaseUrl() !== jobBaseUrl
+      || getApiOrigin() !== jobOrigin
+      || getAuthSessionScope() !== jobSession
+    );
+
+    if (latestAcceptedJobRef.current && String(latestAcceptedJobRef.current.job_id || '').trim() !== String(jobId).trim()) {
+      latestAcceptedJobRef.current = null;
+    }
 
     setJobTrackingState((prev) => (prev === 'QUEUED' || prev === 'RUNNING' ? prev : 'VERIFYING'));
 
@@ -649,19 +679,30 @@ export default function Scanner() {
           pollTimer = window.setTimeout(poll, 1500);
           return;
         }
+        const acceptCheck = shouldAcceptJobSnapshot(latestAcceptedJobRef.current, job, {expectedJobId: jobId});
+        if (!acceptCheck.accept) {
+          const acceptedOutcome = latestAcceptedJobRef.current
+            ? classifyJobPollResponse(latestAcceptedJobRef.current, jobId)
+            : null;
+          if (!acceptedOutcome || acceptedOutcome.retryPoll) {
+            pollTimer = window.setTimeout(poll, 750);
+          }
+          return;
+        }
+        latestAcceptedJobRef.current = job;
         setInterrupted(false);
         setLiveJob(job);
         const state = outcome.state;
         if (state && state !== 'COMPLETED') setLiveStage(state);
         if (job?.scan_id) {
-          window.sessionStorage.setItem('22025523-scan-id', job.scan_id);
+          safeSessionSet('22025523-scan-id', job.scan_id);
           setLiveScanId(job.scan_id);
         }
         if (outcome.kind === 'ACTIVE') {
           if (!startRef.current) {
             const parsedStart = Date.parse(job.started_at || job.created_at || '');
             startRef.current = Number.isFinite(parsedStart) && parsedStart > 0 ? parsedStart : Date.now();
-            window.sessionStorage.setItem(`${JOB_KEY}-started`, String(startRef.current));
+            safeSessionSet(`${JOB_KEY}-started`, String(startRef.current));
           }
           if (!timerRef.current) {
             setElapsedMs(Math.max(0, Date.now() - startRef.current));
@@ -729,11 +770,25 @@ export default function Scanner() {
           window.clearInterval(timerRef.current);
           timerRef.current = null;
           if (startRef.current) setElapsedMs(Math.max(0, Date.now() - startRef.current));
+          const failTotal = job.total_e2e_duration_ms;
+          setBackendMs(typeof failTotal === 'number' && Number.isFinite(failTotal) && failTotal >= 0 ? failTotal : null);
           setLiveStage('FAILED');
           setJobTrackingState(outcome.trackingState);
           setLiveStatus('Phiên phân tích thất bại.');
           setError(inputErrorMessage(job));
           if (job.scan_id) upsertHistory({scanId: job.scan_id, jobId: job.job_id, status: 'FAILED'}, {origin: jobOrigin, sessionScope: jobSession});
+          return;
+        }
+        if (outcome.kind === 'CANCELLED') {
+          if (outcome.clearStoredJob) clearStoredJobIfMatch(jobId);
+          window.clearInterval(timerRef.current);
+          timerRef.current = null;
+          if (startRef.current) setElapsedMs(Math.max(0, Date.now() - startRef.current));
+          const cancelTotal = job.total_e2e_duration_ms;
+          setBackendMs(typeof cancelTotal === 'number' && Number.isFinite(cancelTotal) && cancelTotal >= 0 ? cancelTotal : null);
+          setLiveStage('CANCELLED');
+          setJobTrackingState('CANCELLED');
+          setLiveStatus('Phiên phân tích đã bị hủy trên máy chủ API (CANCELLED).');
           return;
         }
         setJobTrackingState(outcome.trackingState);
@@ -747,6 +802,7 @@ export default function Scanner() {
           window.clearInterval(timerRef.current);
           timerRef.current = null;
           startRef.current = 0;
+          latestAcceptedJobRef.current = null;
           setInterrupted(false);
           setLiveJob(null);
           setJobId('');
@@ -824,9 +880,10 @@ export default function Scanner() {
           const startedAtMs = Date.parse(activeJob.started_at || activeJob.created_at || '');
           if (Number.isFinite(startedAtMs) && startedAtMs > 0) {
             startRef.current = startedAtMs;
-            window.sessionStorage.setItem(`${JOB_KEY}-started`, String(startedAtMs));
+            safeSessionSet(`${JOB_KEY}-started`, String(startedAtMs));
           }
-          window.sessionStorage.setItem(JOB_KEY, activeJobId);
+          safeSessionSet(JOB_KEY, activeJobId);
+          latestAcceptedJobRef.current = activeJob;
           setJobDiscovery({scope: discoveryScope, status: 'DONE', error: ''});
           setLiveJob(activeJob);
           setLiveStage(activeState);
@@ -857,7 +914,7 @@ export default function Scanner() {
 
   useEffect(() => {
     if (jobId || busy || pendingRef.current || jobTrackingState === 'FAILED' || liveStage === 'FAILED') return undefined;
-    const scanId = window.sessionStorage.getItem('22025523-scan-id');
+    const scanId = safeSessionGet('22025523-scan-id');
     if (!scanId) return undefined;
     const controller = new AbortController();
     const requestOrigin = getApiOrigin();
@@ -1051,6 +1108,7 @@ export default function Scanner() {
     const startedAt = new Date().toISOString();
 
     const beginSubmissionUi = () => {
+      latestAcceptedJobRef.current = null;
       setJobTrackingState('SUBMITTING');
       setPipelineOpen(true);
       setLiveJob(null);
@@ -1126,10 +1184,10 @@ export default function Scanner() {
       }
       if (isSubmitCancelled() || getApiOrigin() !== requestOrigin || getAuthSessionScope() !== requestSession) return;
       const acceptedState = String(result.state || 'QUEUED').toUpperCase();
-      window.sessionStorage.setItem(JOB_KEY, acceptedJobId);
-      window.sessionStorage.setItem(`${JOB_KEY}-started`, String(startRef.current));
+      safeSessionSet(JOB_KEY, acceptedJobId);
+      safeSessionSet(`${JOB_KEY}-started`, String(startRef.current));
       if (result.scan_id) {
-        window.sessionStorage.setItem('22025523-scan-id', result.scan_id);
+        safeSessionSet('22025523-scan-id', result.scan_id);
         setLiveScanId(result.scan_id);
         // User-entered source is stored only as browser cache for THIS auth session; never shown as API data.
         upsertHistory({
@@ -1142,6 +1200,7 @@ export default function Scanner() {
           status: acceptedState,
         }, {origin: requestOrigin, sessionScope: requestSession});
       }
+      latestAcceptedJobRef.current = result;
       setJobTrackingState(acceptedState);
       setJobId(acceptedJobId);
       setLiveJob(result);
@@ -1189,17 +1248,18 @@ export default function Scanner() {
 
   const statusChip = liveStage === 'COMPLETED' ? {label: 'Hoàn tất', tone: 'green'}
     : liveStage === 'FAILED' || liveStage === 'RESULTS_ERROR' ? {label: 'Thất bại', tone: 'red'}
-      : jobTrackingState === 'INTERRUPTED' ? {label: 'Mất kết nối tạm thời', tone: 'amber'}
-        : jobTrackingState === 'VERIFYING' ? {label: 'Đang xác minh', tone: 'blue'}
-          : discoveryBlocking
-            ? (discoveryErrorActive ? {label: 'Chưa xác minh job', tone: 'amber'} : {label: 'Đang kiểm tra', tone: 'blue'})
-            : liveStage === 'QUEUED' ? {label: 'Đang xếp hàng', tone: 'amber'}
-              : busy || ['RUNNING', 'SUBMITTING', 'WAITING_FOR_RESPONSE', 'LOADING_RESULTS'].includes(liveStage)
-                ? {label: 'Đang phân tích', tone: 'blue'}
-                : {label: 'Sẵn sàng', tone: 'neutral'};
+      : liveStage === 'CANCELLED' ? {label: 'Đã hủy', tone: 'amber'}
+        : jobTrackingState === 'INTERRUPTED' ? {label: 'Mất kết nối tạm thời', tone: 'amber'}
+          : jobTrackingState === 'VERIFYING' ? {label: 'Đang xác minh', tone: 'blue'}
+            : discoveryBlocking
+              ? (discoveryErrorActive ? {label: 'Chưa xác minh job', tone: 'amber'} : {label: 'Đang kiểm tra', tone: 'blue'})
+              : liveStage === 'QUEUED' ? {label: 'Đang xếp hàng', tone: 'amber'}
+                : busy || ['RUNNING', 'SUBMITTING', 'WAITING_FOR_RESPONSE', 'LOADING_RESULTS'].includes(liveStage)
+                  ? {label: 'Đang phân tích', tone: 'blue'}
+                  : {label: 'Sẵn sàng', tone: 'neutral'};
 
   const resolvedStages = resolveStages(liveJob);
-  const completedStagesCount = resolvedStages.filter((s) => s.cat === 'COMPLETED' || s.cat === 'SKIPPED').length;
+  const completedStagesCount = resolvedStages.filter((s) => ['COMPLETED', 'DEGRADED', 'SKIPPED'].includes(s.cat)).length;
   const stageIndex = currentStageIndex(liveJob);
   const activeStage = stageIndex === null ? null : stageIndex + 1;
   const jobFailed = String(liveJob?.state || '').toUpperCase() === 'FAILED';

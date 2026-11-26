@@ -1,4 +1,834 @@
+// REST-boundary JSON wire integrity analyzer (shared across standalone ESM & bundled modules
+// via Symbol.for without mutating raw parsed JS objects, keeping JSON.stringify() byte-identical
+// for unsigned report downloads while enabling durable normalized taint materialization for UI/cache).
+const WIRE_INTEGRITY_REGISTRY_SYM = Symbol.for('22025523.restJsonWireIntegrity.v1');
+const wireRegistry = globalThis[WIRE_INTEGRITY_REGISTRY_SYM] || (globalThis[WIRE_INTEGRITY_REGISTRY_SYM] = {
+  objects: new WeakMap(),
+  stages: new WeakMap(),
+});
+const WIRE_MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const WIRE_MAX_SAFE_DIGITS = 16n;
+export const WIRE_MAX_SCAN_DEPTH = 128;
+const WIRE_MAX_DUP_PATHS = 24;
+const WIRE_CATCH_PROPAGATE_MAX_DEPTH = 3;
+const WIRE_CATCH_PROPAGATE_MAX_NODES = 512;
+const WIRE_UNSIGNED_JSON_NUMBER_RE = /^(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+
+const WIRE_STRICT_INT_COUNT_KEY_RE = /(?:^|_)(?:count|total|checked|findings|files|scanned|ignored|inventory|matched|invalid|not_verified|unverified|open|pages|page|page_size|limit|citations_matched|citations_invalid|citations_not_verified|citations_total)$/i;
+const WIRE_EXACT_INT_COUNT_KEYS = new Set([
+  'matched_count', 'matched_citation_count', 'citations_matched',
+  'invalid_count', 'invalid_citation_count', 'citations_invalid',
+  'not_verified_count', 'unverified_citation_count', 'citations_not_verified',
+  'total_checked', 'total_findings', 'citations_total', 'total_count', 'total_matching',
+  'total_pages', 'page', 'page_size', 'limit',
+  'java_files_inventory', 'java_files_inventory_count', 'java_files_count', 'java_files_scanned',
+  'java_files_opengrep_scanned', 'opengrep_scanned_java_files', 'java_files_actually_scanned', 'scanned_java_files_count',
+  'java_files_opengrep_ignored', 'java_files_ignored', 'opengrep_ignored_java_files', 'ignored_java_files_count',
+  'proposed_refuted_open_count', 'open_count', 'findings_with_trace', 'validator_downgraded_count',
+  'SUPPORTED', 'REFUTED', 'UNDETERMINED', 'OPEN', 'CONFIRMED_TRUE', 'CONFIRMED_FALSE',
+]);
+
+export function isWireInvalidSentinel(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && value.__wireInvalid === true);
+}
+
+// Single source of truth shared by materializeNormalizedTelemetry and coverage tree checks:
+// flags any strict integer/count key with a non-integer/unsafe/negative wire lexeme, PLUS any
+// key whose JSON number silently rounded to a safe integer (precision loss like 389.00000000000000001)
+// or exceeded MAX_SAFE_INTEGER, while preserving legitimate finite decimal metrics (e.g. elapsed_seconds: 1.42).
+export function isWireInvalidIntAnomaly(key, wireIntErr, rawVal) {
+  if (!wireIntErr) return false;
+  if (WIRE_EXACT_INT_COUNT_KEYS.has(key) || WIRE_STRICT_INT_COUNT_KEY_RE.test(key)) {
+    return true;
+  }
+  if (wireIntErr.reason === 'UNSAFE_INTEGER_WIRE_NUMBER') {
+    return true;
+  }
+  if (
+    wireIntErr.reason === 'NON_INTEGER_WIRE_NUMBER'
+    && typeof rawVal === 'number'
+    && Number.isSafeInteger(rawVal)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function verifyExactNonNegativeSafeIntLexeme(raw) {
+  if (typeof raw !== 'string' || !raw) {
+    return {valid: false, value: null, reason: 'INVALID_WIRE_NUMBER_TOKEN', raw: String(raw ?? '')};
+  }
+  if (raw.charCodeAt(0) === 45) {
+    return {valid: false, value: null, reason: 'NEGATIVE_OR_SIGNED_ZERO_WIRE_NUMBER', raw};
+  }
+  const match = WIRE_UNSIGNED_JSON_NUMBER_RE.exec(raw);
+  if (!match) {
+    return {valid: false, value: null, reason: 'INVALID_WIRE_NUMBER_TOKEN', raw};
+  }
+  const intPart = match[1];
+  const fracPart = match[2] || '';
+  const expStr = match[3] || '';
+  const combined = intPart + fracPart;
+  let firstNonZero = -1;
+  for (let i = 0; i < combined.length; i += 1) {
+    if (combined.charCodeAt(i) !== 48) {
+      firstNonZero = i;
+      break;
+    }
+  }
+  if (firstNonZero === -1) {
+    return {valid: true, value: 0, reason: '', raw};
+  }
+  let lastNonZero = combined.length - 1;
+  while (lastNonZero > firstNonZero && combined.charCodeAt(lastNonZero) === 48) {
+    lastNonZero -= 1;
+  }
+  const sigDigits = combined.slice(firstNonZero, lastNonZero + 1);
+  const trailingZeros = (combined.length - 1) - lastNonZero;
+  let expBig = 0n;
+  if (expStr) {
+    try {
+      expBig = BigInt(expStr);
+    } catch {
+      return {valid: false, value: null, reason: 'UNVERIFIABLE_EXPONENT_WIRE_NUMBER', raw};
+    }
+  }
+  const netExp = expBig - BigInt(fracPart.length) + BigInt(trailingZeros);
+  if (netExp < 0n) {
+    return {valid: false, value: null, reason: 'NON_INTEGER_WIRE_NUMBER', raw};
+  }
+  const totalDigits = BigInt(sigDigits.length) + netExp;
+  if (totalDigits > WIRE_MAX_SAFE_DIGITS) {
+    return {valid: false, value: null, reason: 'UNSAFE_INTEGER_WIRE_NUMBER', raw};
+  }
+  const intBig = BigInt(sigDigits + '0'.repeat(Number(netExp)));
+  if (intBig > WIRE_MAX_SAFE_BIGINT) {
+    return {valid: false, value: null, reason: 'UNSAFE_INTEGER_WIRE_NUMBER', raw};
+  }
+  return {valid: true, value: Number(intBig), reason: '', raw};
+}
+
+function createWireJsonScanner(text) {
+  const len = text.length;
+  let pos = 0;
+  const skipWs = () => {
+    while (pos < len) {
+      const c = text.charCodeAt(pos);
+      if (c === 32 || c === 9 || c === 10 || c === 13) pos += 1;
+      else break;
+    }
+  };
+  const scanStringSlice = () => {
+    const start = pos;
+    if (text.charCodeAt(pos) !== 34) throw new Error('Expected quote');
+    pos += 1;
+    while (pos < len) {
+      const ch = text.charCodeAt(pos);
+      if (ch === 92) { pos += 2; continue; }
+      if (ch === 34) { pos += 1; return text.slice(start, pos); }
+      pos += 1;
+    }
+    throw new Error('Unterminated string');
+  };
+  const scanNumberSlice = () => {
+    const start = pos;
+    if (text.charCodeAt(pos) === 45) pos += 1;
+    while (pos < len) {
+      const c = text.charCodeAt(pos);
+      if ((c >= 48 && c <= 57) || c === 46 || c === 101 || c === 69 || c === 43 || c === 45) pos += 1;
+      else break;
+    }
+    return text.slice(start, pos);
+  };
+  // Iteratively skips any valid JSON value beyond WIRE_MAX_SCAN_DEPTH without recursion so
+  // over-depth subtrees are flagged fail-closed in-place instead of aborting the whole scan
+  // and leaving sibling or child containers untagged.
+  const skipOverDepthValue = () => {
+    skipWs();
+    const start = pos;
+    const ch = text.charCodeAt(pos);
+    if (ch === 34) return scanStringSlice();
+    if (ch === 45 || (ch >= 48 && ch <= 57)) return scanNumberSlice();
+    if (ch === 116) { pos += 4; return text.slice(start, pos); }
+    if (ch === 102) { pos += 5; return text.slice(start, pos); }
+    if (ch === 110) { pos += 4; return text.slice(start, pos); }
+    if (ch !== 123 && ch !== 91) throw new Error(`Unexpected token at ${pos}`);
+    let nesting = 0;
+    let inString = false;
+    while (pos < len) {
+      const c = text.charCodeAt(pos);
+      if (inString) {
+        if (c === 92) { pos += 2; continue; }
+        if (c === 34) inString = false;
+        pos += 1;
+        continue;
+      }
+      if (c === 34) {
+        inString = true;
+        pos += 1;
+        continue;
+      }
+      if (c === 123 || c === 91) {
+        nesting += 1;
+      } else if (c === 125 || c === 93) {
+        nesting -= 1;
+        if (nesting === 0) {
+          pos += 1;
+          return text.slice(start, pos);
+        }
+        if (nesting < 0) throw new Error(`Unexpected closing delimiter at ${pos}`);
+      }
+      pos += 1;
+    }
+    throw new Error('Unterminated over-depth JSON container');
+  };
+  const scanValue = (depth) => {
+    if (depth > WIRE_MAX_SCAN_DEPTH) {
+      const rawSlice = skipOverDepthValue();
+      return {
+        kind: 'overdepth',
+        rawSlice,
+        meta: {
+          kind: 'overdepth',
+          depthExceeded: true,
+          hasDepthExceededSubtree: true,
+          hasDupSubtree: false,
+          hasConflictDupSubtree: false,
+          dupPaths: [],
+          depthExceededPaths: ['__wireDepthExceeded'],
+        },
+      };
+    }
+    skipWs();
+    const start = pos;
+    const ch = text.charCodeAt(pos);
+    if (ch === 123) return scanObject(depth + 1);
+    if (ch === 91) return scanArray(depth + 1);
+    if (ch === 34) return {kind: 'string', rawSlice: scanStringSlice(), meta: null};
+    if (ch === 45 || (ch >= 48 && ch <= 57)) return {kind: 'number', rawSlice: scanNumberSlice(), meta: null};
+    if (ch === 116) { pos += 4; return {kind: 'boolean', rawSlice: text.slice(start, pos), meta: null}; }
+    if (ch === 102) { pos += 5; return {kind: 'boolean', rawSlice: text.slice(start, pos), meta: null}; }
+    if (ch === 110) { pos += 4; return {kind: 'null', rawSlice: text.slice(start, pos), meta: null}; }
+    throw new Error(`Unexpected token at ${pos}`);
+  };
+  const scanArray = (depth) => {
+    const start = pos;
+    pos += 1;
+    skipWs();
+    let childMetas = null;
+    let hasDupSubtree = false;
+    let hasConflictDupSubtree = false;
+    let hasDepthExceededSubtree = false;
+    const dupPaths = [];
+    const depthExceededPaths = [];
+    let index = 0;
+    if (pos < len && text.charCodeAt(pos) !== 93) {
+      while (pos < len) {
+        const val = scanValue(depth);
+        if (val.meta) {
+          if (!childMetas) childMetas = new Map();
+          childMetas.set(index, val.meta);
+          if (val.meta.hasDupSubtree) hasDupSubtree = true;
+          if (val.meta.hasConflictDupSubtree) hasConflictDupSubtree = true;
+          if (val.meta.hasDepthExceededSubtree || val.meta.depthExceeded) hasDepthExceededSubtree = true;
+          if (val.meta.dupPaths && dupPaths.length < WIRE_MAX_DUP_PATHS) {
+            for (const dp of val.meta.dupPaths) {
+              if (dupPaths.length >= WIRE_MAX_DUP_PATHS) break;
+              dupPaths.push(`[${index}].${dp}`);
+            }
+          }
+          if (val.meta.depthExceededPaths && depthExceededPaths.length < WIRE_MAX_DUP_PATHS) {
+            for (const dep of val.meta.depthExceededPaths) {
+              if (depthExceededPaths.length >= WIRE_MAX_DUP_PATHS) break;
+              depthExceededPaths.push(`[${index}].${dep}`);
+            }
+          }
+        }
+        index += 1;
+        skipWs();
+        const next = text.charCodeAt(pos);
+        if (next === 44) { pos += 1; continue; }
+        if (next === 93) break;
+        throw new Error(`Expected , or ] at ${pos}`);
+      }
+    }
+    if (text.charCodeAt(pos) !== 93) throw new Error('Unterminated array');
+    pos += 1;
+    return {
+      kind: 'array',
+      rawSlice: text.slice(start, pos),
+      meta: childMetas
+        ? {kind: 'array', childMetas, hasDupSubtree, hasConflictDupSubtree, hasDepthExceededSubtree, dupPaths, depthExceededPaths}
+        : null,
+    };
+  };
+  const scanObject = (depth) => {
+    const start = pos;
+    pos += 1;
+    skipWs();
+    const seenKeys = new Map();
+    let invalidIntFields = null;
+    let duplicateKeys = null;
+    let childMetas = null;
+    let hasDupSubtree = false;
+    let hasConflictDupSubtree = false;
+    let hasDepthExceededSubtree = false;
+    const dupPaths = [];
+    const depthExceededPaths = [];
+    if (pos < len && text.charCodeAt(pos) !== 125) {
+      while (pos < len) {
+        skipWs();
+        const rawKeySlice = scanStringSlice();
+        const decodedKey = JSON.parse(rawKeySlice);
+        skipWs();
+        if (text.charCodeAt(pos) !== 58) throw new Error(`Expected : at ${pos}`);
+        pos += 1;
+        const val = scanValue(depth);
+        const valCanonical = val.kind === 'string' ? JSON.parse(val.rawSlice) : val.rawSlice.trim();
+        const prevSeen = seenKeys.get(decodedKey);
+        if (prevSeen) {
+          prevSeen.count += 1;
+          if (prevSeen.firstCanonical !== valCanonical) prevSeen.conflicting = true;
+          if (!duplicateKeys) duplicateKeys = new Map();
+          duplicateKeys.set(decodedKey, {count: prevSeen.count, conflicting: prevSeen.conflicting});
+          hasDupSubtree = true;
+          if (prevSeen.conflicting) hasConflictDupSubtree = true;
+          if (dupPaths.length < WIRE_MAX_DUP_PATHS && !dupPaths.includes(decodedKey)) {
+            dupPaths.push(decodedKey);
+          }
+        } else {
+          seenKeys.set(decodedKey, {count: 1, firstCanonical: valCanonical, conflicting: false});
+        }
+        if (val.kind === 'number') {
+          const check = verifyExactNonNegativeSafeIntLexeme(val.rawSlice);
+          if (!check.valid) {
+            if (!invalidIntFields) invalidIntFields = new Map();
+            invalidIntFields.set(decodedKey, {raw: val.rawSlice, reason: check.reason});
+          } else if (invalidIntFields && !prevSeen) {
+            invalidIntFields.delete(decodedKey);
+          }
+        } else if (val.kind === 'overdepth') {
+          if (!invalidIntFields) invalidIntFields = new Map();
+          invalidIntFields.set(decodedKey, {raw: val.rawSlice, reason: 'WIRE_MAX_SCAN_DEPTH_EXCEEDED'});
+        }
+        if (val.meta) {
+          if (!childMetas) childMetas = new Map();
+          childMetas.set(decodedKey, val.meta);
+          if (val.meta.hasDupSubtree) hasDupSubtree = true;
+          if (val.meta.hasConflictDupSubtree) hasConflictDupSubtree = true;
+          if (val.meta.hasDepthExceededSubtree || val.meta.depthExceeded) hasDepthExceededSubtree = true;
+          if (val.meta.dupPaths && dupPaths.length < WIRE_MAX_DUP_PATHS) {
+            for (const dp of val.meta.dupPaths) {
+              if (dupPaths.length >= WIRE_MAX_DUP_PATHS) break;
+              const prefix = dp.startsWith('[') ? `${decodedKey}${dp}` : `${decodedKey}.${dp}`;
+              if (!dupPaths.includes(prefix)) dupPaths.push(prefix);
+            }
+          }
+          if (val.meta.depthExceededPaths && depthExceededPaths.length < WIRE_MAX_DUP_PATHS) {
+            for (const dep of val.meta.depthExceededPaths) {
+              if (depthExceededPaths.length >= WIRE_MAX_DUP_PATHS) break;
+              const prefix = dep.startsWith('[') ? `${decodedKey}${dep}` : `${decodedKey}.${dep}`;
+              if (!depthExceededPaths.includes(prefix)) depthExceededPaths.push(prefix);
+            }
+          }
+        } else if (childMetas && childMetas.has(decodedKey)) {
+          childMetas.delete(decodedKey);
+        }
+        skipWs();
+        const next = text.charCodeAt(pos);
+        if (next === 44) { pos += 1; continue; }
+        if (next === 125) break;
+        throw new Error(`Expected , or } at ${pos}`);
+      }
+    }
+    if (text.charCodeAt(pos) !== 125) throw new Error('Unterminated object');
+    pos += 1;
+    const hasOwn = Boolean((invalidIntFields && invalidIntFields.size > 0) || (duplicateKeys && duplicateKeys.size > 0));
+    const hasChild = Boolean(childMetas && childMetas.size > 0);
+    return {
+      kind: 'object',
+      rawSlice: text.slice(start, pos),
+      meta: (hasOwn || hasChild || hasDepthExceededSubtree)
+        ? {
+            kind: 'object',
+            invalidIntFields,
+            duplicateKeys,
+            childMetas,
+            hasDupSubtree,
+            hasConflictDupSubtree,
+            hasDepthExceededSubtree,
+            dupPaths,
+            depthExceededPaths,
+          }
+        : null,
+    };
+  };
+  return {
+    scanRoot() {
+      const res = scanValue(0);
+      skipWs();
+      if (pos !== len) throw new Error(`Trailing content at ${pos}`);
+      return res;
+    },
+  };
+}
+
+function attachWireMetaTree(node, metaNode) {
+  if (!node || typeof node !== 'object' || !metaNode) return;
+  if (metaNode.kind === 'overdepth') {
+    wireRegistry.objects.set(node, {
+      invalidIntFields: new Map(),
+      duplicateKeys: new Map(),
+      hasDuplicateKeyInSubtree: false,
+      hasConflictingDuplicateKeyInSubtree: false,
+      duplicateKeyPaths: [],
+      scannerError: true,
+      depthExceeded: true,
+      hasDepthExceededSubtree: true,
+      depthExceededPaths: ['__wireDepthExceeded'],
+    });
+    return;
+  }
+  if (metaNode.kind === 'array' && Array.isArray(node)) {
+    if (metaNode.hasDupSubtree || metaNode.hasDepthExceededSubtree) {
+      wireRegistry.objects.set(node, {
+        invalidIntFields: new Map(),
+        duplicateKeys: new Map(),
+        hasDuplicateKeyInSubtree: Boolean(metaNode.hasDupSubtree),
+        hasConflictingDuplicateKeyInSubtree: Boolean(metaNode.hasConflictDupSubtree),
+        duplicateKeyPaths: metaNode.dupPaths || [],
+        scannerError: false,
+        depthExceeded: false,
+        hasDepthExceededSubtree: Boolean(metaNode.hasDepthExceededSubtree),
+        depthExceededPaths: metaNode.depthExceededPaths || [],
+      });
+    }
+    if (metaNode.childMetas) {
+      for (const [idx, childMeta] of metaNode.childMetas.entries()) {
+        attachWireMetaTree(node[idx], childMeta);
+      }
+    }
+    return;
+  }
+  if (metaNode.kind === 'object' && !Array.isArray(node)) {
+    const hasOwn = Boolean(
+      (metaNode.invalidIntFields && metaNode.invalidIntFields.size > 0)
+      || (metaNode.duplicateKeys && metaNode.duplicateKeys.size > 0)
+      || metaNode.hasDupSubtree
+      || metaNode.hasDepthExceededSubtree,
+    );
+    if (hasOwn) {
+      wireRegistry.objects.set(node, {
+        invalidIntFields: metaNode.invalidIntFields || new Map(),
+        duplicateKeys: metaNode.duplicateKeys || new Map(),
+        hasDuplicateKeyInSubtree: Boolean(metaNode.hasDupSubtree),
+        hasConflictingDuplicateKeyInSubtree: Boolean(metaNode.hasConflictDupSubtree),
+        duplicateKeyPaths: metaNode.dupPaths || [],
+        scannerError: false,
+        depthExceeded: false,
+        hasDepthExceededSubtree: Boolean(metaNode.hasDepthExceededSubtree),
+        depthExceededPaths: metaNode.depthExceededPaths || [],
+      });
+    }
+    if (metaNode.childMetas) {
+      for (const [key, childMeta] of metaNode.childMetas.entries()) {
+        if (Object.hasOwn(node, key)) attachWireMetaTree(node[key], childMeta);
+      }
+    }
+  }
+}
+
+function markScannerErrorBounded(root) {
+  const queue = [{node: root, depth: 0}];
+  const seen = new Set();
+  let tagged = 0;
+  while (queue.length > 0 && tagged < WIRE_CATCH_PROPAGATE_MAX_NODES) {
+    const {node, depth} = queue.shift();
+    if (!node || typeof node !== 'object' || seen.has(node)) continue;
+    seen.add(node);
+    tagged += 1;
+    wireRegistry.objects.set(node, {
+      invalidIntFields: new Map(),
+      duplicateKeys: new Map(),
+      hasDuplicateKeyInSubtree: false,
+      hasConflictingDuplicateKeyInSubtree: false,
+      duplicateKeyPaths: [],
+      scannerError: true,
+      depthExceeded: false,
+      hasDepthExceededSubtree: false,
+      depthExceededPaths: [],
+    });
+    if (depth >= WIRE_CATCH_PROPAGATE_MAX_DEPTH) continue;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length && tagged + queue.length < WIRE_CATCH_PROPAGATE_MAX_NODES; i += 1) {
+        if (node[i] && typeof node[i] === 'object') queue.push({node: node[i], depth: depth + 1});
+      }
+    } else {
+      const keys = Object.keys(node);
+      for (let i = 0; i < keys.length && tagged + queue.length < WIRE_CATCH_PROPAGATE_MAX_NODES; i += 1) {
+        const v = node[keys[i]];
+        if (v && typeof v === 'object') queue.push({node: v, depth: depth + 1});
+      }
+    }
+  }
+}
+
+export function parseJsonWithWireIntegrity(rawText) {
+  const parsed = JSON.parse(rawText);
+  if (parsed && typeof parsed === 'object') {
+    try {
+      const scanned = createWireJsonScanner(rawText).scanRoot();
+      if (scanned.meta) attachWireMetaTree(parsed, scanned.meta);
+    } catch {
+      markScannerErrorBounded(parsed);
+    }
+  }
+  return parsed;
+}
+
+// `__wireIntegrity` is a reserved key. The frontend writes it only after verification, and only
+// to carry taint (never validity). The same key can also arrive inside untrusted REST data, so it
+// is read through this type-checked view: wrong shapes never throw, never grant validity, and are
+// themselves treated as malformed. A present block without any taint flag is also treated as a
+// reserved-key collision from untrusted input (frontend-generated blocks always carry a flag).
+function readMaterializedIntegrity(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj) || !Object.hasOwn(obj, '__wireIntegrity')) return null;
+  const raw = obj.__wireIntegrity;
+  const malformedView = {
+    scannerError: false,
+    hasConflict: false,
+    hasMalformed: true,
+    duplicateKeys: {},
+    duplicateKeyPaths: [],
+    invalidFields: ['__wireIntegrity'],
+  };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return malformedView;
+  const isStrList = (v) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+  let shapeOk = true;
+  for (const f of ['scannerError', 'hasConflict', 'hasMalformed']) {
+    if (raw[f] !== undefined && typeof raw[f] !== 'boolean') shapeOk = false;
+  }
+  for (const f of ['duplicateKeyPaths', 'invalidFields']) {
+    if (raw[f] !== undefined && !isStrList(raw[f])) shapeOk = false;
+  }
+  const duplicateKeys = {};
+  if (raw.duplicateKeys !== undefined) {
+    if (raw.duplicateKeys && typeof raw.duplicateKeys === 'object' && !Array.isArray(raw.duplicateKeys)) {
+      for (const [k, info] of Object.entries(raw.duplicateKeys)) {
+        const okInfo = info && typeof info === 'object' && !Array.isArray(info);
+        if (!okInfo) shapeOk = false;
+        duplicateKeys[k] = {count: okInfo && Number.isSafeInteger(info.count) && info.count >= 2 ? info.count : 2, conflicting: Boolean(okInfo && info.conflicting === true)};
+      }
+    } else {
+      shapeOk = false;
+    }
+  }
+  if (!shapeOk) return {...malformedView, duplicateKeys};
+  const view = {
+    scannerError: raw.scannerError === true,
+    hasConflict: raw.hasConflict === true,
+    hasMalformed: raw.hasMalformed === true,
+    duplicateKeys,
+    duplicateKeyPaths: isStrList(raw.duplicateKeyPaths) ? raw.duplicateKeyPaths.slice(0, WIRE_MAX_DUP_PATHS) : [],
+    invalidFields: isStrList(raw.invalidFields) ? raw.invalidFields.slice(0, WIRE_MAX_DUP_PATHS) : [],
+  };
+  if (!view.scannerError && !view.hasConflict && !view.hasMalformed && Object.keys(duplicateKeys).length === 0) {
+    return {...malformedView};
+  }
+  return view;
+}
+
+export function getWireObjectIntegrity(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  const fromWeak = wireRegistry.objects.get(obj) || null;
+  const mat = readMaterializedIntegrity(obj);
+  if (!fromWeak && !mat) return null;
+  return {
+    scannerError: Boolean(fromWeak?.scannerError || mat?.scannerError),
+    depthExceeded: Boolean(fromWeak?.depthExceeded),
+    hasDepthExceededSubtree: Boolean(fromWeak?.hasDepthExceededSubtree || fromWeak?.depthExceeded),
+    depthExceededPaths: fromWeak?.depthExceededPaths || [],
+    duplicateKeys: fromWeak?.duplicateKeys || null,
+    invalidIntFields: fromWeak?.invalidIntFields || null,
+    materialized: mat,
+    hasDuplicateKeyInSubtree: Boolean(fromWeak?.hasDuplicateKeyInSubtree || mat?.hasConflict || (mat && Object.keys(mat.duplicateKeys).length > 0)),
+    hasConflictingDuplicateKeyInSubtree: Boolean(fromWeak?.hasConflictingDuplicateKeyInSubtree || mat?.hasConflict),
+    duplicateKeyPaths: fromWeak?.duplicateKeyPaths || mat?.duplicateKeyPaths || [],
+  };
+}
+
+export function getWireDuplicateKeyInfo(obj, key) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const fromWeak = wireRegistry.objects.get(obj);
+  if (fromWeak?.scannerError) return {count: 2, conflicting: true, scannerError: true};
+  const weakDup = fromWeak?.duplicateKeys?.get(key);
+  if (weakDup) return weakDup;
+  const mat = readMaterializedIntegrity(obj);
+  if (mat?.scannerError) return {count: 2, conflicting: true, scannerError: true};
+  if (mat && Object.hasOwn(mat.duplicateKeys, key)) {
+    const entry = mat.duplicateKeys[key];
+    return {count: entry.count, conflicting: entry.conflicting};
+  }
+  const val = Object.hasOwn(obj, key) ? obj[key] : undefined;
+  if (isWireInvalidSentinel(val) && (val.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY' || val.kind === 'DUPLICATE_WIRE_KEY')) {
+    return {count: 2, conflicting: val.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY'};
+  }
+  return null;
+}
+
+export function readStrictWireSafeInt(obj, key) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return {present: false, valid: true, value: null, conflict: false, malformed: false, reason: ''};
+  }
+  if (isWireInvalidSentinel(obj)) {
+    const isConflict = obj.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY';
+    return {
+      present: true,
+      valid: false,
+      value: null,
+      conflict: isConflict,
+      malformed: !isConflict,
+      reason: String(obj.reason || obj.kind || 'WIRE_INVALID_CONTAINER'),
+    };
+  }
+  const wire = wireRegistry.objects.get(obj);
+  const mat = readMaterializedIntegrity(obj);
+  if (wire?.scannerError || wire?.depthExceeded || mat?.scannerError) {
+    return {present: true, valid: false, value: null, conflict: false, malformed: true, reason: 'WIRE_SCANNER_ERROR'};
+  }
+  const dup = getWireDuplicateKeyInfo(obj, key);
+  if (dup) {
+    return {
+      present: true,
+      valid: false,
+      value: null,
+      conflict: Boolean(dup.conflicting),
+      malformed: !dup.conflicting,
+      reason: dup.conflicting ? 'DUPLICATE_CONFLICTING_WIRE_KEY' : 'DUPLICATE_WIRE_KEY',
+    };
+  }
+  const wireInvalid = wire?.invalidIntFields?.get(key);
+  if (wireInvalid) {
+    return {
+      present: true,
+      valid: false,
+      value: null,
+      conflict: false,
+      malformed: true,
+      reason: wireInvalid.reason,
+      raw: wireInvalid.raw,
+    };
+  }
+  if (!Object.hasOwn(obj, key)) {
+    return {present: false, valid: true, value: null, conflict: false, malformed: false, reason: ''};
+  }
+  const value = obj[key];
+  if (isWireInvalidSentinel(value)) {
+    const isConflict = value.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY';
+    return {
+      present: true,
+      valid: false,
+      value: null,
+      conflict: isConflict,
+      malformed: !isConflict,
+      reason: String(value.reason || value.kind || 'INVALID_WIRE_NUMBER'),
+      ...(value.raw !== undefined ? {raw: String(value.raw)} : {}),
+    };
+  }
+  if (value === undefined || value === null) {
+    return {present: false, valid: true, value: null, conflict: false, malformed: false, reason: ''};
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) {
+    return {present: true, valid: false, value: null, conflict: false, malformed: true, reason: 'INVALID_SAFE_INTEGER'};
+  }
+  return {present: true, valid: true, value, conflict: false, malformed: false, reason: ''};
+}
+
+/**
+ * Produces a durable normalized copy of a telemetry/summary object where any wire-level
+ * anomalies (rounded non-integer count lexemes, unsafe integers, -0, duplicate keys,
+ * scanner errors, or over-depth subtrees exceeding WIRE_MAX_SCAN_DEPTH) are materialized
+ * directly as self-describing invalid sentinels and taint metadata so shallow spreads ({...obj}),
+ * deep clones, React state updates, cache storage, or JSON.parse(JSON.stringify(obj)) round-trips
+ * can NEVER erase a wire violation or rehabilitate invalid data into ALL_MATCHED / VERIFIED.
+ * Clean valid payloads within WIRE_MAX_SCAN_DEPTH receive ZERO extra properties.
+ */
+export function materializeNormalizedTelemetry(value, depth = 0, ancestors = new Set()) {
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return {value, hasConflict: false, hasMalformed: false, duplicateKeys: [], invalidFields: []};
+  }
+  if (ancestors.has(value)) {
+    return {value, hasConflict: false, hasMalformed: false, duplicateKeys: [], invalidFields: []};
+  }
+  const weak = wireRegistry.objects.get(value);
+  if (depth > WIRE_MAX_SCAN_DEPTH || weak?.depthExceeded) {
+    return {
+      value: {
+        __wireInvalid: true,
+        kind: 'WIRE_DEPTH_EXCEEDED',
+        reason: 'WIRE_MAX_SCAN_DEPTH_EXCEEDED',
+      },
+      hasConflict: false,
+      hasMalformed: true,
+      duplicateKeys: [],
+      invalidFields: ['__wireDepthExceeded'],
+      depthExceeded: true,
+    };
+  }
+  if (Array.isArray(value)) {
+    ancestors.add(value);
+    try {
+      let anyChange = false;
+      let hasConflict = false;
+      let hasMalformed = Boolean(weak?.scannerError || weak?.hasDepthExceededSubtree);
+      const duplicateKeys = [];
+      const invalidFields = [];
+      if (weak?.hasDepthExceededSubtree) invalidFields.push('__wireDepthExceeded');
+      const nextArr = value.map((item) => {
+        const res = materializeNormalizedTelemetry(item, depth + 1, ancestors);
+        if (res.value !== item) anyChange = true;
+        if (res.hasConflict) hasConflict = true;
+        if (res.hasMalformed) hasMalformed = true;
+        duplicateKeys.push(...res.duplicateKeys);
+        invalidFields.push(...res.invalidFields);
+        return res.value;
+      });
+      return {value: anyChange ? nextArr : value, hasConflict, hasMalformed, duplicateKeys, invalidFields};
+    } finally {
+      ancestors.delete(value);
+    }
+  }
+  if (isWireInvalidSentinel(value)) {
+    const isConflict = value.kind === 'DUPLICATE_CONFLICTING_WIRE_KEY';
+    return {
+      value: {...value},
+      hasConflict: isConflict,
+      hasMalformed: !isConflict,
+      duplicateKeys: isConflict || value.kind === 'DUPLICATE_WIRE_KEY' ? [String(value.key || '')] : [],
+      invalidFields: !isConflict ? [String(value.key || '')] : [],
+    };
+  }
+  const existingMat = readMaterializedIntegrity(value);
+  const ownDupMap = {};
+  const ownDupKeys = [];
+  const ownInvalidFields = existingMat?.invalidFields.includes('__wireIntegrity') ? ['__wireIntegrity'] : [];
+  let hasConflict = Boolean(existingMat?.hasConflict || weak?.scannerError);
+  let hasMalformed = Boolean(existingMat?.hasMalformed || weak?.scannerError || weak?.hasDepthExceededSubtree);
+
+  if (weak?.duplicateKeys) {
+    for (const [k, info] of weak.duplicateKeys.entries()) {
+      ownDupMap[k] = {count: info.count, conflicting: Boolean(info.conflicting)};
+      ownDupKeys.push(k);
+      if (info.conflicting) hasConflict = true;
+      else hasMalformed = true;
+    }
+  }
+  if (existingMat) {
+    for (const [k, info] of Object.entries(existingMat.duplicateKeys)) {
+      if (!Object.hasOwn(ownDupMap, k)) {
+        ownDupMap[k] = {count: info.count, conflicting: info.conflicting};
+        ownDupKeys.push(k);
+        if (info.conflicting) hasConflict = true;
+        else hasMalformed = true;
+      }
+    }
+  }
+
+  let needsMaterialization = Boolean(
+    weak?.scannerError
+    || weak?.hasDepthExceededSubtree
+    || existingMat?.scannerError
+    || ownDupKeys.length > 0
+    || existingMat?.hasConflict
+    || existingMat?.hasMalformed,
+  );
+
+  const out = {};
+  const keys = Object.keys(value);
+  ancestors.add(value);
+  try {
+    for (let i = 0; i < keys.length; i += 1) {
+      const k = keys[i];
+      if (k === '__wireIntegrity') continue;
+      const rawVal = value[k];
+      if (Object.hasOwn(ownDupMap, k)) {
+        const dupInfo = ownDupMap[k];
+        out[k] = {
+          __wireInvalid: true,
+          kind: dupInfo.conflicting ? 'DUPLICATE_CONFLICTING_WIRE_KEY' : 'DUPLICATE_WIRE_KEY',
+          key: k,
+          reason: dupInfo.conflicting ? 'DUPLICATE_CONFLICTING_WIRE_KEY' : 'DUPLICATE_WIRE_KEY',
+        };
+        needsMaterialization = true;
+        continue;
+      }
+      const wireIntErr = weak?.invalidIntFields?.get(k);
+      if (isWireInvalidIntAnomaly(k, wireIntErr, rawVal)) {
+        out[k] = {
+          __wireInvalid: true,
+          kind: 'INVALID_WIRE_INT',
+          key: k,
+          reason: wireIntErr.reason,
+          raw: wireIntErr.raw,
+        };
+        ownInvalidFields.push(k);
+        hasMalformed = true;
+        needsMaterialization = true;
+        continue;
+      }
+      const child = materializeNormalizedTelemetry(rawVal, depth + 1, ancestors);
+      out[k] = child.value;
+      if (child.value !== rawVal) needsMaterialization = true;
+      if (child.hasConflict) hasConflict = true;
+      if (child.hasMalformed) hasMalformed = true;
+      for (const dk of child.duplicateKeys) ownDupKeys.push(`${k}.${dk}`);
+      for (const ik of child.invalidFields) ownInvalidFields.push(`${k}.${ik}`);
+    }
+  } finally {
+    ancestors.delete(value);
+  }
+
+  if (weak?.hasDepthExceededSubtree && Array.isArray(weak.depthExceededPaths)) {
+    for (const dep of weak.depthExceededPaths) {
+      if (!ownInvalidFields.includes(dep)) ownInvalidFields.push(dep);
+    }
+  }
+
+  if (!needsMaterialization && !hasConflict && !hasMalformed) {
+    return {value, hasConflict: false, hasMalformed: false, duplicateKeys: [], invalidFields: []};
+  }
+
+  out.__wireIntegrity = {
+    scannerError: Boolean(weak?.scannerError || existingMat?.scannerError),
+    hasConflict,
+    hasMalformed,
+    duplicateKeys: ownDupMap,
+    duplicateKeyPaths: [...new Set([...ownDupKeys, ...(existingMat ? existingMat.duplicateKeyPaths : [])])].slice(0, WIRE_MAX_DUP_PATHS),
+    invalidFields: [...new Set([...ownInvalidFields, ...(existingMat ? existingMat.invalidFields : [])])].slice(0, WIRE_MAX_DUP_PATHS),
+  };
+  return {
+    value: out,
+    hasConflict,
+    hasMalformed,
+    duplicateKeys: ownDupKeys,
+    invalidFields: ownInvalidFields,
+  };
+}
+
+// Expose shared helpers on the global registry so standalone ESM modules with zero relative
+// imports (jobModel.js, findingPresentation.js, reportModel.js) use the exact same rules.
+wireRegistry.WIRE_MAX_SCAN_DEPTH = WIRE_MAX_SCAN_DEPTH;
+wireRegistry.isWireInvalidSentinel = isWireInvalidSentinel;
+wireRegistry.isWireInvalidIntAnomaly = isWireInvalidIntAnomaly;
+wireRegistry.getWireObjectIntegrity = getWireObjectIntegrity;
+wireRegistry.getWireDuplicateKeyInfo = getWireDuplicateKeyInfo;
+wireRegistry.readStrictWireSafeInt = readStrictWireSafeInt;
+wireRegistry.materializeNormalizedTelemetry = materializeNormalizedTelemetry;
+
 const STORAGE_API_URL_KEY = 'ntk-api-base-url';
+export const HEALTH_PROOF_LEDGER_STORAGE_KEY = '22025523-health-proof-ledger-v1';
+export const HEALTH_SCOPE_EPOCH_STORAGE_KEY = '22025523-health-scope-epoch-v1';
+export const HEALTH_LEDGER_SALT_STORAGE_KEY = '22025523-health-ledger-salt-v1';
 const ACTIVE_SCAN_STORAGE_KEY = '22025523-scan-id';
 const LIVE_DATASET_CACHE_PREFIX = '22025523-live-dataset:';
 const LIVE_SCAN_HISTORY_STORAGE_KEY = '22025523-live-scan-history';
@@ -191,29 +1021,233 @@ function notifyConfigChange(detail) {
 }
 
 function clearSessionScopedStorage() {
-  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  const storage = getSessionStorageSafe();
+  if (!storage) return;
   try {
-    window.sessionStorage.removeItem(ACTIVE_SCAN_STORAGE_KEY);
-    window.sessionStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
-    window.sessionStorage.removeItem(ACTIVE_JOB_STARTED_KEY);
-    window.sessionStorage.removeItem(LIVE_SCAN_HISTORY_STORAGE_KEY);
-    if (typeof window.sessionStorage.length === 'number' && typeof window.sessionStorage.key === 'function') {
+    storage.removeItem(ACTIVE_SCAN_STORAGE_KEY);
+    storage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+    storage.removeItem(ACTIVE_JOB_STARTED_KEY);
+    storage.removeItem(LIVE_SCAN_HISTORY_STORAGE_KEY);
+    if (typeof storage.length === 'number' && typeof storage.key === 'function') {
       const toRemove = [];
-      for (let i = 0; i < window.sessionStorage.length; i += 1) {
-        const key = window.sessionStorage.key(i);
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
         if (key && key.startsWith(LIVE_DATASET_CACHE_PREFIX)) toRemove.push(key);
       }
-      toRemove.forEach((key) => window.sessionStorage.removeItem(key));
+      toRemove.forEach((key) => storage.removeItem(key));
     }
   } catch {
     /* optional sessionStorage cleanup */
   }
 }
 
+// Storage access guards. In some browser configurations even reading `window.sessionStorage`
+// throws (SecurityError), so the property access itself is wrapped, not only getItem/setItem.
+// Storage is optional: callers treat `null`/`false` as "unavailable" and keep working in RAM.
+export function getSessionStorageSafe() {
+  try {
+    if (typeof window === 'undefined' || !window) return null;
+    const storage = window.sessionStorage;
+    return storage && typeof storage.getItem === 'function' ? storage : null;
+  } catch {
+    return null;
+  }
+}
+
+export function safeSessionGet(key) {
+  const storage = getSessionStorageSafe();
+  if (!storage) return null;
+  try {
+    const value = storage.getItem(key);
+    return typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function safeSessionSet(key, value) {
+  const storage = getSessionStorageSafe();
+  if (!storage) return false;
+  try {
+    storage.setItem(key, String(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function safeSessionRemove(key) {
+  const storage = getSessionStorageSafe();
+  if (!storage) return false;
+  try {
+    storage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Pure-JS FIPS 180-4 SHA-256 + RFC 2104 HMAC-SHA-256 used strictly to derive an irreversible,
+// per-tab randomly-salted scope bucket identifier for non-sensitive monotonic health expiry metadata.
+// Bearer Tokens remain RAM-only and are NEVER stored in sessionStorage/localStorage.
+const SHA256_K = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]);
+
+function utf8Bytes(str) {
+  if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(str);
+  const encoded = unescape(encodeURIComponent(str));
+  const out = new Uint8Array(encoded.length);
+  for (let i = 0; i < encoded.length; i += 1) out[i] = encoded.charCodeAt(i);
+  return out;
+}
+
+function sha256Bytes(data) {
+  const bytes = data instanceof Uint8Array ? data : utf8Bytes(String(data || ''));
+  const bitLen = bytes.length * 8;
+  const paddedLen = Math.ceil((bytes.length + 9) / 64) * 64;
+  const buf = new Uint8Array(paddedLen);
+  buf.set(bytes);
+  buf[bytes.length] = 0x80;
+  const view = new DataView(buf.buffer);
+  view.setUint32(paddedLen - 8, Math.floor(bitLen / 0x100000000), false);
+  view.setUint32(paddedLen - 4, bitLen >>> 0, false);
+
+  let h0 = 0x6a09e667; let h1 = 0xbb67ae85; let h2 = 0x3c6ef372; let h3 = 0xa54ff53a;
+  let h4 = 0x510e527f; let h5 = 0x9b05688c; let h6 = 0x1f83d9ab; let h7 = 0x5be0cd19;
+  const w = new Uint32Array(64);
+
+  for (let offset = 0; offset < paddedLen; offset += 64) {
+    for (let i = 0; i < 16; i += 1) w[i] = view.getUint32(offset + i * 4, false);
+    for (let i = 16; i < 64; i += 1) {
+      const s0 = ((w[i - 15] >>> 7) | (w[i - 15] << 25)) ^ ((w[i - 15] >>> 18) | (w[i - 15] << 14)) ^ (w[i - 15] >>> 3);
+      const s1 = ((w[i - 2] >>> 17) | (w[i - 2] << 15)) ^ ((w[i - 2] >>> 19) | (w[i - 2] << 13)) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+    }
+    let a = h0; let b = h1; let c = h2; let d = h3;
+    let e = h4; let f = h5; let g = h6; let h = h7;
+    for (let i = 0; i < 64; i += 1) {
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const ch = (e & f) ^ ((~e) & g);
+      const temp1 = (h + S1 + ch + SHA256_K[i] + w[i]) >>> 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
+  }
+  const digest = new Uint8Array(32);
+  const dv = new DataView(digest.buffer);
+  dv.setUint32(0, h0, false); dv.setUint32(4, h1, false); dv.setUint32(8, h2, false); dv.setUint32(12, h3, false);
+  dv.setUint32(16, h4, false); dv.setUint32(20, h5, false); dv.setUint32(24, h6, false); dv.setUint32(28, h7, false);
+  return digest;
+}
+
+function hmacSha256Hex(keyStr, msgStr) {
+  let keyBytes = utf8Bytes(keyStr);
+  if (keyBytes.length > 64) keyBytes = sha256Bytes(keyBytes);
+  const ipad = new Uint8Array(64);
+  const opad = new Uint8Array(64);
+  for (let i = 0; i < 64; i += 1) {
+    const k = i < keyBytes.length ? keyBytes[i] : 0;
+    ipad[i] = k ^ 0x36;
+    opad[i] = k ^ 0x5c;
+  }
+  const msgBytes = utf8Bytes(msgStr);
+  const innerBuf = new Uint8Array(64 + msgBytes.length);
+  innerBuf.set(ipad, 0);
+  innerBuf.set(msgBytes, 64);
+  const innerHash = sha256Bytes(innerBuf);
+  const outerBuf = new Uint8Array(64 + 32);
+  outerBuf.set(opad, 0);
+  outerBuf.set(innerHash, 64);
+  const outerHash = sha256Bytes(outerBuf);
+  let hex = '';
+  for (let i = 0; i < outerHash.length; i += 1) hex += outerHash[i].toString(16).padStart(2, '0');
+  return hex;
+}
+
+let memoryTabSalt = '';
+
+function randomSaltHex() {
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto && typeof globalThis.crypto.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i += 1) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function readOrCreateHealthLedgerSalt() {
+  const existing = safeSessionGet(HEALTH_LEDGER_SALT_STORAGE_KEY);
+  if (typeof existing === 'string' && /^[0-9a-f]{32}$/.test(existing)) {
+    memoryTabSalt = existing;
+    return existing;
+  }
+  // When storage is unavailable the salt stays RAM-only for this page load (random, never a
+  // constant). The health ledger cannot persist in that case either, so nothing is lost.
+  if (getSessionStorageSafe()) {
+    const generated = randomSaltHex();
+    if (safeSessionSet(HEALTH_LEDGER_SALT_STORAGE_KEY, generated)) {
+      memoryTabSalt = generated;
+      return generated;
+    }
+  }
+  if (!memoryTabSalt) memoryTabSalt = randomSaltHex();
+  return memoryTabSalt;
+}
+
+export function clearHealthProofLedgerStorage({bumpEpoch = false} = {}) {
+  safeSessionRemove(HEALTH_PROOF_LEDGER_STORAGE_KEY);
+  if (bumpEpoch) {
+    const current = Number.parseInt(safeSessionGet(HEALTH_SCOPE_EPOCH_STORAGE_KEY) || '1', 10);
+    const next = Number.isSafeInteger(current) && current >= 1 && current < 1000000000 ? current + 1 : 2;
+    safeSessionSet(HEALTH_SCOPE_EPOCH_STORAGE_KEY, String(next));
+  }
+}
+
+export function getHealthPersistenceScopeKey() {
+  // Bind non-sensitive monotonic anti-replay metadata to (apiBaseUrl, origin, auth-session).
+  // - Unauthenticated sessions use `v2|<baseUrl>|<origin>|anon`.
+  // - Authenticated sessions use `v2|<baseUrl>|<origin>|auth:<salted-hmac-128bit>` where the
+  //   tag is computed with an ephemeral per-tab random salt in sessionStorage. The Bearer Token
+  //   itself stays strictly in RAM and is NEVER written to storage.
+  // - Surviving Page.reload -> AUTH_REQUIRED -> re-entry of the same token prevents expired-probe
+  //   resurrection while strictly isolating different URLs, origins, anon vs auth, and different tokens.
+  let origin = '';
+  try {
+    origin = extractOrigin(apiBaseUrl);
+  } catch {
+    return null;
+  }
+  if (!apiBaseUrl || !origin) return null;
+  if (!hasSessionToken()) {
+    return `v2|${apiBaseUrl}|${origin}|anon`;
+  }
+  const salt = readOrCreateHealthLedgerSalt();
+  const authTag = hmacSha256Hex(salt, `health-ledger-v2\0${apiBaseUrl}\0${origin}\0${sessionToken}`).slice(0, 32);
+  return `v2|${apiBaseUrl}|${origin}|auth:${authTag}`;
+}
+
 function rotateAuthSession(baseUrl) {
   authSessionSeq += 1;
   authSessionScope = buildAuthSessionScope(baseUrl, authSessionSeq);
   clearSessionScopedStorage();
+  // Intentionally do NOT wipe HEALTH_PROOF_LEDGER_STORAGE_KEY here: the ledger is strictly
+  // monotonic/restrictive and isolated per (baseUrl, origin, salted-auth-tag), so reload ->
+  // AUTH_REQUIRED -> token re-entry preserves expired-probe anti-resurrection without sharing
+  // proofs across different URLs or different tokens.
   abortInFlightRequests();
 }
 
@@ -302,14 +1336,12 @@ function initialApiBaseUrl() {
       /* fallback below */
     }
   }
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    const saved = window.sessionStorage.getItem(STORAGE_API_URL_KEY);
-    if (saved) {
-      try {
-        return normalizeApiUrl(saved);
-      } catch {
-        window.sessionStorage.removeItem(STORAGE_API_URL_KEY);
-      }
+  const saved = safeSessionGet(STORAGE_API_URL_KEY);
+  if (saved) {
+    try {
+      return normalizeApiUrl(saved);
+    } catch {
+      safeSessionRemove(STORAGE_API_URL_KEY);
     }
   }
   return DEFAULT_SUGGESTED_API_URL;
@@ -361,9 +1393,7 @@ export function configureApiConnection({baseUrl, token = ''} = {}) {
   const sessionChanged = baseUrlChanged || originChanged || tokenChanged;
 
   apiBaseUrl = normalized;
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    window.sessionStorage.setItem(STORAGE_API_URL_KEY, normalized);
-  }
+  safeSessionSet(STORAGE_API_URL_KEY, normalized);
 
   if (sessionChanged) {
     rotateAuthSession(normalized);
@@ -414,9 +1444,7 @@ export function setApiBaseUrl(rawUrl) {
   const sessionChanged = baseUrlChanged || originChanged;
 
   apiBaseUrl = normalized;
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    window.sessionStorage.setItem(STORAGE_API_URL_KEY, normalized);
-  }
+  safeSessionSet(STORAGE_API_URL_KEY, normalized);
   if (originChanged) {
     sessionToken = '';
     sessionTokenOrigin = '';
@@ -441,9 +1469,7 @@ export function resetApiBaseUrl() {
   const previousBaseUrl = apiBaseUrl;
   const previousOrigin = extractOrigin(previousBaseUrl);
   const hadToken = hasSessionToken();
-  if (typeof window !== 'undefined' && window.sessionStorage) {
-    window.sessionStorage.removeItem(STORAGE_API_URL_KEY);
-  }
+  safeSessionRemove(STORAGE_API_URL_KEY);
   apiBaseUrl = initialApiBaseUrl();
   const nextOrigin = extractOrigin(apiBaseUrl);
   const baseUrlChanged = apiBaseUrl !== previousBaseUrl;
@@ -650,7 +1676,7 @@ async function request(path, options = {}) {
       }
       let payload;
       try {
-        payload = JSON.parse(rawBody);
+        payload = parseJsonWithWireIntegrity(rawBody);
       } catch {
         /* non-JSON response */
       }
@@ -682,9 +1708,18 @@ async function request(path, options = {}) {
       });
     }
     if (!text) return null;
+    const contentType = String(response.headers?.get?.('content-type') || '').toLowerCase();
     try {
-      return JSON.parse(text);
-    } catch {
+      return parseJsonWithWireIntegrity(text);
+    } catch (parseErr) {
+      const trimmed = text.trim();
+      if (contentType.includes('json') || trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        throw new ApiError('Phản hồi JSON từ máy chủ API không hợp lệ hoặc bị cắt cụt.', {
+          status: response.status,
+          payload: {error_code: 'INVALID_JSON'},
+          cause: parseErr,
+        });
+      }
       return text;
     }
   } catch (error) {
@@ -725,7 +1760,7 @@ function invalidListResult(
   };
 }
 
-const VALID_JOB_STATES = new Set(['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED']);
+const VALID_JOB_STATES = new Set(['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'CANCELED']);
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -781,14 +1816,22 @@ function inspectListItems(rawItems, validator) {
 }
 
 function finalizeListObjectResult(data, rawItems, format, validator) {
-  const totalCountProvided = Object.hasOwn(data, 'total_count') && data.total_count !== undefined;
-  const totalCountValid = (
-    totalCountProvided &&
-    typeof data.total_count === 'number' &&
-    Number.isInteger(data.total_count) &&
-    data.total_count >= 0
+  const hasDuplicateListContainerKey = Boolean(
+    getWireObjectIntegrity(data)?.scannerError
+    || ['jobs', 'scans', 'items', 'findings', 'warnings', 'total_count', 'truncated', 'has_more', 'total_pages', 'page', 'limit']
+      .some((k) => Boolean(getWireDuplicateKeyInfo(data, k))),
   );
-  const declaredTotalCount = totalCountValid ? data.total_count : null;
+  if (hasDuplicateListContainerKey) {
+    return invalidListResult('DUPLICATE_WIRE_KEY', {
+      totalCountProvided: Object.hasOwn(data, 'total_count') && data.total_count !== undefined,
+      endpointStatus: 'INCOMPLETE',
+      httpStatus: 200,
+    });
+  }
+  const totalCountProvided = Object.hasOwn(data, 'total_count') && data.total_count !== undefined;
+  const totalCheck = readStrictWireSafeInt(data, 'total_count');
+  const totalCountValid = Boolean(totalCountProvided && totalCheck.present && totalCheck.valid && totalCheck.value !== null);
+  const declaredTotalCount = totalCountValid ? totalCheck.value : null;
   const {validItems, invalidItemCount, duplicateKeyCount} = inspectListItems(rawItems, validator);
   const declaredTruncated = Boolean(
     data.truncated === true ||
@@ -947,8 +1990,12 @@ function buildFindingsQuery(params = {}) {
   return qs.toString();
 }
 
-function nonNegativeIntOrNull(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+function nonNegativeIntOrNull(value, obj = null, key = '') {
+  if (obj && key) {
+    const check = readStrictWireSafeInt(obj, key);
+    return check.present && check.valid ? check.value : null;
+  }
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0) ? value : null;
 }
 
 function isNonEmptyPageMarker(value) {
@@ -979,6 +2026,16 @@ async function allFindingsPages(scanId, params = {}, options = {}) {
     if (response?.scan_id !== scanId) {
       throw new ApiError('Phản hồi danh sách cảnh báo không khớp scan_id đã chọn.');
     }
+    const pageWireIntegrity = getWireObjectIntegrity(response);
+    const hasDuplicatePageKey = Boolean(
+      pageWireIntegrity?.scannerError
+      || ['findings', 'scan_id', 'total_count', 'total_matching', 'total_pages', 'page', 'page_size', 'has_more', 'truncated', 'next_page', 'next_cursor']
+        .some((k) => Boolean(getWireDuplicateKeyInfo(response, k))),
+    );
+    if (hasDuplicatePageKey) {
+      paginationInconsistent = true;
+      break;
+    }
     summaryMeta = response;
     if (!Array.isArray(response?.findings)) {
       hasInvalidFindingsArray = true;
@@ -1006,10 +2063,10 @@ async function allFindingsPages(scanId, params = {}, options = {}) {
     items.push(...list);
 
     const matching = response.total_matching !== undefined && response.total_matching !== null
-      ? nonNegativeIntOrNull(response.total_matching)
+      ? nonNegativeIntOrNull(response.total_matching, response, 'total_matching')
       : null;
     const countTotal = response.total_count !== undefined && response.total_count !== null
-      ? nonNegativeIntOrNull(response.total_count)
+      ? nonNegativeIntOrNull(response.total_count, response, 'total_count')
       : null;
     if (
       (response.total_matching !== undefined && response.total_matching !== null && matching === null) ||
@@ -1026,19 +2083,19 @@ async function allFindingsPages(scanId, params = {}, options = {}) {
     }
 
     const rawTotalPages = response.total_pages;
-    const totalPages = rawTotalPages !== undefined && rawTotalPages !== null ? nonNegativeIntOrNull(rawTotalPages) : null;
+    const totalPages = rawTotalPages !== undefined && rawTotalPages !== null ? nonNegativeIntOrNull(rawTotalPages, response, 'total_pages') : null;
     if (rawTotalPages !== undefined && rawTotalPages !== null && totalPages === null) {
       paginationInconsistent = true;
       break;
     }
     const rawRespPage = response.page;
-    const respPage = rawRespPage !== undefined && rawRespPage !== null ? nonNegativeIntOrNull(rawRespPage) : null;
+    const respPage = rawRespPage !== undefined && rawRespPage !== null ? nonNegativeIntOrNull(rawRespPage, response, 'page') : null;
     if (rawRespPage !== undefined && rawRespPage !== null && (respPage === null || respPage < 1 || respPage !== page)) {
       paginationInconsistent = true;
       break;
     }
     const rawRespSize = response.page_size;
-    const respSize = rawRespSize !== undefined && rawRespSize !== null ? nonNegativeIntOrNull(rawRespSize) : null;
+    const respSize = rawRespSize !== undefined && rawRespSize !== null ? nonNegativeIntOrNull(rawRespSize, response, 'page_size') : null;
     if (rawRespSize !== undefined && rawRespSize !== null && (respSize === null || respSize < 1)) {
       paginationInconsistent = true;
       break;
@@ -1221,6 +2278,15 @@ export const api = {
     {...options, timeoutMs: 60000},
   ),
 };
+
+Object.defineProperty(api, 'getScopeSnapshot', {
+  value: () => ({
+    baseUrl: getApiBaseUrl(),
+    origin: getApiOrigin(),
+    sessionScope: getAuthSessionScope(),
+  }),
+  enumerable: false,
+});
 
 export async function checkBackend() {
   try {

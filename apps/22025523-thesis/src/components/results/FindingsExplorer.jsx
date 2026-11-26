@@ -6,7 +6,9 @@ import {
   PRIORITY_CWES,
   VALIDATED_STATUSES,
   HUMAN_REVIEW_STATES,
+  describeDowngradeReason,
   fileName,
+  normalizeFailureKind,
   validatedStatusMeta,
   humanReviewMeta,
   citationCheckTone,
@@ -171,11 +173,16 @@ export default function FindingsExplorer({rows, scanId}) {
                   const hMeta = humanReviewMeta(row.humanReviewState);
                   const shortFile = fileName(row.file) || row.file || 'Java';
                   const shortId = row.id.length > 16 ? `${row.id.slice(0, 12)}…` : row.id;
+                  const cleanFailure = normalizeFailureKind(row.failureKind);
+                  const dgInfo = row.validatorDowngraded || cleanFailure
+                    ? describeDowngradeReason(cleanFailure, row.downgradeReason, row.citationCheck)
+                    : null;
+                  const showRawDiff = Boolean(row.rawModelStatus && String(row.rawModelStatus).toUpperCase() !== row.validatedStatus);
                   return (
                     <tr key={row.id}>
                       <td>
                         <div style={{display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginBottom: '4px'}}>
-                          <Badge tone="blue">{row.cwe}</Badge>
+                          <Badge tone="blue" className="v2-status-token">{row.cwe}</Badge>
                           <strong className="mono" title={row.file}>
                             {shortFile}:{row.line || '-'}
                           </strong>
@@ -184,18 +191,28 @@ export default function FindingsExplorer({rows, scanId}) {
                           {row.file !== shortFile ? `${row.file} · ` : ''}{shortId}
                         </span>
                       </td>
-                      <td>
-                        <Badge tone={vMeta.tone}>{row.validatedStatus}</Badge>
+                      <td className="v2-status-col">
+                        <Badge tone={vMeta.tone} className="v2-status-token">{row.validatedStatus}</Badge>
                         <span className="v2-cell-sub">{vMeta.viLabel}</span>
-                        {row.validatorDowngraded && <span className="v2-cell-warn">Đã hạ cấp kiểm chứng</span>}
+                        {showRawDiff && (
+                          <span className="v2-cell-sub mono">Qwen gốc: {String(row.rawModelStatus).toUpperCase()}</span>
+                        )}
+                        {dgInfo && (
+                          <span className="v2-cell-warn" title={dgInfo.rawDetail || dgInfo.note}>
+                            {dgInfo.hasCode ? `${dgInfo.viLabel} (${dgInfo.code})` : dgInfo.viLabel}
+                          </span>
+                        )}
                       </td>
-                      <td>
-                        <Badge tone={citationCheckTone(row.citationCheck)}>
+                      <td className="v2-status-col">
+                        <Badge tone={citationCheckTone(row.citationCheck)} className="v2-status-token">
                           {row.citationCheck} ({row.citationsCount})
                         </Badge>
+                        {row.citationCheck === 'MATCHED' && row.validatedStatus === 'UNDETERMINED' && (
+                          <span className="v2-cell-sub">Trích dẫn khớp nguồn, chưa đủ chứng minh luồng</span>
+                        )}
                       </td>
-                      <td>
-                        <Badge tone={hMeta.tone}>{row.humanReviewState}</Badge>
+                      <td className="v2-status-col">
+                        <Badge tone={hMeta.tone} className="v2-status-token">{row.humanReviewState}</Badge>
                         <span className="v2-cell-sub">{hMeta.viLabel}</span>
                       </td>
                       <td style={{whiteSpace: 'nowrap', textAlign: 'right'}}>

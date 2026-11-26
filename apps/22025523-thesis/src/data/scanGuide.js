@@ -48,7 +48,7 @@ export const scanGuide = [
     title: 'Kiểm chứng trích dẫn dòng mã thật & SHA-256',
     purpose: 'Đối chiếu từng trích dẫn (path, dòng, quote, SHA-256) của mô hình với mã nguồn thật.',
     input: 'Phản hồi JSON từ mô hình và snapshot bằng chứng gốc.',
-    process: 'Hạ cấp về UNDETERMINED (validator_downgraded) nếu thiếu hoặc sai trích dẫn/SHA-256.',
+    process: 'Hạ cấp về UNDETERMINED (validator_downgraded) nếu trích dẫn sai/thiếu (INVALID_CITATION), còn luồng hàm trợ giúp chưa kiểm chứng (UNVERIFIED_HELPER_FLOW) hoặc bác bỏ chưa đủ chứng minh độc lập (UNVERIFIED_REFUTATION).',
     output: 'validated_status, citation_check và citation_provenance.',
     meaning: 'Ngăn chặn mô hình tự suy diễn hoặc bịa đặt trích dẫn không có trong mã nguồn.',
     icon: 'ShieldCheck',

@@ -3,7 +3,12 @@ import {Link, useNavigate, useOutletContext} from 'react-router-dom';
 import {PageHeader, StatCard, DataNotice, EmptyState, Icon} from '../components/common/Ui';
 import FindingsExplorer from '../components/results/FindingsExplorer';
 import OverviewCharts from '../components/results/OverviewCharts';
-import {classifyDataOrigin, NO_FINDINGS_NOTICE} from '../services/findingPresentation';
+import {
+  classifyDataOrigin,
+  NO_FINDINGS_NOTICE,
+  resolveJavaFileCounts,
+  summarizeDowngradeReasons,
+} from '../services/findingPresentation';
 import {clearStaleActiveScanId, scanQuery} from '../services/liveScan';
 import {useScanOverview, buildAggregates} from '../services/scanOverview';
 import '../styles/results-dashboard.css';
@@ -16,25 +21,31 @@ function Kpis({summary, rows, agg}) {
   const byHuman = summary?.by_human_review_state || {};
   const byCwe = summary?.by_cwe || {};
 
-  const javaFiles = n(summary?.java_files_scanned);
+  const javaCounts = resolveJavaFileCounts(summary);
   const total = n(summary?.total_findings) ?? (agg ? rows.length : null);
-  const cwe22 = n(byCwe['CWE-22']) ?? rows.filter((r) => r.cwe === 'CWE-22').length;
-  const cwe89 = n(byCwe['CWE-89']) ?? rows.filter((r) => r.cwe === 'CWE-89').length;
+  const cwe22 = n(byCwe['CWE-22']) ?? (agg ? rows.filter((r) => r.cwe === 'CWE-22').length : null);
+  const cwe89 = n(byCwe['CWE-89']) ?? (agg ? rows.filter((r) => r.cwe === 'CWE-89').length : null);
 
-  const supported = n(byValidated.SUPPORTED) ?? rows.filter((r) => r.validatedStatus === 'SUPPORTED').length;
-  const refuted = n(byValidated.REFUTED) ?? rows.filter((r) => r.validatedStatus === 'REFUTED').length;
-  const undetermined = n(byValidated.UNDETERMINED) ?? rows.filter((r) => r.validatedStatus === 'UNDETERMINED').length;
+  const supported = n(byValidated.SUPPORTED) ?? (agg ? rows.filter((r) => r.validatedStatus === 'SUPPORTED').length : null);
+  const refuted = n(byValidated.REFUTED) ?? (agg ? rows.filter((r) => r.validatedStatus === 'REFUTED').length : null);
+  const undetermined = n(byValidated.UNDETERMINED) ?? (agg ? rows.filter((r) => r.validatedStatus === 'UNDETERMINED').length : null);
 
-  const openCount = n(byHuman.OPEN) ?? rows.filter((r) => r.humanReviewState === 'OPEN').length;
-  const confirmedTrue = n(byHuman.CONFIRMED_TRUE) ?? rows.filter((r) => r.humanReviewState === 'CONFIRMED_TRUE').length;
-  const confirmedFalse = n(byHuman.CONFIRMED_FALSE) ?? rows.filter((r) => r.humanReviewState === 'CONFIRMED_FALSE').length;
+  const openCount = n(byHuman.OPEN) ?? (agg ? rows.filter((r) => r.humanReviewState === 'OPEN').length : null);
+  const confirmedTrue = n(byHuman.CONFIRMED_TRUE) ?? (agg ? rows.filter((r) => r.humanReviewState === 'CONFIRMED_TRUE').length : null);
+  const confirmedFalse = n(byHuman.CONFIRMED_FALSE) ?? (agg ? rows.filter((r) => r.humanReviewState === 'CONFIRMED_FALSE').length : null);
+
+  const javaDisplayValue = javaCounts.isInconsistent
+    ? (javaCounts.inventoryCount !== null ? `${fmt(javaCounts.inventoryCount)} (không nhất quán)` : 'Không nhất quán')
+    : javaCounts.primaryValue !== null
+      ? fmt(javaCounts.primaryValue)
+      : 'Chưa có số liệu';
 
   return (
     <div className="stats-grid v2-results-kpis">
       <StatCard
-        label="Tệp Java đã quét"
-        value={fmt(javaFiles)}
-        note={summary?.repo_url || summary?.file_name || summary?.data_origin || 'Từ summary API'}
+        label={javaCounts.primaryLabel}
+        value={javaDisplayValue}
+        note={javaCounts.summaryNote}
         icon="Code"
       />
       <StatCard
@@ -51,7 +62,7 @@ function Kpis({summary, rows, agg}) {
       </div>
       <StatCard
         label="Người kiểm duyệt"
-        value={`${fmt(openCount)} OPEN`}
+        value={openCount !== null ? `${fmt(openCount)} OPEN` : '—'}
         note={`Xác nhận thật: ${fmt(confirmedTrue)} · Xác nhận giả: ${fmt(confirmedFalse)}`}
         icon="Shield"
       />
@@ -145,7 +156,8 @@ export function LiveFindings({scanId}) {
 
   const summary = data.summary;
   const originInfo = classifyDataOrigin(summary);
-  const downgradedCount = Number(summary?.validator_downgraded_count ?? 0);
+  const downgradedSummary = summarizeDowngradeReasons(data.rows);
+  const downgradedCount = Number(summary?.validator_downgraded_count ?? downgradedSummary.totalDowngraded ?? 0);
 
   return (
     <>
@@ -157,7 +169,31 @@ export function LiveFindings({scanId}) {
       )}
       {downgradedCount > 0 && (
         <DataNotice>
-          Có <strong>{downgradedCount}</strong> cảnh báo bị bộ kiểm chứng hạ cấp về <strong>UNDETERMINED</strong> do thiếu trích dẫn hoặc không khớp dòng mã/SHA-256.
+          <span>
+            Có <strong>{downgradedCount}</strong> cảnh báo bị bộ kiểm chứng hạ cấp về <strong>UNDETERMINED</strong>
+            {downgradedSummary.items.length > 0 ? (
+              <>
+                {' '}theo nguyên nhân thực tế từ API:{' '}
+                {downgradedSummary.items.map((item, idx) => (
+                  <span key={item.code}>
+                    {idx > 0 ? '; ' : ''}
+                    <strong>{item.count}</strong> × {item.viLabel} (<code>{item.code}</code>)
+                  </span>
+                ))}
+                {downgradedSummary.missingReasonCount > 0 && (
+                  <span>; <strong>{downgradedSummary.missingReasonCount}</strong> × chưa có mã nguyên nhân chi tiết từ API</span>
+                )}
+                .
+              </>
+            ) : (
+              ' (API chưa cung cấp mã nguyên nhân hạ cấp chi tiết).'
+            )}
+            {downgradedSummary.matchedButUndeterminedCount > 0 && (
+              <>
+                {' '}Lưu ý: có <strong>{downgradedSummary.matchedButUndeterminedCount}</strong> cảnh báo đạt trích dẫn khớp mã nguồn (<code>MATCHED</code>) nhưng vẫn ở trạng thái <strong>UNDETERMINED</strong> vì chưa kiểm chứng đủ luồng dữ liệu/hàm trợ giúp hoặc lập luận bảo mật.
+              </>
+            )}
+          </span>
         </DataNotice>
       )}
 

@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react';
 import {Badge, Card, DataNotice} from '../common/Ui';
 import {api} from '../../services/api';
-import {runtimeVerificationMeta} from '../../services/findingPresentation';
+import {resolveJavaFileCounts, runtimeVerificationMeta} from '../../services/findingPresentation';
 import {errorInfo, fmtMs, resolveStages, skipNote} from '../../services/jobModel';
 
 function JsonDetails({summary, title}) {
@@ -74,7 +74,9 @@ export function StageTiming({job}) {
   const durations = stages.map((stage) => stage.duration).filter((value) => value !== null);
   const sum = durations.reduce((total, value) => total + value, 0);
   const raw = job?.total_e2e_duration_ms;
-  const total = raw === null || raw === undefined ? NaN : Number(raw);
+  const total = raw === null || raw === undefined || raw === '' ? NaN : Number(raw);
+  const hasValidE2e = Number.isFinite(total) && total >= 0;
+  const shareDenom = hasValidE2e && total > 0 ? total : null;
   const longest = stages.filter((stage) => stage.duration !== null).sort((a, b) => b.duration - a.duration)[0];
 
   return (
@@ -86,7 +88,7 @@ export function StageTiming({job}) {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>#</th><th>Giai đoạn</th><th>Trạng thái</th><th>Thời lượng</th><th>Tỷ lệ</th><th>Ghi chú</th></tr>
+              <tr><th>#</th><th>Giai đoạn</th><th>Trạng thái</th><th>Thời lượng</th><th>Tỷ trọng E2E</th><th>Ghi chú</th></tr>
             </thead>
             <tbody>
               {stages.map((stage) => {
@@ -94,8 +96,20 @@ export function StageTiming({job}) {
                 const tone = stage.cat === 'COMPLETED' ? 'green'
                   : stage.cat === 'FAILED' ? 'red'
                     : stage.cat === 'RUNNING' ? 'blue'
-                      : stage.cat === 'SKIPPED' ? 'amber'
+                      : ['SKIPPED', 'DEGRADED', 'CANCELLED'].includes(stage.cat) ? 'amber'
                         : 'neutral';
+                const executedNoTiming = ['COMPLETED', 'DEGRADED', 'FAILED'].includes(stage.cat) && stage.duration === null;
+                const durationDisplay = stage.duration !== null
+                  ? fmtMs(stage.duration)
+                  : executedNoTiming
+                    ? 'Chưa có số liệu thời lượng'
+                    : stage.cat === 'RUNNING'
+                      ? 'Đang thực thi…'
+                      : stage.cat === 'SKIPPED'
+                        ? 'Bỏ qua'
+                        : stage.cat === 'CANCELLED'
+                          ? 'Đã hủy'
+                          : 'Chưa thực thi';
                 return (
                   <tr key={stage.key} className={`stage-cat-${stage.cat}`}>
                     <td className="mono">{String(stage.number).padStart(2, '0')}</td>
@@ -104,8 +118,14 @@ export function StageTiming({job}) {
                       <span className="v2-cell-sub mono">{stage.key}</span>
                     </td>
                     <td><Badge tone={tone}>{stage.label}</Badge></td>
-                    <td className="mono">{fmtMs(stage.duration)}</td>
-                    <td className="mono">{stage.duration !== null && sum > 0 ? `${(stage.duration / sum * 100).toFixed(1)}%` : '-'}</td>
+                    <td className="mono">{durationDisplay}</td>
+                    <td className="mono">
+                      {stage.duration !== null && shareDenom !== null
+                        ? `${Math.min(100, (stage.duration / shareDenom) * 100).toFixed(1)}%`
+                        : stage.duration === 0 && total === 0
+                          ? '0.0%'
+                          : 'Chưa có số liệu'}
+                    </td>
                     <td>
                       {note && <p style={{margin: '0 0 6px', fontSize: '12px'}}>{note}</p>}
                       <JsonDetails summary={stage.summary} title="Metadata" />
@@ -118,9 +138,9 @@ export function StageTiming({job}) {
         </div>
       </Card>
       <div className="v2-scanner-metrics" style={{marginTop: '12px'}}>
-        <div className="v2-mini-metric"><span>Tổng thời gian E2E</span><strong>{fmtMs(total)}</strong></div>
-        <div className="v2-mini-metric"><span>Tổng cộng các chặng</span><strong>{fmtMs(sum)}</strong></div>
-        <div className="v2-mini-metric"><span>Chặng lâu nhất</span><strong>{longest ? `${longest.name} (${fmtMs(longest.duration)})` : '-'}</strong></div>
+        <div className="v2-mini-metric"><span>Tổng thời gian E2E (API)</span><strong>{hasValidE2e ? fmtMs(total) : 'Chưa có số liệu'}</strong></div>
+        <div className="v2-mini-metric"><span>Tổng các chặng có đo thời lượng</span><strong>{durations.length > 0 ? fmtMs(sum) : 'Chưa có số liệu'}</strong></div>
+        <div className="v2-mini-metric"><span>Chặng lâu nhất (đã đo)</span><strong>{longest ? `${longest.name} (${fmtMs(longest.duration)})` : 'Chưa có số liệu'}</strong></div>
         <div className="v2-mini-metric"><span>Chế độ LLM</span><strong>{job?.no_llm ? 'Bỏ qua Qwen (no_llm)' : 'Qwen3.5-9B (Ollama cục bộ)'}</strong></div>
       </div>
     </section>
@@ -158,12 +178,21 @@ export function CoveragePanel({job}) {
   }, [scanId, state]);
 
   const rtMeta = summary ? runtimeVerificationMeta(summary.qwen_runtime_verified) : null;
+  const javaCounts = resolveJavaFileCounts(summary, job);
 
   const rows = [
     ['Chế độ đầu vào', job?.input_mode || summary?.input_mode || '-'],
     ['Nguồn mã', job?.file_name || job?.repo_url || summary?.file_name || summary?.repo_url || '-'],
     ['Commit xác nhận', job?.resolved_commit || summary?.resolved_commit || '-'],
-    ['Số tệp Java đã quét', summary?.java_files_scanned ?? job?.stages?.[0]?.summary_metadata?.java_files_count ?? '-'],
+    ['Tệp Java trong inventory', javaCounts.inventoryCount !== null ? javaCounts.inventoryCount : (javaCounts.isInconsistent ? 'Không nhất quán' : 'Chưa có số liệu')],
+    ...(javaCounts.isInconsistent
+      ? [['OpenGrep thực quét / bỏ qua', `Không nhất quán — ${javaCounts.inconsistencyReason}`]]
+      : javaCounts.hasExplicitBreakdown
+        ? [
+            ['Tệp Java thực quét (OpenGrep)', javaCounts.scannedCount !== null ? javaCounts.scannedCount : 'Chưa có số liệu'],
+            ['Tệp Java bị bỏ qua', javaCounts.ignoredCount !== null ? javaCounts.ignoredCount : 'Chưa có số liệu'],
+          ]
+        : [['OpenGrep thực quét / bỏ qua', 'Chưa có số liệu (chưa tách riêng trong summary API)']]),
     ['Phiên bản OpenGrep', summary?.opengrep_version || '-'],
     ['Rules SHA-256', summary?.rules_sha256 || '-'],
     ['Prompt contract', summary?.prompt_contract ? `${summary.prompt_contract}${summary.prompt_version ? ` (${summary.prompt_version})` : ''}` : '-'],

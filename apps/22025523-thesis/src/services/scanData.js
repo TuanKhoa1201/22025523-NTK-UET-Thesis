@@ -1,6 +1,6 @@
-import {classifyDataOrigin, normCwe} from './findingPresentation';
+import {classifyDataOrigin, normCwe, resolveJavaFileCounts} from './findingPresentation';
 
-export {classifyDataOrigin};
+export {classifyDataOrigin, resolveJavaFileCounts};
 
 const MAX_RECORDS = 20;
 // In-memory only: scan records belong to the active auth session and must not survive reload
@@ -48,6 +48,7 @@ export function normalizeFinding(item) {
     rawModelStatus: firstValue(safe, ['raw_model_status']) ?? ass.raw_model_status ?? null,
     validatorDowngraded: Boolean(safe.validator_downgraded ?? ass.validator_downgraded),
     failureKind: firstValue(safe, ['failure_kind']) ?? ass.failure_kind ?? null,
+    downgradeReason: firstValue(safe, ['downgrade_reason']) ?? ass.downgrade_reason ?? null,
     citationCheck: String(firstValue(safe, ['citation_check']) ?? ass.citation_check ?? 'NOT_VERIFIED').toUpperCase(),
     citationsCount: Number(safe.citations_count ?? (Array.isArray(ass.citations) ? ass.citations.length : 0)),
     humanReviewState: explicitHumanReviewState || String(rawHuman ?? 'OPEN').toUpperCase(),

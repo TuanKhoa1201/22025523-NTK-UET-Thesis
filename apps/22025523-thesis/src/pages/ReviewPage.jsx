@@ -2,13 +2,15 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Link, useNavigate, useOutletContext, useSearchParams} from 'react-router-dom';
 import {Badge, Card, DataNotice, EmptyState, Icon, PageHeader, SectionTitle, StatCard} from '../components/common/Ui';
 import HumanReviewPanel, {AuditTimeline} from '../components/review/HumanReviewPanel';
-import {api, getApiOrigin, getAuthSessionScope} from '../services/api';
+import {api, getApiBaseUrl, getApiOrigin, getAuthSessionScope, safeSessionGet, safeSessionSet} from '../services/api';
 import {
   citationCheckTone,
   classifyDataOrigin,
+  describeDowngradeReason,
   fileName,
   formatShortHash,
   humanReviewMeta,
+  normalizeFailureKind,
   PRIORITY_CWES,
   validatedStatusMeta,
 } from '../services/findingPresentation';
@@ -16,16 +18,21 @@ import {ACTIVE_KEY, clearStaleActiveScanId, isConfirmedScanNotFoundError, scanQu
 import {verifyFindingIdentity, verifyScanPayloadIdentity} from '../services/reviewModel';
 import {normalizeFinding} from '../services/scanData';
 
-function ReviewQueueItem({row, scanId, writable, onRefreshAll}) {
+function ReviewQueueItem({row, scanId, scopeKey, writable, onRefreshAll}) {
   const [expanded, setExpanded] = useState(false);
   const [detailState, setDetailState] = useState({key: '', data: null});
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState('');
   const detailRequestRef = useRef({controller: null, seq: 0});
-  const itemKey = `${scanId}::${row.id}`;
+  const itemKey = `${scopeKey}::${scanId}::${row.id}`;
 
   const vMeta = validatedStatusMeta(row.validatedStatus);
   const hMeta = humanReviewMeta(row.humanReviewState);
+  const cleanFailure = normalizeFailureKind(row.failureKind);
+  const dgInfo = (row.validatorDowngraded || cleanFailure)
+    ? describeDowngradeReason(cleanFailure, row.downgradeReason, row.citationCheck)
+    : null;
+  const showRawDiff = Boolean(row.rawModelStatus && String(row.rawModelStatus).toUpperCase() !== row.validatedStatus);
 
   useEffect(() => {
     const req = detailRequestRef.current;
@@ -60,11 +67,13 @@ function ReviewQueueItem({row, scanId, writable, onRefreshAll}) {
     req.seq = seq;
     req.controller = controller;
 
+    const requestBaseUrl = getApiBaseUrl();
     const requestOrigin = getApiOrigin();
     const requestSession = getAuthSessionScope();
     const isStale = () => (
       controller.signal.aborted ||
       req.seq !== seq ||
+      getApiBaseUrl() !== requestBaseUrl ||
       getApiOrigin() !== requestOrigin ||
       getAuthSessionScope() !== requestSession
     );
@@ -115,10 +124,10 @@ function ReviewQueueItem({row, scanId, writable, onRefreshAll}) {
       <div style={{display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: '14px', alignItems: 'flex-start'}}>
         <div style={{flex: '1 1 420px', minWidth: 0}}>
           <div style={{display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px'}}>
-            <Badge tone="blue">{row.cwe}</Badge>
-            <Badge tone={vMeta.tone}>AI: {row.validatedStatus}</Badge>
-            <Badge tone={hMeta.tone}>Người duyệt: {row.humanReviewState}</Badge>
-            <Badge tone={citationCheckTone(row.citationCheck)}>
+            <Badge tone="blue" className="v2-status-token">{row.cwe}</Badge>
+            <Badge tone={vMeta.tone} className="v2-status-token">AI: {row.validatedStatus}</Badge>
+            <Badge tone={hMeta.tone} className="v2-status-token">Người duyệt: {row.humanReviewState}</Badge>
+            <Badge tone={citationCheckTone(row.citationCheck)} className="v2-status-token">
               Trích dẫn: {row.citationCheck} ({row.citationsCount})
             </Badge>
           </div>
@@ -126,6 +135,13 @@ function ReviewQueueItem({row, scanId, writable, onRefreshAll}) {
           <p className="mono wrap-value" style={{fontSize: '12px', color: 'var(--v2-text-secondary)', margin: '0 0 4px'}}>
             {fileName(row.file) || row.file}:{row.line || '-'} · ID {formatShortHash(row.id, 10, 6)}
           </p>
+          {(showRawDiff || dgInfo) && (
+            <p style={{fontSize: '12px', color: 'var(--v2-warn-text)', margin: '4px 0'}}>
+              {showRawDiff ? `Qwen gốc: ${String(row.rawModelStatus).toUpperCase()} → ${row.validatedStatus}` : ''}
+              {showRawDiff && dgInfo ? ' · ' : ''}
+              {dgInfo ? `${dgInfo.viLabel}${dgInfo.hasCode ? ` (${dgInfo.code})` : ''}` : ''}
+            </p>
+          )}
           {row.explanationPreview && (
             <p style={{fontSize: '13px', color: 'var(--v2-text-secondary)', margin: '6px 0 0', overflowWrap: 'anywhere'}}>
               {row.explanationPreview}
@@ -154,6 +170,7 @@ function ReviewQueueItem({row, scanId, writable, onRefreshAll}) {
           {detailError && <div className="inline-error" role="alert"><Icon name="AlertTriangle" />{detailError}</div>}
           {verifiedDetail && (
             <HumanReviewPanel
+              key={itemKey}
               scanId={scanId}
               findingId={row.id}
               detail={verifiedDetail}
@@ -186,6 +203,7 @@ function ReviewQueueItem({row, scanId, writable, onRefreshAll}) {
 function LiveReviewWorkspace({scanId}) {
   const outlet = useOutletContext();
   const navigate = useNavigate();
+  const apiBaseUrl = getApiBaseUrl();
   const apiOrigin = outlet?.apiOrigin || getApiOrigin();
   const authSessionScope = outlet?.authSessionScope || getAuthSessionScope();
   const apiRevision = outlet?.apiRevision ?? 0;
@@ -193,73 +211,264 @@ function LiveReviewWorkspace({scanId}) {
   const [validatedFilter, setValidatedFilter] = useState('');
   const [cweFilter, setCweFilter] = useState('');
   const [search, setSearch] = useState('');
-  const [queueState, setQueueState] = useState({status: 'loading', data: null, error: '', statusCode: null});
-  const [historyState, setHistoryState] = useState({status: 'loading', data: null, error: '', statusCode: null});
-  const [refreshTick, setRefreshTick] = useState(0);
+  const [queueState, setQueueState] = useState({
+    status: 'loading',
+    data: null,
+    error: '',
+    syncError: '',
+    statusCode: null,
+    errorCode: null,
+    scopeKey: '',
+    refreshing: false,
+  });
+  const [historyState, setHistoryState] = useState({
+    status: 'loading',
+    data: null,
+    error: '',
+    syncError: '',
+    statusCode: null,
+    errorCode: null,
+    scopeKey: '',
+    refreshing: false,
+  });
+  const scopeKey = `${authSessionScope}|${apiBaseUrl}|${apiOrigin}|${apiRevision}|${scanId}`;
+  const queueReqRef = useRef({controller: null, seq: 0});
+  const historyReqRef = useRef({controller: null, seq: 0});
+  const currentScopeRef = useRef(scopeKey);
+  currentScopeRef.current = scopeKey;
 
-  const triggerRefresh = useCallback(() => {
-    setRefreshTick((v) => v + 1);
-  }, []);
-
-  useEffect(() => {
+  // Strictly decoupled GET /review-queue loader: never coupled to /review-history and
+  // preserves verified same-scope queue data (and any mounted 409 STALE_SOURCE alert)
+  // if a subsequent refresh fails transiently.
+  const loadQueue = useCallback(() => {
+    const req = queueReqRef.current;
+    req.controller?.abort();
     const controller = new AbortController();
+    const seq = req.seq + 1;
+    req.seq = seq;
+    req.controller = controller;
+
+    const requestBaseUrl = getApiBaseUrl();
     const requestOrigin = getApiOrigin();
     const requestSession = getAuthSessionScope();
-    let active = true;
-    const isStale = () => !active || controller.signal.aborted || getApiOrigin() !== requestOrigin || getAuthSessionScope() !== requestSession;
-    setQueueState({status: 'loading', data: null, error: '', statusCode: null});
-    setHistoryState({status: 'loading', data: null, error: '', statusCode: null});
+    const requestScopeKey = scopeKey;
+    const isStale = () => (
+      controller.signal.aborted
+      || req.seq !== seq
+      || currentScopeRef.current !== requestScopeKey
+      || getApiBaseUrl() !== requestBaseUrl
+      || getApiOrigin() !== requestOrigin
+      || getAuthSessionScope() !== requestSession
+    );
 
-    Promise.all([
-      api.reviewQueue(scanId, {includeAll: true}, {signal: controller.signal}),
-      api.scanReviewHistory(scanId, {signal: controller.signal}),
-    ])
-      .then(([queueDoc, historyDoc]) => {
+    setQueueState((prev) => (
+      prev.scopeKey === scopeKey && prev.data
+        ? {...prev, syncError: '', refreshing: true}
+        : {status: 'loading', data: null, error: '', syncError: '', statusCode: null, errorCode: null, scopeKey, refreshing: true}
+    ));
+
+    api.reviewQueue(scanId, {includeAll: true}, {signal: controller.signal})
+      .then((queueDoc) => {
         if (isStale()) return;
         const queueIdentity = verifyScanPayloadIdentity(queueDoc, scanId, {itemsKey: 'warnings'});
         if (!queueIdentity.valid) {
-          setQueueState({status: 'error', data: null, error: queueIdentity.error, statusCode: null});
-          setHistoryState({status: 'error', data: null, error: queueIdentity.error, statusCode: null});
+          setQueueState({
+            status: 'error',
+            data: null,
+            error: queueIdentity.error,
+            syncError: '',
+            statusCode: null,
+            errorCode: queueIdentity.reason || 'IDENTITY_MISMATCH',
+            scopeKey,
+            refreshing: false,
+          });
           return;
         }
         if (classifyDataOrigin(queueDoc).isMockOrTest) {
-          const mockMsg = 'Dữ liệu mô phỏng (mock) bị chặn trong hàng đợi kiểm duyệt vận hành thực.';
-          setQueueState({status: 'error', data: null, error: mockMsg, statusCode: 403});
-          setHistoryState({status: 'error', data: null, error: mockMsg, statusCode: 403});
+          setQueueState({
+            status: 'error',
+            data: null,
+            error: 'Dữ liệu mô phỏng (mock) bị chặn trong hàng đợi kiểm duyệt vận hành thực.',
+            syncError: '',
+            statusCode: 403,
+            errorCode: 'TEST_DATA_ISOLATED',
+            scopeKey,
+            refreshing: false,
+          });
           return;
         }
         try {
-          window.sessionStorage.setItem(ACTIVE_KEY, scanId);
+          safeSessionSet(ACTIVE_KEY, scanId);
         } catch {
           /* optional sessionStorage update */
         }
-        setQueueState({status: 'ready', data: queueDoc, error: '', statusCode: null});
-
-        const historyIdentity = verifyScanPayloadIdentity(historyDoc, scanId);
-        if (!historyIdentity.valid) {
-          setHistoryState({status: 'error', data: null, error: historyIdentity.error, statusCode: null});
-        } else {
-          setHistoryState({status: 'ready', data: historyDoc, error: '', statusCode: null});
-        }
+        setQueueState({
+          status: 'ready',
+          data: queueDoc,
+          error: '',
+          syncError: '',
+          statusCode: null,
+          errorCode: null,
+          scopeKey,
+          refreshing: false,
+        });
       })
       .catch((err) => {
         if (isStale() || err?.abortedByConfigChange) return;
         const statusCode = err?.status ?? null;
         const errorCode = err?.code ?? err?.payload?.error_code ?? null;
+        const errMsg = err?.message || 'Không tải được hàng đợi kiểm duyệt.';
         if (isConfirmedScanNotFoundError(err)) {
           clearStaleActiveScanId(scanId, requestSession);
+          setQueueState({
+            status: 'error',
+            data: null,
+            error: errMsg,
+            syncError: '',
+            statusCode,
+            errorCode,
+            scopeKey,
+            refreshing: false,
+          });
+          return;
         }
-        setQueueState({status: 'error', data: null, error: err?.message || 'Không tải được hàng đợi kiểm duyệt.', statusCode, errorCode});
-        setHistoryState({status: 'error', data: null, error: err?.message || 'Không tải được lịch sử kiểm duyệt.', statusCode, errorCode});
+        setQueueState((prev) => {
+          // Keep already-verified queue & mounted Quick Review / 409 STALE_SOURCE panel on transient refresh failure.
+          if (prev.scopeKey === scopeKey && prev.data) {
+            return {
+              ...prev,
+              status: 'ready',
+              syncError: errMsg,
+              statusCode,
+              errorCode,
+              refreshing: false,
+            };
+          }
+          return {
+            status: 'error',
+            data: null,
+            error: errMsg,
+            syncError: '',
+            statusCode,
+            errorCode,
+            scopeKey,
+            refreshing: false,
+          };
+        });
       });
+  }, [scanId, scopeKey]);
 
+  // Strictly decoupled GET /review-history loader: a 500 or network error here NEVER
+  // clears queueState or unmounts Quick Review / STALE_SOURCE alerts.
+  const loadHistory = useCallback(() => {
+    const req = historyReqRef.current;
+    req.controller?.abort();
+    const controller = new AbortController();
+    const seq = req.seq + 1;
+    req.seq = seq;
+    req.controller = controller;
+
+    const requestBaseUrl = getApiBaseUrl();
+    const requestOrigin = getApiOrigin();
+    const requestSession = getAuthSessionScope();
+    const requestScopeKey = scopeKey;
+    const isStale = () => (
+      controller.signal.aborted
+      || req.seq !== seq
+      || currentScopeRef.current !== requestScopeKey
+      || getApiBaseUrl() !== requestBaseUrl
+      || getApiOrigin() !== requestOrigin
+      || getAuthSessionScope() !== requestSession
+    );
+
+    setHistoryState((prev) => (
+      prev.scopeKey === scopeKey && prev.data
+        ? {...prev, syncError: '', error: '', refreshing: true}
+        : {status: 'loading', data: null, error: '', syncError: '', statusCode: null, errorCode: null, scopeKey, refreshing: true}
+    ));
+
+    api.scanReviewHistory(scanId, {signal: controller.signal})
+      .then((historyDoc) => {
+        if (isStale()) return;
+        const historyIdentity = verifyScanPayloadIdentity(historyDoc, scanId);
+        if (!historyIdentity.valid) {
+          setHistoryState({
+            status: 'error',
+            data: null,
+            error: historyIdentity.error,
+            syncError: '',
+            statusCode: null,
+            errorCode: historyIdentity.reason || 'IDENTITY_MISMATCH',
+            scopeKey,
+            refreshing: false,
+          });
+          return;
+        }
+        setHistoryState({
+          status: 'ready',
+          data: historyDoc,
+          error: '',
+          syncError: '',
+          statusCode: null,
+          errorCode: null,
+          scopeKey,
+          refreshing: false,
+        });
+      })
+      .catch((err) => {
+        if (isStale() || err?.abortedByConfigChange) return;
+        const statusCode = err?.status ?? null;
+        const errorCode = err?.code ?? err?.payload?.error_code ?? null;
+        const errMsg = err?.message || 'Không đồng bộ được lịch sử kiểm duyệt toàn phiên.';
+        setHistoryState((prev) => {
+          if (prev.scopeKey === scopeKey && prev.data) {
+            return {
+              ...prev,
+              status: 'ready',
+              syncError: errMsg,
+              statusCode,
+              errorCode,
+              refreshing: false,
+            };
+          }
+          return {
+            status: 'error',
+            data: null,
+            error: errMsg,
+            syncError: errMsg,
+            statusCode,
+            errorCode,
+            scopeKey,
+            refreshing: false,
+          };
+        });
+      });
+  }, [scanId, scopeKey]);
+
+  const triggerRefreshAll = useCallback(() => {
+    loadQueue();
+    loadHistory();
+  }, [loadQueue, loadHistory]);
+
+  useEffect(() => {
+    loadQueue();
+    loadHistory();
+    const qReq = queueReqRef.current;
+    const hReq = historyReqRef.current;
     return () => {
-      active = false;
-      controller.abort();
+      qReq.seq += 1;
+      qReq.controller?.abort();
+      qReq.controller = null;
+      hReq.seq += 1;
+      hReq.controller?.abort();
+      hReq.controller = null;
     };
-  }, [scanId, refreshTick, apiOrigin, authSessionScope, apiRevision]);
+  }, [loadQueue, loadHistory]);
 
-  const queueData = queueState.data;
+  const queueData = queueState.scopeKey === scopeKey ? queueState.data : null;
+  const historyData = historyState.scopeKey === scopeKey ? historyState.data : null;
+  const historyErrorText = historyState.scopeKey === scopeKey ? (historyState.syncError || historyState.error) : '';
+  const queueSyncErrorText = queueState.scopeKey === scopeKey ? queueState.syncError : '';
   const queueOriginInfo = useMemo(() => (queueData ? classifyDataOrigin(queueData) : null), [queueData]);
   const counts = queueData?.counts || {};
   const writable = queueData?.writable !== false;
@@ -293,18 +502,18 @@ function LiveReviewWorkspace({scanId}) {
         eyebrow="HUMAN REVIEW & SOURCE DRIFT"
         title="Hàng đợi xác minh cảnh báo"
         actions={(
-          <button type="button" className="button-secondary" onClick={triggerRefresh}>
+          <button type="button" className="button-secondary" onClick={triggerRefreshAll}>
             <Icon name="RotateCcw" />Làm mới
           </button>
         )}
       />
 
-      {queueState.status === 'loading' && <DataNotice>Đang tải hàng đợi Human Review từ SQLite…</DataNotice>}
-      {queueState.status === 'error' && (
+      {queueState.status === 'loading' && !queueData && <DataNotice>Đang tải hàng đợi Human Review từ SQLite…</DataNotice>}
+      {queueState.status === 'error' && !queueData && (
         <>
           <EmptyState title="Không tải được hàng đợi kiểm duyệt" text={queueState.error} icon="AlertTriangle" />
           <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px'}}>
-            <button type="button" className="button-primary" onClick={triggerRefresh}>Thử lại</button>
+            <button type="button" className="button-primary" onClick={loadQueue}>Thử lại</button>
             {(queueState.statusCode === 401 || queueState.statusCode === 403 || /UNAUTHORIZED|Bearer Token|HTTP 401|HTTP 403/i.test(queueState.error || '')) && (
               <button type="button" className="button-secondary" onClick={() => outlet?.openConnectionPanel?.()}>
                 <Icon name="KeyRound" />Nhập Bearer Token phiên
@@ -330,6 +539,42 @@ function LiveReviewWorkspace({scanId}) {
 
       {queueData && (
         <>
+          {queueSyncErrorText && (
+            <div className="inline-error" role="alert" data-testid="review-queue-sync-error" style={{marginBottom: '12px'}}>
+              <Icon name="AlertTriangle" />
+              <span style={{display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center'}}>
+                <span>
+                  Không đồng bộ được bản cập nhật hàng đợi kiểm duyệt ({queueSyncErrorText}). Đang giữ nguyên dữ liệu đã xác minh và các cảnh báo hiện tại.
+                </span>
+                <button
+                  type="button"
+                  className="button-secondary button-compact"
+                  disabled={queueState.refreshing}
+                  onClick={loadQueue}
+                >
+                  <Icon name="RotateCcw" />{queueState.refreshing ? 'Đang đồng bộ…' : 'Thử đồng bộ hàng đợi'}
+                </button>
+              </span>
+            </div>
+          )}
+          {historyErrorText && (
+            <div className="inline-warning" role="status" data-testid="review-history-sync-banner" style={{marginBottom: '12px'}}>
+              <Icon name="AlertTriangle" />
+              <span style={{display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center'}}>
+                <span>
+                  Không tải được lịch sử kiểm duyệt toàn phiên ({historyErrorText}). Hàng đợi và cảnh báo kiểm duyệt vẫn được giữ nguyên.
+                </span>
+                <button
+                  type="button"
+                  className="button-secondary button-compact"
+                  disabled={historyState.refreshing}
+                  onClick={loadHistory}
+                >
+                  <Icon name="RotateCcw" />{historyState.refreshing ? 'Đang đồng bộ…' : 'Thử tải lại lịch sử'}
+                </button>
+              </span>
+            </div>
+          )}
           {queueOriginInfo?.isUnverified && !queueOriginInfo.isMockOrTest && (
             <DataNotice>
               Nguồn gốc dữ liệu phiên quét là <code>{queueOriginInfo.code}</code> ({queueOriginInfo.label}); chưa có đủ bằng chứng xác minh phiên quét thực.
@@ -361,7 +606,8 @@ function LiveReviewWorkspace({scanId}) {
                   <span>Trạng thái</span>
                   <div className="v2-review-status-group" role="group" aria-label="Lọc theo trạng thái người kiểm duyệt">
                     {[
-                      ['', 'Tất cả trong hàng đợi'],
+                      ['', 'Tất cả'],
+                      ['OPEN', 'OPEN'],
                       ['CONFIRMED_TRUE', 'CONFIRMED_TRUE'],
                       ['CONFIRMED_FALSE', 'CONFIRMED_FALSE'],
                     ].map(([val, label]) => (
@@ -411,11 +657,12 @@ function LiveReviewWorkspace({scanId}) {
             ) : (
               filtered.map((row) => (
                 <ReviewQueueItem
-                  key={row.id}
+                  key={`${scopeKey}::${row.id}`}
                   row={row}
                   scanId={scanId}
+                  scopeKey={scopeKey}
                   writable={writable}
-                  onRefreshAll={triggerRefresh}
+                  onRefreshAll={triggerRefreshAll}
                 />
               ))
             )}
@@ -427,12 +674,27 @@ function LiveReviewWorkspace({scanId}) {
               text="Ghi nhận đầy đủ confirm-true, confirm-false, reopen và các quyết định bị từ chối."
             />
             <Card>
-              {historyState.status === 'loading' && <DataNotice>Đang tải nhật ký sự kiện kiểm duyệt…</DataNotice>}
-              {historyState.status === 'error' && <div className="inline-error">{historyState.error}</div>}
-              {historyState.data && (
+              {historyState.status === 'loading' && !historyData && <DataNotice>Đang tải nhật ký sự kiện kiểm duyệt…</DataNotice>}
+              {historyErrorText && (
+                <div className="inline-error" role="alert" data-testid="review-history-sync-error" style={{marginBottom: historyData ? '12px' : 0}}>
+                  <Icon name="AlertTriangle" />
+                  <span style={{display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center'}}>
+                    <span>Không đồng bộ được lịch sử kiểm duyệt toàn phiên: {historyErrorText}</span>
+                    <button
+                      type="button"
+                      className="button-secondary button-compact"
+                      disabled={historyState.refreshing}
+                      onClick={loadHistory}
+                    >
+                      <Icon name="RotateCcw" />{historyState.refreshing ? 'Đang đồng bộ…' : 'Thử tải lại lịch sử'}
+                    </button>
+                  </span>
+                </div>
+              )}
+              {historyData && (
                 <AuditTimeline
-                  events={historyState.data.events}
-                  rejectedDecisions={historyState.data.rejected_decisions}
+                  events={historyData.events}
+                  rejectedDecisions={historyData.rejected_decisions}
                   showWarningId
                 />
               )}
@@ -451,7 +713,7 @@ export default function ReviewPage() {
   const apiRevision = outlet?.apiRevision ?? 0;
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const scanId = params.get('scan_id') || window.sessionStorage.getItem(ACTIVE_KEY) || '';
+  const scanId = params.get('scan_id') || safeSessionGet(ACTIVE_KEY) || '';
   const [scans, setScans] = useState({status: 'idle', items: [], error: '', statusCode: null});
 
   useEffect(() => {
@@ -480,7 +742,8 @@ export default function ReviewPage() {
     };
   }, [scanId, apiOrigin, authSessionScope, apiRevision]);
 
-  if (scanId) return <LiveReviewWorkspace key={`${authSessionScope}:${scanId}`} scanId={scanId} />;
+  const apiBaseUrl = getApiBaseUrl();
+  if (scanId) return <LiveReviewWorkspace key={`${authSessionScope}:${apiBaseUrl}:${scanId}`} scanId={scanId} />;
 
   return (
     <>

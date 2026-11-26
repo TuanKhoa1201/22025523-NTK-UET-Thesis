@@ -1,8 +1,8 @@
 import {useEffect, useRef, useState} from 'react';
 import {useOutletContext} from 'react-router-dom';
 import {Badge, Card, DataNotice, Icon} from '../common/Ui';
-import {hasSessionToken} from '../../services/api';
-import {humanReviewMeta, resolveFindingSourceHash, validatedStatusMeta} from '../../services/findingPresentation';
+import {api, getApiBaseUrl, getApiOrigin, getAuthSessionScope, hasSessionToken} from '../../services/api';
+import {describeDowngradeReason, humanReviewMeta, normalizeFailureKind, resolveFindingSourceHash, validatedStatusMeta} from '../../services/findingPresentation';
 import {
   buildAuditTimeline,
   evaluateSourceDriftReadiness,
@@ -85,27 +85,58 @@ export default function HumanReviewPanel({
 }) {
   const outlet = useOutletContext();
   const backendHealth = outlet?.backend?.health;
+  const apiOrigin = outlet?.apiOrigin || getApiOrigin();
+  const authSessionScope = outlet?.authSessionScope || getAuthSessionScope();
+  const apiRevision = outlet?.apiRevision ?? 0;
+  const apiBaseUrl = getApiBaseUrl();
+  const panelScopeKey = `${authSessionScope}|${apiBaseUrl}|${apiOrigin}|${apiRevision}|${scanId || ''}|${findingId || ''}`;
+
   const [actor, setActor] = useState('');
   const [reason, setReason] = useState('');
   const [submittingAction, setSubmittingAction] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [staleInfo, setStaleInfo] = useState(null);
+  const [historySyncError, setHistorySyncError] = useState('');
+  const [retryingHistory, setRetryingHistory] = useState(false);
   const [localEvents, setLocalEvents] = useState(null);
   const [localRejected, setLocalRejected] = useState(null);
   const inFlightRef = useRef(new Set());
+  const scopeEpochRef = useRef(0);
+  const currentScopeRef = useRef(panelScopeKey);
+  const historyRetryControllerRef = useRef(null);
+  currentScopeRef.current = panelScopeKey;
 
+  // Strictly isolate alerts, feedback, and local rejected decisions by (session, baseUrl, origin, scanId, findingId).
   useEffect(() => {
+    scopeEpochRef.current += 1;
+    historyRetryControllerRef.current?.abort();
+    historyRetryControllerRef.current = null;
+    setSubmittingAction('');
+    setFeedback(null);
+    setStaleInfo(null);
+    setHistorySyncError('');
+    setRetryingHistory(false);
     setLocalEvents(null);
-  }, [reviewEvents]);
-
-  useEffect(() => {
     setLocalRejected(null);
-  }, [rejectedDecisions]);
+    return () => {
+      scopeEpochRef.current += 1;
+      historyRetryControllerRef.current?.abort();
+      historyRetryControllerRef.current = null;
+    };
+  }, [panelScopeKey]);
 
   const effectiveEvents = localEvents ?? reviewEvents;
   const effectiveRejected = localRejected ?? rejectedDecisions;
   const vMeta = validatedStatusMeta(validatedStatus);
   const hMeta = humanReviewMeta(humanReviewState);
+  const cleanFailure = normalizeFailureKind(detail?.failure_kind ?? detail?.assessment?.failure_kind);
+  const dgInfo = validatedStatus === 'UNDETERMINED'
+    ? describeDowngradeReason(
+      cleanFailure,
+      detail?.downgrade_reason ?? detail?.assessment?.downgrade_reason ?? '',
+      detail?.citation_check ?? detail?.assessment?.citation_check ?? '',
+    )
+    : null;
   const tokenPresent = hasSessionToken();
   const writeConfigured = backendHealth?.write_auth_configured !== false;
   const identityCheck = verifyFindingIdentity(detail, scanId, findingId, {requireScanId: true});
@@ -114,9 +145,48 @@ export default function HumanReviewPanel({
   const canReview = writable && identityCheck.valid;
   const canConfirmFalse = canReview && driftReadiness.canConfirmFalse;
 
+  // Safe GET-only retry for finding history / detail sync after a partial sync failure (never sends POST).
+  const handleRetryFindingHistory = async () => {
+    if (!scanId || !findingId || retryingHistory) return;
+    historyRetryControllerRef.current?.abort();
+    const controller = new AbortController();
+    historyRetryControllerRef.current = controller;
+    const reqEpoch = scopeEpochRef.current;
+    const reqScope = panelScopeKey;
+    const isStale = () => (
+      controller.signal.aborted
+      || scopeEpochRef.current !== reqEpoch
+      || currentScopeRef.current !== reqScope
+    );
+    setRetryingHistory(true);
+    setHistorySyncError('');
+    try {
+      const candidateHistory = await api.findingHistory(scanId, findingId, {includeRejected: true}, {signal: controller.signal});
+      if (isStale()) return;
+      const histScan = String(candidateHistory?.scan_id || '').trim();
+      const histFinding = String(candidateHistory?.finding_id || '').trim();
+      if ((histScan && histScan !== String(scanId).trim()) || (histFinding && histFinding !== String(findingId).trim())) {
+        setHistorySyncError('Phản hồi lịch sử cảnh báo không khớp scan_id hoặc finding_id đang chọn.');
+        return;
+      }
+      if (Array.isArray(candidateHistory?.events)) setLocalEvents(candidateHistory.events);
+      if (Array.isArray(candidateHistory?.rejected_decisions)) setLocalRejected(candidateHistory.rejected_decisions);
+      onUpdated?.({
+        human_review_state: candidateHistory?.human_review_state || humanReviewState,
+        review_events: Array.isArray(candidateHistory?.events) ? candidateHistory.events : effectiveEvents,
+        rejected_decisions: Array.isArray(candidateHistory?.rejected_decisions) ? candidateHistory.rejected_decisions : effectiveRejected,
+      });
+    } catch (err) {
+      if (err?.abortedByConfigChange || isStale()) return;
+      setHistorySyncError(err?.message || 'Không đồng bộ được lịch sử kiểm duyệt của cảnh báo.');
+    } finally {
+      if (!isStale()) setRetryingHistory(false);
+    }
+  };
+
   const handleAction = async (action) => {
     setFeedback(null);
-    setStaleInfo(null);
+    setHistorySyncError('');
 
     if (!identityCheck.valid) {
       setFeedback({type: 'error', message: identityCheck.error});
@@ -137,6 +207,10 @@ export default function HumanReviewPanel({
       return;
     }
 
+    const reqEpoch = scopeEpochRef.current;
+    const reqScope = panelScopeKey;
+    const isStaleAction = () => scopeEpochRef.current !== reqEpoch || currentScopeRef.current !== reqScope;
+
     setSubmittingAction(action);
     const result = await submitReviewDecision({
       scanId,
@@ -148,6 +222,7 @@ export default function HumanReviewPanel({
       hashConflict,
       inFlightKeys: inFlightRef.current,
     });
+    if (isStaleAction()) return;
     setSubmittingAction('');
 
     if (result.ok) {
@@ -156,6 +231,7 @@ export default function HumanReviewPanel({
         setFeedback({type: 'error', message: updatedIdentity.error});
         return;
       }
+      setStaleInfo(null);
       setLocalEvents(result.detail?.review_events ?? null);
       setLocalRejected(result.detail?.rejected_decisions ?? null);
       setReason('');
@@ -168,14 +244,19 @@ export default function HumanReviewPanel({
     }
 
     if (result.staleSource) {
-      // Never auto-retry on 409 STALE_SOURCE; preserve exact server state (typically OPEN).
+      // Never auto-retry on 409 STALE_SOURCE; preserve exact server state (typically OPEN)
+      // and keep the STALE_SOURCE warning mounted regardless of secondary history refresh errors.
       setStaleInfo({
+        scopeKey: reqScope,
         message: result.message,
         humanReviewState: result.humanReviewState,
         staleDetail: result.staleDetail,
       });
       setLocalEvents(result.reviewEvents);
       setLocalRejected(result.rejectedDecisions);
+      if (result.historyRefreshFailed) {
+        setHistorySyncError(result.historyRefreshError || 'Không đồng bộ được lịch sử chi tiết cảnh báo sau lỗi 409.');
+      }
       onUpdated?.({
         human_review_state: result.humanReviewState,
         review_events: result.reviewEvents,
@@ -185,6 +266,12 @@ export default function HumanReviewPanel({
     }
 
     if (result.abortedByConfigChange) return;
+
+    if (result.mutatedOnServer && result.refreshFailed) {
+      setHistorySyncError(result.message);
+      onUpdated?.();
+      return;
+    }
 
     setFeedback({type: 'error', message: result.message});
     if (result.status === 401) {
@@ -225,7 +312,12 @@ export default function HumanReviewPanel({
       )}
       {validatedStatus === 'UNDETERMINED' && (
         <DataNotice>
-          Trạng thái AI là <strong>UNDETERMINED</strong> (chưa đủ bằng chứng hoặc trích dẫn chưa khớp). Cảnh báo được giữ nguyên để kiểm tra trực tiếp mã nguồn Java.
+          <span>
+            Trạng thái AI là <strong>UNDETERMINED</strong>
+            {dgInfo ? ` — ${dgInfo.viLabel}${dgInfo.hasCode ? ` (${dgInfo.code})` : ''}` : ''}.
+            {dgInfo?.matchedCitationNote ? ` ${dgInfo.matchedCitationNote}` : ''}
+            {' '}Cảnh báo được giữ nguyên để kiểm tra trực tiếp mã nguồn Java.
+          </span>
         </DataNotice>
       )}
       {!identityCheck.valid && (
@@ -335,7 +427,7 @@ export default function HumanReviewPanel({
         </div>
       )}
 
-      {staleInfo && (
+      {staleInfo && staleInfo.scopeKey === panelScopeKey && (
         <div className="v2-stale-alert" role="alert">
           <h4>
             <Icon name="AlertTriangle" />
@@ -357,6 +449,23 @@ export default function HumanReviewPanel({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {historySyncError && (
+        <div className="inline-warning" role="status" data-testid="finding-history-sync-error" style={{marginTop: '12px'}}>
+          <Icon name="AlertTriangle" />
+          <span style={{display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center'}}>
+            <span>Lỗi đồng bộ lịch sử cảnh báo: {historySyncError}</span>
+            <button
+              type="button"
+              className="button-secondary button-compact"
+              disabled={retryingHistory}
+              onClick={handleRetryFindingHistory}
+            >
+              <Icon name="RotateCcw" />{retryingHistory ? 'Đang đồng bộ…' : 'Thử đồng bộ lịch sử cảnh báo'}
+            </button>
+          </span>
         </div>
       )}
 
