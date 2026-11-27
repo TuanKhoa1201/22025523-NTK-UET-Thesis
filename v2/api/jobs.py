@@ -28,7 +28,7 @@ import uuid
 
 from v2.api.config import ApiConfig, REPO_ROOT
 from v2.api.intake import IntakeError, clone_github_repo, extract_safe_zip, validate_github_url
-from v2.api.opengrep_runner import make_bounded_scanner_class
+from v2.api.opengrep_runner import compute_opengrep_coverage_telemetry, make_bounded_scanner_class
 from v2.api.qwen_triage import StorageCommitError, run_bounded_triage
 from v2.api.service import (
     ApiServiceError,
@@ -893,6 +893,12 @@ class ScanJobManager:
 
             raw_count = len(j_doc.get("results") or [])
             engine_version = scan_results.get("engine_version")
+            coverage_telemetry = compute_opengrep_coverage_telemetry(
+                inventory.get("java_sha256").keys() if isinstance(inventory.get("java_sha256"), dict) else None,
+                j_doc,
+                inventory_count_fallback=inventory.get("java_files_count"),
+                source_root=source_dir,
+            )
             s2_ms = round((time.monotonic() - s2_mono) * 1000.0, 3)
             s2_end = now()
             self._update_job(
@@ -915,6 +921,10 @@ class ScanJobManager:
                             "opengrep_jobs": self.config.opengrep_jobs,
                             "single_pass_dual_output": bool(scanner_timing.get("single_pass_dual_output")),
                             "opengrep_timing": scanner_timing or None,
+                            "java_files_inventory": coverage_telemetry["java_files_inventory"],
+                            "java_files_opengrep_scanned": coverage_telemetry["java_files_opengrep_scanned"],
+                            "java_files_opengrep_ignored": coverage_telemetry["java_files_opengrep_ignored"],
+                            "opengrep_paths_telemetry_status": coverage_telemetry["opengrep_paths_telemetry_status"],
                         },
                     ),
                 ),
@@ -1042,7 +1052,17 @@ class ScanJobManager:
                         state=st4,
                         started_at=j["stages"][3]["started_at"] or (None if no_llm else s3_start),
                         finished_at=None if no_llm else ts,
-                        duration_ms=None if no_llm else info.get("qwen_total_ms"),
+                        duration_ms=(
+                            None
+                            if no_llm
+                            else (
+                                (0.0 if (rq := round(float(q), 3)) == 0.0 else rq)
+                                if (q := info.get("qwen_total_ms")) is not None
+                                and q.__class__ in ((0).__class__, (0.0).__class__)
+                                and 0 <= q <= 10**15
+                                else None
+                            )
+                        ),
                         summary_metadata={
                             "qwen_inference_status": q_st,
                             "model": None if no_llm else self.config.ollama_model,
@@ -1056,7 +1076,43 @@ class ScanJobManager:
                         state=st5,
                         started_at=None if no_llm else (j["stages"][3]["started_at"] or s3_start),
                         finished_at=None if no_llm else ts,
-                        summary_metadata={"validator_status": v_st},
+                        duration_ms=None,
+                        summary_metadata={
+                            "validator_status": v_st,
+                            "duration_nesting_mode": (
+                                "skipped_no_llm"
+                                if no_llm
+                                else str(info.get("validation_nesting_mode") or "interleaved_per_finding_inside_stage4")
+                            ),
+                            "excluded_from_stage_duration_sum": True,
+                            "non_overlapping_integration_gate_ms": (
+                                None
+                                if no_llm
+                                else (
+                                    (0.0 if (rv := round(float(v), 3)) == 0.0 else rv)
+                                    if (c := info.get("integration_gate_calls")) is not None
+                                    and c.__class__ is (0).__class__
+                                    and 0 < c <= 10**12
+                                    and (v := info.get("integration_gate_ms")) is not None
+                                    and v.__class__ in ((0).__class__, (0.0).__class__)
+                                    and 0 <= v <= 10**15
+                                    and (
+                                        (q_ms := info.get("qwen_total_ms")) is None
+                                        or (
+                                            q_ms.__class__ in ((0).__class__, (0.0).__class__)
+                                            and 0 <= q_ms <= 10**15
+                                            and float(v) <= float(q_ms)
+                                            and round(float(v), 3) <= round(float(q_ms), 3)
+                                        )
+                                    )
+                                    else None
+                                )
+                            ),
+                            "duration_note": (
+                                "Citation & integration gate validation runs interleaved per finding inside Stage 4 "
+                                "(QWEN_INFERENCE); duration_ms stays null to prevent double-counting."
+                            ),
+                        },
                     )
                     j["stages"][5].update(state="RUNNING", started_at=j["stages"][5]["started_at"] or ts)
 
@@ -1163,6 +1219,7 @@ class ScanJobManager:
                     protocol_check = live_check.inspect(
                         assessments_rows,
                         minimum=max(1, len(assessments_rows)),
+                        require_prompt_metadata=True,
                     )
                     (triage_dir / "live-protocol-check.json").write_text(
                         json.dumps(protocol_check, indent=2), encoding="utf-8"
@@ -1254,7 +1311,17 @@ class ScanJobManager:
                     state=s4_state,
                     started_at=job["stages"][3]["started_at"] or (None if no_llm else s3_start),
                     finished_at=None if no_llm else triage_finished,
-                    duration_ms=None if no_llm else triage_telemetry["qwen_total_ms"],
+                    duration_ms=(
+                        None
+                        if no_llm
+                        else (
+                            (0.0 if (rq := round(float(q), 3)) == 0.0 else rq)
+                            if (q := triage_telemetry.get("qwen_total_ms")) is not None
+                            and q.__class__ in ((0).__class__, (0.0).__class__)
+                            and 0 <= q <= 10**15
+                            else None
+                        )
+                    ),
                     summary_metadata={
                         "qwen_inference_status": qwen_status,
                         "model": None if no_llm else self.config.ollama_model,
@@ -1268,7 +1335,46 @@ class ScanJobManager:
                     state=s5_state,
                     started_at=None if no_llm else (job["stages"][3]["started_at"] or s3_start),
                     finished_at=None if no_llm else triage_finished,
-                    summary_metadata={"validator_status": validator_status},
+                    duration_ms=None,
+                    summary_metadata={
+                        "validator_status": validator_status,
+                        "duration_nesting_mode": (
+                            "skipped_no_llm"
+                            if no_llm
+                            else str(
+                                triage_telemetry.get("validation_nesting_mode")
+                                or "interleaved_per_finding_inside_stage4"
+                            )
+                        ),
+                        "excluded_from_stage_duration_sum": True,
+                        "non_overlapping_integration_gate_ms": (
+                            None
+                            if no_llm
+                            else (
+                                (0.0 if (rv := round(float(v), 3)) == 0.0 else rv)
+                                if (c := triage_telemetry.get("integration_gate_calls")) is not None
+                                and c.__class__ is (0).__class__
+                                and 0 < c <= 10**12
+                                and (v := triage_telemetry.get("integration_gate_ms")) is not None
+                                and v.__class__ in ((0).__class__, (0.0).__class__)
+                                and 0 <= v <= 10**15
+                                and (
+                                    (q_ms := triage_telemetry.get("qwen_total_ms")) is None
+                                    or (
+                                        q_ms.__class__ in ((0).__class__, (0.0).__class__)
+                                        and 0 <= q_ms <= 10**15
+                                        and float(v) <= float(q_ms)
+                                        and round(float(v), 3) <= round(float(q_ms), 3)
+                                    )
+                                )
+                                else None
+                            )
+                        ),
+                        "duration_note": (
+                            "Citation & integration gate validation runs interleaved per finding inside Stage 4 "
+                            "(QWEN_INFERENCE); duration_ms stays null to prevent double-counting."
+                        ),
+                    },
                 )
                 job["stages"][5].update(
                     state="COMPLETED",
@@ -1306,6 +1412,10 @@ class ScanJobManager:
                     "completed_at": triage_finished,
                     "total_e2e_duration_ms": e2e_ms,
                     "java_files_count": inventory["java_files_count"],
+                    "java_files_inventory": coverage_telemetry["java_files_inventory"],
+                    "java_files_opengrep_scanned": coverage_telemetry["java_files_opengrep_scanned"],
+                    "java_files_opengrep_ignored": coverage_telemetry["java_files_opengrep_ignored"],
+                    "opengrep_paths_telemetry_status": coverage_telemetry["opengrep_paths_telemetry_status"],
                     "java_sha256": inventory["java_sha256"],
                     "opengrep_version": engine_version,
                     "rules_name": self.config.rules_path.name,

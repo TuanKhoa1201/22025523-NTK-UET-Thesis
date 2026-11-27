@@ -4820,3 +4820,453 @@ class OpenGrepHealthProbe:
             }
             self._shutdown_result = result
             return copy.deepcopy(result)
+
+
+from collections.abc import Iterable
+import re
+
+
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+_VALID_COVERAGE_STATUSES = ("VERIFIED", "MISSING_PATHS_TELEMETRY", "INCONSISTENT_TELEMETRY")
+
+
+def _is_nonneg_int(val: Any) -> bool:
+    return type(val) is int and val >= 0
+
+
+def _is_absolute_or_drive_path(p: str) -> bool:
+    if not p:
+        return False
+    if p.startswith("/"):
+        return True
+    if len(p) >= 2 and p[1] == ":" and p[0].isalpha():
+        return True
+    return False
+
+
+def _normalize_clean_relative_path(raw: str) -> str | None:
+    """Normalize a relative path to POSIX form; reject absolute, drive, NUL, empty, or `.`/`..` segments."""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    if not s or "\x00" in s:
+        return None
+    p = s.replace("\\", "/")
+    if _is_absolute_or_drive_path(p):
+        return None
+    while p.startswith("./"):
+        p = p[2:]
+    if not p or "//" in p or p.endswith("/"):
+        return None
+    segs = p.split("/")
+    if any(seg in ("", ".", "..") for seg in segs):
+        return None
+    return p
+
+
+def _build_verified_root_prefixes(source_root: Path | None) -> list[str]:
+    prefixes: list[str] = []
+    if source_root is None:
+        return prefixes
+    raw_candidates: list[str] = []
+    raw_posix = str(source_root).replace("\\", "/").rstrip("/")
+    if raw_posix:
+        raw_candidates.append(raw_posix)
+    try:
+        res_posix = Path(source_root).resolve().as_posix().rstrip("/")
+        if res_posix and res_posix not in raw_candidates:
+            raw_candidates.append(res_posix)
+    except OSError:
+        pass
+    for base in raw_candidates:
+        pref = base + "/"
+        if pref not in prefixes:
+            prefixes.append(pref)
+        if len(base) >= 2 and base[1] == ":" and base[0].isalpha():
+            wsl_pref = f"/mnt/{base[0].lower()}{base[2:]}/"
+            if wsl_pref not in prefixes:
+                prefixes.append(wsl_pref)
+        else:
+            m_wsl = re.fullmatch(r"/mnt/([a-z])(/.*)?", base)
+            if m_wsl:
+                win_pref = f"{m_wsl.group(1).upper()}:{m_wsl.group(2) or ''}/"
+                if win_pref not in prefixes:
+                    prefixes.append(win_pref)
+    return prefixes
+
+
+def reconcile_cached_and_raw_coverage_telemetry(
+    cached_meta: dict[str, Any] | None,
+    raw_telemetry: dict[str, Any],
+    *,
+    expected_inventory: int | None = None,
+    scan_sha256: str | None = None,
+    raw_file_present: bool = True,
+) -> dict[str, Any]:
+    """Reconcile optional cached coverage metadata against raw-verified OpenGrep telemetry.
+
+    Fail-closed contract:
+    - Cached metadata NEVER bypasses raw SHA-256 verification or exact path membership checking.
+    - When cached coverage keys are absent, returns `raw_telemetry`.
+    - When cached coverage keys are present, validates cache shape/arithmetic AND requires exact
+      consistency with `raw_telemetry`:
+      * Invalid/contradictory cache or raw evidence -> `INCONSISTENT_TELEMETRY` (`scanned=None, ignored=None`).
+      * Missing raw capture file when cache claims `VERIFIED` -> `MISSING_PATHS_TELEMETRY` (`scanned=None, ignored=None`),
+        never trusting cache alone as `VERIFIED`.
+      * Present raw capture file lacking `paths.scanned` when cache claims `VERIFIED` -> `INCONSISTENT_TELEMETRY`.
+    """
+    exp_inv = expected_inventory if _is_nonneg_int(expected_inventory) else None
+
+    def _fail_closed(
+        status_label: str,
+        inv_val: int | None = None,
+        *,
+        allow_exp_fallback: bool = True,
+    ) -> dict[str, Any]:
+        chosen_inv = inv_val if _is_nonneg_int(inv_val) else (exp_inv if allow_exp_fallback else None)
+        return {
+            "java_files_inventory": chosen_inv if _is_nonneg_int(chosen_inv) else None,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": status_label,
+        }
+
+    coverage_keys = (
+        "opengrep_paths_telemetry_status",
+        "java_files_inventory",
+        "java_files_opengrep_scanned",
+        "java_files_opengrep_ignored",
+    )
+    has_cached = isinstance(cached_meta, dict) and any(k in cached_meta for k in coverage_keys)
+    if not has_cached:
+        return raw_telemetry
+
+    cached_tel = validate_coverage_telemetry_payload(
+        cached_meta,
+        expected_inventory=exp_inv,
+        scan_sha256=scan_sha256,
+    )
+    cached_status = cached_tel["opengrep_paths_telemetry_status"]
+    raw_status = raw_telemetry.get("opengrep_paths_telemetry_status")
+    raw_inv = raw_telemetry.get("java_files_inventory")
+
+    if raw_status == "INCONSISTENT_TELEMETRY":
+        if _is_nonneg_int(raw_inv):
+            return _fail_closed("INCONSISTENT_TELEMETRY", raw_inv, allow_exp_fallback=False)
+        return _fail_closed("INCONSISTENT_TELEMETRY", None, allow_exp_fallback=False)
+    if cached_status == "INCONSISTENT_TELEMETRY":
+        return _fail_closed(
+            "INCONSISTENT_TELEMETRY",
+            raw_inv if _is_nonneg_int(raw_inv) else cached_tel.get("java_files_inventory"),
+            allow_exp_fallback=(raw_inv is not None or exp_inv is not None),
+        )
+
+    if raw_status == "MISSING_PATHS_TELEMETRY":
+        if cached_status == "VERIFIED":
+            if raw_file_present:
+                return _fail_closed("INCONSISTENT_TELEMETRY", raw_inv)
+            return _fail_closed("MISSING_PATHS_TELEMETRY", raw_inv)
+        if cached_tel == raw_telemetry:
+            return raw_telemetry
+        return _fail_closed("INCONSISTENT_TELEMETRY", raw_inv)
+
+    if raw_status == "VERIFIED":
+        if cached_tel == raw_telemetry:
+            return raw_telemetry
+        return _fail_closed("INCONSISTENT_TELEMETRY", raw_inv)
+
+    return _fail_closed("INCONSISTENT_TELEMETRY", raw_inv)
+
+
+def validate_coverage_telemetry_payload(
+    meta_doc: dict[str, Any] | None,
+    *,
+    expected_inventory: int | None = None,
+    scan_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Validate cached coverage telemetry strictly before forwarding it at API boundaries.
+
+    Never trusts status labels or numeric fields without verifying exact integer types (excluding bool),
+    non-negativity, `scanned <= inventory`, `ignored == inventory - scanned`, consistency with
+    `expected_inventory`, and a valid 64-hex `scan_sha256` whenever `VERIFIED` is claimed.
+    """
+    exp_inv = expected_inventory if _is_nonneg_int(expected_inventory) else None
+
+    def _inconsistent(inv_val: int | None = exp_inv) -> dict[str, Any]:
+        return {
+            "java_files_inventory": inv_val if _is_nonneg_int(inv_val) else None,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+        }
+
+    if not isinstance(meta_doc, dict):
+        return _inconsistent()
+
+    status = meta_doc.get("opengrep_paths_telemetry_status")
+    if status not in _VALID_COVERAGE_STATUSES:
+        return _inconsistent()
+
+    inv = meta_doc.get("java_files_inventory")
+    scn = meta_doc.get("java_files_opengrep_scanned")
+    ign = meta_doc.get("java_files_opengrep_ignored")
+
+    if status == "VERIFIED":
+        if not (isinstance(scan_sha256, str) and bool(_SHA256_HEX_RE.fullmatch(scan_sha256))):
+            return _inconsistent()
+        if not (_is_nonneg_int(inv) and _is_nonneg_int(scn) and _is_nonneg_int(ign)):
+            return _inconsistent()
+        if scn > inv or ign != (inv - scn):
+            return _inconsistent()
+        if exp_inv is not None and inv != exp_inv:
+            return _inconsistent(exp_inv)
+        return {
+            "java_files_inventory": inv,
+            "java_files_opengrep_scanned": scn,
+            "java_files_opengrep_ignored": ign,
+            "opengrep_paths_telemetry_status": "VERIFIED",
+        }
+
+    # For MISSING_PATHS_TELEMETRY / INCONSISTENT_TELEMETRY: scanned and ignored MUST be None;
+    # inventory may only be None or a valid non-negative int matching expected_inventory if known.
+    if inv is not None and not _is_nonneg_int(inv):
+        return _inconsistent()
+    if scn is not None or ign is not None:
+        return _inconsistent(exp_inv if exp_inv is not None else inv)
+    if exp_inv is not None and inv is not None and inv != exp_inv:
+        return _inconsistent(exp_inv)
+    final_inv = exp_inv if exp_inv is not None else inv
+    return {
+        "java_files_inventory": final_inv,
+        "java_files_opengrep_scanned": None,
+        "java_files_opengrep_ignored": None,
+        "opengrep_paths_telemetry_status": status,
+    }
+
+
+def compute_opengrep_coverage_telemetry(
+    inventory_rel_paths: Any = None,
+    opengrep_doc: dict[str, Any] | None = None,
+    *,
+    inventory_count_fallback: int | None = None,
+    source_root: Path | None = None,
+) -> dict[str, Any]:
+    """Compute additive OpenGrep Java file coverage telemetry without altering legacy counts.
+
+    Fail-closed contract:
+    - `java_files_inventory`: exact count of verified `.java` files in intake inventory, or null.
+    - `java_files_opengrep_scanned`: unique `.java` files in `paths.scanned` proven under `source_root`
+      and exact members of verified `inventory_rel_paths`, or null when unverified/inconsistent.
+    - `java_files_opengrep_ignored`: `java_files_inventory - java_files_opengrep_scanned`, or null.
+    - `opengrep_paths_telemetry_status`:
+      - `VERIFIED`: inventory path set, types, root mapping, membership, uniqueness, and counts all verified.
+      - `MISSING_PATHS_TELEMETRY`: missing inventory path set or missing/null `paths` / `paths.scanned`.
+      - `INCONSISTENT_TELEMETRY`: invalid types, malformed entries, foreign/unrooted paths, alien paths
+        outside inventory, duplicate scanned Java paths, or contradictory counts.
+    """
+    if inventory_count_fallback is not None and not _is_nonneg_int(inventory_count_fallback):
+        return {
+            "java_files_inventory": None,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+        }
+
+    seen_inv_paths: set[str] = set()
+    inv_set: set[str] = set()
+    inv_lower_map: dict[str, str | None] = {}
+    has_inv_paths = False
+    if inventory_rel_paths is not None:
+        if isinstance(inventory_rel_paths, (str, bytes, bytearray, dict)) or not isinstance(
+            inventory_rel_paths, Iterable
+        ):
+            return {
+                "java_files_inventory": None,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+        has_inv_paths = True
+        for raw_p in inventory_rel_paths:
+            norm = _normalize_clean_relative_path(raw_p)
+            if norm is None or norm in seen_inv_paths:
+                return {
+                    "java_files_inventory": None,
+                    "java_files_opengrep_scanned": None,
+                    "java_files_opengrep_ignored": None,
+                    "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+                }
+            seen_inv_paths.add(norm)
+            if norm.lower().endswith(".java"):
+                inv_set.add(norm)
+                low = norm.lower()
+                if low not in inv_lower_map:
+                    inv_lower_map[low] = norm
+                elif inv_lower_map[low] != norm:
+                    inv_lower_map[low] = None  # Ambiguous case collision -> require exact case match
+
+    if has_inv_paths:
+        java_files_inventory: int | None = len(inv_set)
+        if inventory_count_fallback is not None and inventory_count_fallback != java_files_inventory:
+            return {
+                "java_files_inventory": java_files_inventory,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+    else:
+        java_files_inventory = inventory_count_fallback
+
+    if opengrep_doc is None:
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "MISSING_PATHS_TELEMETRY",
+        }
+    if not isinstance(opengrep_doc, dict):
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+        }
+    if "paths" not in opengrep_doc or opengrep_doc["paths"] is None:
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "MISSING_PATHS_TELEMETRY",
+        }
+    paths_obj = opengrep_doc["paths"]
+    if not isinstance(paths_obj, dict):
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+        }
+    if "scanned" not in paths_obj or paths_obj["scanned"] is None:
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "MISSING_PATHS_TELEMETRY",
+        }
+    scanned_raw = paths_obj["scanned"]
+    if not isinstance(scanned_raw, list):
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+        }
+
+    # Validate scanned item shapes even when inventory paths are absent (distinguish malformed from missing)
+    for raw_item in scanned_raw:
+        if not isinstance(raw_item, str) or not raw_item.strip() or "\x00" in raw_item:
+            return {
+                "java_files_inventory": java_files_inventory,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+
+    # Without an explicit verified inventory path set, set membership cannot be proven -> NEVER VERIFIED!
+    if not has_inv_paths:
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "MISSING_PATHS_TELEMETRY",
+        }
+
+    root_prefixes = _build_verified_root_prefixes(source_root)
+    scanned_java: set[str] = set()
+    for raw_item in scanned_raw:
+        p = raw_item.strip().replace("\\", "/")
+        if "//" in p:
+            return {
+                "java_files_inventory": java_files_inventory,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+        if any(seg == ".." for seg in p.split("/")):
+            return {
+                "java_files_inventory": java_files_inventory,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+        if not p.lower().endswith(".java"):
+            continue
+
+        if _is_absolute_or_drive_path(p):
+            matched_rel: str | None = None
+            p_low = p.lower()
+            for pref in root_prefixes:
+                if p.startswith(pref):
+                    matched_rel = _normalize_clean_relative_path(p[len(pref) :])
+                    break
+                pref_low = pref.lower()
+                if len(p_low) == len(p) and len(pref_low) == len(pref) and p_low.startswith(pref_low):
+                    matched_rel = _normalize_clean_relative_path(p[len(pref) :])
+                    break
+            if matched_rel is None:
+                # Foreign or unrooted absolute path cannot be verified against workspace root!
+                return {
+                    "java_files_inventory": java_files_inventory,
+                    "java_files_opengrep_scanned": None,
+                    "java_files_opengrep_ignored": None,
+                    "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+                }
+        else:
+            matched_rel = _normalize_clean_relative_path(p)
+            if matched_rel is None:
+                return {
+                    "java_files_inventory": java_files_inventory,
+                    "java_files_opengrep_scanned": None,
+                    "java_files_opengrep_ignored": None,
+                    "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+                }
+
+        # Strict membership check against verified inventory set (NO blind suffix guessing!)
+        if matched_rel in inv_set:
+            canonical_rel = matched_rel
+        else:
+            low_hit = inv_lower_map.get(matched_rel.lower())
+            if low_hit is None:
+                return {
+                    "java_files_inventory": java_files_inventory,
+                    "java_files_opengrep_scanned": None,
+                    "java_files_opengrep_ignored": None,
+                    "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+                }
+            canonical_rel = low_hit
+
+        # Reject duplicate counting of the same Java file in paths.scanned
+        if canonical_rel in scanned_java:
+            return {
+                "java_files_inventory": java_files_inventory,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+        scanned_java.add(canonical_rel)
+
+    scanned_count = len(scanned_java)
+    assert java_files_inventory is not None
+    if scanned_count > java_files_inventory:
+        return {
+            "java_files_inventory": java_files_inventory,
+            "java_files_opengrep_scanned": None,
+            "java_files_opengrep_ignored": None,
+            "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+        }
+    return {
+        "java_files_inventory": java_files_inventory,
+        "java_files_opengrep_scanned": scanned_count,
+        "java_files_opengrep_ignored": java_files_inventory - scanned_count,
+        "opengrep_paths_telemetry_status": "VERIFIED",
+    }

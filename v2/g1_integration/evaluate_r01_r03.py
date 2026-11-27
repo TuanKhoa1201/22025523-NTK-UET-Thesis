@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import errno
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import secrets
 import sqlite3
 import stat
 from typing import Any
@@ -23,7 +25,9 @@ from v2.g1_audit import contracts
 from v2.triage import live_check
 from v2.triage.evidence import EvidenceError, SourceTree, StaleSourceError, check_current, digest, strict_json
 from v2.triage.ollama import (
+    LEGACY_STEERED_PROMPT_VERSION,
     PROMPT_CONTRACT_BLIND,
+    PROMPT_SERIALIZER_FINGERPRINTS,
     PROMPT_VERSION,
     CaptureWriteError,
     _validate_lexical_dir_path,
@@ -33,6 +37,32 @@ from v2.triage.ollama import (
     validate_answer,
     verify_safe_directory_chain,
 )
+
+ALLOWED_EVALUATOR_PROMPT_VERSIONS = frozenset(
+    pv for pv in PROMPT_SERIALIZER_FINGERPRINTS if pv != LEGACY_STEERED_PROMPT_VERSION
+)
+
+
+def _resolve_expected_prompt_version(expected_prompt_version: str | None) -> str:
+    """Resolve an explicitly requested prompt version against registered neutral serializers only.
+
+    Defaults to the active `PROMPT_VERSION` when omitted. Refuses unregistered, blank, non-string,
+    or legacy steered prompt versions so arbitrary version downgrades are never accepted.
+    """
+    if expected_prompt_version is None:
+        return PROMPT_VERSION
+    if (
+        not isinstance(expected_prompt_version, str)
+        or not expected_prompt_version.strip()
+        or expected_prompt_version != expected_prompt_version.strip()
+    ):
+        raise ValueError(f"invalid expected_prompt_version: {expected_prompt_version!r}")
+    if expected_prompt_version not in ALLOWED_EVALUATOR_PROMPT_VERSIONS:
+        raise ValueError(
+            f"unsupported or unregistered expected_prompt_version={expected_prompt_version!r}; "
+            f"allowed registered neutral versions: {sorted(ALLOWED_EVALUATOR_PROMPT_VERSIONS)}"
+        )
+    return expected_prompt_version
 from v2.triage.scan_receipt import verify_receipt
 from v2.triage.verify_http_capture import _safe_id, verify_run_http_captures
 
@@ -1001,10 +1031,11 @@ def _verify_relocated_scenario_provenance(
             triage_manifest_errors.extend(art_errs)
         if expect_llm:
             orig_http = verify_run_http_captures(orig_triage, require_live_chat=False, minimum_findings=1)
-            if not orig_http["capture_integrity_ok"]:
-                triage_manifest_errors.append(
-                    f"{prefix}: original triage raw HTTP capture integrity failed: {orig_http['errors']}"
-                )
+            orig_http_errs = _validate_offline_artifact_integrity_result(
+                f"{prefix}: original triage raw HTTP capture", orig_http
+            )
+            if orig_http_errs:
+                triage_manifest_errors.extend(orig_http_errs)
         else:
             http_entry = orig_artifacts.get("http_capture_check") if isinstance(orig_artifacts, dict) else None
             if not isinstance(http_entry, dict) or http_entry.get("sha256") is not None:
@@ -1333,6 +1364,300 @@ def _has_raw_path_metadata_key(prompt_evidence: dict[str, Any]) -> bool:
     return "raw_path" in prompt_evidence
 
 
+_REQUIRED_OPERATOR_EXTERNAL_EVIDENCE = [
+    "Ollama server process PID and StartTime recorded before and after the run",
+    "Ollama executable absolute path and SHA-256 hash",
+    "Active loopback listener at 127.0.0.1:11434 verified as owned by that exact Ollama PID",
+    "Ollama CLI/daemon version, installed model name, and model digest captured independently by the operator",
+    "Ollama daemon log entries matching the UTC execution window and request sequence",
+    "Binary process exec_receipts bound to the same run's raw HTTP capture artifacts",
+    "Optional corroborating GPU/timing telemetry (e.g. nvidia-smi / eval_duration)",
+]
+
+
+def _validate_offline_artifact_integrity_result(
+    prefix: str,
+    http_check: Any,
+    *,
+    expected_findings: int | None = None,
+) -> list[str]:
+    """Fail-closed type, consistency & integrity validation for normal-mode verify_run_http_captures() results."""
+    errs: list[str] = []
+    if not isinstance(http_check, dict):
+        return [f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: verifier result is not a dict"]
+    for key in (
+        "artifact_integrity_ok",
+        "capture_integrity_ok",
+        "endpoint_reported_protocol_ok",
+        "live_origin_verified",
+        "live_chat_verified",
+        "independently_verified_model_runtime",
+        "security_conclusion_verified",
+    ):
+        if type(http_check.get(key)) is not bool:
+            errs.append(f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: missing or non-boolean field {key!r}")
+    for key in ("capture_status", "live_origin_trust_status"):
+        if not isinstance(http_check.get(key), str) or not http_check[key].strip():
+            errs.append(f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: missing or non-string field {key!r}")
+    for key in ("errors", "endpoint_reported_protocol_errors", "findings"):
+        if not isinstance(http_check.get(key), list):
+            errs.append(f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: missing or non-list field {key!r}")
+    if type(http_check.get("total_findings")) is not int or http_check["total_findings"] < 0:
+        errs.append(f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: missing or invalid integer 'total_findings'")
+    if errs:
+        return errs
+    if http_check["total_findings"] != len(http_check["findings"]):
+        errs.append(
+            f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: total_findings ({http_check['total_findings']}) != len(findings) ({len(http_check['findings'])})"
+        )
+    for forbidden_true in (
+        "live_origin_verified",
+        "live_chat_verified",
+        "independently_verified_model_runtime",
+        "security_conclusion_verified",
+    ):
+        if http_check[forbidden_true] is True:
+            errs.append(
+                f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: offline verifier illegally reported {forbidden_true}=True"
+            )
+    for idx, fc in enumerate(http_check["findings"]):
+        if not isinstance(fc, dict):
+            errs.append(f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: findings[{idx}] is not a dict")
+            continue
+        if type(fc.get("artifact_integrity_ok")) is not bool or type(fc.get("endpoint_reported_protocol_ok")) is not bool:
+            errs.append(f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: findings[{idx}] missing boolean integrity/protocol flags")
+        if fc.get("live_provenance_ok") is not False:
+            errs.append(f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: findings[{idx}] live_provenance_ok must be False offline")
+        if http_check["artifact_integrity_ok"] is True and fc.get("artifact_integrity_ok") is not True:
+            errs.append(
+                f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: top-level artifact_integrity_ok=True contradicts findings[{idx}].artifact_integrity_ok={fc.get('artifact_integrity_ok')!r}"
+            )
+    if errs:
+        return errs
+    if (
+        http_check["artifact_integrity_ok"] is not True
+        or http_check["capture_integrity_ok"] is not True
+        or len(http_check["errors"]) > 0
+    ):
+        errs.append(
+            f"{prefix}: HTTP_ARTIFACT_INTEGRITY_FAILED: raw HTTP artifact/binding verification failed: {http_check['errors']}"
+        )
+    elif expected_findings is not None and len(http_check["findings"]) != expected_findings:
+        errs.append(
+            f"{prefix}: HTTP_VERIFIER_CONTRACT_ERROR: verifier returned {len(http_check['findings'])} finding(s), expected {expected_findings}"
+        )
+    return errs
+
+
+def _classify_http_capture_verification(
+    scenario_name: str,
+    http_check: Any,
+    *,
+    allow_mock_primary: bool,
+    expected_findings: int | None = None,
+) -> tuple[dict[str, Any], list[str], list[str], list[str]]:
+    """Classify offline normal-mode verifier output into explicit artifact, protocol, mock, and live-origin states.
+
+    Returns (http_verification_summary, failures, blockers, live_origin_requirements).
+    Never conflates unverified offline live origin with corrupted raw HTTP artifacts,
+    and never treats artifact integrity alone as live runtime origin verification.
+    """
+    contract_errors: list[str] = []
+    if not isinstance(http_check, dict):
+        contract_errors.append(f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: verifier result is not a JSON object")
+    else:
+        for key in (
+            "artifact_integrity_ok",
+            "capture_integrity_ok",
+            "endpoint_reported_protocol_ok",
+            "live_origin_verified",
+            "live_chat_verified",
+            "independently_verified_model_runtime",
+            "security_conclusion_verified",
+        ):
+            if type(http_check.get(key)) is not bool:
+                contract_errors.append(
+                    f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: missing or non-boolean field {key!r}"
+                )
+        for key in ("capture_status", "live_origin_trust_status"):
+            if not isinstance(http_check.get(key), str) or not http_check[key].strip():
+                contract_errors.append(
+                    f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: missing or non-string field {key!r}"
+                )
+        for key in ("errors", "endpoint_reported_protocol_errors", "findings"):
+            if not isinstance(http_check.get(key), list):
+                contract_errors.append(
+                    f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: missing or non-list field {key!r}"
+                )
+        if type(http_check.get("total_findings")) is not int or http_check["total_findings"] < 0:
+            contract_errors.append(
+                f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: missing or invalid integer field 'total_findings'"
+            )
+        if not contract_errors:
+            if http_check["total_findings"] != len(http_check["findings"]):
+                contract_errors.append(
+                    f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: total_findings ({http_check['total_findings']}) != len(findings) ({len(http_check['findings'])})"
+                )
+            for forbidden_true in (
+                "live_origin_verified",
+                "live_chat_verified",
+                "independently_verified_model_runtime",
+                "security_conclusion_verified",
+            ):
+                if http_check[forbidden_true] is True:
+                    contract_errors.append(
+                        f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: offline verifier illegally reported {forbidden_true}=True"
+                    )
+            for idx, fc in enumerate(http_check["findings"]):
+                if not isinstance(fc, dict):
+                    contract_errors.append(
+                        f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: findings[{idx}] is not a dict"
+                    )
+                    continue
+                if type(fc.get("artifact_integrity_ok")) is not bool or type(fc.get("endpoint_reported_protocol_ok")) is not bool:
+                    contract_errors.append(
+                        f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: findings[{idx}] missing boolean integrity/protocol flags"
+                    )
+                    continue
+                if fc.get("live_provenance_ok") is not False:
+                    contract_errors.append(
+                        f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: findings[{idx}] live_provenance_ok must be False offline"
+                    )
+                if http_check["artifact_integrity_ok"] is True and fc.get("artifact_integrity_ok") is not True:
+                    contract_errors.append(
+                        f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: top-level artifact_integrity_ok=True contradicts findings[{idx}].artifact_integrity_ok=False"
+                    )
+                if http_check["endpoint_reported_protocol_ok"] is True and fc.get("endpoint_reported_protocol_ok") is not True:
+                    contract_errors.append(
+                        f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: top-level endpoint_reported_protocol_ok=True contradicts findings[{idx}].endpoint_reported_protocol_ok=False"
+                    )
+            if (
+                not contract_errors
+                and http_check["artifact_integrity_ok"] is True
+                and expected_findings is not None
+                and len(http_check["findings"]) != expected_findings
+            ):
+                contract_errors.append(
+                    f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: verifier returned {len(http_check['findings'])} finding(s), expected {expected_findings}"
+                )
+            if (
+                not contract_errors
+                and not allow_mock_primary
+                and http_check["endpoint_reported_protocol_ok"] is True
+                and len(http_check["findings"]) == 0
+            ):
+                contract_errors.append(
+                    f"{scenario_name}: HTTP_VERIFIER_CONTRACT_ERROR: endpoint_reported_protocol_ok=True requires at least 1 verified finding"
+                )
+
+    if contract_errors:
+        return (
+            {
+                "verification_scope": "offline_artifact_integrity_and_endpoint_reported_protocol_only",
+                "classification": "INVALID_VERIFIER_RESULT",
+                "artifact_integrity_ok": False,
+                "endpoint_reported_protocol_ok": False,
+                "live_origin_verified": False,
+                "live_origin_status": "INVALID_VERIFIER_RESULT",
+                "live_origin_trust_status": None,
+                "independently_verified_model_runtime": False,
+                "security_conclusion_verified": False,
+                "artifact_errors": list(contract_errors),
+                "endpoint_reported_protocol_errors": [],
+                "live_origin_note": "Offline HTTP verifier returned missing or invalidly typed contract fields; failed closed.",
+            },
+            contract_errors,
+            [],
+            [],
+        )
+
+    art_errors = list(http_check["errors"])
+    proto_errors = list(http_check["endpoint_reported_protocol_errors"])
+    artifact_ok = (
+        http_check["artifact_integrity_ok"] is True
+        and http_check["capture_integrity_ok"] is True
+        and len(art_errors) == 0
+    )
+    protocol_ok = (
+        artifact_ok
+        and http_check["endpoint_reported_protocol_ok"] is True
+        and http_check["capture_status"] == "VERIFIED_COMPLETE"
+        and len(proto_errors) == 0
+    )
+    declared_mock = (
+        http_check["live_origin_trust_status"] == "MOCK_OR_NON_LIVE_DECLARED"
+        or http_check["capture_status"] == "MOCKED_REQUEST_METHOD"
+        or any(
+            fc.get("mock") is True or fc.get("mode") == "mock_request_method"
+            for fc in http_check["findings"]
+        )
+    )
+
+    failures: list[str] = []
+    blockers: list[str] = []
+    live_reqs: list[str] = []
+
+    if not artifact_ok:
+        classification = "ARTIFACT_INTEGRITY_FAILED"
+        live_status = "BLOCKED_ARTIFACT_INTEGRITY_FAILED"
+        failures.append(
+            f"{scenario_name}: HTTP_ARTIFACT_INTEGRITY_FAILED: raw HTTP artifact/binding verification failed: {art_errors}"
+        )
+        note = "Raw HTTP artifact or metadata binding failed verification; capture cannot be trusted."
+    elif allow_mock_primary:
+        classification = "MOCK_TEST_MODE_ARTIFACT_VERIFIED"
+        live_status = "NOT_APPLICABLE_MOCK_TEST_MODE"
+        note = "Offline test mode (--allow-mock-primary): raw HTTP artifact integrity verified; live Ollama origin is not verified."
+    elif declared_mock:
+        classification = "MOCK_OR_NON_LIVE_DECLARED"
+        live_status = "BLOCKED_MOCK_OR_NON_LIVE"
+        detail = proto_errors or ["capture declared mock/non-live origin"]
+        blockers.append(f"{scenario_name}: HTTP_MOCK_OR_NON_LIVE: HTTP capture is mock/non-live: {detail}")
+        note = "Raw HTTP artifact integrity passed, but capture is explicitly mock/non-live and rejected in official mode."
+    elif not protocol_ok:
+        classification = "ENDPOINT_PROTOCOL_INCOMPLETE"
+        live_status = "BLOCKED_ENDPOINT_PROTOCOL_INCOMPLETE"
+        detail = proto_errors or [f"capture_status={http_check['capture_status']}", http_check["live_origin_trust_status"]]
+        blockers.append(
+            f"{scenario_name}: HTTP_ENDPOINT_PROTOCOL_INCOMPLETE: raw HTTP artifact integrity passed, "
+            f"but endpoint-reported Ollama protocol metadata is incomplete: {detail}"
+        )
+        note = "Raw HTTP artifact integrity passed, but endpoint-reported Ollama protocol requirements are incomplete."
+    else:
+        classification = "ARTIFACT_AND_PROTOCOL_VERIFIED_LIVE_ORIGIN_UNVERIFIED_OFFLINE"
+        live_status = "UNVERIFIED_OFFLINE_REQUIRES_OPERATOR_EXTERNAL_EVIDENCE"
+        live_reqs.append(
+            f"{scenario_name}: UNVERIFIED_LIVE_RUNTIME_ORIGIN: raw HTTP artifact integrity and "
+            "endpoint-reported Ollama protocol passed offline; external operator-controlled runtime "
+            "evidence is required to confirm live Ollama origin"
+        )
+        note = (
+            "Raw HTTP artifact integrity and endpoint-reported Ollama protocol passed offline verification; "
+            "live Ollama runtime origin remains unverified offline and must be confirmed separately via "
+            "operator-controlled external runtime evidence."
+        )
+
+    return (
+        {
+            "verification_scope": "offline_artifact_integrity_and_endpoint_reported_protocol_only",
+            "classification": classification,
+            "artifact_integrity_ok": artifact_ok,
+            "endpoint_reported_protocol_ok": protocol_ok,
+            "live_origin_verified": False,
+            "live_origin_status": live_status,
+            "live_origin_trust_status": http_check["live_origin_trust_status"],
+            "independently_verified_model_runtime": False,
+            "security_conclusion_verified": False,
+            "artifact_errors": art_errors,
+            "endpoint_reported_protocol_errors": proto_errors,
+            "live_origin_note": note,
+        },
+        failures,
+        blockers,
+        live_reqs,
+    )
+
+
 def _inspect_primary_scenario(
     scenario_name: str,
     scenario_dir: Path,
@@ -1343,7 +1668,9 @@ def _inspect_primary_scenario(
     require_after_confirm_false: bool = False,
     trusted_original_scenario_dir: Path | None = None,
     trusted_original_capture_dir: Path | None = None,
+    expected_prompt_version: str | None = None,
 ) -> dict[str, Any]:
+    eff_prompt_version = _resolve_expected_prompt_version(expected_prompt_version)
     raw_scenario_dir = Path(scenario_dir)
     failures: list[str] = []
     blockers: list[str] = []
@@ -1449,24 +1776,36 @@ def _inspect_primary_scenario(
 
     if manifest.get("prompt_contract") != PROMPT_CONTRACT_BLIND:
         failures.append(f"{scenario_name}: manifest prompt_contract={manifest.get('prompt_contract')!r} != 'blind'")
-    if manifest.get("prompt_version") != PROMPT_VERSION:
-        failures.append(f"{scenario_name}: manifest prompt_version={manifest.get('prompt_version')!r} != {PROMPT_VERSION!r}")
+    if manifest.get("prompt_version") != eff_prompt_version:
+        failures.append(f"{scenario_name}: manifest prompt_version={manifest.get('prompt_version')!r} != {eff_prompt_version!r}")
 
-    # B1 HTTP capture check
+    # B1 HTTP capture check (always normal mode offline: separates artifact integrity & endpoint-reported
+    # protocol from live runtime origin, which cannot be attested solely from files inside triage_dir).
     http_check = verify_run_http_captures(
         triage_dir,
-        require_live_chat=not allow_mock_primary,
+        require_live_chat=False,
         minimum_findings=expected_findings,
     )
-    if not http_check["capture_integrity_ok"]:
-        if any("used in-memory mocked request()" in e or "is marked mock" in e for e in http_check["errors"]):
-            blockers.append(f"{scenario_name}: HTTP capture is mock/non-live: {http_check['errors']}")
-        else:
-            blockers.append(f"{scenario_name}: raw HTTP capture verification failed: {http_check['errors']}")
+    http_verification, http_failures, http_blockers, live_origin_requirements = _classify_http_capture_verification(
+        scenario_name,
+        http_check,
+        allow_mock_primary=allow_mock_primary,
+        expected_findings=expected_findings,
+    )
+    failures.extend(http_failures)
+    blockers.extend(http_blockers)
 
     # Live protocol check (exact finding count minimum, never minimum=1 for 2-finding Demo1!)
     proto = live_check.inspect(rows, minimum=expected_findings)
-    if not allow_mock_primary and proto.get("protocol_status") != "OLLAMA_REPORTED_UNATTESTED":
+    if (
+        not isinstance(proto, dict)
+        or not isinstance(proto.get("protocol_status"), str)
+        or proto.get("live_origin_verified") is not False
+        or proto.get("independently_verified_model_runtime") is not False
+        or proto.get("security_conclusion_verified") is not False
+    ):
+        failures.append(f"{scenario_name}: LIVE_CHECK_CONTRACT_ERROR: invalid or unsafe live_check output: {proto!r}")
+    elif not allow_mock_primary and proto.get("protocol_status") != "OLLAMA_REPORTED_UNATTESTED":
         blockers.append(
             f"{scenario_name}: live_check protocol_status={proto.get('protocol_status')} "
             f"(completed={proto.get('completed_reported_responses')}/{expected_findings})"
@@ -1575,8 +1914,8 @@ def _inspect_primary_scenario(
 
         if row.get("state") != "OPEN":
             f_errors.append(f"assessments.jsonl state={row.get('state')!r} != 'OPEN'")
-        if assessment.get("prompt_version") != PROMPT_VERSION:
-            f_errors.append(f"assessment.prompt_version={assessment.get('prompt_version')!r} != {PROMPT_VERSION!r}")
+        if assessment.get("prompt_version") != eff_prompt_version:
+            f_errors.append(f"assessment.prompt_version={assessment.get('prompt_version')!r} != {eff_prompt_version!r}")
         if assessment.get("prompt_contract") != PROMPT_CONTRACT_BLIND:
             f_errors.append(f"assessment.prompt_contract={assessment.get('prompt_contract')!r} != 'blind'")
         if rec.get("triage_mode") not in (None, "evidence+llm"):
@@ -1589,7 +1928,7 @@ def _inspect_primary_scenario(
             f_errors.append(f"missing or unsafe {safe_id}.prompt.json")
         else:
             p_doc = strict_json(prompt_file.read_text(encoding="utf-8"))
-            if p_doc.get("prompt_contract") != PROMPT_CONTRACT_BLIND or p_doc.get("prompt_version") != PROMPT_VERSION:
+            if p_doc.get("prompt_contract") != PROMPT_CONTRACT_BLIND or p_doc.get("prompt_version") != eff_prompt_version:
                 f_errors.append(f"{safe_id}.prompt.json contract/version mismatch")
             msgs = p_doc.get("messages") or []
             if len(msgs) != 2 or not isinstance(msgs[1], dict) or not isinstance(msgs[1].get("content"), str):
@@ -1611,7 +1950,7 @@ def _inspect_primary_scenario(
                 env_doc = strict_json(resp_bin.read_bytes().decode("utf-8"))
                 msg_content = env_doc.get("message", {}).get("content") if isinstance(env_doc, dict) and isinstance(env_doc.get("message"), dict) else None
                 if isinstance(msg_content, str):
-                    replayed_answer = validate_answer(msg_content, rec)
+                    replayed_answer = validate_answer(msg_content, rec, prompt_version=eff_prompt_version)
                 else:
                     f_errors.append(f"{safe_id}.response.body.bin missing assistant message.content string")
             except (UnicodeError, ValueError, EvidenceError) as exc:
@@ -1641,7 +1980,7 @@ def _inspect_primary_scenario(
             if not cites or assessment.get("citation_check") != "MATCHED":
                 f_errors.append("conclusive verdict missing MATCHED canonical citations")
             else:
-                prov = inspect_citations_provenance(cites, rec)
+                prov = inspect_citations_provenance(cites, rec, prompt_version=eff_prompt_version)
                 if not (
                     prov["citation_in_source"] is True
                     and prov["citation_in_prompt"] is True
@@ -1689,7 +2028,7 @@ def _inspect_primary_scenario(
                 if not cites or assessment.get("citation_check") != "MATCHED":
                     f_errors.append("supplementary control verdict missing MATCHED canonical citations")
                 else:
-                    prov = inspect_citations_provenance(cites, rec)
+                    prov = inspect_citations_provenance(cites, rec, prompt_version=eff_prompt_version)
                     if not (
                         prov["citation_in_source"] is True
                         and prov["citation_in_prompt"] is True
@@ -1847,6 +2186,8 @@ def _inspect_primary_scenario(
         "scenario": scenario_name,
         "findings_count": len(rows),
         "http_capture": http_check,
+        "http_verification": http_verification,
+        "live_origin_requirements": live_origin_requirements,
         "live_protocol": proto,
         "capture_relocation": {
             "relocated_mode": (
@@ -2085,8 +2426,11 @@ def _inspect_demo3b_mock_control(
         errors.append(f"Demo3b invalid g1-run-manifest.json: {exc}")
 
     http_check = verify_run_http_captures(triage_dir, require_live_chat=False, minimum_findings=1)
-    if not http_check["capture_integrity_ok"]:
-        errors.append(f"Demo3b mock HTTP raw capture check failed: {http_check['errors']}")
+    d3b_http_errs = _validate_offline_artifact_integrity_result(
+        "Demo3b mock HTTP raw capture", http_check, expected_findings=1
+    )
+    if d3b_http_errs:
+        errors.extend(d3b_http_errs)
 
     cap_errors, d3b_s_man = _verify_capture_dir_integrity(
         "Demo3b",
@@ -2239,7 +2583,7 @@ def _inspect_demo3b_mock_control(
         "present": True,
         "evidence_kind": "SYNTHETIC_MOCK_HTTP",
         "excluded_from_real_denominator": True,
-        "http_capture_status": http_check["capture_status"],
+        "http_capture_status": http_check.get("capture_status") if isinstance(http_check, dict) else None,
         "errors": errors,
     }
 
@@ -2869,7 +3213,9 @@ def evaluate_acceptance(
     demo3b_trusted_capture_root: Path | None = None,
     allowlisted_trusted_capture_root: Path | None = None,
     allow_mock_primary: bool = False,
+    expected_prompt_version: str | None = None,
 ) -> dict[str, Any]:
+    eff_prompt_version = _resolve_expected_prompt_version(expected_prompt_version)
     if r03_fp_mode not in ("locked-demo2", "proposed-allowlisted-fp"):
         raise ValueError(f"unsupported r03_fp_mode={r03_fp_mode!r}")
     if r03_fp_mode == "locked-demo2" and allowlisted_fp_dir is not None:
@@ -2917,6 +3263,7 @@ def evaluate_acceptance(
         allow_mock_primary=allow_mock_primary,
         trusted_original_scenario_dir=demo1_trusted_scenario_root,
         trusted_original_capture_dir=demo1_trusted_capture_root,
+        expected_prompt_version=eff_prompt_version,
     )
     d2 = _inspect_primary_scenario(
         "demo2_protected_false_positive",
@@ -2927,6 +3274,7 @@ def evaluate_acceptance(
         require_after_confirm_false=not use_proposed_fp,
         trusted_original_scenario_dir=demo2_trusted_scenario_root,
         trusted_original_capture_dir=demo2_trusted_capture_root,
+        expected_prompt_version=eff_prompt_version,
     )
     d_fp: dict[str, Any] | None = None
     id_errs: list[str] = []
@@ -2941,6 +3289,7 @@ def evaluate_acceptance(
             require_after_confirm_false=True,
             trusted_original_scenario_dir=allowlisted_trusted_scenario_root,
             trusted_original_capture_dir=allowlisted_trusted_capture_root,
+            expected_prompt_version=eff_prompt_version,
         )
         id_errs = _verify_allowlisted_fp_scenario_identity(
             allowlisted_fp_dir, trusted_source_root=allowlisted_trusted_source_root,
@@ -2975,6 +3324,7 @@ def evaluate_acceptance(
         allow_mock_primary=allow_mock_primary,
         trusted_original_scenario_dir=demo3a_trusted_scenario_root,
         trusted_original_capture_dir=demo3a_trusted_capture_root,
+        expected_prompt_version=eff_prompt_version,
     )
     m1 = _inspect_m1_scan_only(
         m1_dir,
@@ -3002,13 +3352,19 @@ def evaluate_acceptance(
         *d3b.get("errors", []),
     ]
     r01_blockers = [e for item in historical_primary_items for e in item.get("blockers", [])]
+    r01_live_origin_reqs = [e for item in historical_primary_items for e in item.get("live_origin_requirements", [])]
     expected_real_total = 4
     real_findings_total = sum(x.get("findings_count", 0) for x in historical_primary_items)
     if real_findings_total != expected_real_total and not r01_blockers:
         r01_failures.append(
             f"R01 real-Qwen denominator must equal {expected_real_total}, observed {real_findings_total}"
         )
-    r01_status = "FAIL" if r01_failures else ("BLOCKED" if r01_blockers else "PASS")
+    r01_offline_status = "FAIL" if r01_failures else ("BLOCKED" if r01_blockers else "PASS")
+    r01_status = (
+        r01_offline_status
+        if r01_offline_status != "PASS" or allow_mock_primary
+        else "OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN"
+    )
 
     # R02 decision (historical M1 + Demo1/Demo2/Demo3a pipeline parity)
     r02_failures = [
@@ -3016,7 +3372,8 @@ def evaluate_acceptance(
         *[e for item in historical_primary_items for e in item.get("r02_errors", [])],
     ]
     r02_blockers = [*m1.get("blockers", []), *r01_blockers]
-    r02_status = "FAIL" if r02_failures else ("BLOCKED" if r02_blockers else "PASS")
+    r02_offline_status = "FAIL" if r02_failures else ("BLOCKED" if r02_blockers else "PASS")
+    r02_status = r02_offline_status
 
     # R03 decision (Demo1 confirm-true + FP control confirm-false -> reopen + Demo3a untouched OPEN + Demo4 STALE_SOURCE)
     r03_failures: list[str] = [
@@ -3027,11 +3384,13 @@ def evaluate_acceptance(
         *d4.get("blockers", []),
         *r01_blockers,
     ]
+    r03_live_origin_reqs: list[str] = []
     if d_fp is not None:
         r03_failures.extend(d_fp.get("failures", []))
         r03_failures.extend(d_fp.get("r02_errors", []))
         r03_failures.extend(d_fp.get("r03_errors", []))
         r03_blockers.extend(d_fp.get("blockers", []))
+        r03_live_origin_reqs.extend(d_fp.get("live_origin_requirements", []))
 
     d1_sql = d1.get("current_sqlite")
     if d1_sql is not None:
@@ -3100,13 +3459,36 @@ def evaluate_acceptance(
         if d3a_sql["events"]:
             r03_failures.append(f"Demo3a expected 0 SQLite events, got {d3a_sql['events']}")
 
-    r03_status = "FAIL" if r03_failures else ("BLOCKED" if r03_blockers else "PASS")
-
-    overall = (
-        "FAIL"
-        if "FAIL" in (r01_status, r02_status, r03_status)
-        else ("BLOCKED" if "BLOCKED" in (r01_status, r02_status, r03_status) else "PASS")
+    r03_offline_status = "FAIL" if r03_failures else ("BLOCKED" if r03_blockers else "PASS")
+    r03_status = (
+        r03_offline_status
+        if r03_offline_status != "PASS" or allow_mock_primary or not r03_live_origin_reqs
+        else "OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN"
     )
+
+    overall_offline_status = (
+        "FAIL"
+        if "FAIL" in (r01_offline_status, r02_offline_status, r03_offline_status)
+        else ("BLOCKED" if "BLOCKED" in (r01_offline_status, r02_offline_status, r03_offline_status) else "PASS")
+    )
+    if overall_offline_status != "PASS":
+        overall = overall_offline_status
+    elif allow_mock_primary:
+        overall = "PASS"
+    else:
+        # Offline artifact, protocol, citation, validator, SARIF, and SQLite checks all passed,
+        # but official live runtime origin CANNOT be declared PASS without operator external session evidence.
+        overall = "OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN"
+
+    all_live_origin_reqs = [*r01_live_origin_reqs, *r03_live_origin_reqs]
+    if allow_mock_primary:
+        live_runtime_acceptance_status = "NOT_APPLICABLE_MOCK_TEST_MODE"
+    elif overall_offline_status == "FAIL":
+        live_runtime_acceptance_status = "FAIL"
+    elif overall_offline_status == "BLOCKED":
+        live_runtime_acceptance_status = "BLOCKED"
+    else:
+        live_runtime_acceptance_status = "PENDING_OPERATOR_EXTERNAL_RUNTIME_EVIDENCE"
 
     breakdown: dict[str, int] = {
         "demo1_true_positive": d1.get("findings_count", 0),
@@ -3130,6 +3512,7 @@ def evaluate_acceptance(
         fp_integrity_ok = (
             d_fp.get("findings_count") == 1
             and not d_fp.get("failures")
+            and not d_fp.get("blockers")
             and not d_fp.get("r02_errors")
             and not id_errs
             and fp_f0.get("passed", True) is True
@@ -3185,6 +3568,7 @@ def evaluate_acceptance(
         "Human actor actions in R03 test operational lifecycle, not Ground Truth labels.",
         "SQLite --actor strings are local unauthenticated operational identifiers (not cryptographic identity attestation); official mode rejects scripted/mock/replay markers.",
         "HTTP 200 and raw HTTP body hashes prove client-observed transport bytes, not cryptographic model weight attestation.",
+        "Offline artifact and endpoint-reported protocol verification cannot independently prove genuine Ollama live runtime origin; external operator-controlled runtime evidence (PID/StartTime, binary SHA-256, 127.0.0.1:11434 listener, version, model digest, daemon logs, exec_receipts) is required before operator acceptance.",
     ]
     if use_proposed_fp:
         caveats.append(
@@ -3200,8 +3584,18 @@ def evaluate_acceptance(
             "only post-review SQLite review.sqlite / review.after_confirm_false.sqlite may diverge, and manifest paths are never self-authenticating."
         )
 
+    if eff_prompt_version != PROMPT_VERSION:
+        caveats.append(
+            f"EXPLICIT HISTORICAL PROMPT REPLAY MODE: Evaluator verified recorded captures strictly against "
+            f"registered neutral prompt_version={eff_prompt_version!r} (instead of current {PROMPT_VERSION!r}) "
+            "using that version's registered request serializer and citation span contract."
+        )
+
     out_doc: dict[str, Any] = {
         "schema": "ntk-g1-r01-r03-evaluation-1",
+        "verification_scope": "offline_artifact_protocol_and_sqlite_only_no_live_origin_attestation",
+        "expected_prompt_version": eff_prompt_version,
+        "historical_prompt_replay_mode": eff_prompt_version != PROMPT_VERSION,
         "r03_fp_mode": r03_fp_mode,
         "capture_relocation_mode": capture_relocation_mode,
         "pinned_original_scenario_roots": {k: str(v) for k, v in provided_scenario_roots.items()},
@@ -3214,10 +3608,17 @@ def evaluate_acceptance(
             "enforced_when_official": [
                 "non-empty stripped actor and reason required",
                 "scripted/mock/synthetic/replay actor tokens and tags rejected when allow_mock_primary=False",
-                "live Ollama HTTP capture and unmodified source hashes required when allow_mock_primary=False",
+                "raw HTTP artifact integrity, endpoint-reported Ollama protocol, and unmodified source hashes required offline; live Ollama origin requires separate operator-controlled external runtime evidence",
             ],
         },
         "overall_status": overall,
+        "offline_artifact_status": overall_offline_status,
+        "live_origin_verified": False,
+        "live_runtime_acceptance_status": live_runtime_acceptance_status,
+        "independently_verified_model_runtime": False,
+        "security_conclusion_verified": False,
+        "live_origin_requirements": all_live_origin_reqs,
+        "required_operator_external_evidence": list(_REQUIRED_OPERATOR_EXTERNAL_EVIDENCE),
         "real_qwen_denominator": {
             "expected": expected_real_total,
             "observed": real_findings_total,
@@ -3225,9 +3626,26 @@ def evaluate_acceptance(
             "excluded_auxiliary_controls": excluded_aux,
         },
         "criteria": {
-            "R01": {"status": r01_status, "failures": r01_failures, "blockers": r01_blockers},
-            "R02": {"status": r02_status, "failures": r02_failures, "blockers": r02_blockers},
-            "R03": {"status": r03_status, "failures": r03_failures, "blockers": r03_blockers},
+            "R01": {
+                "status": r01_status,
+                "offline_artifact_status": r01_offline_status,
+                "failures": r01_failures,
+                "blockers": r01_blockers,
+                "live_origin_requirements": r01_live_origin_reqs,
+            },
+            "R02": {
+                "status": r02_status,
+                "offline_artifact_status": r02_offline_status,
+                "failures": r02_failures,
+                "blockers": r02_blockers,
+            },
+            "R03": {
+                "status": r03_status,
+                "offline_artifact_status": r03_offline_status,
+                "failures": r03_failures,
+                "blockers": r03_blockers,
+                "live_origin_requirements": r03_live_origin_reqs,
+            },
         },
         "scenarios": scenarios_out,
         "caveats": caveats,
@@ -3284,8 +3702,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--demo3b-trusted-capture-root", type=Path, default=None, help="Original Demo3b capture dir pinned by the operator")
     parser.add_argument("--allowlisted-trusted-capture-root", type=Path, default=None, help="Original AllowlistedQuery capture dir pinned by the operator")
     parser.add_argument("--output", type=Path, required=True, help="Output JSON file (must lie outside scenario directories)")
+    parser.add_argument(
+        "--expected-prompt-version",
+        default=None,
+        help="Optional explicit registered neutral prompt_version for historical read-only replay (defaults to active PROMPT_VERSION)",
+    )
     parser.add_argument("--allow-mock-primary", action="store_true", help="Offline unit-test flag only; never set in real acceptance")
     args = parser.parse_args(argv)
+
+    try:
+        resolved_expected_prompt_version = _resolve_expected_prompt_version(args.expected_prompt_version)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.r03_fp_mode == "locked-demo2" and args.allowlisted_fp_dir is not None:
         parser.error("--allowlisted-fp-dir requires --r03-fp-mode proposed-allowlisted-fp")
@@ -3383,17 +3811,62 @@ def main(argv: list[str] | None = None) -> int:
         demo3b_trusted_capture_root=args.demo3b_trusted_capture_root,
         allowlisted_trusted_capture_root=args.allowlisted_trusted_capture_root,
         allow_mock_primary=args.allow_mock_primary,
+        expected_prompt_version=resolved_expected_prompt_version,
     )
+    try:
+        rendered = json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        parser.error(f"unable to serialize evaluation report {args.output}: {exc}")
     try:
         safe_out_parent = verify_safe_directory_chain(abs_out.parent, boundary_root=abs_out.parent, create=True)
         out_resolved = safe_out_parent / abs_out.name
     except CaptureWriteError as exc:
         parser.error(f"refusing unsafe --output directory {abs_out.parent}: {exc}")
-    rendered = json.dumps(report, indent=2, ensure_ascii=False)
-    with out_resolved.open("xb") as handle:
-        handle.write((rendered + "\n").encode("utf-8"))
+    payload = (rendered + "\n").encode("utf-8")
+    tmp_out = safe_out_parent / f".{out_resolved.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    created_tmp = False
+    try:
+        if os.path.lexists(out_resolved):
+            if is_reparse_link(out_resolved):
+                parser.error(f"refusing symlink/junction --output path: {args.output}")
+            parser.error(f"refusing to overwrite existing evaluation report: {args.output}")
+        with tmp_out.open("xb") as handle:
+            created_tmp = True
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(tmp_out, out_resolved)
+        except FileExistsError:
+            parser.error(f"refusing to overwrite existing evaluation report: {args.output}")
+        except OSError as exc:
+            unsupported_link_errnos = {
+                e for e in (getattr(errno, "EXDEV", None), getattr(errno, "EOPNOTSUPP", None), getattr(errno, "ENOSYS", None))
+                if e is not None
+            }
+            win_err = getattr(exc, "winerror", None)
+            if exc.errno in unsupported_link_errnos or win_err in (1, 50):
+                raise OSError(
+                    exc.errno or getattr(errno, "EOPNOTSUPP", errno.EIO),
+                    f"ATOMIC_PUBLISH_UNSUPPORTED: target filesystem does not support exclusive hard-link publication for {out_resolved}: {exc}",
+                ) from exc
+            raise
+    except FileExistsError:
+        parser.error(f"refusing to overwrite existing evaluation report: {args.output}")
+    except OSError as exc:
+        parser.error(f"unable to write evaluation report {args.output}: {exc}")
+    finally:
+        if created_tmp:
+            try:
+                tmp_out.unlink()
+            except OSError:
+                pass
     print(rendered)
-    return 0 if report["overall_status"] == "PASS" else 2
+    if report["overall_status"] == "PASS":
+        return 0
+    if report["overall_status"] == "OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN":
+        return 3
+    return 2
 
 
 if __name__ == "__main__":

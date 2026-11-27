@@ -1710,7 +1710,8 @@ class CodexReauditCounterexampleTests(unittest.TestCase):
             "}\n"
         )
 
-        # Confirm sealed heuristics emits deceptive REFUTED on OverflowPathCtrl (root cause of Blocker C)
+        # Heuristics now fails closed on Java 32-bit int overflow instead of emitting deceptive REFUTED;
+        # the scripted LLM below still returns REFUTED to independently verify Gate 2 rejects it.
         self.assertEqual(
             extract_evidence_signals({
                 "rule_id": "ntk.api.java.cwe22.path-traversal",
@@ -1727,7 +1728,7 @@ class CodexReauditCounterexampleTests(unittest.TestCase):
                               "start": {"line": 11}, "end": {"line": 11},
                               "lines": [{"line": i + 1, "text": l} for i, l in enumerate(overflow_path.splitlines())]}],
             }).get("recommended_status"),
-            "REFUTED",
+            "SUPPORTED",
         )
 
         fake_og = _create_fake_opengrep_from_fixtures(self.root, subdir="og_blocker_c")
@@ -1735,18 +1736,31 @@ class CodexReauditCounterexampleTests(unittest.TestCase):
         def _respond_refuted_full_method(req_doc, _n):
             ev_user = json.loads(req_doc["messages"][1]["content"])
             snip = ev_user["snippets"][0]
-            lines = snip["lines"]
+            line_map = {l["line"]: l["text"] for l in snip["lines"]}
+            sink_ln = ev_user["start"]["line"]
+            chosen_lines = []
+            for l in snip["lines"]:
+                txt = l["text"]
+                if any(tok in txt for tok in ("startsWith(", "Integer.parseInt(", "String q =")):
+                    if l["line"] not in chosen_lines:
+                        chosen_lines.append(l["line"])
+            if sink_ln not in chosen_lines:
+                chosen_lines.append(sink_ln)
+            chosen_lines = chosen_lines[:3]
             return {
                 "status": "REFUTED",
                 "explanation": "Cho rang nhanh an toan hoac da duoc kiem soat.",
                 "fix_suggestion": "Khong can sua.",
-                "citations": [{
-                    "path": snip["path"],
-                    "start_line": lines[0]["line"],
-                    "end_line": lines[-1]["line"],
-                    "quote": "\n".join(l["text"] for l in lines),
-                    "sha256": snip["sha256"],
-                }],
+                "citations": [
+                    {
+                        "path": snip["path"],
+                        "start_line": ln,
+                        "end_line": ln,
+                        "quote": line_map[ln],
+                        "sha256": snip["sha256"],
+                    }
+                    for ln in chosen_lines
+                ],
             }
 
         with _ScriptedOllamaServer(_respond_refuted_full_method) as ol:

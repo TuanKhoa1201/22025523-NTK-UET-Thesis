@@ -522,8 +522,8 @@ class CitationProvenanceAndPromptNeutralityRegressions(unittest.TestCase):
         recommendation_reason, candidate_citations, and OWASP SeparateClassRequest hints while preserving
         forensic replay via legacy_v2_1_request_payload.
         """
-        # Single-line-first citation contract + canonical snippet metadata + strict inclusive quotes.
-        self.assertEqual(PROMPT_VERSION, "v2.2.4-cwe22-cwe89-minimal-singleline-citations")
+        # Strict single-line max-3 executable citation contract + flow-first rebuttal reasoning.
+        self.assertEqual(PROMPT_VERSION, "v2.2.6-cwe22-cwe89-strict-singleline-max3-citations")
         self.assertEqual(LEGACY_STEERED_PROMPT_VERSION, "v2.1-cwe22-cwe89-grounded")
 
         # Default G1 mode is blind (no evidence_signals at all)

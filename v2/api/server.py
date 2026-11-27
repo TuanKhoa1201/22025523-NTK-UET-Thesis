@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 import re
+import socket
 import time
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -23,6 +24,8 @@ from v2.triage.evidence import EvidenceError, strict_json
 MAX_JSON_BODY_BYTES = 65_536
 DEFAULT_DRAIN_TIMEOUT_SECONDS = 0.25
 DEFAULT_BODY_READ_TIMEOUT_SECONDS = 10.0
+DEFAULT_LINGER_DRAIN_TIMEOUT_SECONDS = 0.25
+DEFAULT_LINGER_MAX_DISCARD_BYTES = 2 * 1024 * 1024
 
 _RE_JOB_ID = re.compile(r"^/api/scan-jobs/([^/]+)$")
 _RE_SCAN_DETAIL = re.compile(r"^/api/scans/([^/]+)$")
@@ -104,6 +107,8 @@ class ThesisApiServer(ThreadingHTTPServer):
         self.jobs.set_on_opengrep_scan_succeeded(self.service.notify_real_opengrep_scan_completed)
         self.drain_timeout_seconds = DEFAULT_DRAIN_TIMEOUT_SECONDS
         self.body_read_timeout_seconds = DEFAULT_BODY_READ_TIMEOUT_SECONDS
+        self.linger_drain_timeout_seconds = DEFAULT_LINGER_DRAIN_TIMEOUT_SECONDS
+        self.linger_max_discard_bytes = DEFAULT_LINGER_MAX_DISCARD_BYTES
         self.last_probe_shutdown_status: dict[str, Any] | None = None
         super().__init__((config.host, config.port), ThesisApiRequestHandler)
         self.service.start_opengrep_probe()
@@ -227,10 +232,63 @@ class ThesisApiRequestHandler(BaseHTTPRequestHandler):
             except OSError:
                 pass
 
+    def _linger_close_unread_post_body(self, *, already_timed_out: bool) -> None:
+        """RFC 9112 section 9.6 staged half-close teardown to avoid Windows TCP RST (WinError 10053).
+
+        After flushing an early 4xx/5xx response (such as HTTP 413 PAYLOAD_TOO_LARGE) with
+        `Connection: close`, half-close the write side (`SHUT_WR`) so the client receives the
+        response and EOF immediately, then discard unread incoming bytes from the kernel socket
+        receive buffer using O(1) memory under strict time and byte bounds until the client closes.
+        """
+        try:
+            self.wfile.flush()
+        except OSError:
+            return
+        try:
+            self.connection.shutdown(socket.SHUT_WR)
+        except OSError:
+            return
+
+        base_timeout = float(
+            getattr(self.server, "linger_drain_timeout_seconds", DEFAULT_LINGER_DRAIN_TIMEOUT_SECONDS)
+        )
+        linger_timeout = min(0.05, base_timeout) if already_timed_out else max(0.02, base_timeout)
+        max_discard = int(getattr(self.server, "linger_max_discard_bytes", DEFAULT_LINGER_MAX_DISCARD_BYTES))
+        deadline = time.monotonic() + max(0.01, linger_timeout)
+        discarded = 0
+        prev_timeout = None
+        try:
+            prev_timeout = self.connection.gettimeout()
+            while discarded < max_discard:
+                rem = deadline - time.monotonic()
+                if rem <= 0:
+                    break
+                self.connection.settimeout(rem)
+                chunk = self.connection.recv(min(16384, max_discard - discarded))
+                if not chunk:
+                    break
+                discarded += len(chunk)
+        except (TimeoutError, OSError):
+            pass
+        finally:
+            try:
+                self.connection.settimeout(prev_timeout)
+            except OSError:
+                pass
+
     def _send_json(self, status_code: int, payload: dict[str, Any], cors_origin: str | None) -> None:
         close_after = bool(self.close_connection)
+        body_already_timed_out = bool(getattr(self, "_body_aborted", False))
         if status_code >= 400 and not self._drain_small_unread_post_body():
             close_after = True
+            # If small-body drain ran (Content-Length <= MAX_JSON_BODY_BYTES) and returned False,
+            # the client was slow/incomplete; keep post-FIN linger brief to preserve timeout bounds.
+            raw_len = self.headers.get("Content-Length")
+            try:
+                if raw_len is not None and 0 < int(raw_len) <= MAX_JSON_BODY_BYTES:
+                    body_already_timed_out = True
+            except ValueError:
+                pass
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -245,6 +303,13 @@ class ThesisApiRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
         self.end_headers()
         self.wfile.write(body)
+        if (
+            close_after
+            and status_code >= 400
+            and getattr(self, "command", "") == "POST"
+            and not getattr(self, "_body_consumed", False)
+        ):
+            self._linger_close_unread_post_body(already_timed_out=body_already_timed_out)
 
     def _read_bounded_body(self, max_bytes: int, too_large_code: str = "PAYLOAD_TOO_LARGE") -> bytes:
         raw_len = self.headers.get("Content-Length")

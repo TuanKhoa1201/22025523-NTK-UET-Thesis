@@ -1625,9 +1625,10 @@ _STDLIB_SIMPLE_TO_PACKAGES: dict[str, tuple[str, ...]] = {
     "Paths": ("java.nio.file",),
     "Path": ("java.nio.file",),
     "StandardOpenOption": ("java.nio.file",),
+    "LinkOption": ("java.nio.file",),
     "Charset": ("java.nio.charset",),
     "StandardCharsets": ("java.nio.charset",),
-    # java.util / regex / stream / net / sql / security / swing / awt
+    # java.util / java.text / regex / stream / net / sql / security / swing / awt
     "UUID": ("java.util",),
     "Objects": ("java.util",),
     "Arrays": ("java.util",),
@@ -1641,12 +1642,16 @@ _STDLIB_SIMPLE_TO_PACKAGES: dict[str, tuple[str, ...]] = {
     "Map": ("java.util",),
     "HashMap": ("java.util",),
     "Optional": ("java.util",),
-    "Base64": ("java.util",),
+    "Base64": ("java.util", "org.apache.commons.codec.binary"),
     "Enumeration": ("java.util",),
     "Iterator": ("java.util",),
     "Scanner": ("java.util",),
     "Properties": ("java.util",),
     "Date": ("java.util",),
+    "Calendar": ("java.util",),
+    "Format": ("java.text",),
+    "DateFormat": ("java.text",),
+    "SimpleDateFormat": ("java.text",),
     "Pattern": ("java.util.regex",),
     "Matcher": ("java.util.regex",),
     "Stream": ("java.util.stream",),
@@ -1710,6 +1715,7 @@ _STDLIB_SIMPLE_TO_PACKAGES: dict[str, tuple[str, ...]] = {
     "UriUtils": ("org.springframework.web.util",),
     "UriComponentsBuilder": ("org.springframework.web.util",),
     "StreamUtils": ("org.springframework.util",),
+    "FileCopyUtils": ("org.springframework.util",),
     "CollectionUtils": ("org.springframework.util",),
     "ObjectUtils": ("org.springframework.util",),
     "Assert": ("org.springframework.util",),
@@ -1773,6 +1779,8 @@ _STDLIB_SUPERTYPES: dict[str, tuple[str, ...]] = {
     "java.util.Set": ("java.util.Collection",),
     "java.util.HashSet": ("java.util.Set",),
     "java.util.HashMap": ("java.util.Map",),
+    "java.text.DateFormat": ("java.text.Format",),
+    "java.text.SimpleDateFormat": ("java.text.DateFormat",),
     "java.sql.PreparedStatement": ("java.sql.Statement",),
     "java.sql.CallableStatement": ("java.sql.PreparedStatement",),
     "javax.servlet.http.HttpServlet": ("javax.servlet.GenericServlet",),
@@ -1864,7 +1872,8 @@ _STDLIB_FQN_METHODS: dict[str, frozenset[str]] = {
             "readString", "readAllBytes", "readAllLines", "lines", "newInputStream",
             "newOutputStream", "newBufferedReader", "newBufferedWriter", "write",
             "writeString", "copy", "move", "delete", "deleteIfExists", "createFile",
-            "createDirectory", "createDirectories", "list", "walk", "find",
+            "createDirectory", "createDirectories", "createTempDirectory", "createTempFile",
+            "list", "walk", "find",
             "exists", "notExists", "isRegularFile", "isDirectory", "isSymbolicLink",
             "isReadable", "size",
         }
@@ -1881,6 +1890,12 @@ _STDLIB_FQN_METHODS: dict[str, frozenset[str]] = {
     "java.util.Base64": frozenset({"getDecoder", "getEncoder", "getUrlDecoder", "getUrlEncoder", "getMimeDecoder", "getMimeEncoder"}),
     "java.util.Base64$Decoder": frozenset({"decode"}),
     "java.util.Base64$Encoder": frozenset({"encode", "encodeToString"}),
+    "org.apache.commons.codec.binary.Base64": frozenset({"encodeBase64", "decodeBase64", "encodeBase64String", "encodeBase64URLSafe", "encodeBase64URLSafeString", "isBase64"}),
+    "java.util.Calendar": frozenset({"getInstance", "getTime", "get", "set", "add", "getTimeInMillis", "setTime", "setTimeInMillis", "getTimeZone"}),
+    "java.util.Date": frozenset({"getTime", "before", "after", "compareTo", "toInstant"}),
+    "java.text.Format": frozenset({"format", "parseObject"}),
+    "java.text.DateFormat": frozenset({"format", "parse", "getInstance", "getDateInstance", "getTimeInstance", "getDateTimeInstance", "setTimeZone", "setLenient"}),
+    "java.text.SimpleDateFormat": frozenset({"applyPattern", "toPattern"}),
     "java.util.Iterator": frozenset({"hasNext", "next", "remove"}),
     "java.util.Enumeration": frozenset({"hasMoreElements", "nextElement"}),
     "java.util.Scanner": frozenset({"next", "nextLine", "nextInt", "nextLong", "hasNext", "hasNextLine", "close"}),
@@ -1939,6 +1954,7 @@ _STDLIB_FQN_METHODS: dict[str, frozenset[str]] = {
     "org.springframework.web.util.UriUtils": frozenset({"encode", "encodePath", "encodePathSegment", "encodeQueryParam", "decode"}),
     "org.springframework.web.util.UriComponentsBuilder": frozenset({"fromHttpUrl", "fromUriString", "fromPath", "path", "pathSegment", "queryParam", "build", "encode", "toUriString", "toUri"}),
     "org.springframework.util.StreamUtils": frozenset({"copy", "copyToByteArray", "copyToString"}),
+    "org.springframework.util.FileCopyUtils": frozenset({"copy", "copyToByteArray", "copyToString"}),
     "org.springframework.util.CollectionUtils": frozenset({"isEmpty"}),
     "org.springframework.util.ObjectUtils": frozenset({"isEmpty", "nullSafeEquals"}),
     "org.springframework.util.Assert": frozenset({"notNull", "hasText", "isTrue", "state"}),
@@ -2001,6 +2017,8 @@ _STDLIB_METHOD_RETURN_FQN: dict[tuple[str, str], str] = {
     ("java.nio.file.Path", "getFileName"): "java.nio.file.Path",
     ("java.nio.file.Path", "getParent"): "java.nio.file.Path",
     ("java.nio.file.Path", "toFile"): "java.io.File",
+    ("java.nio.file.Files", "createTempDirectory"): "java.nio.file.Path",
+    ("java.nio.file.Files", "createTempFile"): "java.nio.file.Path",
     ("java.util.Base64", "getDecoder"): "java.util.Base64$Decoder",
     ("java.util.Base64", "getUrlDecoder"): "java.util.Base64$Decoder",
     ("java.util.Base64", "getMimeDecoder"): "java.util.Base64$Decoder",
@@ -2008,6 +2026,13 @@ _STDLIB_METHOD_RETURN_FQN: dict[tuple[str, str], str] = {
     ("java.util.Base64", "getUrlEncoder"): "java.util.Base64$Encoder",
     ("java.util.Base64", "getMimeEncoder"): "java.util.Base64$Encoder",
     ("java.util.Base64$Encoder", "encodeToString"): "java.lang.String",
+    ("org.apache.commons.codec.binary.Base64", "encodeBase64String"): "java.lang.String",
+    ("org.apache.commons.codec.binary.Base64", "encodeBase64URLSafeString"): "java.lang.String",
+    ("java.util.Calendar", "getInstance"): "java.util.Calendar",
+    ("java.util.Calendar", "getTime"): "java.util.Date",
+    ("java.text.Format", "format"): "java.lang.String",
+    ("java.text.DateFormat", "format"): "java.lang.String",
+    ("java.text.DateFormat", "parse"): "java.util.Date",
     ("java.util.zip.ZipInputStream", "getNextEntry"): "java.util.zip.ZipEntry",
     ("java.util.zip.ZipEntry", "getName"): "java.lang.String",
     ("java.util.Optional", "of"): "java.util.Optional",
@@ -2051,8 +2076,31 @@ _STDLIB_METHOD_RETURN_FQN: dict[tuple[str, str], str] = {
     ("jakarta.servlet.ServletRequest", "getReader"): "java.io.BufferedReader",
     ("javax.servlet.http.HttpServletRequest", "getHeader"): "java.lang.String",
     ("jakarta.servlet.http.HttpServletRequest", "getHeader"): "java.lang.String",
+    ("javax.servlet.http.HttpServletRequest", "getQueryString"): "java.lang.String",
+    ("jakarta.servlet.http.HttpServletRequest", "getQueryString"): "java.lang.String",
+    ("javax.servlet.http.HttpServletRequest", "getPathInfo"): "java.lang.String",
+    ("jakarta.servlet.http.HttpServletRequest", "getPathInfo"): "java.lang.String",
+    ("javax.servlet.http.HttpServletRequest", "getRequestURI"): "java.lang.String",
+    ("jakarta.servlet.http.HttpServletRequest", "getRequestURI"): "java.lang.String",
+    ("javax.servlet.http.HttpServletRequest", "getContextPath"): "java.lang.String",
+    ("jakarta.servlet.http.HttpServletRequest", "getContextPath"): "java.lang.String",
+    ("javax.servlet.http.HttpServletRequest", "getServletPath"): "java.lang.String",
+    ("jakarta.servlet.http.HttpServletRequest", "getServletPath"): "java.lang.String",
+    ("javax.servlet.http.HttpServletRequest", "getMethod"): "java.lang.String",
+    ("jakarta.servlet.http.HttpServletRequest", "getMethod"): "java.lang.String",
+    ("javax.servlet.http.HttpServletRequest", "getRemoteUser"): "java.lang.String",
+    ("jakarta.servlet.http.HttpServletRequest", "getRemoteUser"): "java.lang.String",
     ("javax.servlet.http.HttpServletRequest", "getSession"): "javax.servlet.http.HttpSession",
     ("jakarta.servlet.http.HttpServletRequest", "getSession"): "jakarta.servlet.http.HttpSession",
+    ("javax.servlet.http.Cookie", "getName"): "java.lang.String",
+    ("jakarta.servlet.http.Cookie", "getName"): "java.lang.String",
+    ("javax.servlet.http.Cookie", "getValue"): "java.lang.String",
+    ("jakarta.servlet.http.Cookie", "getValue"): "java.lang.String",
+    ("javax.servlet.http.Cookie", "getPath"): "java.lang.String",
+    ("jakarta.servlet.http.Cookie", "getPath"): "java.lang.String",
+    ("javax.servlet.http.Cookie", "getDomain"): "java.lang.String",
+    ("jakarta.servlet.http.Cookie", "getDomain"): "java.lang.String",
+    ("org.springframework.util.FileCopyUtils", "copyToString"): "java.lang.String",
     ("javax.servlet.ServletResponse", "getOutputStream"): "javax.servlet.ServletOutputStream",
     ("jakarta.servlet.ServletResponse", "getOutputStream"): "jakarta.servlet.ServletOutputStream",
     ("javax.servlet.ServletResponse", "getWriter"): "java.io.PrintWriter",
@@ -2132,7 +2180,11 @@ _CALL_SITE_RE = re.compile(
 _ASSIGN_OR_COND_RE = re.compile(r"(?:^|[^=!<>])=[^=]|\b(?:return|if|else\s+if|while|switch|assert)\b|\?")
 _DECL_TYPE_VAR_RE = re.compile(
     r"^\s*(?:(?:public|protected|private|static|final|transient|volatile)\s+)*"
-    r"([A-Za-z_][A-Za-z0-9_<>,.\[\]?]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*(.+?))?;\s*$"
+    r"([A-Za-z_][A-Za-z0-9_.]*(?:\s*<[^;={}()]*>)?(?:\s*\[\s*\])*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:=\s*(.+?))?;\s*$"
+)
+_PENDING_DECL_START_RE = re.compile(
+    r"^\s*(?:(?:public|protected|private|static|final|transient|volatile)\s+)*"
+    r"([A-Za-z_][A-Za-z0-9_.]*(?:\s*<[^;={}()]*>)?(?:\s*\[\s*\])*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$"
 )
 _NEW_CTOR_RE = re.compile(r"^new\s+([A-Za-z_][A-Za-z0-9_.]*)(?:\s*<[^>{};]*>)?\s*\(")
 
@@ -2927,6 +2979,47 @@ def _extract_line_var_decls(c_txt: str, try_depth: int = 0) -> tuple[list[tuple[
         decls.append((m_for.group(1).strip(), m_for.group(2).strip(), ""))
         return decls, 0
 
+    m_cfor = re.match(r"^\s*for\s*\(", c_txt)
+    if m_cfor:
+        pos = m_cfor.end()
+        depth = 1
+        semi_pos = None
+        for idx in range(pos, len(c_txt)):
+            ch = c_txt[idx]
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif ch == ";" and depth == 1:
+                semi_pos = idx
+                break
+        if semi_pos is not None:
+            init_clause = c_txt[pos:semi_pos].strip()
+            if init_clause:
+                init_stmt = init_clause + ";"
+                if len(_split_top_level_commas(init_clause)) == 1:
+                    m_ci = _DECL_TYPE_VAR_RE.match(init_stmt)
+                    if m_ci:
+                        decls.append((m_ci.group(1).strip(), m_ci.group(2).strip(), (m_ci.group(3) or "").strip()))
+                        return decls, 0
+                m_cm = _FIELD_DECL_STMT_RE.match(init_stmt)
+                if m_cm:
+                    raw_type = m_cm.group(1).strip()
+                    first_tok = raw_type.split()[0] if raw_type else ""
+                    if first_tok not in CONTROL_KEYWORDS and first_tok not in ("class", "interface", "enum", "void"):
+                        for item in _split_top_level_commas(m_cm.group(2)):
+                            if "=" in item:
+                                lhs_raw, rhs_raw = item.split("=", 1)
+                            else:
+                                lhs_raw, rhs_raw = item, ""
+                            vname = re.sub(r"\s*\[\s*\]\s*", "", lhs_raw).strip()
+                            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", vname) and vname not in CONTROL_KEYWORDS:
+                                decls.append((raw_type, vname, rhs_raw.strip()))
+                        if decls:
+                            return decls, 0
+
     m_decl = _DECL_TYPE_VAR_RE.match(c_txt)
     if m_decl:
         decls.append((m_decl.group(1).strip(), m_decl.group(2).strip(), (m_decl.group(3) or "").strip()))
@@ -2958,6 +3051,9 @@ def _collect_visible_var_info(
     caller_pkg: str | None = None,
     caller_imports: list[str] | None = None,
     caller_unit: dict[str, Any] | None = None,
+    project_pkg_classes: dict[str | None, set[str]] | None = None,
+    all_units: list[dict[str, Any]] | None = None,
+    static_field_resolver: Any = None,
 ) -> dict[str, dict[str, Any]]:
     """Collect package-preserving declared types, verified `new` concrete types, and reassignment flags.
 
@@ -2965,6 +3061,9 @@ def _collect_visible_var_info(
     - Class fields (outside sibling method bodies & nested classes) are seeded with `concrete_type_ref=None`.
     - Sibling method local variables above `h_line` are NEVER mistaken for class fields.
     - Parameters and local variables inside `enc` properly shadow class fields (Java scoping).
+    - Multi-line local declarations and multi-line `try (...)` resource headers are accumulated before parsing.
+    - Java 10+ `var` locals infer a stdlib type ONLY when the RHS resolves via JLS §6.5.5.1 to a proven
+      stdlib FQN (no anonymous subclass/lambda); reassigned or duplicated `var` locals fail closed to `None`.
     - Duplicate local/parameter declarations inside `enc` still fail closed (`declared_type_ref=None`).
     """
     imports = list(caller_imports or [])
@@ -2984,9 +3083,11 @@ def _collect_visible_var_info(
                     "concrete_type": None,
                     "concrete_type_ref": None,
                     "decl_line": decl_line,
+                    "decl_end_line": decl_line,
                     "is_param": False,
                     "is_field": True,
                     "reassigned": True,
+                    "inferred_from_var": False,
                 }
             return
         field_info[vname] = {
@@ -2995,9 +3096,11 @@ def _collect_visible_var_info(
             "concrete_type": None,
             "concrete_type_ref": None,
             "decl_line": decl_line,
+            "decl_end_line": decl_line,
             "is_param": False,
             "is_field": True,
             "reassigned": False,
+            "inferred_from_var": False,
         }
 
     def _record_local(
@@ -3006,10 +3109,13 @@ def _collect_visible_var_info(
         declared_type_ref: _JavaTypeRef | None,
         concrete_type_ref: _JavaTypeRef | None,
         decl_line: int,
+        decl_end_line: int | None = None,
         is_param: bool = False,
+        inferred_from_var: bool = False,
     ) -> None:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", vname) or vname in CONTROL_KEYWORDS:
             return
+        eff_end = decl_end_line if type(decl_end_line) is int and decl_end_line >= decl_line else decl_line
         local_counts[vname] = local_counts.get(vname, 0) + 1
         if local_counts[vname] > 1:
             local_info[vname] = {
@@ -3018,9 +3124,11 @@ def _collect_visible_var_info(
                 "concrete_type": None,
                 "concrete_type_ref": None,
                 "decl_line": decl_line,
+                "decl_end_line": eff_end,
                 "is_param": is_param,
                 "is_field": False,
                 "reassigned": True,
+                "inferred_from_var": False,
             }
         else:
             local_info[vname] = {
@@ -3029,10 +3137,54 @@ def _collect_visible_var_info(
                 "concrete_type": concrete_type_ref.qualified_name if concrete_type_ref else None,
                 "concrete_type_ref": concrete_type_ref,
                 "decl_line": decl_line,
+                "decl_end_line": eff_end,
                 "is_param": is_param,
                 "is_field": False,
                 "reassigned": False,
+                "inferred_from_var": inferred_from_var,
             }
+
+    def _record_local_decl(raw_type: str, vname: str, rhs: str, d_start: int, d_end: int) -> None:
+        decl_ref = _parse_java_type_ref(raw_type)
+        if decl_ref is None:
+            return
+        inferred_var = False
+        concrete_ref: _JavaTypeRef | None = None
+        if decl_ref.is_var:
+            rhs_clean = rhs.strip().rstrip(";").strip()
+            if rhs_clean and rhs_clean.endswith(")") and "{" not in rhs_clean and "->" not in rhs_clean:
+                cur_visible = {**field_info, **local_info}
+                inferred_fqn = _resolve_expr_stdlib_fqn(
+                    rhs_clean,
+                    visible_var_info=cur_visible,
+                    caller_imports=imports,
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    enclosing_class=enclosing_class,
+                    static_field_resolver=static_field_resolver,
+                )
+                if inferred_fqn is not None:
+                    inferred_ref = _parse_java_type_ref(inferred_fqn)
+                    if inferred_ref is not None and not inferred_ref.is_var:
+                        decl_ref = inferred_ref
+                        inferred_var = True
+        else:
+            concrete_ref = _extract_exact_new_ctor_ref(
+                rhs,
+                decl_ref,
+                caller_pkg=caller_pkg,
+                caller_imports=imports,
+                caller_unit=caller_unit,
+            )
+        _record_local(
+            vname,
+            declared_type_ref=decl_ref,
+            concrete_type_ref=concrete_ref,
+            decl_line=d_start,
+            decl_end_line=d_end,
+            inferred_from_var=inferred_var,
+        )
 
     # Seed verified class fields from full primary header metadata (e.g. Swing JTextField fields declared anywhere in class)
     if isinstance(caller_unit, dict):
@@ -3088,9 +3240,12 @@ def _collect_visible_var_info(
                         excluded_field_ranges.append((cs, ce))
 
         # Pass 1: collect fields before `h_line` or after `e_line` (within enclosing class, outside sibling methods)
-        # and locals inside `h_line..e_line`.
+        # and locals inside `h_line..e_line` (supporting multi-line declarations & multi-line try-with-resources).
         method_body_clean: list[tuple[int, str]] = []
         try_depth = 0
+        try_buf: list[tuple[int, str]] = []
+        pending_decl: list[tuple[int, str]] = []
+        pending_paren_depth = 0
         for lno, c_txt in zip(range(min_ln, max_ln + 1), clean_lines):
             if lno not in p_verified:
                 continue
@@ -3107,46 +3262,127 @@ def _collect_visible_var_info(
                 continue
             if h_line < lno <= e_line:
                 method_body_clean.append((lno, c_txt))
-                decls, try_depth = _extract_line_var_decls(c_txt, try_depth)
-                for raw_type, vname, rhs in decls:
-                    decl_ref = _parse_java_type_ref(raw_type)
-                    if decl_ref is None:
+                stripped_c = c_txt.strip()
+
+                # Multi-line `try (...)` resource header accumulation
+                m_try_start = re.match(r"^\s*try\s*\(", c_txt) if try_depth == 0 else None
+                if try_depth > 0 or m_try_start:
+                    pending_decl = []
+                    pending_paren_depth = 0
+                    pos = m_try_start.end() if m_try_start else 0
+                    depth = 1 if m_try_start else try_depth
+                    end_pos = len(c_txt)
+                    for idx_ch in range(pos, len(c_txt)):
+                        ch = c_txt[idx_ch]
+                        if ch == "(":
+                            depth += 1
+                        elif ch == ")":
+                            depth -= 1
+                            if depth == 0:
+                                end_pos = idx_ch
+                                break
+                    header_slice = c_txt[pos:end_pos]
+                    try_buf.append((lno, header_slice))
+                    try_depth = depth
+                    if try_depth == 0:
+                        t_start = try_buf[0][0]
+                        t_end = try_buf[-1][0]
+                        full_hdr = " ".join(seg.strip() for _, seg in try_buf if seg.strip())
+                        try_buf = []
+                        for seg in _split_top_level_semicolons(full_hdr):
+                            m_res = _TRY_RESOURCE_DECL_RE.match(seg)
+                            if m_res:
+                                _record_local_decl(
+                                    m_res.group(1).strip(),
+                                    m_res.group(2).strip(),
+                                    m_res.group(3).strip(),
+                                    t_start,
+                                    t_end,
+                                )
+                    continue
+
+                # Multi-line regular declaration continuation (`Type v =\n rhs...;`)
+                if pending_decl:
+                    if not stripped_c:
                         continue
-                    concrete_ref = _extract_exact_new_ctor_ref(
-                        rhs,
-                        decl_ref,
-                        caller_pkg=caller_pkg,
-                        caller_imports=imports,
-                        caller_unit=caller_unit,
-                    )
-                    _record_local(
-                        vname,
-                        declared_type_ref=decl_ref,
-                        concrete_type_ref=concrete_ref,
-                        decl_line=lno,
-                    )
+                    if "{" in stripped_c or "}" in stripped_c or len(pending_decl) >= 12:
+                        pending_decl = []
+                        pending_paren_depth = 0
+                    else:
+                        pending_decl.append((lno, stripped_c))
+                        pending_paren_depth += stripped_c.count("(") - stripped_c.count(")")
+                        if pending_paren_depth <= 0 and stripped_c.endswith(";"):
+                            d_start = pending_decl[0][0]
+                            d_end = pending_decl[-1][0]
+                            joined_stmt = " ".join(s for _, s in pending_decl)
+                            pending_decl = []
+                            pending_paren_depth = 0
+                            decls, _ = _extract_line_var_decls(joined_stmt, 0)
+                            for raw_type, vname, rhs in decls:
+                                _record_local_decl(raw_type, vname, rhs, d_start, d_end)
+                        continue
+
+                decls, _ = _extract_line_var_decls(c_txt, 0)
+                if decls:
+                    for raw_type, vname, rhs in decls:
+                        _record_local_decl(raw_type, vname, rhs, lno, lno)
+                    continue
+
+                if (
+                    stripped_c
+                    and not stripped_c.endswith((";", "{", "}", ":"))
+                    and "{" not in stripped_c
+                    and "}" not in stripped_c
+                ):
+                    m_pend = _PENDING_DECL_START_RE.match(c_txt)
+                    if m_pend:
+                        p_type = m_pend.group(1).strip()
+                        p_var = m_pend.group(2).strip()
+                        first_t = p_type.split()[0] if p_type else ""
+                        if (
+                            first_t not in CONTROL_KEYWORDS
+                            and first_t not in _MODIFIERS
+                            and first_t not in ("class", "interface", "enum", "void")
+                            and p_var not in CONTROL_KEYWORDS
+                        ):
+                            pending_decl = [(lno, stripped_c)]
+                            pending_paren_depth = stripped_c.count("(") - stripped_c.count(")")
 
         # Pass 2: detect ANY reassignment inside the method body (including inline `if (flag) t = other;`)
         for lno, c_txt in method_body_clean:
             for vname, info in local_info.items():
                 if info["reassigned"]:
                     continue
-                if lno == info["decl_line"]:
+                d_start = info["decl_line"]
+                d_end = info.get("decl_end_line", d_start)
+                if d_start <= lno < d_end:
+                    continue
+                if lno == d_end:
                     parts_same = _split_top_level_semicolons(c_txt)
                     if len(parts_same) > 1:
-                        decl_seg_idx = next(
-                            (i for i, seg in enumerate(parts_same) if re.search(rf"\b{re.escape(vname)}\b", seg)),
-                            0,
+                        decl_seg_idx = (
+                            next(
+                                (i for i, seg in enumerate(parts_same) if re.search(rf"\b{re.escape(vname)}\b", seg)),
+                                0,
+                            )
+                            if d_start == d_end
+                            else 0
                         )
                         if any(_line_reassigns_var(seg, vname) for seg in parts_same[decl_seg_idx + 1 :]):
                             info["reassigned"] = True
                             info["concrete_type"] = None
                             info["concrete_type_ref"] = None
+                            if info.get("inferred_from_var"):
+                                info["declared_type"] = None
+                                info["declared_type_ref"] = None
                     continue
-                if lno > info["decl_line"] and _line_reassigns_var(c_txt, vname):
+                if lno > d_end and _line_reassigns_var(c_txt, vname):
                     info["reassigned"] = True
                     info["concrete_type"] = None
                     info["concrete_type_ref"] = None
+                    if info.get("inferred_from_var"):
+                        info["declared_type"] = None
+                        info["declared_type_ref"] = None
 
     var_info: dict[str, dict[str, Any]] = {**field_info, **local_info}
 
@@ -3430,6 +3666,385 @@ def _resolve_inherited_stdlib_method_fqn(
     return None
 
 
+_CLASS_FIELD_MOD_RE = re.compile(
+    r"^\s*((?:(?:public|protected|private|static|final|transient|volatile)\s+)*)"
+    r"([A-Za-z_][A-Za-z0-9_.]*(?:\s*<[^;={}()]*>)?(?:\s*\[\s*\])*)\s+"
+    r"(.+?)\s*;\s*$"
+)
+
+
+def extract_class_static_field_decls(
+    text: str,
+    structure: dict[str, Any] | None = None,
+    class_name: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Extract class-level field declarations inside `class_name` (excluding methods, static blocks, and nested classes).
+
+    Supports multi-line field declarations ending with `;` and preserves both stripped (`rhs_clean`)
+    and literal-preserving (`rhs_keep`) initializer text for fail-closed constant/type verification.
+    """
+    parsed = structure if isinstance(structure, dict) else parse_java_structure_v2(text)
+    classes = parsed.get("classes") or []
+    methods = parsed.get("methods") or []
+    clean_lines = _strip_comments_and_strings_preserve_lines(text)
+    # Also produce comment-stripped but string-preserving lines via simple scanner
+    keep_lines: list[str] = []
+    in_blk = False
+    for raw_ln in text.splitlines():
+        out_ch: list[str] = []
+        i = 0
+        n = len(raw_ln)
+        in_s = False
+        in_c = False
+        while i < n:
+            ch = raw_ln[i]
+            nxt = raw_ln[i + 1] if i + 1 < n else ""
+            if in_blk:
+                if ch == "*" and nxt == "/":
+                    in_blk = False
+                    out_ch.append("  ")
+                    i += 2
+                else:
+                    out_ch.append(" ")
+                    i += 1
+                continue
+            if in_s:
+                if ch == "\\" and i + 1 < n:
+                    out_ch.append(raw_ln[i : i + 2])
+                    i += 2
+                    continue
+                if ch == '"':
+                    in_s = False
+                out_ch.append(ch)
+                i += 1
+                continue
+            if in_c:
+                if ch == "\\" and i + 1 < n:
+                    out_ch.append(raw_ln[i : i + 2])
+                    i += 2
+                    continue
+                if ch == "'":
+                    in_c = False
+                out_ch.append(ch)
+                i += 1
+                continue
+            if ch == "/" and nxt == "/":
+                break
+            if ch == "/" and nxt == "*":
+                in_blk = True
+                out_ch.append("  ")
+                i += 2
+                continue
+            if ch == '"':
+                in_s = True
+            elif ch == "'":
+                in_c = True
+            out_ch.append(ch)
+            i += 1
+        keep_lines.append("".join(out_ch))
+
+    target_classes = [c for c in classes if not class_name or c.get("name") == class_name]
+    out: dict[str, list[dict[str, Any]]] = {}
+    for cls in target_classes:
+        c_start = int(cls.get("start_line") or 1)
+        c_end = int(cls.get("end_line") or len(clean_lines))
+        excluded_ranges: list[tuple[int, int]] = []
+        for m in methods:
+            ms = int(m.get("header_line") or m.get("start_line") or 0)
+            me = int(m.get("end_line") or 0)
+            if c_start < ms <= c_end:
+                excluded_ranges.append((ms, me))
+        for other in classes:
+            if other is cls:
+                continue
+            os_ln = int(other.get("start_line") or 0)
+            oe_ln = int(other.get("end_line") or 0)
+            if c_start < os_ln <= oe_ln <= c_end:
+                excluded_ranges.append((os_ln, oe_ln))
+
+        brace_depth = 0
+        stmt_clean_parts: list[str] = []
+        stmt_keep_parts: list[str] = []
+        stmt_start_ln = 0
+
+        def _flush_stmt() -> None:
+            nonlocal stmt_clean_parts, stmt_keep_parts, stmt_start_ln
+            if not stmt_clean_parts:
+                return
+            joined_c = " ".join(stmt_clean_parts).strip()
+            joined_k = " ".join(stmt_keep_parts).strip()
+            s_ln = stmt_start_ln
+            stmt_clean_parts = []
+            stmt_keep_parts = []
+            stmt_start_ln = 0
+            if not joined_c or not joined_c.endswith(";"):
+                return
+            while joined_c.startswith("@"):
+                _, ann_off = _consume_leading_annotations(joined_c)
+                if ann_off < 0:
+                    return
+                joined_c = joined_c[ann_off:].strip()
+                _, ann_off_k = _consume_leading_annotations(joined_k)
+                if ann_off_k >= 0:
+                    joined_k = joined_k[ann_off_k:].strip()
+            if not joined_c:
+                return
+            if "(" in joined_c and not ("=" in joined_c and joined_c.find("=") < joined_c.find("(")):
+                return
+            m_c = _CLASS_FIELD_MOD_RE.match(joined_c)
+            m_k = _CLASS_FIELD_MOD_RE.match(joined_k)
+            if not m_c:
+                return
+            mods = set((m_c.group(1) or "").split())
+            raw_type = m_c.group(2).strip()
+            first_tok = raw_type.split()[0] if raw_type else ""
+            if first_tok in CONTROL_KEYWORDS or first_tok in ("class", "interface", "enum", "void"):
+                return
+            c_items = _split_top_level_commas(m_c.group(3))
+            k_items = _split_top_level_commas(m_k.group(3)) if m_k else c_items
+            if len(k_items) != len(c_items):
+                k_items = c_items
+            for c_item, k_item in zip(c_items, k_items):
+                if "=" in c_item:
+                    lhs_c, rhs_c = c_item.split("=", 1)
+                    rhs_k = k_item.split("=", 1)[1] if "=" in k_item else rhs_c
+                else:
+                    lhs_c, rhs_c, rhs_k = c_item, "", ""
+                fname = re.sub(r"\s*\[\s*\]\s*", "", lhs_c).strip()
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", fname) and fname not in CONTROL_KEYWORDS:
+                    out.setdefault(fname, []).append(
+                        {
+                            "raw_type": raw_type,
+                            "is_static": "static" in mods,
+                            "is_final": "final" in mods,
+                            "rhs_clean": rhs_c.strip(),
+                            "rhs_keep": rhs_k.strip(),
+                            "line": s_ln,
+                        }
+                    )
+
+        for lno in range(c_start + 1, min(c_end, len(clean_lines)) + 1):
+            if any(lo <= lno <= hi for lo, hi in excluded_ranges):
+                stmt_clean_parts = []
+                stmt_keep_parts = []
+                continue
+            cl = clean_lines[lno - 1].strip()
+            kl = keep_lines[lno - 1].strip() if lno - 1 < len(keep_lines) else cl
+            if not cl:
+                continue
+            # Skip static/instance initializer blocks (`static { ... }`, `{ ... }`) inside class body
+            if brace_depth > 0 or "{" in cl or "}" in cl:
+                brace_depth = max(0, brace_depth + cl.count("{") - cl.count("}"))
+                stmt_clean_parts = []
+                stmt_keep_parts = []
+                continue
+            if cl.startswith(("package ", "import ")):
+                continue
+            if not stmt_clean_parts:
+                stmt_start_ln = lno
+            stmt_clean_parts.append(cl)
+            stmt_keep_parts.append(kl)
+            if cl.endswith(";"):
+                _flush_stmt()
+            elif len(stmt_clean_parts) > 12:
+                stmt_clean_parts = []
+                stmt_keep_parts = []
+    return out
+
+
+def load_verified_project_class_unit(
+    record: dict[str, Any] | None,
+    owner_pkg: str | None,
+    owner_simple: str,
+) -> dict[str, Any] | None:
+    """Load the unique SHA-256-verified `.java` source unit declaring `(owner_pkg, owner_simple)` under `record['root']`.
+
+    Fails closed (`None`) unless `scan_provenance.source_capture_verified` is True, the target file
+    lies strictly inside `record['root']`, its exact byte SHA-256 matches the locked hash table, and
+    EXACTLY ONE verified file defines `(owner_pkg, owner_simple)`.
+    """
+    if not isinstance(record, dict) or not owner_simple or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", owner_simple):
+        return None
+    prov = record.get("scan_provenance") if isinstance(record.get("scan_provenance"), dict) else {}
+    if prov.get("source_capture_verified") is not True:
+        return None
+    root_raw = record.get("root")
+    if not isinstance(root_raw, str) or not root_raw.strip():
+        return None
+    try:
+        root_dir = Path(root_raw).resolve(strict=True)
+    except OSError:
+        return None
+    if not root_dir.is_dir():
+        return None
+
+    verified_hashes: dict[str, str] = {}
+    for mapping in (prov.get("source_hashes"), record.get("pre_scan_hashes")):
+        if isinstance(mapping, dict):
+            for rel_k, sha_v in mapping.items():
+                if isinstance(rel_k, str) and isinstance(sha_v, str) and len(sha_v) == 64:
+                    verified_hashes.setdefault(rel_k.replace("\\", "/"), sha_v)
+    manifest_path_raw = prov.get("manifest_path")
+    manifest_sha_expected = prov.get("manifest_sha256")
+    if (
+        isinstance(manifest_path_raw, str)
+        and manifest_path_raw.strip()
+        and isinstance(manifest_sha_expected, str)
+        and len(manifest_sha_expected) == 64
+    ):
+        try:
+            m_path = Path(manifest_path_raw).resolve(strict=True)
+            if m_path.is_file() and m_path.stat().st_size <= 20_000_000:
+                m_raw = m_path.read_bytes()
+                if digest(m_raw) == manifest_sha_expected:
+                    m_doc = json.loads(m_raw.decode("utf-8"))
+                    if isinstance(m_doc, dict):
+                        s_before = m_doc.get("sources_before")
+                        s_after = m_doc.get("sources_after")
+                        if isinstance(s_before, dict) and isinstance(s_after, dict):
+                            for rel_k, sha_b in s_before.items():
+                                if (
+                                    isinstance(rel_k, str)
+                                    and isinstance(sha_b, str)
+                                    and len(sha_b) == 64
+                                    and s_after.get(rel_k) == sha_b
+                                ):
+                                    verified_hashes.setdefault(rel_k.replace("\\", "/"), sha_b)
+        except (OSError, ValueError, UnicodeDecodeError):
+            pass
+    snaps = record.get("snapshots") if isinstance(record.get("snapshots"), dict) else {}
+    for rel_k, snap_v in snaps.items():
+        if isinstance(rel_k, str) and isinstance(snap_v, dict):
+            sha_v = snap_v.get("sha256")
+            if isinstance(sha_v, str) and len(sha_v) == 64:
+                verified_hashes.setdefault(rel_k.replace("\\", "/"), sha_v)
+    if not verified_hashes:
+        return None
+
+    target_name = f"{owner_simple}.java"
+    cand_rels = [rel for rel in sorted(verified_hashes) if Path(rel).name == target_name]
+    if not cand_rels:
+        return None
+
+    matches: list[dict[str, Any]] = []
+    for rel in cand_rels:
+        expected_sha = verified_hashes[rel]
+        try:
+            fp = (root_dir / rel).resolve(strict=True)
+            fp.relative_to(root_dir)
+            if not fp.is_file() or fp.stat().st_size > 2_000_000:
+                continue
+            raw = fp.read_bytes()
+        except (OSError, ValueError):
+            continue
+        if digest(raw) != expected_sha:
+            continue
+        text = raw.decode("utf-8", errors="replace")
+        parsed = parse_java_structure_v2(text)
+        if parsed.get("package_name") != owner_pkg:
+            continue
+        cls_by_name = {c["name"]: c for c in (parsed.get("classes") or []) if isinstance(c.get("name"), str)}
+        if owner_simple not in cls_by_name:
+            continue
+        owner_unit = {
+            "path": rel,
+            "min_line": 1,
+            "has_complete_header": True,
+            "has_complete_scope_context": True,
+            "package_name": parsed.get("package_name"),
+            "imports": list(parsed.get("imports") or []),
+            "type_imports": list(parsed.get("type_imports") or []),
+            "static_imports": list(parsed.get("static_imports") or []),
+            "classes": cls_by_name,
+            "declared_class_names": list(cls_by_name.keys()),
+            "methods": list(parsed.get("methods") or []),
+        }
+        matches.append(
+            {
+                "path": rel,
+                "sha256": expected_sha,
+                "text": text,
+                "parsed": parsed,
+                "unit": owner_unit,
+                "class_info": cls_by_name[owner_simple],
+            }
+        )
+        if len(matches) > 1:
+            return None
+    return matches[0] if len(matches) == 1 else None
+
+
+def make_verified_static_stdlib_field_resolver(record: dict[str, Any] | None):
+    """Build a cached resolver mapping `OwnerClass.STATIC_FIELD` -> proven stdlib FQN using SHA-256-locked source."""
+    class_unit_cache: dict[tuple[str | None, str], dict[str, Any] | None] = {}
+    field_decls_cache: dict[tuple[str | None, str], dict[str, list[dict[str, Any]]]] = {}
+    qual_cache: dict[str, str | None] = {}
+
+    def _resolve(
+        qual: str,
+        *,
+        caller_unit: dict[str, Any] | None,
+        project_pkg_classes: dict[str | None, set[str]] | None,
+        all_units: list[dict[str, Any]] | None,
+        caller_imports: list[str] | None,
+    ) -> str | None:
+        if "." not in qual or not isinstance(record, dict):
+            return None
+        if qual in qual_cache:
+            return qual_cache[qual]
+        owner_qual, field_name = qual.rsplit(".", 1)
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", field_name):
+            qual_cache[qual] = None
+            return None
+        owner_ref = _parse_java_type_ref(owner_qual)
+        if owner_ref is None or owner_ref.is_var or owner_ref.is_nested_or_ambiguous:
+            qual_cache[qual] = None
+            return None
+        caller_pkg = caller_unit.get("package_name") if isinstance(caller_unit, dict) else None
+        resolved_owner = _resolve_canonical_fqn_for_type_ref(
+            owner_ref,
+            caller_pkg,
+            list(caller_imports or []),
+            caller_unit=caller_unit,
+        )
+        if resolved_owner is None:
+            qual_cache[qual] = None
+            return None
+        owner_pkg, owner_simple = resolved_owner
+        if not owner_simple:
+            qual_cache[qual] = None
+            return None
+        ckey = (owner_pkg, owner_simple)
+        if ckey not in class_unit_cache:
+            class_unit_cache[ckey] = load_verified_project_class_unit(record, owner_pkg, owner_simple)
+        loaded = class_unit_cache[ckey]
+        if loaded is None:
+            qual_cache[qual] = None
+            return None
+        if ckey not in field_decls_cache:
+            field_decls_cache[ckey] = extract_class_static_field_decls(
+                loaded["text"],
+                structure=loaded["parsed"],
+                class_name=owner_simple,
+            )
+        decls = field_decls_cache[ckey].get(field_name) or []
+        if len(decls) != 1 or not decls[0].get("is_static"):
+            qual_cache[qual] = None
+            return None
+        owner_unit = loaded["unit"]
+        fqn = resolve_stdlib_class_fqn(
+            decls[0]["raw_type"],
+            caller_unit=owner_unit,
+            project_pkg_classes=project_pkg_classes,
+            all_units=all_units,
+            caller_imports=owner_unit.get("imports"),
+        )
+        qual_cache[qual] = fqn
+        return fqn
+
+    return _resolve
+
+
 def _resolve_expr_stdlib_fqn(
     expr: str | None,
     *,
@@ -3439,6 +4054,7 @@ def _resolve_expr_stdlib_fqn(
     project_pkg_classes: dict[str | None, set[str]] | None,
     all_units: list[dict[str, Any]] | None,
     enclosing_class: str | None,
+    static_field_resolver: Any = None,
     depth: int = 6,
 ) -> str | None:
     """Resolve a chained Java receiver expression to its proven stdlib FQN, failing closed on any unknown step."""
@@ -3500,6 +4116,7 @@ def _resolve_expr_stdlib_fqn(
             project_pkg_classes=project_pkg_classes,
             all_units=all_units,
             enclosing_class=enclosing_class,
+            static_field_resolver=static_field_resolver,
             depth=depth - 1,
         )
         if recv_fqn is None or prev_m not in _stdlib_methods_for_fqn(recv_fqn):
@@ -3565,7 +4182,8 @@ def _resolve_expr_stdlib_fqn(
             )
         return None
 
-    # Dotted qualified type (e.g. `java.nio.file.Paths`), failing closed on ExpressionName/TypeName shadowing or truncated scope
+    # Dotted qualified type (e.g. `java.nio.file.Paths`) or SHA-256-verified static stdlib field
+    # (e.g. `pkg.Helper.STATIC_JDBC_TEMPLATE`), failing closed on ExpressionName/TypeName shadowing or truncated scope.
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+", cur):
         if _is_leading_qualifier_shadowed(
             cur,
@@ -3577,13 +4195,23 @@ def _resolve_expr_stdlib_fqn(
             require_expr_scope=True,
         ):
             return None
-        return resolve_stdlib_class_fqn(
+        direct_fqn = resolve_stdlib_class_fqn(
             cur,
             caller_unit=caller_unit,
             project_pkg_classes=project_pkg_classes,
             all_units=all_units,
             caller_imports=caller_imports,
         )
+        if direct_fqn is not None:
+            return direct_fqn
+        if callable(static_field_resolver):
+            return static_field_resolver(
+                cur,
+                caller_unit=caller_unit,
+                project_pkg_classes=project_pkg_classes,
+                all_units=all_units,
+                caller_imports=caller_imports,
+            )
     return None
 
 
@@ -3601,6 +4229,7 @@ def _is_stdlib_call(
     line_clean: str | None = None,
     call_start: int | None = None,
     is_new_ctor_chain: bool = False,
+    static_field_resolver: Any = None,
 ) -> bool:
     """Return True ONLY when receiver identity resolves via JLS §6.5.5.1 to a proven stdlib FQN
     AND `mname` belongs to that specific FQN's API contract (NO global method-name whitelist!).
@@ -3637,6 +4266,7 @@ def _is_stdlib_call(
             project_pkg_classes=project_pkg_classes,
             all_units=all_units,
             enclosing_class=enclosing_class,
+            static_field_resolver=static_field_resolver,
         )
         return recv_fqn is not None and mname in _stdlib_methods_for_fqn(recv_fqn)
 
@@ -3697,10 +4327,11 @@ def _is_stdlib_call(
         # same-package shadowed `audit.Integer`, `CustomStore`, or `var`) MUST NEVER bypass helper verification!
         return False
 
-    # 5. Qualified type (`java.lang.Integer`, `audit.Integer`) or simple uppercase type (`Integer`, `Files`, `DriverManager`):
-    # MUST prove exact stdlib FQN under JLS §6.5.5.1 AND verify leading identifier is NOT shadowed by variable/field/TypeName!
+    # 5. Qualified type (`java.lang.Integer`), simple uppercase type (`Integer`, `Files`, `DriverManager`),
+    # or SHA-256-verified static stdlib-typed field (`pkg.Helper.STATIC_JDBC_TEMPLATE`):
+    # MUST prove exact stdlib FQN under JLS §6.5.5.1 AND verify leading identifier is NOT shadowed!
     if "." in qual or qual[0].isupper():
-        if _is_leading_qualifier_shadowed(
+        if not _is_leading_qualifier_shadowed(
             qual,
             visible_var_info=visible_var_info,
             caller_unit=caller_unit,
@@ -3709,15 +4340,48 @@ def _is_stdlib_call(
             caller_imports=imports,
             require_expr_scope=True,
         ):
-            return False
-        fqn = resolve_stdlib_class_fqn(
-            qual,
-            caller_unit=caller_unit,
-            project_pkg_classes=project_pkg_classes,
-            all_units=all_units,
-            caller_imports=imports,
-        )
-        return fqn is not None and mname in _stdlib_methods_for_fqn(fqn)
+            fqn = resolve_stdlib_class_fqn(
+                qual,
+                caller_unit=caller_unit,
+                project_pkg_classes=project_pkg_classes,
+                all_units=all_units,
+                caller_imports=imports,
+            )
+            if fqn is not None and mname in _stdlib_methods_for_fqn(fqn):
+                return True
+        if "." in qual and callable(static_field_resolver):
+            first_seg = qual.strip().split(".", 1)[0]
+            expr_shadowed = (
+                not first_seg
+                or first_seg in ("this", "super")
+                or (visible_var_info is not None and first_seg in visible_var_info)
+                or (
+                    isinstance(caller_unit, dict)
+                    and int(caller_unit.get("min_line") or 1) > 1
+                    and not caller_unit.get("has_complete_scope_context", True)
+                )
+            )
+            if not expr_shadowed and qual.count(".") >= 2:
+                expr_shadowed = _is_leading_qualifier_shadowed(
+                    qual,
+                    visible_var_info=visible_var_info,
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    caller_imports=imports,
+                    require_expr_scope=True,
+                )
+            if not expr_shadowed:
+                fqn = static_field_resolver(
+                    qual,
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    caller_imports=imports,
+                )
+                if fqn is not None and mname in _stdlib_methods_for_fqn(fqn):
+                    return True
+        return False
 
     # 6. Undeclared lowercase receiver has NO verified Java type evidence -> ALWAYS fail closed.
     return False
@@ -4147,6 +4811,10 @@ _FLOW_JAVA_KEYWORDS = frozenset(
         "while", "yield",
     }
 )
+_FLOW_PRIMITIVE_OR_VAR_TYPES = frozenset(
+    {"boolean", "byte", "char", "double", "float", "int", "long", "short", "var"}
+)
+_FLOW_NON_TYPE_KEYWORDS = _FLOW_JAVA_KEYWORDS - _FLOW_PRIMITIVE_OR_VAR_TYPES
 
 _FLOW_IMMUTABLE_TYPES = frozenset(
     {
@@ -5062,7 +5730,11 @@ def _extract_stmt_defs_and_uses(
         return set(), set()
 
     m_decl = _FLOW_DECL_ONLY_RE.match(s_no_semi)
-    if m_decl and m_decl.group(1).strip() not in _FLOW_JAVA_KEYWORDS and m_decl.group(2) not in _FLOW_JAVA_KEYWORDS:
+    if (
+        m_decl
+        and m_decl.group(1).strip().split("[")[0].strip() not in _FLOW_NON_TYPE_KEYWORDS
+        and m_decl.group(2) not in _FLOW_JAVA_KEYWORDS
+    ):
         return {m_decl.group(2)}, set()
 
     # Check single assignment / declaration (`Type v = rhs`, `v = rhs`, `v += rhs`, `this.f = rhs`, `arr[i] = rhs`)
@@ -5072,7 +5744,7 @@ def _extract_stmt_defs_and_uses(
         lhs_raw = m_asgn.group(2).strip()
         op_sym = m_asgn.group(3)
         rhs = m_asgn.group(4).strip()
-        if not decl_t or decl_t.split()[0] not in _FLOW_JAVA_KEYWORDS:
+        if not decl_t or decl_t.split("[")[0].strip().split()[0] not in _FLOW_NON_TYPE_KEYWORDS:
             # Handle multi-var decl `String a = x, b = y`
             if decl_t and len(_split_top_level_char(rhs, ",")) > 1:
                 m_multi = _FLOW_MULTI_DECL_RE.match(s_no_semi)
@@ -5174,6 +5846,7 @@ def _extract_sink_payload_vars(
     project_pkg_classes: dict[str | None, set[str]] | None,
     all_units: list[dict[str, Any]] | None,
     enclosing_class: str | None,
+    static_field_resolver: Any = None,
 ) -> set[str]:
     """Extract variables feeding the vulnerable sink payload (excluding verified JDBC Statement/Connection handles)."""
     kw_ctx = {
@@ -5193,7 +5866,10 @@ def _extract_sink_payload_vars(
             expr = expr[7:].strip()
         else:
             m_asgn = _FLOW_ASSIGN_STMT_RE.match(expr)
-            if m_asgn and (not m_asgn.group(1) or m_asgn.group(1).strip().split()[0] not in _FLOW_JAVA_KEYWORDS):
+            if m_asgn and (
+                not m_asgn.group(1)
+                or m_asgn.group(1).strip().split("[")[0].strip().split()[0] not in _FLOW_NON_TYPE_KEYWORDS
+            ):
                 expr = m_asgn.group(4).strip()
 
         extracted = False
@@ -5215,6 +5891,7 @@ def _extract_sink_payload_vars(
                             project_pkg_classes=project_pkg_classes,
                             all_units=all_units,
                             enclosing_class=enclosing_class,
+                            static_field_resolver=static_field_resolver,
                         )
                         if recv_fqn in _SQL_SINK_RECEIVER_FQNS:
                             args = _split_top_level_char(args_str, ",") if args_str else []
@@ -5775,6 +6452,7 @@ def _build_enclosing_method_flow_slice(
     caller_unit: dict[str, Any],
     project_pkg_classes: dict[str | None, set[str]],
     all_units: list[dict[str, Any]],
+    static_field_resolver: Any = None,
 ) -> dict[str, Any]:
     """Build AST-grounded causal, data-dependency, and control-dependency slices for the enclosing method.
 
@@ -6159,6 +6837,7 @@ def _build_enclosing_method_flow_slice(
         sink_stmts,
         primary_cwe,
         enclosing_class=enclosing_class,
+        static_field_resolver=static_field_resolver,
         **kw_ctx,
     )
     # Remove self-reference noise unless field access exists
@@ -6441,6 +7120,8 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
         extra_pkgs=wild_extra_pkgs,
     )
 
+    static_field_resolver = make_verified_static_stdlib_field_resolver(record)
+
     primary_enc_method = None
     if enc and type(enc.get("header_line")) is int:
         primary_enc_method = next(
@@ -6454,6 +7135,9 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
         caller_pkg=caller_unit.get("package_name"),
         caller_imports=caller_unit.get("imports"),
         caller_unit=caller_unit,
+        project_pkg_classes=project_pkg_classes,
+        all_units=all_units,
+        static_field_resolver=static_field_resolver,
     )
 
     # Resolve authoritative sink line coordinate for AST-based causal & data/control slicing
@@ -6479,6 +7163,7 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
         caller_unit=caller_unit,
         project_pkg_classes=project_pkg_classes,
         all_units=all_units,
+        static_field_resolver=static_field_resolver,
     )
 
     # Check unresolved_calls from heuristics analysis
@@ -6538,26 +7223,83 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
             ):
                 continue
         if mname and type(uline) is int and uline in p_verified:
-            # Re-verify EVERY matching call site on `uline` in verified primary source:
+            # Re-verify EVERY matching call site on `uline` (or its verified multi-line statement window when
+            # heuristics anchored a multi-line Java statement at its start line `uline`):
             # resolve ONLY if >= 1 matching call site exists AND every matching call site is
             # a proven stdlib/inherited-stdlib API call, a verified stdlib constructor, a verified
             # project helper, or provably non-decisive for the finding's sink/taint/guard slice.
-            s_clean_line = _strip_comments_and_strings_preserve_lines(p_verified[uline])[0].strip()
-            line_sites = [s for s in _extract_call_sites_on_line(s_clean_line) if s["method"] == mname]
-            if not line_sites and _is_verified_stdlib_constructor_on_line(
-                s_clean_line,
-                mname,
-                caller_unit=caller_unit,
-                project_pkg_classes=project_pkg_classes,
-                all_units=all_units,
-                caller_imports=caller_unit.get("imports"),
+            def _collect_window_call_sites(start_lno: int) -> tuple[list[tuple[int, str, dict[str, Any]]], list[str]]:
+                s_l0 = _strip_comments_and_strings_preserve_lines(p_verified[start_lno])[0].strip()
+                direct = [(start_lno, s_l0, s) for s in _extract_call_sites_on_line(s_l0) if s["method"] == mname]
+                if direct:
+                    return direct, [s_l0]
+                win_lns: list[int] = [start_lno]
+                if flow_slice.get("valid"):
+                    c_items = flow_slice.get("causal_by_line", {}).get(start_lno) or []
+                    for c_st, _, _ in c_items:
+                        for ln_c in sorted(c_st.lines or range(c_st.start_line, c_st.end_line + 1)):
+                            if ln_c in p_verified and ln_c >= start_lno and ln_c not in win_lns and ln_c <= start_lno + 10:
+                                win_lns.append(ln_c)
+                if len(win_lns) == 1 and not s_l0.endswith((";", "{", "}")):
+                    cur_ln = start_lno
+                    while cur_ln < start_lno + 8 and (cur_ln + 1) in p_verified:
+                        cur_ln += 1
+                        win_lns.append(cur_ln)
+                        nxt_c = _strip_comments_and_strings_preserve_lines(p_verified[cur_ln])[0].strip()
+                        if nxt_c.endswith((";", "{", "}")):
+                            break
+                win_lns = sorted(set(win_lns))
+                raw_win = "\n".join(p_verified[ln_w] for ln_w in win_lns)
+                clean_win = [cl.strip() for cl in _strip_java_non_executable_preserve_lines(raw_win)]
+                found_sites: list[tuple[int, str, dict[str, Any]]] = []
+                for idx_w, (ln_w, cl_w) in enumerate(zip(win_lns, clean_win)):
+                    if not cl_w:
+                        continue
+                    for s_item in _extract_call_sites_on_line(cl_w):
+                        if s_item["method"] != mname:
+                            continue
+                        eff_line = cl_w
+                        eff_site = dict(s_item)
+                        if (
+                            eff_site["chained"]
+                            and eff_site["qualifier"] is None
+                            and _extract_chain_receiver_expr(cl_w, eff_site.get("start")) is None
+                            and idx_w > 0
+                        ):
+                            pref_chunks: list[str] = []
+                            for j_back in range(idx_w - 1, max(-1, idx_w - 7), -1):
+                                prev_c = clean_win[j_back]
+                                if not prev_c:
+                                    continue
+                                if prev_c.endswith((";", "{", "}", ":")):
+                                    break
+                                pref_chunks.append(prev_c)
+                            if pref_chunks:
+                                pref_s = " ".join(reversed(pref_chunks)) + " "
+                                eff_line = pref_s + cl_w
+                                eff_site["start"] = len(pref_s) + int(eff_site["start"])
+                        found_sites.append((ln_w, eff_line, eff_site))
+                return found_sites, clean_win
+
+            window_sites, window_cleans = _collect_window_call_sites(uline)
+            if not window_sites and any(
+                _is_verified_stdlib_constructor_on_line(
+                    cw,
+                    mname,
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    caller_imports=caller_unit.get("imports"),
+                )
+                for cw in window_cleans
+                if cw
             ):
                 continue
-            if line_sites:
+            if window_sites:
                 all_sites_ok = True
                 resolved_targets_for_line: list[dict[str, Any]] = []
-                non_decisive_reasons: list[tuple[str | None, str]] = []
-                for site in line_sites:
+                non_decisive_reasons: list[tuple[str | None, int, str]] = []
+                for site_lno, site_clean_line, site in window_sites:
                     s_qual = site["qualifier"]
                     s_chained = site["chained"]
                     s_new = site["is_new_ctor_chain"]
@@ -6571,14 +7313,15 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
                         project_pkg_classes=project_pkg_classes,
                         all_units=all_units,
                         enclosing_class=enclosing_class,
-                        line_clean=s_clean_line,
+                        line_clean=site_clean_line,
                         call_start=site.get("start"),
                         is_new_ctor_chain=s_new,
+                        static_field_resolver=static_field_resolver,
                     ):
                         continue
                     s_arg_cnt = _extract_call_arg_count_at_line(
                         p_verified,
-                        uline,
+                        site_lno,
                         s_qual,
                         mname,
                         is_new_ctor_chain=s_new,
@@ -6596,21 +7339,21 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
                         all_units=all_units,
                     )
                     if s_ok and s_tinfo is not None:
-                        is_dec, _ = _classify_unverified_call_decisiveness(uline, s_qual, flow_slice)
+                        is_dec, _ = _classify_unverified_call_decisiveness(site_lno, s_qual, flow_slice)
                         if is_dec:
                             resolved_targets_for_line.append(s_tinfo)
                         continue
-                    is_dec, dec_reason = _classify_unverified_call_decisiveness(uline, s_qual, flow_slice)
+                    is_dec, dec_reason = _classify_unverified_call_decisiveness(site_lno, s_qual, flow_slice)
                     if not is_dec:
-                        non_decisive_reasons.append((s_qual, dec_reason))
+                        non_decisive_reasons.append((s_qual, site_lno, dec_reason))
                         continue
                     all_sites_ok = False
                     break
                 if all_sites_ok:
                     for ti in resolved_targets_for_line:
                         _enqueue_callee(ti, 1)
-                    for nd_qual, nd_reason in non_decisive_reasons:
-                        _record_non_decisive(nd_qual, mname, uline, nd_reason)
+                    for nd_qual, nd_lno, nd_reason in non_decisive_reasons:
+                        _record_non_decisive(nd_qual, mname, nd_lno, nd_reason)
                     continue
         if mname:
             arg_cnt = _extract_call_arg_count_at_line(p_verified, uline, qual, mname)
@@ -6668,8 +7411,8 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
             return
         use_slice = bool(hop_depth == 0 and method_flow_slice and method_flow_slice.get("valid"))
         clean_body = _strip_java_non_executable_preserve_lines("\n".join(txt for _, txt in body_lines))
-        for (lno, _raw_t), cline in zip(body_lines, clean_body):
-            s_clean = cline.strip()
+        clean_rows = [(lno, cline.strip()) for (lno, _raw_t), cline in zip(body_lines, clean_body)]
+        for row_idx, (lno, s_clean) in enumerate(clean_rows):
             if not s_clean:
                 continue
             covered_paren_indices: set[int] = set()
@@ -6682,6 +7425,26 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
                 mname = site["method"]
                 chained = site["chained"]
                 is_new_chain = site["is_new_ctor_chain"]
+                eff_line_clean = s_clean
+                eff_call_start = site.get("start")
+                if (
+                    chained
+                    and qual is None
+                    and _extract_chain_receiver_expr(s_clean, eff_call_start) is None
+                    and row_idx > 0
+                ):
+                    pref_chunks: list[str] = []
+                    for j_back in range(row_idx - 1, max(-1, row_idx - 7), -1):
+                        prev_c = clean_rows[j_back][1]
+                        if not prev_c:
+                            continue
+                        if prev_c.endswith((";", "{", "}", ":")):
+                            break
+                        pref_chunks.append(prev_c)
+                    if pref_chunks:
+                        pref_s = " ".join(reversed(pref_chunks)) + " "
+                        eff_line_clean = pref_s + s_clean
+                        eff_call_start = len(pref_s) + int(eff_call_start)
                 if _is_stdlib_call(
                     qual,
                     mname,
@@ -6692,9 +7455,10 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
                     project_pkg_classes=project_pkg_classes,
                     all_units=all_units,
                     enclosing_class=m_enc_cls,
-                    line_clean=s_clean,
-                    call_start=site.get("start"),
+                    line_clean=eff_line_clean,
+                    call_start=eff_call_start,
                     is_new_ctor_chain=is_new_chain,
+                    static_field_resolver=static_field_resolver,
                 ):
                     continue
                 if use_slice and method_flow_slice is not None:
@@ -6845,6 +7609,9 @@ def analyze_flow_dependencies(record: dict[str, Any]) -> dict[str, Any]:
                 caller_pkg=tu.get("package_name"),
                 caller_imports=tu.get("imports"),
                 caller_unit=tu,
+                project_pkg_classes=project_pkg_classes,
+                all_units=all_units,
+                static_field_resolver=static_field_resolver,
             )
             t_hl = int(tm.get("header_line") or tm.get("start_line") or 1)
             t_el = int(tm.get("end_line") or t_hl)

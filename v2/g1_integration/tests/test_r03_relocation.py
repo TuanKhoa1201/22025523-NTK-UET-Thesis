@@ -362,13 +362,16 @@ def _start_mock_server(explanation_tag: str = "RUN_A") -> tuple[ThreadingHTTPSer
                 ans = {
                     "status": "REFUTED",
                     "explanation": f"SCRIPTED_TEST_ONLY [{explanation_tag}]: canonical path prefix check.",
-                    "citations": [{
-                        "path": rel_path,
-                        "start_line": min(g_lines),
-                        "end_line": max(g_lines),
-                        "quote": "\n".join(line_map[i] for i in range(min(g_lines), max(g_lines) + 1)),
-                        "sha256": snap_sha,
-                    }],
+                    "citations": [
+                        {
+                            "path": rel_path,
+                            "start_line": ln,
+                            "end_line": ln,
+                            "quote": line_map[ln],
+                            "sha256": snap_sha,
+                        }
+                        for ln in g_lines[:3]
+                    ],
                     "fix_suggestion": "",
                 }
             elif "AllowlistedQuery.java" in rel_path:
@@ -377,13 +380,22 @@ def _start_mock_server(explanation_tag: str = "RUN_A") -> tuple[ThreadingHTTPSer
                 ans = {
                     "status": "REFUTED",
                     "explanation": f"SCRIPTED_TEST_ONLY [{explanation_tag}]: strict literal SELECT 1 allowlist.",
-                    "citations": [{
-                        "path": rel_path,
-                        "start_line": guard_ln,
-                        "end_line": throw_ln,
-                        "quote": f"{line_map[guard_ln]}\n{line_map[throw_ln]}",
-                        "sha256": snap_sha,
-                    }],
+                    "citations": [
+                        {
+                            "path": rel_path,
+                            "start_line": guard_ln,
+                            "end_line": guard_ln,
+                            "quote": line_map[guard_ln],
+                            "sha256": snap_sha,
+                        },
+                        {
+                            "path": rel_path,
+                            "start_line": throw_ln,
+                            "end_line": throw_ln,
+                            "quote": line_map[throw_ln],
+                            "sha256": snap_sha,
+                        },
+                    ],
                     "fix_suggestion": "",
                 }
             else:

@@ -238,8 +238,61 @@ class CheckpointDRegressionTests(unittest.TestCase):
             self.fail("Expected 413 PAYLOAD_TOO_LARGE")
         except HTTPError as exc:
             self.assertEqual(exc.code, 413)
+            self.assertEqual((exc.headers.get("Connection") or "").lower(), "close")
             err = json.loads(exc.read().decode("utf-8"))
             self.assertEqual(err["error_code"], "PAYLOAD_TOO_LARGE")
+
+        # Negative invariant: rejected 413 request must NOT mutate human review state
+        code_q, queue_doc, _ = self._http(f"http://{host}:{port}/api/scans/{scan_id}/review-queue")
+        self.assertEqual(code_q, 200)
+        self.assertEqual(queue_doc["warnings"][0]["human_review_state"], "OPEN")
+
+    def test_oversized_json_body_split_write_and_large_payloads_never_reset_with_winerror_10053(self) -> None:
+        rw_dir, scan_id, finding_id = _make_scan(self.root / "big_split", tag="big_split")
+        host, port = self._start_server(
+            ApiConfig(
+                host="127.0.0.1",
+                port=0,
+                data_dir=self.root / "data_big_split",
+                reviewable_scan_dirs=(rw_dir,),
+                api_token=TEST_TOKEN,
+            )
+        )
+        action_path = f"/api/scans/{scan_id}/findings/{finding_id}/confirm-true"
+        for sz in (70_000, 262_144, 1_048_576):
+            big_body = json.dumps({"actor": "reviewer", "reason": "x" * sz}).encode("utf-8")
+            with self.subTest(body_bytes=len(big_body)):
+                conn = HTTPConnection(host, port, timeout=10)
+                try:
+                    conn.putrequest("POST", action_path)
+                    conn.putheader("Authorization", f"Bearer {TEST_TOKEN}")
+                    conn.putheader("Content-Type", "application/json")
+                    conn.putheader("Content-Length", str(len(big_body)))
+                    conn.putheader("Connection", "close")
+                    conn.endheaders()
+                    for off in range(0, len(big_body), 16384):
+                        conn.send(big_body[off : off + 16384])
+                    resp = conn.getresponse()
+                    raw = resp.read().decode("utf-8")
+                    self.assertEqual(resp.status, 413)
+                    self.assertEqual((resp.headers.get("Connection") or "").lower(), "close")
+                    self.assertEqual(json.loads(raw)["error_code"], "PAYLOAD_TOO_LARGE")
+                finally:
+                    conn.close()
+
+        # Negative control: still zero jobs/mutations after repeated 413 rejections
+        code_h, hist_doc, _ = self._http(f"http://{host}:{port}/api/scans/{scan_id}/findings/{finding_id}/history")
+        self.assertEqual(code_h, 200)
+        self.assertEqual(hist_doc["events"], [])
+
+        # Positive control: valid bounded JSON POST succeeds immediately after 413 rejections
+        code_ok, ok_doc, _ = self._http(
+            f"http://{host}:{port}{action_path}",
+            method="POST",
+            body={"actor": "reviewer", "reason": "Verified valid bounded POST after 413 control"},
+        )
+        self.assertEqual(code_ok, 200)
+        self.assertEqual(ok_doc["human_review_state"], "CONFIRMED_TRUE")
 
 
 if __name__ == "__main__":

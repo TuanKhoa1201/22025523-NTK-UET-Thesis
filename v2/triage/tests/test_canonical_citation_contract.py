@@ -126,13 +126,28 @@ class CanonicalCitationContractTests(unittest.TestCase):
                     self.save(mode.replace('+', '_') + '-' + contract, out)
 
     def test_q01_q03_exact_inclusive_quotes_accepted(self):
-        for start, end in ((25, 25), (23, 24), (23, 25)):
+        # Current v2.2.6 strict contract accepts exact single-line citation and rejects multi-line spans
+        self.case = '25-25'
+        out = self.analyze(self.answer(25, 25))
+        self.assertEqual(out['validated_status'], 'SUPPORTED')
+        self.assertTrue(out['citation_provenance']['citation_in_prompt'])
+        self.assertFalse(out['citation_provenance']['supports_security_claim_verified'])
+
+        for start, end in ((23, 24), (23, 25)):
             with self.subTest(start=start, end=end):
                 self.case = f'{start}-{end}'
-                out = self.analyze(self.answer(start, end))
-                self.assertEqual(out['validated_status'], 'SUPPORTED')
-                self.assertTrue(out['citation_provenance']['citation_in_prompt'])
-                self.assertFalse(out['citation_provenance']['supports_security_claim_verified'])
+                out_cur = self.analyze(self.answer(start, end))
+                self.assertEqual(out_cur['validated_status'], 'UNDETERMINED')
+                self.assertEqual(out_cur['failure_kind'], 'INVALID_CITATION')
+                # Historical replay (v2.2.2) preserves exact inclusive multi-line citation verification
+                out_hist = ollama.validate_answer(
+                    json.dumps(self.answer(start, end)),
+                    self.rec,
+                    prompt_version=ollama.PREVIOUS_CANONICAL_PROMPT_VERSION,
+                )
+                self.assertEqual(out_hist['validated_status'], 'SUPPORTED')
+                self.assertTrue(out_hist['citation_provenance']['citation_in_prompt'])
+                self.assertFalse(out_hist['citation_provenance']['supports_security_claim_verified'])
 
     def test_q02_incomplete_reordered_extra_or_trimmed_quotes_rejected(self):
         spans = self.lines[22:25]

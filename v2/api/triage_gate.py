@@ -15,21 +15,29 @@ Single authoritative verdict publication gate enforcing:
 """
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 import re
 from typing import Any
 
-from v2.triage.evidence import now
-from v2.triage.ollama import inspect_citations_provenance
+from v2.triage.evidence import now, strict_json
+from v2.triage.heuristics import parse_java_nonneg_decimal_int_literal
+from v2.triage.ollama import PROMPT_VERSION, inspect_citations_provenance
 
 from .java_context_v2 import (
+    _collect_visible_var_info,
     _extract_param_types_and_count,
     _find_matching_paren,
     _merge_header_metadata_into_unit,
+    _parse_java_type_ref,
+    _resolve_and_verify_call,
+    _resolve_canonical_fqn_for_type_ref,
     _split_top_level_commas,
     analyze_flow_dependencies,
     collect_project_package_classes,
     extract_class_field_names,
+    extract_class_static_field_decls,
+    load_verified_project_class_unit,
     parse_java_structure_v2,
     resolve_stdlib_class_fqn,
 )
@@ -39,14 +47,23 @@ SUPPORTED_REFUTATION_PROOF_CLASSES = (
     "UNCONDITIONAL_CONSTANT_SINK_FLOW",
     "CWE89_CONSTANT_PREPARED_STATEMENT",
     "CWE89_UNCONDITIONAL_SCALAR_PARSE",
+    "DETERMINISTIC_CONSTANT_SWITCH",
+    "LOCAL_ARRAYLIST_CONSTANT_FLOW",
+    "LOCAL_HASHMAP_CONSTANT_FLOW",
+    "SAME_FILE_HELPER_CONSTANT_FLOW",
 )
 
 UNSUPPORTED_REFUTATION_PROOF_LIMITS = (
     "REFUTED auto-triage gate only authorizes independently verified CWE-22 canonical directory "
-    "containment guards (with checked canonical value used at the sink), unconditional constant sink flows, "
+    "containment guards (with checked canonical value used at the sink), unconditional constant sink flows "
+    "(including deterministic constant String/char switch on BMP strings, non-escaping local ArrayList/HashMap "
+    "constant slots with JLS-decoded keys, bounded 1-hop same-file pure constant-return helpers, and "
+    "SHA-256-verified compile-time constant static final String fields), "
     "constant-template PreparedStatement, or unconditional scalar parse (Integer.parseInt/Long.parseLong/UUID.fromString); "
-    "refutations relying on Java integer/long arithmetic, branch pruning, collections, switch, try/catch fallthrough, "
-    "unmodeled statements, or custom allowlists remain UNDETERMINED (affects FP recall in G3).",
+    "refutations relying on mutable runtime System.getProperty/System.getenv values, Java Unicode escapes (JLS §3.3), "
+    "non-BMP UTF-16 charAt indexing, Java integer/long arithmetic branch pruning, escaping/dynamic collections, "
+    "cross-file helpers, try/catch fallthrough, unmodeled statements, or custom allowlists remain UNDETERMINED "
+    "(affects FP recall in G3).",
 )
 
 _BASENAME_SANITIZER_NAMES = (
@@ -123,7 +140,7 @@ _PREPARE_CALL_RE = re.compile(
 _PREP_EXEC_ZERO_RE = re.compile(
     r"^(?:return\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(?:executeQuery|executeUpdate|execute)\s*\(\s*\)\s*;?$"
 )
-_NUM_OR_BOOL_LITERAL_RE = re.compile(r"^(?:null|true|false|-?\d+[lL]?)$")
+_NUM_OR_BOOL_LITERAL_RE = re.compile(r"^(?:null|true|false|-?(?:0|[1-9][0-9]*)[lL]?)$", re.ASCII)
 _SIMPLE_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _EXPR_SIDE_EFFECT_RE = re.compile(
     r"(?<![=!<>+\-*/%&|^])=(?!=)|"
@@ -256,8 +273,13 @@ def _verify_citation_integrity(
                 "citation is missing required path, line range, quote, or source sha256",
             )
 
+    eff_prompt_version = (
+        assessment.get("prompt_version")
+        if isinstance(assessment.get("prompt_version"), str) and assessment.get("prompt_version").strip()
+        else PROMPT_VERSION
+    )
     try:
-        prov = inspect_citations_provenance(citations, record)
+        prov = inspect_citations_provenance(citations, record, prompt_version=eff_prompt_version)
     except Exception as exc:
         return False, "NOT_VERIFIED", empty_prov, f"citation verification error: {exc}"
 
@@ -268,6 +290,8 @@ def _verify_citation_integrity(
         "citation_posthoc_only": bool(prov.get("citation_posthoc_only")) if isinstance(prov, dict) else False,
         "supports_security_claim_verified": False,
     }
+    if isinstance(prov, dict) and prov.get("contract_error"):
+        return False, "NOT_VERIFIED", failed_prov, str(prov["contract_error"])
     items = prov.get("items") if isinstance(prov, dict) else None
     if not items:
         return False, "NOT_VERIFIED", failed_prov, "no verifiable citations matched locked source evidence"
@@ -537,9 +561,33 @@ def _strip_comments_and_mask_strings(lines_by_no: dict[int, str]) -> tuple[dict[
     return keep_str, masked_str
 
 
+_JAVA_UNICODE_ESCAPE_RE = re.compile(r"(?<!\\)(?:\\\\)*\\u+[0-9A-Fa-f]{4}")
+_JAVA_SIMPLE_ESCAPES = {
+    "b": "\b",
+    "t": "\t",
+    "n": "\n",
+    "f": "\f",
+    "r": "\r",
+    "s": " ",
+    '"': '"',
+    "'": "'",
+    "\\": "\\",
+}
+
+
+def _contains_java_unicode_escape(text: str) -> bool:
+    """Detect JLS §3.3 raw Unicode escapes (`\\uXXXX`), which translate prior to Java lexical tokenization."""
+    return bool(text and _JAVA_UNICODE_ESCAPE_RE.search(text))
+
+
+def _has_non_bmp_or_surrogate(val: str) -> bool:
+    """Return True if `val` contains any supplementary code point (> U+FFFF) or UTF-16 surrogate."""
+    return any(ord(ch) > 0xFFFF or 0xD800 <= ord(ch) <= 0xDFFF for ch in val)
+
+
 def _is_pure_string_literal(expr: str) -> bool:
     s = expr.strip()
-    if len(s) < 2 or not (s.startswith('"') and s.endswith('"')):
+    if len(s) < 2 or not (s.startswith('"') and s.endswith('"')) or "\n" in s or "\r" in s:
         return False
     i = 1
     while i < len(s) - 1:
@@ -555,6 +603,7 @@ def _is_pure_string_literal(expr: str) -> bool:
 
 
 def _unescape_java_string_literal(lit: str) -> str | None:
+    """Decode a Java string literal strictly per JLS §3.10.7; fail closed (None) on \\u or unknown escapes."""
     if not _is_pure_string_literal(lit):
         return None
     inner = lit.strip()[1:-1]
@@ -563,27 +612,46 @@ def _unescape_java_string_literal(lit: str) -> str | None:
     n = len(inner)
     while i < n:
         ch = inner[i]
-        if ch == "\\" and i + 1 < n:
+        if ch in ('"', "\n", "\r"):
+            return None
+        if ch == "\\":
+            if i + 1 >= n:
+                return None
             nxt = inner[i + 1]
-            if nxt == "\\":
-                out.append("\\")
-            elif nxt == '"':
-                out.append('"')
-            elif nxt == "n":
-                out.append("\n")
-            elif nxt == "r":
-                out.append("\r")
-            elif nxt == "t":
-                out.append("\t")
-            elif nxt == "0":
-                out.append("\x00")
-            else:
-                out.append(nxt)
-            i += 2
-            continue
+            if nxt in _JAVA_SIMPLE_ESCAPES:
+                out.append(_JAVA_SIMPLE_ESCAPES[nxt])
+                i += 2
+                continue
+            if nxt in "01234567":
+                # JLS §3.10.7 OctalEscape: \OctalDigit | \OctalDigit OctalDigit | \ZeroToThree OctalDigit OctalDigit
+                digits = nxt
+                j = i + 2
+                if j < n and inner[j] in "01234567":
+                    digits += inner[j]
+                    j += 1
+                    if nxt in "0123" and j < n and inner[j] in "01234567":
+                        digits += inner[j]
+                        j += 1
+                out.append(chr(int(digits, 8)))
+                i = j
+                continue
+            return None
         out.append(ch)
         i += 1
     return "".join(out)
+
+
+def _is_safe_cwe22_complete_path(val: str) -> bool:
+    """Verify a COMPLETE assembled CWE-22 constant path string contains no NUL or `.`/`..` path segments."""
+    if not isinstance(val, str) or not val or "\x00" in val:
+        return False
+    segs = val.replace("\\", "/").split("/")
+    return ".." not in segs and "." not in segs
+
+
+def _is_safe_cwe22_composable_const(val: str) -> bool:
+    """Verify a CWE-22 constant fragment is safe standalone AND cannot create `.`/`..` across `+` seams."""
+    return _is_safe_cwe22_complete_path(val) and not val.startswith(".") and not val.endswith(".")
 
 
 def _is_non_root_safe_base_literal(lit: str) -> bool:
@@ -869,6 +937,34 @@ class _JavaBodyParser:
             self.pos += 1
             return _StmtNode("UNKNOWN", tok.line, tok.line, subkind="unexpected_rbrace")
 
+        # Switch `default:` and `case <label>:` labels (Java 14 `->` switch arrows remain fail-closed UNKNOWN)
+        if tok.kind == "WORD" and tok.text == "default":
+            nxt = self._peek(1)
+            if nxt is not None and nxt.kind == "SYM" and nxt.text == ":":
+                self.pos += 2
+                return _StmtNode("CASE", tok.line, nxt.line, subkind="default")
+        if tok.kind == "WORD" and tok.text == "case":
+            self.pos += 1
+            lbl_start = self._peek().start if self._peek() is not None else tok.end
+            end_ln = tok.line
+            p_depth = 0
+            while self.pos < len(self.tokens):
+                cur = self.tokens[self.pos]
+                self.pos += 1
+                end_ln = cur.line
+                if cur.kind == "SYM" and cur.text == "(":
+                    p_depth += 1
+                elif cur.kind == "SYM" and cur.text == ")":
+                    p_depth = max(0, p_depth - 1)
+                elif cur.kind == "SYM" and cur.text == ":" and p_depth == 0:
+                    ck, cm = self._slice_km(lbl_start, cur.start)
+                    return _StmtNode("CASE", tok.line, end_ln, cond_k=ck, cond_m=cm, subkind="case")
+                elif cur.kind == "SYM" and cur.text == "->" and p_depth == 0:
+                    self.parse_errors.append("unmodeled_arrow_case")
+                    return _StmtNode("UNKNOWN", tok.line, end_ln, subkind="unmodeled_arrow_case")
+            self.parse_errors.append("unterminated_case")
+            return _StmtNode("UNKNOWN", tok.line, end_ln, subkind="malformed_case")
+
         # Labeled statement `label: stmt` (except `default:` inside switch)
         if tok.kind == "WORD" and tok.text not in ("default", "case"):
             nxt = self._peek(1)
@@ -1130,7 +1226,11 @@ def _clean_sink_statement(raw_stmt: str) -> str:
     s = re.sub(r";\s*\)\s*\{\s*$", ";", s)
     s = re.sub(r"\{\s*$", "", s).strip()
     parts = _split_top_level(s, ";")
-    return parts[-1] if parts else s
+    if len(parts) > 1:
+        # Multiple statements or try-with-resources declarations on the sink line cannot be proven
+        # safe by inspecting only the trailing statement/resource -> fail closed.
+        return ""
+    return parts[0] if parts else s
 
 
 _SAFE_STDLIB_SUPERCLASS_FQNS = frozenset(
@@ -1439,31 +1539,533 @@ def _canonical_prefix_is_constant_safe(
     return True
 
 
-def _eval_constant_expr(expr: str, const_vars: dict[str, bool], *, is_cwe22: bool) -> bool:
-    """Return True ONLY when `expr` is provably composed solely of literals and `const_vars`."""
+_CHAR_AT_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*|"[^"]*")\s*\.\s*charAt\s*\(\s*([^()]+?)\s*\)$')
+_LIST_NEW_STMT_RE = re.compile(
+    r"^\s*(?:final\s+)?((?:java\.util\.)?(?:List|ArrayList)(?:\s*<[^;={}()]*>)?|var)\s+"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\s+((?:java\.util\.)?ArrayList)(?:\s*<[^;={}()]*>)?\s*\(\s*\)\s*;\s*$"
+)
+_LIST_ADD_STMT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*add\s*\((.+)\)\s*;\s*$")
+_LIST_REMOVE_STMT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*remove\s*\((.+)\)\s*;\s*$")
+_LIST_SET_STMT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*set\s*\((.+)\)\s*;\s*$")
+_LIST_CLEAR_STMT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*clear\s*\(\s*\)\s*;\s*$")
+_LIST_GET_RHS_RE = re.compile(
+    r"^(?:\(\s*(?:java\.lang\.)?String\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*get\s*\(\s*([^()]+?)\s*\)$"
+)
+_MAP_NEW_STMT_RE = re.compile(
+    r"^\s*(?:final\s+)?((?:java\.util\.)?(?:Map|HashMap)(?:\s*<[^;={}()]*>)?|var)\s+"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\s+((?:java\.util\.)?HashMap)(?:\s*<[^;={}()]*>)?\s*\(\s*\)\s*;\s*$"
+)
+_MAP_PUT_STMT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*put\s*\((.+)\)\s*;\s*$")
+_MAP_REMOVE_STMT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*remove\s*\((.+)\)\s*;\s*$")
+_MAP_CLEAR_STMT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*clear\s*\(\s*\)\s*;\s*$")
+_MAP_GET_RHS_RE = re.compile(
+    r'^(?:\(\s*(?:java\.lang\.)?String\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*get\s*\(\s*("[^"]*")\s*\)$'
+)
+_HELPER_NEW_CALL_RHS_RE = re.compile(
+    r"^new\s+([A-Za-z_][A-Za-z0-9_.]*)\s*\(\s*\)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$"
+)
+_HELPER_QUAL_CALL_RHS_RE = re.compile(
+    r"^(?:([A-Za-z_][A-Za-z0-9_.]*)\s*\.\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$"
+)
+
+
+def _unescape_java_char_literal(lit: str) -> str | None:
+    """Decode a Java char literal strictly per JLS §3.10.7; fail closed on \\u, unknown escapes, or non-BMP."""
+    s = lit.strip()
+    if len(s) < 3 or not (s.startswith("'") and s.endswith("'")):
+        return None
+    inner = s[1:-1]
+    if "\n" in inner or "\r" in inner:
+        return None
+    if inner.startswith("\\"):
+        if len(inner) < 2:
+            return None
+        nxt = inner[1]
+        if len(inner) == 2 and nxt in _JAVA_SIMPLE_ESCAPES:
+            return _JAVA_SIMPLE_ESCAPES[nxt]
+        oct_part = inner[1:]
+        if all(ch in "01234567" for ch in oct_part):
+            if len(oct_part) in (1, 2) or (len(oct_part) == 3 and oct_part[0] in "0123"):
+                return chr(int(oct_part, 8))
+        return None
+    if len(inner) != 1 or inner in ("'", "\\"):
+        return None
+    if _has_non_bmp_or_surrogate(inner):
+        return None
+    return inner
+
+
+def _is_verified_jdk_enum_const(
+    expr: str,
+    *,
+    caller_unit: dict[str, Any] | None = None,
+    project_pkg_classes: dict[str | None, set[str]] | None = None,
+    all_units: list[dict[str, Any]] | None = None,
+    shadowed_expr_names: set[str] | frozenset[str] = frozenset(),
+    has_unverified_superclass: bool = False,
+) -> bool:
+    e = expr.strip()
+    if "." not in e or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+", e):
+        return False
+    owner_qual, const_name = e.rsplit(".", 1)
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", const_name):
+        return False
+    lead = owner_qual.split(".", 1)[0]
+    if lead in shadowed_expr_names or has_unverified_superclass:
+        return False
+    fqn = resolve_stdlib_class_fqn(
+        owner_qual,
+        caller_unit=caller_unit,
+        project_pkg_classes=project_pkg_classes,
+        all_units=all_units,
+    )
+    return fqn in (
+        "java.nio.file.StandardOpenOption",
+        "java.nio.file.LinkOption",
+        "java.nio.charset.StandardCharsets",
+    )
+
+
+def _make_verified_jdk_enum_checker(
+    *,
+    caller_unit: dict[str, Any] | None,
+    project_pkg_classes: dict[str | None, set[str]] | None,
+    all_units: list[dict[str, Any]] | None,
+    shadowed_expr_names: set[str] | frozenset[str],
+    has_unverified_superclass: bool,
+):
+    def _check(expr: str) -> bool:
+        return _is_verified_jdk_enum_const(
+            expr,
+            caller_unit=caller_unit,
+            project_pkg_classes=project_pkg_classes,
+            all_units=all_units,
+            shadowed_expr_names=shadowed_expr_names,
+            has_unverified_superclass=has_unverified_superclass,
+        )
+
+    return _check
+
+
+def _make_verified_static_final_const_resolver(
+    record: dict[str, Any] | None,
+    *,
+    caller_unit: dict[str, Any] | None,
+    project_pkg_classes: dict[str | None, set[str]] | None,
+    all_units: list[dict[str, Any]] | None,
+    shadowed_expr_names: set[str] | frozenset[str],
+    has_unverified_superclass: bool,
+):
+    """Build a fail-closed cached resolver returning the COMPLETE compile-time String value for
+    verified `File.separator` tokens and SHA-256-locked compile-time `static final String` fields.
+
+    Runtime sources (`System.getProperty`, `System.getenv`, non-literal calls, mutable fields,
+    classes with superclasses, or files containing JLS §3.3 `\\uXXXX` escapes) return None.
+    """
+    class_cache: dict[tuple[str | None, str], dict[str, Any] | None] = {}
+    field_cache: dict[tuple[str | None, str], dict[str, list[dict[str, Any]]]] = {}
+    res_cache: dict[str, str | None] = {}
+
+    def _eval_owner_const_rhs(
+        rhs_keep: str,
+        *,
+        owner_unit: dict[str, Any],
+        owner_fields: dict[str, list[dict[str, Any]]],
+        owner_shadowed: set[str],
+        depth: int,
+        visiting: set[str],
+    ) -> str | None:
+        if depth <= 0 or not rhs_keep.strip() or _contains_java_unicode_escape(rhs_keep):
+            return None
+        parts = _split_top_level(rhs_keep.strip(), "+")
+        if not parts:
+            return None
+        chunks: list[str] = []
+        seen_string = False
+        for p in parts:
+            pt = p.strip()
+            if not pt:
+                return None
+            lit = _unescape_java_string_literal(pt)
+            if lit is not None:
+                if "\x00" in lit:
+                    return None
+                seen_string = True
+                chunks.append(lit)
+                continue
+            ch_lit = _unescape_java_char_literal(pt)
+            if ch_lit is not None:
+                # JLS §15.18.1 / §5.6.2: `+` associates left-to-right; `char + char` is int addition until a String appears!
+                if not seen_string or "\x00" in ch_lit:
+                    return None
+                chunks.append(ch_lit)
+                continue
+            sep_kind = _separator_token_kind(
+                pt,
+                caller_unit=owner_unit,
+                project_pkg_classes=project_pkg_classes,
+                all_units=all_units,
+                shadowed_expr_names=owner_shadowed,
+                has_unverified_superclass=False,
+            )
+            if sep_kind is not None:
+                is_char_sep = pt.endswith("separatorChar") or pt.startswith("'")
+                if is_char_sep and not seen_string:
+                    return None
+                if not is_char_sep:
+                    seen_string = True
+                chunks.append("/" if sep_kind == "platform" else sep_kind)
+                continue
+            if _SIMPLE_IDENT_RE.fullmatch(pt) and pt not in visiting and pt in owner_fields:
+                fdecls = owner_fields[pt]
+                if len(fdecls) == 1 and fdecls[0].get("is_static") and fdecls[0].get("is_final"):
+                    t_fqn = resolve_stdlib_class_fqn(
+                        fdecls[0]["raw_type"],
+                        caller_unit=owner_unit,
+                        project_pkg_classes=project_pkg_classes,
+                        all_units=all_units,
+                        caller_imports=owner_unit.get("imports"),
+                    )
+                    if t_fqn == "java.lang.String":
+                        sub_val = _eval_owner_const_rhs(
+                            fdecls[0].get("rhs_keep", ""),
+                            owner_unit=owner_unit,
+                            owner_fields=owner_fields,
+                            owner_shadowed=owner_shadowed,
+                            depth=depth - 1,
+                            visiting=visiting | {pt},
+                        )
+                        if sub_val is not None:
+                            seen_string = True
+                            chunks.append(sub_val)
+                            continue
+            return None
+        return "".join(chunks) if seen_string else None
+
+    def _resolve_verified_const_string(expr: str) -> str | None:
+        e = expr.strip()
+        if e in res_cache:
+            return res_cache[e]
+        sep_kind = _separator_token_kind(
+            e,
+            caller_unit=caller_unit,
+            project_pkg_classes=project_pkg_classes,
+            all_units=all_units,
+            shadowed_expr_names=shadowed_expr_names,
+            has_unverified_superclass=has_unverified_superclass,
+        )
+        if sep_kind is not None and not e.endswith("separatorChar") and not e.startswith("'"):
+            val = "/" if sep_kind == "platform" else sep_kind
+            res_cache[e] = val
+            return val
+        if "." not in e or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+", e):
+            res_cache[e] = None
+            return None
+        owner_qual, field_name = e.rsplit(".", 1)
+        lead = owner_qual.split(".", 1)[0]
+        if lead in shadowed_expr_names or has_unverified_superclass:
+            res_cache[e] = None
+            return None
+        owner_ref = _parse_java_type_ref(owner_qual)
+        if owner_ref is None or owner_ref.is_var or owner_ref.is_nested_or_ambiguous:
+            res_cache[e] = None
+            return None
+        caller_pkg = caller_unit.get("package_name") if isinstance(caller_unit, dict) else None
+        caller_imports = list(caller_unit.get("imports") or []) if isinstance(caller_unit, dict) else []
+        resolved_owner = _resolve_canonical_fqn_for_type_ref(
+            owner_ref,
+            caller_pkg,
+            caller_imports,
+            caller_unit=caller_unit,
+        )
+        if resolved_owner is None or not resolved_owner[1]:
+            res_cache[e] = None
+            return None
+        owner_pkg, owner_simple = resolved_owner
+        ukey = (owner_pkg, owner_simple)
+        if ukey not in class_cache:
+            class_cache[ukey] = load_verified_project_class_unit(record, owner_pkg, owner_simple)
+        loaded = class_cache[ukey]
+        if loaded is None or _contains_java_unicode_escape(loaded.get("text", "")):
+            res_cache[e] = None
+            return None
+        if ukey not in field_cache:
+            field_cache[ukey] = extract_class_static_field_decls(
+                loaded["text"],
+                structure=loaded["parsed"],
+                class_name=owner_simple,
+            )
+        fdecls = field_cache[ukey].get(field_name) or []
+        if len(fdecls) != 1 or not fdecls[0].get("is_static") or not fdecls[0].get("is_final"):
+            res_cache[e] = None
+            return None
+        owner_unit = loaded["unit"]
+        if loaded["class_info"].get("extends") or loaded["class_info"].get("implements"):
+            res_cache[e] = None
+            return None
+        t_fqn = resolve_stdlib_class_fqn(
+            fdecls[0]["raw_type"],
+            caller_unit=owner_unit,
+            project_pkg_classes=project_pkg_classes,
+            all_units=all_units,
+            caller_imports=owner_unit.get("imports"),
+        )
+        if t_fqn != "java.lang.String":
+            res_cache[e] = None
+            return None
+        owner_shadowed = {fn for fn in field_cache[ukey] if fn != field_name}
+        resolved_val = _eval_owner_const_rhs(
+            fdecls[0].get("rhs_keep", ""),
+            owner_unit=owner_unit,
+            owner_fields=field_cache[ukey],
+            owner_shadowed=owner_shadowed,
+            depth=3,
+            visiting={field_name},
+        )
+        res_cache[e] = resolved_val
+        return resolved_val
+
+    return _resolve_verified_const_string
+
+
+def _eval_exact_string_expr(
+    expr: str,
+    exact_str_vars: dict[str, str],
+    *,
+    const_field_resolver: Any = None,
+) -> str | None:
+    """Evaluate `+` concatenation strictly as a Java String expression per JLS §15.18.1 & §5.6.2.
+
+    Fail-closed on leading `char` operands (`'A' + 'B' + ""` performs integer addition in Java,
+    yielding `"131"` rather than `"AB"`) and standalone `char` literals (never stored as String).
+    """
+    e = expr.strip()
+    if not e:
+        return None
+    parts = _split_top_level(e, "+")
+    if not parts:
+        return None
+    chunks: list[str] = []
+    seen_string = False
+    for p in parts:
+        pt = p.strip()
+        if not pt:
+            return None
+        lit = _unescape_java_string_literal(pt)
+        if lit is not None:
+            seen_string = True
+            chunks.append(lit)
+            continue
+        ch_lit = _unescape_java_char_literal(pt)
+        if ch_lit is not None:
+            if not seen_string:
+                return None
+            chunks.append(ch_lit)
+            continue
+        if _SIMPLE_IDENT_RE.fullmatch(pt) and pt in exact_str_vars:
+            seen_string = True
+            chunks.append(exact_str_vars[pt])
+            continue
+        if callable(const_field_resolver):
+            cf = const_field_resolver(pt)
+            if isinstance(cf, str):
+                seen_string = True
+                chunks.append(cf)
+                continue
+        return None
+    return "".join(chunks) if seen_string else None
+
+
+def _eval_constant_expr(
+    expr: str,
+    const_vars: dict[str, bool],
+    *,
+    is_cwe22: bool,
+    const_field_resolver: Any = None,
+    exact_str_vars: dict[str, str] | None = None,
+    allow_jdk_enum: bool = False,
+    jdk_enum_checker: Any = None,
+) -> bool:
+    """Return True ONLY when `expr` is provably composed solely of compile-time constants.
+
+    For CWE-22 paths (`is_cwe22=True`):
+    - Evaluates the COMPLETE assembled string whenever possible and verifies `_is_safe_cwe22_complete_path`
+      (rejecting split parent traversal such as `"." + "." + "/fixtures/"`).
+    - When falling back to branch-merged `const_vars`, requires every concatenated part to satisfy the
+      boundary-dot composability invariant (`_is_safe_cwe22_composable_const`).
+    - Verified JDK enum constants (`StandardOpenOption`, `LinkOption`, `StandardCharsets`) are accepted
+      ONLY as standalone sink arguments (`allow_jdk_enum=True`), never inside string concatenation.
+    """
     e = expr.strip()
     if not e:
         return False
-    if _NUM_OR_BOOL_LITERAL_RE.fullmatch(e) or _is_pure_string_literal(e):
-        if is_cwe22 and _is_pure_string_literal(e):
-            val = _unescape_java_string_literal(e)
-            if val is None or ".." in val.replace("\\", "/").split("/") or "\x00" in val:
-                return False
+    if allow_jdk_enum and callable(jdk_enum_checker) and jdk_enum_checker(e):
         return True
-    parts = _split_top_level(e, "+")
-    if len(parts) > 1:
-        return all(_eval_constant_expr(p, const_vars, is_cwe22=is_cwe22) for p in parts)
-    if _SIMPLE_IDENT_RE.fullmatch(e) and e not in _JAVA_KEYWORDS:
-        return bool(const_vars.get(e, False))
+
     m_new_f = _NEW_FILE_ARGS_RE.match(e)
     if m_new_f:
         args = _split_top_level(m_new_f.group(1), ",")
-        return bool(args) and all(_eval_constant_expr(a, const_vars, is_cwe22=is_cwe22) for a in args)
+        if not args:
+            return False
+        if is_cwe22:
+            exact_parts: list[str] = []
+            all_exact = True
+            for a in args:
+                ev = _eval_exact_string_expr(a, exact_str_vars or {}, const_field_resolver=const_field_resolver)
+                if ev is None:
+                    all_exact = False
+                else:
+                    exact_parts.append(ev)
+                if not _eval_constant_expr(
+                    a,
+                    const_vars,
+                    is_cwe22=True,
+                    const_field_resolver=const_field_resolver,
+                    exact_str_vars=exact_str_vars,
+                    allow_jdk_enum=False,
+                ):
+                    return False
+            if all_exact and not _is_safe_cwe22_complete_path("/".join(exact_parts)):
+                return False
+            return True
+        return all(
+            _eval_constant_expr(
+                a,
+                const_vars,
+                is_cwe22=False,
+                const_field_resolver=const_field_resolver,
+                exact_str_vars=exact_str_vars,
+                allow_jdk_enum=False,
+            )
+            for a in args
+        )
+
     m_pg = _PATHS_GET_ARGS_RE.match(e)
     if m_pg:
         args = _split_top_level(m_pg.group(1), ",")
-        return bool(args) and all(_eval_constant_expr(a, const_vars, is_cwe22=is_cwe22) for a in args)
+        if not args:
+            return False
+        if is_cwe22:
+            exact_parts = []
+            all_exact = True
+            for a in args:
+                ev = _eval_exact_string_expr(a, exact_str_vars or {}, const_field_resolver=const_field_resolver)
+                if ev is None:
+                    all_exact = False
+                else:
+                    exact_parts.append(ev)
+                if not _eval_constant_expr(
+                    a,
+                    const_vars,
+                    is_cwe22=True,
+                    const_field_resolver=const_field_resolver,
+                    exact_str_vars=exact_str_vars,
+                    allow_jdk_enum=False,
+                ):
+                    return False
+            if all_exact and not _is_safe_cwe22_complete_path("/".join(exact_parts)):
+                return False
+            return True
+        return all(
+            _eval_constant_expr(
+                a,
+                const_vars,
+                is_cwe22=False,
+                const_field_resolver=const_field_resolver,
+                exact_str_vars=exact_str_vars,
+                allow_jdk_enum=False,
+            )
+            for a in args
+        )
+
+    if is_cwe22:
+        full_exact = _eval_exact_string_expr(e, exact_str_vars or {}, const_field_resolver=const_field_resolver)
+        if full_exact is not None:
+            return _is_safe_cwe22_complete_path(full_exact)
+        parts = _split_top_level(e, "+")
+        if len(parts) > 1:
+            for p in parts:
+                pt = p.strip()
+                if not pt:
+                    return False
+                sub_exact = _eval_exact_string_expr(pt, exact_str_vars or {}, const_field_resolver=const_field_resolver)
+                if sub_exact is not None:
+                    if not _is_safe_cwe22_composable_const(sub_exact):
+                        return False
+                    continue
+                if _SIMPLE_IDENT_RE.fullmatch(pt) and pt not in _JAVA_KEYWORDS and const_vars.get(pt, False):
+                    continue
+                return False
+            return True
+        if _SIMPLE_IDENT_RE.fullmatch(e) and e not in _JAVA_KEYWORDS:
+            return bool(const_vars.get(e, False))
+        return False
+
+    if (
+        _NUM_OR_BOOL_LITERAL_RE.fullmatch(e)
+        or _unescape_java_string_literal(e) is not None
+        or _unescape_java_char_literal(e) is not None
+    ):
+        return True
+    parts = _split_top_level(e, "+")
+    if len(parts) > 1:
+        return all(
+            _eval_constant_expr(
+                p,
+                const_vars,
+                is_cwe22=False,
+                const_field_resolver=const_field_resolver,
+                exact_str_vars=exact_str_vars,
+                allow_jdk_enum=False,
+            )
+            for p in parts
+        )
+    if _SIMPLE_IDENT_RE.fullmatch(e) and e not in _JAVA_KEYWORDS:
+        return bool(const_vars.get(e, False))
+    if callable(const_field_resolver) and isinstance(const_field_resolver(e), str):
+        return True
     return False
+
+
+def _eval_exact_char_expr(
+    expr: str,
+    exact_str_vars: dict[str, str],
+    exact_char_vars: dict[str, str],
+    exact_value_lines: dict[str, list[int]],
+) -> tuple[str | None, list[int]]:
+    """Evaluate exact char literal, exact BMP char local, or `<exactBmpStr>.charAt(K)` with literal index `K`.
+
+    Fails closed (returns None) if the base string contains any supplementary Unicode character (> U+FFFF)
+    or surrogate code point so UTF-16 code-unit indexing can never diverge from Python str indexing.
+    """
+    e = expr.strip()
+    ch = _unescape_java_char_literal(e)
+    if ch is not None and not _has_non_bmp_or_surrogate(ch):
+        return ch, []
+    if _SIMPLE_IDENT_RE.fullmatch(e) and e in exact_char_vars:
+        cv = exact_char_vars[e]
+        if not _has_non_bmp_or_surrogate(cv):
+            return cv, list(exact_value_lines.get(e, ()))
+        return None, []
+    m_ca = _CHAR_AT_RE.fullmatch(e)
+    if m_ca:
+        base_tok, idx_s = m_ca.group(1), m_ca.group(2)
+        idx = parse_java_nonneg_decimal_int_literal(idx_s)
+        if idx is None:
+            return None, []
+        s_val: str | None = None
+        src_lines: list[int] = []
+        lit = _unescape_java_string_literal(base_tok)
+        if lit is not None:
+            s_val = lit
+        elif base_tok in exact_str_vars:
+            s_val = exact_str_vars[base_tok]
+            src_lines = list(exact_value_lines.get(base_tok, ()))
+        if s_val is not None and not _has_non_bmp_or_surrogate(s_val):
+            # Guaranteed 1-to-1 UTF-16 code unit parity for pure BMP non-surrogate strings
+            if len(s_val.encode("utf-16-le")) == 2 * len(s_val) and 0 <= idx < len(s_val):
+                return s_val[idx], src_lines
+    return None, []
 
 
 def _eval_scalar_safe_sql_expr(
@@ -1492,14 +2094,32 @@ def _eval_scalar_safe_sql_expr(
     return saw_scalar
 
 
+_CWE22_STATIC_SINK_RECEIVERS = frozenset(
+    {
+        "Files",
+        "java.nio.file.Files",
+        "Paths",
+        "java.nio.file.Paths",
+        "Path",
+        "java.nio.file.Path",
+        "FileUtils",
+        "org.apache.commons.io.FileUtils",
+    }
+)
+
+
 def _extract_sink_args(rhs_k: str, rhs_m: str, primary_cwe: str) -> list[str]:
     clean_k = rhs_k.strip()
+    if not clean_k:
+        return []
     m_asgn = _LOCAL_ASSIGN_RE.match(clean_k if clean_k.endswith(";") else clean_k + ";")
     if m_asgn and (not m_asgn.group(1) or m_asgn.group(1).strip() not in _JAVA_NON_TYPE_KEYWORDS):
         clean_k = m_asgn.group(4).strip()
     if clean_k.startswith("return "):
         clean_k = clean_k[7:].strip()
     clean_k = clean_k.rstrip(";").strip()
+    if not clean_k:
+        return []
 
     m_new = re.search(r"\bnew\s+[A-Za-z_][A-Za-z0-9_.]*\s*\((.+)\)(?:\s*\.\s*getFD\s*\(\s*\))?$", clean_k)
     if m_new:
@@ -1514,6 +2134,10 @@ def _extract_sink_args(rhs_k: str, rhs_m: str, primary_cwe: str) -> list[str]:
             "queryForObject", "queryForList", "queryForRowSet", "update", "batchUpdate", "addBatch",
         ) and args:
             return [args[0]]
+        if primary_cwe == "CWE-22":
+            recv = clean_k[: m_mc.start()].strip()
+            if recv and recv not in _CWE22_STATIC_SINK_RECEIVERS:
+                return [recv] + args
         return args
     return []
 
@@ -1564,6 +2188,14 @@ class _IndependentFlowState:
         self.is_cwe22 = primary_cwe == "CWE-22"
         self.declared_locals: set[str] = set()
         self.const_vars: dict[str, bool] = {}
+        self.exact_str_vars: dict[str, str] = {}
+        self.exact_char_vars: dict[str, str] = {}
+        self.exact_value_lines: dict[str, list[int]] = {}
+        self.tracked_lists: dict[str, list[tuple[bool, str | None, list[int]]]] = {}
+        self.list_meta_lines: dict[str, list[int]] = {}
+        self.tracked_maps: dict[str, dict[str, tuple[bool, str | None, list[int]]]] = {}
+        self.map_meta_lines: dict[str, list[int]] = {}
+        self.used_proof_classes: set[str] = set()
         self.scalar_vars: dict[str, bool] = {}
         self.raw_const_path_vars: dict[str, bool] = {}
         self.canon_safe_base_str_vars: dict[str, bool] = {}
@@ -1575,6 +2207,8 @@ class _IndependentFlowState:
         self.const_assign_lines: dict[str, list[int]] = {}
         self.scalar_assign_lines: dict[str, list[int]] = {}
         self.prepared_stmt_safe: dict[str, list[int]] = {}
+        self.helper_returns: list[tuple[bool, str | None, list[int], set[str]]] = []
+        self.helper_impure: bool = False
         self.sink_reached = False
         self.aborted = False
         self.abort_reason: str | None = None
@@ -1585,6 +2219,20 @@ class _IndependentFlowState:
             self.aborted,
             tuple(sorted(self.declared_locals)),
             tuple(sorted(k for k, v in self.const_vars.items() if v)),
+            tuple(sorted(self.exact_str_vars.items())),
+            tuple(sorted(self.exact_char_vars.items())),
+            tuple(
+                sorted(
+                    (k, tuple((bool(is_c), ex_s) for is_c, ex_s, _ in elems))
+                    for k, elems in self.tracked_lists.items()
+                )
+            ),
+            tuple(
+                sorted(
+                    (k, tuple(sorted((mk, bool(is_c), ex_s) for mk, (is_c, ex_s, _) in mp.items())))
+                    for k, mp in self.tracked_maps.items()
+                )
+            ),
             tuple(sorted(k for k, v in self.scalar_vars.items() if v)),
             tuple(sorted(k for k, v in self.raw_const_path_vars.items() if v)),
             tuple(sorted(k for k, v in self.canon_safe_base_str_vars.items() if v)),
@@ -1598,6 +2246,13 @@ class _IndependentFlowState:
 
     def invalidate_var(self, vname: str) -> None:
         self.const_vars[vname] = False
+        self.exact_str_vars.pop(vname, None)
+        self.exact_char_vars.pop(vname, None)
+        self.exact_value_lines.pop(vname, None)
+        self.tracked_lists.pop(vname, None)
+        self.list_meta_lines.pop(vname, None)
+        self.tracked_maps.pop(vname, None)
+        self.map_meta_lines.pop(vname, None)
         self.scalar_vars[vname] = False
         self.raw_const_path_vars[vname] = False
         self.canon_safe_base_str_vars[vname] = False
@@ -1610,9 +2265,30 @@ class _IndependentFlowState:
         self.scalar_assign_lines.pop(vname, None)
         self.prepared_stmt_safe.pop(vname, None)
 
+    def invalidate_collections_mentioned_in(self, masked_expr: str, *, allow_vars: set[str] | frozenset[str] = frozenset()) -> None:
+        """Immediately drop tracking for any tracked ArrayList/HashMap referenced (aliased/escaped) in `masked_expr`."""
+        if not masked_expr or (not self.tracked_lists and not self.tracked_maps):
+            return
+        toks = set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", masked_expr)) - set(allow_vars)
+        for lv in list(self.tracked_lists):
+            if lv in toks:
+                self.tracked_lists.pop(lv, None)
+                self.list_meta_lines.pop(lv, None)
+        for mv in list(self.tracked_maps):
+            if mv in toks:
+                self.tracked_maps.pop(mv, None)
+                self.map_meta_lines.pop(mv, None)
+
     def invalidate_all(self, reason: str) -> None:
         """Drop every prior safety assumption whenever an unknown statement or side effect is encountered."""
         self.const_vars.clear()
+        self.exact_str_vars.clear()
+        self.exact_char_vars.clear()
+        self.exact_value_lines.clear()
+        self.tracked_lists.clear()
+        self.list_meta_lines.clear()
+        self.tracked_maps.clear()
+        self.map_meta_lines.clear()
         self.scalar_vars.clear()
         self.raw_const_path_vars.clear()
         self.canon_safe_base_str_vars.clear()
@@ -1631,6 +2307,17 @@ class _IndependentFlowState:
         st = _IndependentFlowState(self.primary_cwe)
         st.declared_locals = set(self.declared_locals)
         st.const_vars = dict(self.const_vars)
+        st.exact_str_vars = dict(self.exact_str_vars)
+        st.exact_char_vars = dict(self.exact_char_vars)
+        st.exact_value_lines = {k: list(v) for k, v in self.exact_value_lines.items()}
+        st.tracked_lists = {k: [(c, ex_s, list(lns)) for c, ex_s, lns in v] for k, v in self.tracked_lists.items()}
+        st.list_meta_lines = {k: list(v) for k, v in self.list_meta_lines.items()}
+        st.tracked_maps = {
+            k: {mk: (c, ex_s, list(lns)) for mk, (c, ex_s, lns) in mp.items()}
+            for k, mp in self.tracked_maps.items()
+        }
+        st.map_meta_lines = {k: list(v) for k, v in self.map_meta_lines.items()}
+        st.used_proof_classes = set(self.used_proof_classes)
         st.scalar_vars = dict(self.scalar_vars)
         st.raw_const_path_vars = dict(self.raw_const_path_vars)
         st.canon_safe_base_str_vars = dict(self.canon_safe_base_str_vars)
@@ -1642,6 +2329,8 @@ class _IndependentFlowState:
         st.const_assign_lines = {k: list(v) for k, v in self.const_assign_lines.items()}
         st.scalar_assign_lines = {k: list(v) for k, v in self.scalar_assign_lines.items()}
         st.prepared_stmt_safe = {k: list(v) for k, v in self.prepared_stmt_safe.items()}
+        st.helper_returns = [(c, ex_s, list(lns), set(pcs)) for c, ex_s, lns, pcs in self.helper_returns]
+        st.helper_impure = self.helper_impure
         st.sink_reached = self.sink_reached
         st.aborted = self.aborted
         st.abort_reason = self.abort_reason
@@ -1650,6 +2339,14 @@ class _IndependentFlowState:
     def adopt_from(self, other: "_IndependentFlowState") -> None:
         self.declared_locals = other.declared_locals
         self.const_vars = other.const_vars
+        self.exact_str_vars = other.exact_str_vars
+        self.exact_char_vars = other.exact_char_vars
+        self.exact_value_lines = other.exact_value_lines
+        self.tracked_lists = other.tracked_lists
+        self.list_meta_lines = other.list_meta_lines
+        self.tracked_maps = other.tracked_maps
+        self.map_meta_lines = other.map_meta_lines
+        self.used_proof_classes = other.used_proof_classes
         self.scalar_vars = other.scalar_vars
         self.raw_const_path_vars = other.raw_const_path_vars
         self.canon_safe_base_str_vars = other.canon_safe_base_str_vars
@@ -1661,6 +2358,8 @@ class _IndependentFlowState:
         self.const_assign_lines = other.const_assign_lines
         self.scalar_assign_lines = other.scalar_assign_lines
         self.prepared_stmt_safe = other.prepared_stmt_safe
+        self.helper_returns = other.helper_returns
+        self.helper_impure = other.helper_impure
         self.sink_reached = other.sink_reached
         self.aborted = other.aborted
         self.abort_reason = other.abort_reason
@@ -1673,6 +2372,68 @@ class _IndependentFlowState:
             return
         self.declared_locals = set.intersection(*(b.declared_locals for b in branches)) if branches else set()
         self.const_vars = _merge_bool_dicts_intersection(*(b.const_vars for b in branches))
+        self.exact_str_vars = _merge_map_intersection(*(b.exact_str_vars for b in branches))
+        self.exact_char_vars = _merge_map_intersection(*(b.exact_char_vars for b in branches))
+        self.exact_value_lines = {
+            k: sorted({ln for b in branches for ln in b.exact_value_lines.get(k, [])})
+            for k in set(self.exact_str_vars) | set(self.exact_char_vars)
+        }
+        merged_lists: dict[str, list[tuple[bool, str | None, list[int]]]] = {}
+        merged_list_meta: dict[str, list[int]] = {}
+        if branches:
+            common_lists = set.intersection(*(set(b.tracked_lists.keys()) for b in branches))
+            for lv in common_lists:
+                lens = {len(b.tracked_lists[lv]) for b in branches}
+                if len(lens) == 1:
+                    n_el = next(iter(lens))
+                    el_list: list[tuple[bool, str | None, list[int]]] = []
+                    for i in range(n_el):
+                        ex_vals = [b.tracked_lists[lv][i][1] for b in branches]
+                        common_ex = ex_vals[0] if (ex_vals and ex_vals[0] is not None and all(v == ex_vals[0] for v in ex_vals)) else None
+                        el_list.append(
+                            (
+                                all(b.tracked_lists[lv][i][0] for b in branches),
+                                common_ex,
+                                sorted({ln for b in branches for ln in b.tracked_lists[lv][i][2]}),
+                            )
+                        )
+                    merged_lists[lv] = el_list
+                    merged_list_meta[lv] = sorted({ln for b in branches for ln in b.list_meta_lines.get(lv, [])})
+        self.tracked_lists = merged_lists
+        self.list_meta_lines = merged_list_meta
+
+        merged_maps: dict[str, dict[str, tuple[bool, str | None, list[int]]]] = {}
+        merged_map_meta: dict[str, list[int]] = {}
+        if branches:
+            common_maps = set.intersection(*(set(b.tracked_maps.keys()) for b in branches))
+            for mv in common_maps:
+                common_keys = set.intersection(*(set(b.tracked_maps[mv].keys()) for b in branches))
+                m_dict: dict[str, tuple[bool, str | None, list[int]]] = {}
+                for mk in common_keys:
+                    ex_vals = [b.tracked_maps[mv][mk][1] for b in branches]
+                    common_ex = ex_vals[0] if (ex_vals and ex_vals[0] is not None and all(v == ex_vals[0] for v in ex_vals)) else None
+                    m_dict[mk] = (
+                        all(b.tracked_maps[mv][mk][0] for b in branches),
+                        common_ex,
+                        sorted({ln for b in branches for ln in b.tracked_maps[mv][mk][2]}),
+                    )
+                merged_maps[mv] = m_dict
+                merged_map_meta[mv] = sorted({ln for b in branches for ln in b.map_meta_lines.get(mv, [])})
+        self.tracked_maps = merged_maps
+        self.map_meta_lines = merged_map_meta
+
+        self.used_proof_classes = set().union(*(b.used_proof_classes for b in branches)) if branches else set()
+        self.helper_impure = any(b.helper_impure for b in branches)
+        all_h_rets: list[tuple[bool, str | None, list[int], set[str]]] = []
+        seen_h_keys: set[tuple[bool, str | None, tuple[int, ...], tuple[str, ...]]] = set()
+        for b in branches:
+            for hc, hex_s, hlns, hpcs in b.helper_returns:
+                hk = (hc, hex_s, tuple(sorted(hlns)), tuple(sorted(hpcs)))
+                if hk not in seen_h_keys:
+                    seen_h_keys.add(hk)
+                    all_h_rets.append((hc, hex_s, sorted(hlns), set(hpcs)))
+        self.helper_returns = all_h_rets
+
         self.scalar_vars = _merge_bool_dicts_intersection(*(b.scalar_vars for b in branches))
         self.raw_const_path_vars = _merge_bool_dicts_intersection(*(b.raw_const_path_vars for b in branches))
         self.canon_safe_base_str_vars = _merge_bool_dicts_intersection(*(b.canon_safe_base_str_vars for b in branches))
@@ -1822,6 +2583,202 @@ def _nio_paths_expr_verified(
     )
 
 
+def _verify_collection_type_fqn(
+    raw_type: str,
+    expected_fqns: tuple[str, ...],
+    *,
+    caller_unit: dict[str, Any] | None,
+    project_pkg_classes: dict[str | None, set[str]] | None,
+    all_units: list[dict[str, Any]] | None,
+    shadowed_expr_names: set[str] | frozenset[str],
+    has_unverified_superclass: bool,
+) -> bool:
+    t = re.sub(r"<.*>", "", raw_type).strip()
+    if t == "var":
+        return True
+    lead = t.split(".", 1)[0]
+    if lead in shadowed_expr_names or has_unverified_superclass:
+        return False
+    fqn = resolve_stdlib_class_fqn(
+        t,
+        caller_unit=caller_unit,
+        project_pkg_classes=project_pkg_classes,
+        all_units=all_units,
+    )
+    return fqn in expected_fqns
+
+
+def _stmt_list_always_returns(stmts: list[_StmtNode] | None) -> bool:
+    """Return True only when every execution path through `stmts` terminates with `return` (or `throw`)."""
+    if not stmts:
+        return False
+    for st in stmts:
+        if st.kind == "EMPTY":
+            continue
+        if st.kind == "EXIT" and st.subkind in ("return", "throw"):
+            return True
+        if st.kind == "BLOCK" and _stmt_list_always_returns(st.body_stmts):
+            return True
+        if (
+            st.kind == "IF"
+            and st.else_stmt is not None
+            and _stmt_list_always_returns([st.then_stmt] if st.then_stmt else [])
+            and _stmt_list_always_returns([st.else_stmt])
+        ):
+            return True
+    return False
+
+
+def _evaluate_same_file_pure_const_helper(
+    rhs_k: str,
+    rhs_m: str,
+    *,
+    primary_cwe: str,
+    lines_by_no: dict[int, str],
+    caller_unit: dict[str, Any] | None,
+    project_pkg_classes: dict[str | None, set[str]] | None,
+    all_units: list[dict[str, Any]] | None,
+    enclosing_class: str | None,
+    enclosing_method: dict[str, Any] | None,
+    visible_var_info: dict[str, dict[str, Any]] | None,
+    const_field_resolver: Any,
+    helper_depth: int,
+) -> tuple[bool, str | None, list[int], set[str]]:
+    """Bounded 1-hop same-file pure constant-return helper verification.
+
+    Treats ALL formal parameters as untrusted/non-constant. Fails closed unless:
+    - `helper_depth == 0` (strictly 1 hop, no recursion),
+    - Call resolves uniquely inside `caller_unit` via `_resolve_and_verify_call(all_units=[caller_unit])`,
+    - Helper target class has no unverified superclass and full body lines exist in `lines_by_no`,
+    - Zero non-local writes, zero unmodeled/impure statements, zero aborted paths,
+    - Every execution path returns via `return <expr>;` AND every returned expression evaluates constant.
+    """
+    if helper_depth >= 1 or not isinstance(caller_unit, dict) or not lines_by_no:
+        return False, None, [], set()
+    rk = rhs_k.strip()
+    rm = rhs_m.strip()
+    if not rk or _has_unmodeled_expr_side_effect(rm):
+        return False, None, [], set()
+
+    is_new_chain = False
+    qual: str | None = None
+    mname: str = ""
+    raw_args_k = ""
+    m_new = _HELPER_NEW_CALL_RHS_RE.fullmatch(rk)
+    if m_new:
+        is_new_chain = True
+        qual = m_new.group(1).strip()
+        mname = m_new.group(2).strip()
+        raw_args_k = m_new.group(3).strip()
+    else:
+        m_q = _HELPER_QUAL_CALL_RHS_RE.fullmatch(rk)
+        if not m_q:
+            return False, None, [], set()
+        qual = m_q.group(1).strip() if m_q.group(1) else None
+        mname = m_q.group(2).strip()
+        raw_args_k = m_q.group(3).strip()
+    if mname in _JAVA_KEYWORDS:
+        return False, None, [], set()
+    arg_count = 0 if not raw_args_k else len(_split_top_level(raw_args_k, ","))
+
+    ok, tinfo = _resolve_and_verify_call(
+        qual=qual,
+        mname=mname,
+        chained=False,
+        is_new_ctor_chain=is_new_chain,
+        arg_count=arg_count,
+        caller_unit=caller_unit,
+        enclosing_class=enclosing_class,
+        enclosing_method=enclosing_method,
+        visible_var_info=visible_var_info or {},
+        all_units=[caller_unit],
+    )
+    if not ok or not isinstance(tinfo, dict):
+        return False, None, [], set()
+    if tinfo.get("unit") is not caller_unit:
+        return False, None, [], set()
+    target_m = tinfo.get("method")
+    target_cls_info = tinfo.get("class_info")
+    if not isinstance(target_m, dict):
+        return False, None, [], set()
+    t_owner = target_m.get("owner_class")
+    if isinstance(target_cls_info, dict) and target_cls_info.get("extends"):
+        if _enclosing_class_has_unverified_superclass(caller_unit, project_pkg_classes, all_units, t_owner):
+            return False, None, [], set()
+
+    h_hdr = target_m.get("header_line")
+    h_end = target_m.get("end_line")
+    if type(h_hdr) is not int or type(h_end) is not int or h_end < h_hdr:
+        return False, None, [], set()
+    if not all(ln in lines_by_no for ln in range(h_hdr, h_end + 1)):
+        return False, None, [], set()
+
+    sub_lines = {ln: lines_by_no[ln] for ln in range(h_hdr, h_end + 1)}
+    if any(_contains_java_unicode_escape(txt) for txt in sub_lines.values()):
+        return False, None, [], set()
+    keep_str, masked_str = _strip_comments_and_mask_strings(sub_lines)
+    body_pos = _method_body_start_pos(masked_str, h_hdr, h_end)
+    if body_pos is None or body_pos[0] > h_end:
+        return False, None, [], set()
+    b_start, b_col = body_pos
+    if b_col > 0 and b_start in keep_str and b_start in masked_str:
+        keep_str = dict(keep_str)
+        masked_str = dict(masked_str)
+        keep_str[b_start] = (" " * b_col) + keep_str[b_start][b_col:]
+        masked_str[b_start] = (" " * b_col) + masked_str[b_start][b_col:]
+
+    parser = _JavaBodyParser(b_start, h_end, keep_str, masked_str)
+    h_stmts = parser.parse_method_body()
+    if parser.parse_errors or not _stmt_list_always_returns(h_stmts):
+        return False, None, [], set()
+
+    h_shadowed: set[str] = set()
+    p_types, _, _ = _extract_param_types_and_count(target_m.get("parameters"))
+    h_shadowed.update(p_types.keys())
+    h_shadowed.update(_collect_local_decl_names_in_ast(h_stmts))
+    for fn in caller_unit.get("enclosing_class_fields") or ():
+        if isinstance(fn, str) and fn:
+            h_shadowed.add(fn)
+    h_unv_super = _enclosing_class_has_unverified_superclass(caller_unit, project_pkg_classes, all_units, t_owner)
+
+    h_state = _IndependentFlowState(primary_cwe)
+    # Formal parameters are treated as adversarial/tainted (never added as constant)
+    _exec_stmt_list(
+        h_stmts,
+        h_state,
+        sink_line=None,
+        at_top_unconditional=True,
+        caller_unit=caller_unit,
+        project_pkg_classes=project_pkg_classes,
+        all_units=all_units,
+        shadowed_expr_names=h_shadowed,
+        has_unverified_superclass=h_unv_super,
+        const_field_resolver=const_field_resolver,
+        lines_by_no=lines_by_no,
+        enclosing_class=t_owner,
+        enclosing_method=target_m,
+        visible_var_info=None,
+        helper_depth=helper_depth + 1,
+        in_helper_eval=True,
+    )
+    if h_state.aborted or h_state.helper_impure or not h_state.helper_returns:
+        return False, None, [], set()
+    if not all(is_c for is_c, _, _, _ in h_state.helper_returns):
+        return False, None, [], set()
+    ret_exact_vals = [ex_s for _, ex_s, _, _ in h_state.helper_returns]
+    common_exact = (
+        ret_exact_vals[0]
+        if ret_exact_vals and ret_exact_vals[0] is not None and all(v == ret_exact_vals[0] for v in ret_exact_vals)
+        else None
+    )
+    proof_lines: set[int] = {h_hdr}
+    proof_classes: set[str] = {"SAME_FILE_HELPER_CONSTANT_FLOW"}
+    for _, _, rlns, rpcs in h_state.helper_returns:
+        proof_lines.update(rlns)
+        proof_classes.update(rpcs)
+    return True, common_exact, sorted(proof_lines), proof_classes
+
+
 def _exec_simple_stmt(
     node: _StmtNode,
     state: _IndependentFlowState,
@@ -1832,6 +2789,13 @@ def _exec_simple_stmt(
     all_units: list[dict[str, Any]] | None = None,
     shadowed_expr_names: set[str] | frozenset[str] = frozenset(),
     has_unverified_superclass: bool = False,
+    const_field_resolver: Any = None,
+    lines_by_no: dict[int, str] | None = None,
+    enclosing_class: str | None = None,
+    enclosing_method: dict[str, Any] | None = None,
+    visible_var_info: dict[str, dict[str, Any]] | None = None,
+    helper_depth: int = 0,
+    in_helper_eval: bool = False,
 ) -> None:
     sk = node.code_k.strip()
     sm = node.code_m.strip()
@@ -1842,9 +2806,235 @@ def _exec_simple_stmt(
     if m_bind:
         ps_var = m_bind.group(1)
         args_m = m_bind.group(2)
+        state.invalidate_collections_mentioned_in(args_m)
         if ps_var in state.prepared_stmt_safe and not _has_unmodeled_expr_side_effect(args_m):
             return
+        if in_helper_eval:
+            state.helper_impure = True
         state.invalidate_all("unmodeled_bind_or_side_effect")
+        return
+
+    # 1b. Local non-escaping ArrayList creation & modeled mutations (`add`, `remove(K)`, `set(K, e)`, `clear`)
+    m_lnew = _LIST_NEW_STMT_RE.match(sm)
+    if m_lnew:
+        decl_t, lname, ctor_t = m_lnew.group(1).strip(), m_lnew.group(2), m_lnew.group(3).strip()
+        if lname not in _JAVA_KEYWORDS:
+            state.declared_locals.add(lname)
+            state.invalidate_var(lname)
+            if (
+                _verify_collection_type_fqn(
+                    decl_t,
+                    ("java.util.List", "java.util.ArrayList"),
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    shadowed_expr_names=shadowed_expr_names,
+                    has_unverified_superclass=has_unverified_superclass,
+                )
+                and _verify_collection_type_fqn(
+                    ctor_t,
+                    ("java.util.ArrayList",),
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    shadowed_expr_names=shadowed_expr_names,
+                    has_unverified_superclass=has_unverified_superclass,
+                )
+            ):
+                state.tracked_lists[lname] = []
+                state.list_meta_lines[lname] = [s_ln]
+            return
+
+    m_ladd = _LIST_ADD_STMT_RE.match(sk)
+    m_ladd_m = _LIST_ADD_STMT_RE.match(sm)
+    if m_ladd and m_ladd_m and m_ladd.group(1) in state.tracked_lists:
+        lname = m_ladd.group(1)
+        args_k = _split_top_level(m_ladd.group(2), ",")
+        args_m = _split_top_level(m_ladd_m.group(2), ",")
+        state.invalidate_collections_mentioned_in(m_ladd_m.group(2))
+        if (
+            lname not in state.tracked_lists
+            or _has_unmodeled_expr_side_effect(m_ladd_m.group(2))
+            or len(args_k) != len(args_m)
+            or len(state.tracked_lists[lname]) >= 64
+        ):
+            state.tracked_lists.pop(lname, None)
+            state.list_meta_lines.pop(lname, None)
+            return
+        if len(args_k) == 1:
+            elem_ex = _eval_exact_string_expr(
+                args_k[0], state.exact_str_vars, const_field_resolver=const_field_resolver
+            )
+            elem_c = _eval_constant_expr(
+                args_k[0],
+                state.const_vars,
+                is_cwe22=state.is_cwe22,
+                const_field_resolver=const_field_resolver,
+                exact_str_vars=state.exact_str_vars,
+            )
+            if state.is_cwe22 and elem_ex is not None and not _is_safe_cwe22_composable_const(elem_ex):
+                elem_c = False
+            state.tracked_lists[lname].append((elem_c, elem_ex, [s_ln]))
+            return
+        if len(args_k) == 2:
+            idx = parse_java_nonneg_decimal_int_literal(args_k[0])
+            if idx is not None and 0 <= idx <= len(state.tracked_lists[lname]):
+                elem_ex = _eval_exact_string_expr(
+                    args_k[1], state.exact_str_vars, const_field_resolver=const_field_resolver
+                )
+                elem_c = _eval_constant_expr(
+                    args_k[1],
+                    state.const_vars,
+                    is_cwe22=state.is_cwe22,
+                    const_field_resolver=const_field_resolver,
+                    exact_str_vars=state.exact_str_vars,
+                )
+                if state.is_cwe22 and elem_ex is not None and not _is_safe_cwe22_composable_const(elem_ex):
+                    elem_c = False
+                state.tracked_lists[lname].insert(idx, (elem_c, elem_ex, [s_ln]))
+                state.list_meta_lines.setdefault(lname, []).append(s_ln)
+                return
+        state.tracked_lists.pop(lname, None)
+        state.list_meta_lines.pop(lname, None)
+        return
+
+    m_lrem = _LIST_REMOVE_STMT_RE.match(sk)
+    m_lrem_m = _LIST_REMOVE_STMT_RE.match(sm)
+    if m_lrem and m_lrem_m and m_lrem.group(1) in state.tracked_lists:
+        lname = m_lrem.group(1)
+        arg_k = m_lrem.group(2).strip()
+        state.invalidate_collections_mentioned_in(m_lrem_m.group(2))
+        idx = parse_java_nonneg_decimal_int_literal(arg_k)
+        if lname in state.tracked_lists and idx is not None and not _has_unmodeled_expr_side_effect(m_lrem_m.group(2)):
+            if 0 <= idx < len(state.tracked_lists[lname]):
+                state.tracked_lists[lname].pop(idx)
+                state.list_meta_lines.setdefault(lname, []).append(s_ln)
+                return
+        state.tracked_lists.pop(lname, None)
+        state.list_meta_lines.pop(lname, None)
+        return
+
+    m_lset = _LIST_SET_STMT_RE.match(sk)
+    m_lset_m = _LIST_SET_STMT_RE.match(sm)
+    if m_lset and m_lset_m and m_lset.group(1) in state.tracked_lists:
+        lname = m_lset.group(1)
+        args_k = _split_top_level(m_lset.group(2), ",")
+        state.invalidate_collections_mentioned_in(m_lset_m.group(2))
+        idx = parse_java_nonneg_decimal_int_literal(args_k[0]) if len(args_k) == 2 else None
+        if (
+            lname in state.tracked_lists
+            and idx is not None
+            and not _has_unmodeled_expr_side_effect(m_lset_m.group(2))
+        ):
+            if 0 <= idx < len(state.tracked_lists[lname]):
+                elem_ex = _eval_exact_string_expr(
+                    args_k[1], state.exact_str_vars, const_field_resolver=const_field_resolver
+                )
+                elem_c = _eval_constant_expr(
+                    args_k[1],
+                    state.const_vars,
+                    is_cwe22=state.is_cwe22,
+                    const_field_resolver=const_field_resolver,
+                    exact_str_vars=state.exact_str_vars,
+                )
+                if state.is_cwe22 and elem_ex is not None and not _is_safe_cwe22_composable_const(elem_ex):
+                    elem_c = False
+                state.tracked_lists[lname][idx] = (elem_c, elem_ex, [s_ln])
+                return
+        state.tracked_lists.pop(lname, None)
+        state.list_meta_lines.pop(lname, None)
+        return
+
+    m_lclr = _LIST_CLEAR_STMT_RE.match(sm)
+    if m_lclr and m_lclr.group(1) in state.tracked_lists:
+        lname = m_lclr.group(1)
+        state.tracked_lists[lname] = []
+        state.list_meta_lines.setdefault(lname, []).append(s_ln)
+        return
+
+    # 1c. Local non-escaping HashMap creation & modeled mutations (`put("lit", e)`, `remove("lit")`, `clear`)
+    m_mnew = _MAP_NEW_STMT_RE.match(sm)
+    if m_mnew:
+        decl_t, mname, ctor_t = m_mnew.group(1).strip(), m_mnew.group(2), m_mnew.group(3).strip()
+        if mname not in _JAVA_KEYWORDS:
+            state.declared_locals.add(mname)
+            state.invalidate_var(mname)
+            if (
+                _verify_collection_type_fqn(
+                    decl_t,
+                    ("java.util.Map", "java.util.HashMap"),
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    shadowed_expr_names=shadowed_expr_names,
+                    has_unverified_superclass=has_unverified_superclass,
+                )
+                and _verify_collection_type_fqn(
+                    ctor_t,
+                    ("java.util.HashMap",),
+                    caller_unit=caller_unit,
+                    project_pkg_classes=project_pkg_classes,
+                    all_units=all_units,
+                    shadowed_expr_names=shadowed_expr_names,
+                    has_unverified_superclass=has_unverified_superclass,
+                )
+            ):
+                state.tracked_maps[mname] = {}
+                state.map_meta_lines[mname] = [s_ln]
+            return
+
+    m_mput = _MAP_PUT_STMT_RE.match(sk)
+    m_mput_m = _MAP_PUT_STMT_RE.match(sm)
+    if m_mput and m_mput_m and m_mput.group(1) in state.tracked_maps:
+        mname = m_mput.group(1)
+        args_k = _split_top_level(m_mput.group(2), ",")
+        state.invalidate_collections_mentioned_in(m_mput_m.group(2))
+        if (
+            mname in state.tracked_maps
+            and len(args_k) == 2
+            and not _has_unmodeled_expr_side_effect(m_mput_m.group(2))
+            and len(state.tracked_maps[mname]) < 64
+        ):
+            key_val = _unescape_java_string_literal(args_k[0])
+            if key_val is not None:
+                val_ex = _eval_exact_string_expr(
+                    args_k[1], state.exact_str_vars, const_field_resolver=const_field_resolver
+                )
+                val_c = _eval_constant_expr(
+                    args_k[1],
+                    state.const_vars,
+                    is_cwe22=state.is_cwe22,
+                    const_field_resolver=const_field_resolver,
+                    exact_str_vars=state.exact_str_vars,
+                )
+                if state.is_cwe22 and val_ex is not None and not _is_safe_cwe22_composable_const(val_ex):
+                    val_c = False
+                state.tracked_maps[mname][key_val] = (val_c, val_ex, [s_ln])
+                return
+        # Non-literal key or escape invalidates entire map!
+        state.tracked_maps.pop(mname, None)
+        state.map_meta_lines.pop(mname, None)
+        return
+
+    m_mrem = _MAP_REMOVE_STMT_RE.match(sk)
+    m_mrem_m = _MAP_REMOVE_STMT_RE.match(sm)
+    if m_mrem and m_mrem_m and m_mrem.group(1) in state.tracked_maps:
+        mname = m_mrem.group(1)
+        state.invalidate_collections_mentioned_in(m_mrem_m.group(2))
+        key_val = _unescape_java_string_literal(m_mrem.group(2))
+        if mname in state.tracked_maps and key_val is not None and not _has_unmodeled_expr_side_effect(m_mrem_m.group(2)):
+            state.tracked_maps[mname].pop(key_val, None)
+            state.map_meta_lines.setdefault(mname, []).append(s_ln)
+            return
+        state.tracked_maps.pop(mname, None)
+        state.map_meta_lines.pop(mname, None)
+        return
+
+    m_mclr = _MAP_CLEAR_STMT_RE.match(sm)
+    if m_mclr and m_mclr.group(1) in state.tracked_maps:
+        mname = m_mclr.group(1)
+        state.tracked_maps[mname] = {}
+        state.map_meta_lines.setdefault(mname, []).append(s_ln)
         return
 
     # 2. Variable declaration without initializer (`String q;`)
@@ -1856,6 +3046,8 @@ def _exec_simple_stmt(
             state.declared_locals.add(vname)
             state.invalidate_var(vname)
             return
+        if in_helper_eval:
+            state.helper_impure = True
         state.invalidate_all("unmodeled_declaration")
         return
 
@@ -1870,13 +3062,19 @@ def _exec_simple_stmt(
         rhs_m = m_asgn_m.group(4).strip()
 
         if decl_type and decl_type in _JAVA_NON_TYPE_KEYWORDS:
+            if in_helper_eval:
+                state.helper_impure = True
             state.invalidate_all("keyword_misread_as_type")
             return
         if vname in _JAVA_KEYWORDS:
+            if in_helper_eval:
+                state.helper_impure = True
             state.invalidate_all("keyword_as_lvalue")
             return
         # Multi-variable declaration (`String a = "x", b = u;`) or embedded side effects (`=`, `++`, `--`, `->`)
         if len(_split_top_level(rhs_m, ",")) > 1 or _has_unmodeled_expr_side_effect(rhs_m):
+            if in_helper_eval:
+                state.helper_impure = True
             state.invalidate_all("unmodeled_rhs_or_multi_decl")
             return
 
@@ -1884,17 +3082,51 @@ def _exec_simple_stmt(
             state.declared_locals.add(vname)
         is_declared_local = vname in state.declared_locals
 
+        # Check modeled collection read BEFORE collection escape invalidation!
+        m_lget = _LIST_GET_RHS_RE.fullmatch(rhs_k) if op_sym == "=" else None
+        l_idx_parsed = parse_java_nonneg_decimal_int_literal(m_lget.group(2)) if m_lget else None
+        m_mget = _MAP_GET_RHS_RE.fullmatch(rhs_k) if op_sym == "=" else None
+        allow_coll: set[str] = set()
+        if m_lget and l_idx_parsed is not None and m_lget.group(1) in state.tracked_lists:
+            allow_coll.add(m_lget.group(1))
+        if m_mget and m_mget.group(1) in state.tracked_maps:
+            allow_coll.add(m_mget.group(1))
+        # Any other mention of a tracked list/map on RHS (e.g., aliasing `List b = a;` or passing `f(a)`) invalidates it!
+        state.invalidate_collections_mentioned_in(rhs_m, allow_vars=allow_coll)
+
         prev_const = state.const_vars.get(vname, False)
+        prev_exact_str = state.exact_str_vars.get(vname)
         prev_guarded_from: tuple[int, int] | None = None
         if op_sym == "=" and is_declared_local:
             wrapped_var = _extract_cwe22_sink_target_var(rhs_k)
             if wrapped_var and wrapped_var in state.guarded_vars:
                 prev_guarded_from = state.guarded_vars[wrapped_var]
 
+        # Snapshot pre-invalidation exact values / collection slots so `v = v.get(...)` or `s = s + "x"` reads old state
+        snap_const_vars = dict(state.const_vars)
+        snap_exact_str = dict(state.exact_str_vars)
+        snap_exact_char = dict(state.exact_char_vars)
+        snap_exact_lines = {k: list(v) for k, v in state.exact_value_lines.items()}
+        snap_list_slot: tuple[bool, str | None, list[int]] | None = None
+        snap_list_meta: list[int] = []
+        if m_lget and l_idx_parsed is not None and m_lget.group(1) in state.tracked_lists:
+            if 0 <= l_idx_parsed < len(state.tracked_lists[m_lget.group(1)]):
+                snap_list_slot = state.tracked_lists[m_lget.group(1)][l_idx_parsed]
+                snap_list_meta = list(state.list_meta_lines.get(m_lget.group(1), ()))
+        snap_map_slot: tuple[bool, str | None, list[int]] | None = None
+        snap_map_meta: list[int] = []
+        if m_mget and m_mget.group(1) in state.tracked_maps:
+            k_val = _unescape_java_string_literal(m_mget.group(2))
+            if k_val is not None and k_val in state.tracked_maps[m_mget.group(1)]:
+                snap_map_slot = state.tracked_maps[m_mget.group(1)][k_val]
+                snap_map_meta = list(state.map_meta_lines.get(m_mget.group(1), ()))
+
         state.invalidate_var(vname)
         # Never certify safety properties on undeclared identifiers (which may be shared class fields
         # mutated by helper methods or concurrent servlet requests!).
         if not is_declared_local:
+            if in_helper_eval:
+                state.helper_impure = True
             return
 
         if op_sym == "=":
@@ -1996,15 +3228,110 @@ def _exec_simple_stmt(
                 elif m_wrap_f and state.canon_target_str_vars.get(m_wrap_f.group(1), False):
                     state.canon_target_file_vars[vname] = True
 
-        # Track constant literal flow
+        # Track constant literal flow, exact String/char values, local ArrayList/HashMap reads, & 1-hop pure helpers
         if op_sym == "+=":
-            if prev_const and _eval_constant_expr(rhs_k, state.const_vars, is_cwe22=state.is_cwe22):
+            combined_exact: str | None = None
+            if prev_exact_str is not None:
+                rhs_s = _eval_exact_string_expr(rhs_k, snap_exact_str, const_field_resolver=const_field_resolver)
+                if rhs_s is not None:
+                    combined_exact = prev_exact_str + rhs_s
+                    state.exact_str_vars[vname] = combined_exact
+                    state.exact_value_lines[vname] = sorted(set(snap_exact_lines.get(vname, []) + [s_ln]))
+            if state.is_cwe22:
+                if combined_exact is not None:
+                    if _is_safe_cwe22_composable_const(combined_exact):
+                        state.const_vars[vname] = True
+                        state.const_assign_lines[vname] = sorted(set(snap_exact_lines.get(vname, []) + [s_ln]))
+                elif prev_const and _eval_constant_expr(
+                    rhs_k,
+                    snap_const_vars,
+                    is_cwe22=True,
+                    const_field_resolver=const_field_resolver,
+                    exact_str_vars=snap_exact_str,
+                ):
+                    rhs_ex = _eval_exact_string_expr(rhs_k, snap_exact_str, const_field_resolver=const_field_resolver)
+                    if rhs_ex is None or _is_safe_cwe22_composable_const(rhs_ex):
+                        state.const_vars[vname] = True
+                        state.const_assign_lines.setdefault(vname, []).append(s_ln)
+            elif prev_const and _eval_constant_expr(
+                rhs_k,
+                snap_const_vars,
+                is_cwe22=False,
+                const_field_resolver=const_field_resolver,
+                exact_str_vars=snap_exact_str,
+            ):
                 state.const_vars[vname] = True
                 state.const_assign_lines.setdefault(vname, []).append(s_ln)
         else:
-            if _eval_constant_expr(rhs_k, state.const_vars, is_cwe22=state.is_cwe22):
-                state.const_vars[vname] = True
-                state.const_assign_lines[vname] = [s_ln]
+            if snap_list_slot is not None and (snap_list_slot[0] is True or snap_list_slot[1] is not None):
+                if snap_list_slot[1] is not None:
+                    state.exact_str_vars[vname] = snap_list_slot[1]
+                    state.exact_value_lines[vname] = sorted(set([s_ln] + snap_list_slot[2] + snap_list_meta))
+                if snap_list_slot[0] is True:
+                    state.const_vars[vname] = True
+                    state.const_assign_lines[vname] = sorted(set([s_ln] + snap_list_slot[2] + snap_list_meta))
+                    state.used_proof_classes.add("LOCAL_ARRAYLIST_CONSTANT_FLOW")
+            elif snap_map_slot is not None and (snap_map_slot[0] is True or snap_map_slot[1] is not None):
+                if snap_map_slot[1] is not None:
+                    state.exact_str_vars[vname] = snap_map_slot[1]
+                    state.exact_value_lines[vname] = sorted(set([s_ln] + snap_map_slot[2] + snap_map_meta))
+                if snap_map_slot[0] is True:
+                    state.const_vars[vname] = True
+                    state.const_assign_lines[vname] = sorted(set([s_ln] + snap_map_slot[2] + snap_map_meta))
+                    state.used_proof_classes.add("LOCAL_HASHMAP_CONSTANT_FLOW")
+            else:
+                exact_s = _eval_exact_string_expr(rhs_k, snap_exact_str, const_field_resolver=const_field_resolver)
+                if exact_s is not None:
+                    state.exact_str_vars[vname] = exact_s
+                    state.exact_value_lines[vname] = [s_ln]
+                    if (not state.is_cwe22) or _is_safe_cwe22_composable_const(exact_s):
+                        state.const_vars[vname] = True
+                        state.const_assign_lines[vname] = [s_ln]
+                elif _eval_constant_expr(
+                    rhs_k,
+                    snap_const_vars,
+                    is_cwe22=state.is_cwe22,
+                    const_field_resolver=const_field_resolver,
+                    exact_str_vars=snap_exact_str,
+                ):
+                    state.const_vars[vname] = True
+                    state.const_assign_lines[vname] = [s_ln]
+                    exact_ch, ch_lns = _eval_exact_char_expr(rhs_k, snap_exact_str, snap_exact_char, snap_exact_lines)
+                    if exact_ch is not None:
+                        state.exact_char_vars[vname] = exact_ch
+                        state.exact_value_lines[vname] = sorted(set(ch_lns + [s_ln]))
+                else:
+                    # Check `<exactBmpStr>.charAt(K)` (produces exact char constant -> safe constant)
+                    exact_ch, ch_lns = _eval_exact_char_expr(rhs_k, snap_exact_str, snap_exact_char, snap_exact_lines)
+                    if exact_ch is not None:
+                        if not state.is_cwe22 or _is_safe_cwe22_composable_const(exact_ch):
+                            state.const_vars[vname] = True
+                            state.const_assign_lines[vname] = sorted(set(ch_lns + [s_ln]))
+                        state.exact_char_vars[vname] = exact_ch
+                        state.exact_value_lines[vname] = sorted(set(ch_lns + [s_ln]))
+                    elif helper_depth == 0 and "(" in rhs_k and lines_by_no:
+                        h_ok, h_exact, h_lines, h_classes = _evaluate_same_file_pure_const_helper(
+                            rhs_k,
+                            rhs_m,
+                            primary_cwe=state.primary_cwe,
+                            lines_by_no=lines_by_no,
+                            caller_unit=caller_unit,
+                            project_pkg_classes=project_pkg_classes,
+                            all_units=all_units,
+                            enclosing_class=enclosing_class,
+                            enclosing_method=enclosing_method,
+                            visible_var_info=visible_var_info,
+                            const_field_resolver=const_field_resolver,
+                            helper_depth=helper_depth,
+                        )
+                        if h_ok:
+                            if h_exact is not None:
+                                state.exact_str_vars[vname] = h_exact
+                                state.exact_value_lines[vname] = sorted(set([s_ln] + h_lines))
+                            if (not state.is_cwe22) or (h_exact is None) or _is_safe_cwe22_composable_const(h_exact):
+                                state.const_vars[vname] = True
+                                state.const_assign_lines[vname] = sorted(set([s_ln] + h_lines))
+                                state.used_proof_classes.update(h_classes)
 
         # Track unconditional CWE-89 scalar parse & PreparedStatement
         simple_decl = decl_type.rsplit(".", 1)[-1].strip()
@@ -2056,12 +3383,16 @@ def _exec_simple_stmt(
             m_prep = _PREPARE_CALL_RE.match(rhs_k)
             if m_prep:
                 p_args = _split_top_level(m_prep.group(1), ",")
-                if p_args and _eval_constant_expr(p_args[0], state.const_vars, is_cwe22=False):
+                if p_args and _eval_constant_expr(
+                    p_args[0], state.const_vars, is_cwe22=False, const_field_resolver=const_field_resolver
+                ):
                     state.prepared_stmt_safe[vname] = [s_ln]
         return
 
     # Unknown / unmodeled statement (e.g., `this.q = u;`, `arr[0] = u;`, `mutate();`, `sb.append(u);`):
     # NEVER treat an unknown statement as a no-op! Invalidate all prior safety assumptions!
+    if in_helper_eval:
+        state.helper_impure = True
     state.invalidate_all("unmodeled_statement")
 
 
@@ -2100,6 +3431,13 @@ def _exec_stmt_list(
     all_units: list[dict[str, Any]] | None = None,
     shadowed_expr_names: set[str] | frozenset[str] = frozenset(),
     has_unverified_superclass: bool = False,
+    const_field_resolver: Any = None,
+    lines_by_no: dict[int, str] | None = None,
+    enclosing_class: str | None = None,
+    enclosing_method: dict[str, Any] | None = None,
+    visible_var_info: dict[str, dict[str, Any]] | None = None,
+    helper_depth: int = 0,
+    in_helper_eval: bool = False,
 ) -> bool:
     if sink_line is not None:
         same_line_nodes = [n for n in stmts if n.kind != "EMPTY" and _stmt_contains_line(n, sink_line)]
@@ -2123,6 +3461,13 @@ def _exec_stmt_list(
             all_units=all_units,
             shadowed_expr_names=shadowed_expr_names,
             has_unverified_superclass=has_unverified_superclass,
+            const_field_resolver=const_field_resolver,
+            lines_by_no=lines_by_no,
+            enclosing_class=enclosing_class,
+            enclosing_method=enclosing_method,
+            visible_var_info=visible_var_info,
+            helper_depth=helper_depth,
+            in_helper_eval=in_helper_eval,
         ):
             return True
         if sink_line is not None and node.start_line > sink_line:
@@ -2145,6 +3490,36 @@ def _has_unmodeled_continue_in_loop(node: _StmtNode | None) -> bool:
     for attr in ("body_stmts", "catches"):
         for child in getattr(node, attr) or []:
             if _has_unmodeled_continue_in_loop(child):
+                return True
+    return False
+
+
+def _has_labeled_continue_in_subtree(node: _StmtNode | None) -> bool:
+    if node is None:
+        return False
+    if node.kind == "SIMPLE" and re.match(r"^\s*continue\s+[A-Za-z_]", node.code_m):
+        return True
+    for attr in ("then_stmt", "else_stmt", "body_stmt", "finally_stmt"):
+        if _has_labeled_continue_in_subtree(getattr(node, attr)):
+            return True
+    for attr in ("body_stmts", "catches"):
+        for child in getattr(node, attr) or []:
+            if _has_labeled_continue_in_subtree(child):
+                return True
+    return False
+
+
+def _has_any_break_in_subtree(node: _StmtNode | None) -> bool:
+    if node is None:
+        return False
+    if node.kind == "SIMPLE" and re.match(r"^\s*break\b", node.code_m):
+        return True
+    for attr in ("then_stmt", "else_stmt", "body_stmt", "finally_stmt"):
+        if _has_any_break_in_subtree(getattr(node, attr)):
+            return True
+    for attr in ("body_stmts", "catches"):
+        for child in getattr(node, attr) or []:
+            if _has_any_break_in_subtree(child):
                 return True
     return False
 
@@ -2196,6 +3571,13 @@ def _exec_stmt_node(
     all_units: list[dict[str, Any]] | None = None,
     shadowed_expr_names: set[str] | frozenset[str] = frozenset(),
     has_unverified_superclass: bool = False,
+    const_field_resolver: Any = None,
+    lines_by_no: dict[int, str] | None = None,
+    enclosing_class: str | None = None,
+    enclosing_method: dict[str, Any] | None = None,
+    visible_var_info: dict[str, dict[str, Any]] | None = None,
+    helper_depth: int = 0,
+    in_helper_eval: bool = False,
 ) -> bool:
     """Execute AST statement node conservatively up to `sink_line` (or full subtree when `sink_line is None`)."""
     if node is None or state.aborted:
@@ -2204,6 +3586,20 @@ def _exec_stmt_node(
         return False
 
     ctx_kw = {
+        "caller_unit": caller_unit,
+        "project_pkg_classes": project_pkg_classes,
+        "all_units": all_units,
+        "shadowed_expr_names": shadowed_expr_names,
+        "has_unverified_superclass": has_unverified_superclass,
+        "const_field_resolver": const_field_resolver,
+        "lines_by_no": lines_by_no,
+        "enclosing_class": enclosing_class,
+        "enclosing_method": enclosing_method,
+        "visible_var_info": visible_var_info,
+        "helper_depth": helper_depth,
+        "in_helper_eval": in_helper_eval,
+    }
+    guard_ctx_kw = {
         "caller_unit": caller_unit,
         "project_pkg_classes": project_pkg_classes,
         "all_units": all_units,
@@ -2225,7 +3621,34 @@ def _exec_stmt_node(
             return True
         if node.kind == "EXIT":
             if _has_unmodeled_expr_side_effect(node.code_m):
+                if in_helper_eval:
+                    state.helper_impure = True
                 state.invalidate_all("exit_expr_side_effect")
+                return False
+            if in_helper_eval and node.subkind == "return":
+                m_ret = re.match(r"^\s*return\s+(.+?)\s*;\s*$", node.code_k.strip())
+                if not m_ret:
+                    state.helper_returns.append((False, None, [node.start_line], set()))
+                else:
+                    ret_expr = m_ret.group(1).strip()
+                    ret_exact = _eval_exact_string_expr(
+                        ret_expr,
+                        state.exact_str_vars,
+                        const_field_resolver=const_field_resolver,
+                    )
+                    ret_const = _eval_constant_expr(
+                        ret_expr,
+                        state.const_vars,
+                        is_cwe22=state.is_cwe22,
+                        const_field_resolver=const_field_resolver,
+                        exact_str_vars=state.exact_str_vars,
+                    )
+                    if state.is_cwe22 and ret_exact is not None and not _is_safe_cwe22_composable_const(ret_exact):
+                        ret_const = False
+                    rlns: list[int] = [node.start_line]
+                    for tok in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", ret_expr):
+                        rlns.extend(state.const_assign_lines.get(tok, ()))
+                    state.helper_returns.append((ret_const, ret_exact, sorted(set(rlns)), set(state.used_proof_classes)))
             return False
         if sink_line is None and _stmt_contains_line(node, loop_sink_line):
             # Full-body loop fixed-point pass encountering the sink statement itself:
@@ -2262,7 +3685,10 @@ def _exec_stmt_node(
         )
 
     if node.kind == "IF":
+        state.invalidate_collections_mentioned_in(node.cond_m)
         if _has_unmodeled_expr_side_effect(node.cond_m):
+            if in_helper_eval:
+                state.helper_impure = True
             state.invalidate_all("if_condition_side_effect")
             if _stmt_contains_line(node, sink_line):
                 state.sink_reached = True
@@ -2287,7 +3713,7 @@ def _exec_stmt_node(
             and not sink_in_then
             and _stmt_unconditionally_exits(node.then_stmt)
         ):
-            gvar = _extract_guarded_canonical_var(node.cond_k, state, negated=True, **ctx_kw)
+            gvar = _extract_guarded_canonical_var(node.cond_k, state, negated=True, **guard_ctx_kw)
             if gvar is not None:
                 state.guarded_vars[gvar] = (node.start_line, node.start_line)
             return False
@@ -2301,7 +3727,7 @@ def _exec_stmt_node(
             and not sink_in_else
         ):
             then_st = state.clone()
-            gvar = _extract_guarded_canonical_var(node.cond_k, then_st, negated=False, **ctx_kw)
+            gvar = _extract_guarded_canonical_var(node.cond_k, then_st, negated=False, **guard_ctx_kw)
             if gvar is not None:
                 then_st.guarded_vars[gvar] = (node.start_line, node.start_line)
             _exec_stmt_node(
@@ -2348,8 +3774,19 @@ def _exec_stmt_node(
             then_exits = _stmt_unconditionally_exits(node.then_stmt)
             else_exits = _stmt_unconditionally_exits(node.else_stmt)
             if then_exits and not else_exits:
+                # Preserve helper returns recorded in exiting then-branch while adopting else-branch continuation
+                if in_helper_eval and then_st.helper_returns:
+                    else_st.helper_returns = list(else_st.helper_returns) + [
+                        r for r in then_st.helper_returns if r not in else_st.helper_returns
+                    ]
+                    else_st.helper_impure = else_st.helper_impure or then_st.helper_impure
                 state.merge_from(else_st)
             elif else_exits and not then_exits:
+                if in_helper_eval and else_st.helper_returns:
+                    then_st.helper_returns = list(then_st.helper_returns) + [
+                        r for r in else_st.helper_returns if r not in then_st.helper_returns
+                    ]
+                    then_st.helper_impure = then_st.helper_impure or else_st.helper_impure
                 state.merge_from(then_st)
             else:
                 state.merge_from(then_st, else_st)
@@ -2395,14 +3832,28 @@ def _exec_stmt_node(
                     state.invalidate_all("unmodeled_for_header")
 
         # The fixed-point executor does not model Java continue backedges or early loop break exits.
-        # Fail closed rather than proving a potentially unsafe sink safe.
-        if _has_unmodeled_continue_in_loop(node.body_stmt):
+        # When the sink lies strictly AFTER a top-level loop whose break/continue are all unlabeled,
+        # control can only leave the loop cleanly to the statement after it, so dropping ALL pre-loop/in-loop
+        # facts (`invalidate_all`) without aborting is strictly sound while allowing post-loop unconditional proofs.
+        # Whenever the sink is inside the loop, inside an outer loop, or labeled break/continue exists, abort fail-closed.
+        has_cont = _has_unmodeled_continue_in_loop(node.body_stmt)
+        has_brk = _has_unmodeled_break_in_loop(node.body_stmt)
+        if has_cont or has_brk:
+            can_invalidate_post_loop = (
+                sink_line is not None
+                and loop_sink_line is None
+                and not in_helper_eval
+                and not _stmt_contains_line(node, sink_line)
+                and not _has_labeled_break_in_subtree(node.body_stmt)
+                and not _has_labeled_continue_in_subtree(node.body_stmt)
+            )
+            if can_invalidate_post_loop:
+                state.invalidate_all("pre_sink_loop_unlabeled_break_or_continue")
+                return False
             state.aborted = True
-            state.invalidate_all("unmodeled_continue_loop_backedge")
-            return False
-        if _has_unmodeled_break_in_loop(node.body_stmt):
-            state.aborted = True
-            state.invalidate_all("unmodeled_break_loop_exit")
+            state.invalidate_all(
+                "unmodeled_continue_loop_backedge" if has_cont else "unmodeled_break_loop_exit"
+            )
             return False
         active_loop_sink = sink_line if sink_line is not None else loop_sink_line
         inv_st = state.clone()
@@ -2524,14 +3975,135 @@ def _exec_stmt_node(
                 return True
         return False
 
-    if node.kind in ("SWITCH", "SYNCHRONIZED"):
-        # Unmodeled switch/synchronized blocks conservatively invalidate all prior safety assumptions
-        state.invalidate_all(f"unmodeled_{node.kind.lower()}_block")
+    if node.kind == "SWITCH":
+        # Deterministic constant String/char switch ONLY (NO int/long arithmetic pruning!)
+        # Preserves exact Java fallthrough semantics until unlabeled `break;` or `EXIT`.
+        def _try_deterministic_const_switch() -> tuple[bool, bool]:
+            if (
+                node.body_stmt is None
+                or node.body_stmt.kind != "BLOCK"
+                or not node.body_stmt.body_stmts
+                or _has_unmodeled_expr_side_effect(node.cond_m)
+                or _has_labeled_break_in_subtree(node.body_stmt)
+                or _has_unmodeled_continue_in_loop(node.body_stmt)
+            ):
+                return False, False
+            cond_expr = node.cond_k.strip()
+            sw_kind: str | None = None
+            sw_val: str | None = None
+            sw_lines: list[int] = [node.start_line]
+            ch_val, ch_lns = _eval_exact_char_expr(
+                cond_expr, state.exact_str_vars, state.exact_char_vars, state.exact_value_lines
+            )
+            if ch_val is not None:
+                sw_kind = "char"
+                sw_val = ch_val
+                sw_lines.extend(ch_lns)
+            else:
+                str_val = _eval_exact_string_expr(cond_expr, state.exact_str_vars)
+                if str_val is not None:
+                    sw_kind = "str"
+                    sw_val = str_val
+                    if _SIMPLE_IDENT_RE.fullmatch(cond_expr):
+                        sw_lines.extend(state.exact_value_lines.get(cond_expr, ()))
+            if sw_kind is None or sw_val is None:
+                return False, False
+
+            body_items = node.body_stmt.body_stmts
+            # Validate ALL case labels in the switch block cleanly before selecting entry index
+            seen_labels: set[str] = set()
+            matched_idx: int | None = None
+            default_idx: int | None = None
+            for idx_it, item in enumerate(body_items):
+                if item.kind == "CASE":
+                    if item.subkind == "default":
+                        if default_idx is not None:
+                            return False, False
+                        default_idx = idx_it
+                    elif item.subkind == "case":
+                        lbl_val = (
+                            _unescape_java_char_literal(item.cond_k)
+                            if sw_kind == "char"
+                            else _unescape_java_string_literal(item.cond_k)
+                        )
+                        if lbl_val is None or lbl_val in seen_labels:
+                            return False, False
+                        seen_labels.add(lbl_val)
+                        if lbl_val == sw_val:
+                            matched_idx = idx_it
+                    else:
+                        return False, False
+
+            entry_idx = matched_idx if matched_idx is not None else default_idx
+            if entry_idx is None:
+                # Constant switch matches no case and has no default -> provable no-op!
+                if _stmt_contains_line(node, sink_line):
+                    return False, False
+                state.used_proof_classes.add("DETERMINISTIC_CONSTANT_SWITCH")
+                return True, False
+
+            pre_const_keys = {k for k, v in state.const_vars.items() if v}
+            sw_st = state.clone()
+            for item in body_items[entry_idx + 1 :]:
+                if item.kind == "CASE":
+                    # Java fallthrough across consecutive `case` / `default` labels!
+                    continue
+                if item.kind == "EMPTY":
+                    continue
+                if item.kind == "SIMPLE" and re.fullmatch(r"break\s*;", item.code_m.strip()):
+                    break
+                if item.kind in ("BLOCK", "IF", "LOOP", "TRY", "SWITCH", "SYNCHRONIZED", "LABELED") and _has_any_break_in_subtree(item):
+                    return False, False
+                if item.kind == "UNKNOWN":
+                    return False, False
+                hit_s = _exec_stmt_node(
+                    item,
+                    sw_st,
+                    sink_line=sink_line,
+                    at_top_unconditional=at_top_unconditional,
+                    loop_sink_line=loop_sink_line,
+                    **ctx_kw,
+                )
+                if sw_st.aborted:
+                    return False, False
+                if hit_s:
+                    sw_st.used_proof_classes.add("DETERMINISTIC_CONSTANT_SWITCH")
+                    state.adopt_from(sw_st)
+                    state.sink_reached = True
+                    return True, True
+                if item.kind == "EXIT":
+                    break
+
+            for k, is_c in sw_st.const_vars.items():
+                if is_c and (k not in pre_const_keys or sw_st.const_assign_lines.get(k) != state.const_assign_lines.get(k)):
+                    sw_st.const_assign_lines[k] = sorted(set(sw_st.const_assign_lines.get(k, []) + sw_lines))
+            sw_st.used_proof_classes.add("DETERMINISTIC_CONSTANT_SWITCH")
+            state.adopt_from(sw_st)
+            return True, False
+
+        sw_ok, sw_hit_sink = _try_deterministic_const_switch()
+        if sw_ok:
+            return sw_hit_sink
+        if in_helper_eval:
+            state.helper_impure = True
+        state.invalidate_all("unmodeled_switch_block")
         if _stmt_contains_line(node, sink_line):
             state.sink_reached = True
             return True
         return False
 
+    if node.kind == "SYNCHRONIZED":
+        # Unmodeled synchronized blocks conservatively invalidate all prior safety assumptions
+        if in_helper_eval:
+            state.helper_impure = True
+        state.invalidate_all("unmodeled_synchronized_block")
+        if _stmt_contains_line(node, sink_line):
+            state.sink_reached = True
+            return True
+        return False
+
+    if in_helper_eval:
+        state.helper_impure = True
     state.invalidate_all(f"unknown_node_kind:{node.kind}")
     return False
 
@@ -2582,6 +4154,7 @@ def _build_gate_resolution_context(
             "type_imports": list(parsed.get("type_imports") or []),
             "static_imports": list(parsed.get("static_imports") or []),
             "classes": cls_by_name,
+            "methods": list(parsed.get("methods") or []),
             "declared_class_names": list(cls_by_name.keys()),
             "enclosing_class_fields": fields,
             "enclosing_class_extends": enc_extends,
@@ -2597,6 +4170,7 @@ def _build_gate_resolution_context(
             "package_name": jctx.get("package_name") if isinstance(jctx.get("package_name"), str) else None,
             "imports": [],
             "classes": {},
+            "methods": [],
             "line_map": lines_by_no,
         }
     _merge_header_metadata_into_unit(caller_unit, record, p_path)
@@ -2629,9 +4203,27 @@ def _verify_independent_refutation_proof(
         return False, f"unsupported CWE ({primary_cwe}) for independent safety verification"
 
     caller_unit, project_pkg_classes, all_units = _build_gate_resolution_context(record, p_path, lines_by_no)
+    parsed_methods = [
+        m
+        for m in (caller_unit.get("methods") or [])
+        if isinstance(m, dict)
+        and type(m.get("header_line")) is int
+        and type(m.get("start_line")) is int
+        and type(m.get("end_line")) is int
+        and m["start_line"] <= sink_line <= m["end_line"]
+    ]
+    if parsed_methods:
+        innermost_m = min(parsed_methods, key=lambda m: m["end_line"] - m["start_line"])
+        if innermost_m["header_line"] != header_line:
+            return (
+                False,
+                "enclosing_method.header_line disagrees with verified Java method boundary parsed from locked source",
+            )
 
     max_ln = max(lines_by_no)
     sub_lines = {ln: lines_by_no[ln] for ln in range(header_line, max_ln + 1) if ln in lines_by_no}
+    if any(_contains_java_unicode_escape(txt) for txt in sub_lines.values()):
+        return False, "Java Unicode escape (JLS §3.3) in verified method lines is not modeled; failing closed"
     keep_str, masked_str = _strip_comments_and_mask_strings(sub_lines)
     body_pos = _method_body_start_pos(masked_str, header_line, sink_line)
     if body_pos is None or body_pos[0] > sink_line:
@@ -2677,6 +4269,36 @@ def _verify_independent_refutation_proof(
         all_units,
         enc_cls,
     )
+    const_field_resolver = _make_verified_static_final_const_resolver(
+        record,
+        caller_unit=caller_unit,
+        project_pkg_classes=project_pkg_classes,
+        all_units=all_units,
+        shadowed_expr_names=shadowed_expr_names,
+        has_unverified_superclass=has_unverified_superclass,
+    )
+    jdk_enum_checker = _make_verified_jdk_enum_checker(
+        caller_unit=caller_unit,
+        project_pkg_classes=project_pkg_classes,
+        all_units=all_units,
+        shadowed_expr_names=shadowed_expr_names,
+        has_unverified_superclass=has_unverified_superclass,
+    )
+    enc_jctx = jctx.get("enclosing_method") if isinstance(jctx.get("enclosing_method"), dict) else None
+    enc_method_obj = next(
+        (m for m in (caller_unit.get("methods") or []) if m.get("header_line") == header_line),
+        enc_jctx,
+    )
+    visible_var_info = _collect_visible_var_info(
+        lines_by_no,
+        enc_method_obj,
+        enc_cls,
+        caller_pkg=caller_unit.get("package_name"),
+        caller_imports=caller_unit.get("imports"),
+        caller_unit=caller_unit,
+        project_pkg_classes=project_pkg_classes,
+        all_units=all_units,
+    )
 
     state = _IndependentFlowState(primary_cwe)
     _exec_stmt_list(
@@ -2689,6 +4311,13 @@ def _verify_independent_refutation_proof(
         all_units=all_units,
         shadowed_expr_names=shadowed_expr_names,
         has_unverified_superclass=has_unverified_superclass,
+        const_field_resolver=const_field_resolver,
+        lines_by_no=lines_by_no,
+        enclosing_class=enc_cls,
+        enclosing_method=enc_method_obj,
+        visible_var_info=visible_var_info,
+        helper_depth=0,
+        in_helper_eval=False,
     )
     if state.aborted or not state.sink_reached:
         return False, (
@@ -2714,7 +4343,9 @@ def _verify_independent_refutation_proof(
         m_prep_sink = _PREPARE_CALL_RE.match(clean_sink_k.rstrip(";").strip())
         if m_prep_sink:
             p_args = _split_top_level(m_prep_sink.group(1), ",")
-            if p_args and _eval_constant_expr(p_args[0], state.const_vars, is_cwe22=False):
+            if p_args and _eval_constant_expr(
+                p_args[0], state.const_vars, is_cwe22=False, const_field_resolver=const_field_resolver
+            ):
                 if cited_primary_lines & sink_span:
                     return True, "CWE89_CONSTANT_PREPARED_STATEMENT"
                 return False, "citations do not cover the verified PreparedStatement or sink lines"
@@ -2726,13 +4357,33 @@ def _verify_independent_refutation_proof(
     if any(_has_unmodeled_expr_side_effect(arg_m) for arg_m in sink_args_m):
         return False, "sink arguments contain unmodeled embedded side effects"
 
-    # 2. Unconditional constant-literal sink flow (all dangerous sink args proven constant across all paths)
-    if all(_eval_constant_expr(arg, state.const_vars, is_cwe22=state.is_cwe22) for arg in sink_args):
+    # 2. Unconditional constant-literal sink flow (including deterministic switch, local ArrayList/HashMap, 1-hop pure helper)
+    if all(
+        _eval_constant_expr(
+            arg,
+            state.const_vars,
+            is_cwe22=state.is_cwe22,
+            const_field_resolver=const_field_resolver,
+            exact_str_vars=state.exact_str_vars,
+            allow_jdk_enum=True,
+            jdk_enum_checker=jdk_enum_checker,
+        )
+        for arg in sink_args
+    ):
         proof_lines = set(sink_span)
         for arg in sink_args:
             for tok in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", arg):
                 proof_lines.update(state.const_assign_lines.get(tok, ()))
+                proof_lines.update(state.exact_value_lines.get(tok, ()))
         if cited_primary_lines & proof_lines:
+            for cls_name in (
+                "SAME_FILE_HELPER_CONSTANT_FLOW",
+                "LOCAL_ARRAYLIST_CONSTANT_FLOW",
+                "LOCAL_HASHMAP_CONSTANT_FLOW",
+                "DETERMINISTIC_CONSTANT_SWITCH",
+            ):
+                if cls_name in state.used_proof_classes:
+                    return True, cls_name
             return True, "UNCONDITIONAL_CONSTANT_SINK_FLOW"
         return False, "citations do not cover the constant assignment or sink lines"
 
@@ -2750,18 +4401,28 @@ def _verify_independent_refutation_proof(
 
     # 4. CWE-22 verified dominating canonical directory containment guard (checked canonical value used directly at sink!)
     if primary_cwe == "CWE-22":
-        # Never allow multi-arg path joining after canonicalization (e.g. `new File(targetCanon, "child")`,
-        # `Paths.get(targetCanon, "child")`, `targetReal.resolve("child")`) because appended child segments
-        # were NOT resolved by the preceding canonical containment check!
-        if len(sink_args) > 1 and _CWE22_PATH_JOIN_SINK_RE.search(clean_sink_k):
-            return False, "CWE-22 sink appends unverified path segments after canonical containment guard"
+        # Never allow path joining after canonicalization (e.g. `new File(targetCanon, "child")`,
+        # `Paths.get(targetCanon, "child")`, `targetReal.resolve("child")`, `untrusted.resolve(targetReal)`)
+        # because appended or prepended segments were NOT resolved by the preceding canonical containment check!
+        if re.search(r"\.\s*(?:resolve|resolveSibling)\s*\(", clean_sink_k) or (
+            len(sink_args) > 1 and _CWE22_PATH_JOIN_SINK_RE.search(clean_sink_k)
+        ):
+            return False, "CWE-22 sink joins unverified path segments after canonical containment guard"
         guarded_lines: set[int] = set()
         all_args_guarded = True
         for arg in sink_args:
             tv = _extract_cwe22_sink_target_var(arg)
             if tv and tv in state.guarded_vars:
                 guarded_lines.add(state.guarded_vars[tv][0])
-            elif _eval_constant_expr(arg, state.const_vars, is_cwe22=True):
+            elif _eval_constant_expr(
+                arg,
+                state.const_vars,
+                is_cwe22=True,
+                const_field_resolver=const_field_resolver,
+                exact_str_vars=state.exact_str_vars,
+                allow_jdk_enum=True,
+                jdk_enum_checker=jdk_enum_checker,
+            ):
                 continue
             else:
                 all_args_guarded = False
@@ -2871,6 +4532,35 @@ def apply_integration_gate(record: dict[str, Any], assessment: dict[str, Any]) -
                 citation_check="NOT_VERIFIED",
                 citation_provenance=verified_citation_prov,
             )
+        # Preserve verified citations from raw_response when Layer-1 downgraded REFUTED -> UNVERIFIED_REFUTATION
+        # (only when every citation passes full provenance verification; status always remains UNDETERMINED).
+        if out.get("failure_kind") == "UNVERIFIED_REFUTATION" and not out.get("citations"):
+            raw_resp = out.get("raw_response")
+            raw_content = None
+            if isinstance(raw_resp, dict) and isinstance(raw_resp.get("message"), dict):
+                raw_content = raw_resp["message"].get("content")
+            elif isinstance(raw_resp, str):
+                raw_content = raw_resp
+            if isinstance(raw_content, str) and raw_content.strip():
+                try:
+                    raw_ans = strict_json(raw_content)
+                except Exception:
+                    raw_ans = None
+                if isinstance(raw_ans, dict) and isinstance(raw_ans.get("citations"), list) and raw_ans["citations"]:
+                    cand_out = dict(out)
+                    cand_out["citations"] = copy.deepcopy(raw_ans["citations"])
+                    c_ok, c_chk, c_prov, _ = _verify_citation_integrity(
+                        record,
+                        cand_out,
+                        require_non_empty=True,
+                        require_relevant_scope=True,
+                    )
+                    if c_ok and c_chk == "MATCHED":
+                        out["citations"] = cand_out["citations"]
+                        verified_citation_check = c_chk
+                        verified_citation_prov = c_prov
+            if not out.get("downgrade_reason") and isinstance(out.get("explanation"), str) and out["explanation"].strip():
+                out["downgrade_reason"] = out["explanation"].strip()
         return _finalize_gate_output(
             out,
             final_status="UNDETERMINED",
@@ -2976,7 +4666,37 @@ def apply_integration_gate(record: dict[str, Any], assessment: dict[str, Any]) -
             citation_provenance=verified_citation_prov,
         )
     header_line = int(enc["header_line"])
-    raw_sink_ln = sig.get("sink_line") if type(sig.get("sink_line")) is int else (record.get("start") or {}).get("line")
+    # Derive authoritative OpenGrep sink line from verified record evidence (never trust heuristic_signals blindly)
+    verified_evidence_sink_ln: int | None = None
+    snaps_map = record.get("snapshots") if isinstance(record.get("snapshots"), dict) else {}
+    p_expected_sha = (snaps_map.get(p_path) or {}).get("sha256") if isinstance(snaps_map.get(p_path), dict) else None
+    for snip in record.get("snippets") or []:
+        if (
+            isinstance(snip, dict)
+            and snip.get("role") == "sink"
+            and snip.get("path") == p_path
+            and (p_expected_sha is None or snip.get("sha256") == p_expected_sha)
+            and isinstance(snip.get("start"), dict)
+            and type(snip["start"].get("line")) is int
+        ):
+            verified_evidence_sink_ln = int(snip["start"]["line"])
+            break
+    if verified_evidence_sink_ln is None and isinstance(record.get("start"), dict) and type(record["start"].get("line")) is int:
+        verified_evidence_sink_ln = int(record["start"]["line"])
+
+    sig_sink_ln = sig.get("sink_line") if type(sig.get("sink_line")) is int else None
+    if verified_evidence_sink_ln is not None and sig_sink_ln is not None and sig_sink_ln != verified_evidence_sink_ln:
+        return _downgrade_assessment(
+            out,
+            failure_kind="UNVERIFIED_REFUTATION",
+            reason=(
+                f"Rejected REFUTED because heuristic_signals.sink_line ({sig_sink_ln}) disagrees with "
+                f"verified OpenGrep finding sink coordinate ({verified_evidence_sink_ln})."
+            ),
+            citation_check=verified_citation_check,
+            citation_provenance=verified_citation_prov,
+        )
+    raw_sink_ln = verified_evidence_sink_ln if verified_evidence_sink_ln is not None else sig_sink_ln
     if type(raw_sink_ln) is not int:
         return _downgrade_assessment(
             out,

@@ -26,13 +26,18 @@ else:
 
 from v2.api import API_CONTRACT_SCHEMA, API_SERVICE_NAME, API_VERSION, REPORT_SCHEMA
 from v2.api.config import ApiConfig
-from v2.api.opengrep_runner import OpenGrepHealthProbe
+from v2.api.opengrep_runner import (
+    OpenGrepHealthProbe,
+    compute_opengrep_coverage_telemetry,
+    reconcile_cached_and_raw_coverage_telemetry,
+    validate_coverage_telemetry_payload,
+)
 from v2.api.triage_gate import UNSUPPORTED_REFUTATION_PROOF_LIMITS
 from v2.g1_integration.bridge import KNOWN_ANALYSIS_LIMITS
 from v2.g1_integration.fork_support.scanner_config import validate_opengrep_binary
 from v2.triage import export_pilot
 from v2.triage.evidence import EvidenceError, StaleSourceError, digest, now, strict_json
-from v2.triage.ollama import PROMPT_VERSION, OllamaClient
+from v2.triage.ollama import PROMPT_VERSION, OllamaClient, is_reparse_link
 from v2.triage.runtime import SCHEMA_VERSION, summary as runtime_summary_fn
 from v2.triage.store import ReviewStore
 
@@ -2833,7 +2838,153 @@ class TriageApiService:
 
         rt_counts = runtime_summary_fn(assessments)
         prov = bundle.get("scan_provenance") or {}
-        pre_hashes = bundle.get("pre_scan_hashes") or g1_doc.get("pre_scan_sources_sha256") or meta_doc.get("java_sha256") or {}
+        inventory_malformed = False
+        bundle_pre_raw = bundle.get("pre_scan_hashes")
+        g1_pre_raw = g1_doc.get("pre_scan_sources_sha256")
+        meta_pre_raw = meta_doc.get("java_sha256")
+        for cand_raw in (bundle_pre_raw, g1_pre_raw, meta_pre_raw):
+            if cand_raw is not None and not isinstance(cand_raw, dict):
+                inventory_malformed = True
+
+        # Prefer cryptographically verified capture/scan-manifest.json inventory over unverified meta_doc cache
+        manifest_hashes: dict[str, Any] | None = None
+        if bundle_pre_raw is None and g1_pre_raw is None:
+            manifest_sha_expected = prov.get("manifest_sha256")
+            if (
+                isinstance(manifest_sha_expected, str)
+                and len(manifest_sha_expected) == 64
+                and all(ch in "0123456789abcdef" for ch in manifest_sha_expected)
+            ):
+                manifest_path = entry.base_dir / "capture" / "scan-manifest.json"
+                if manifest_path.is_file() and not is_reparse_link(manifest_path):
+                    try:
+                        m_raw = manifest_path.read_bytes()
+                        if digest(m_raw) == manifest_sha_expected:
+                            m_doc = strict_json(m_raw.decode("utf-8"))
+                            if isinstance(m_doc, dict) and isinstance(m_doc.get("sources_before"), dict):
+                                sb = m_doc["sources_before"]
+                                sa = m_doc.get("sources_after")
+                                if sa is None or (isinstance(sa, dict) and sa == sb):
+                                    manifest_hashes = sb
+                                else:
+                                    inventory_malformed = True
+                    except (OSError, UnicodeDecodeError, EvidenceError, ValueError):
+                        inventory_malformed = True
+
+        pre_hashes: dict[str, Any] | None = None
+        if isinstance(bundle_pre_raw, dict):
+            pre_hashes = bundle_pre_raw
+        elif isinstance(g1_pre_raw, dict):
+            pre_hashes = g1_pre_raw
+        elif manifest_hashes is not None:
+            pre_hashes = manifest_hashes
+            if isinstance(meta_pre_raw, dict):
+                m_java_keys = {
+                    k.replace("\\", "/") for k in manifest_hashes.keys() if isinstance(k, str) and k.replace("\\", "/").lower().endswith(".java")
+                }
+                c_java_keys = {
+                    k.replace("\\", "/") for k in meta_pre_raw.keys() if isinstance(k, str) and k.replace("\\", "/").lower().endswith(".java")
+                }
+                if c_java_keys != m_java_keys:
+                    inventory_malformed = True
+        elif isinstance(meta_pre_raw, dict):
+            pre_hashes = meta_pre_raw
+
+        raw_meta_count = meta_doc.get("java_files_count")
+        if raw_meta_count is not None and not (type(raw_meta_count) is int and raw_meta_count >= 0):
+            inventory_malformed = True
+            valid_meta_count = None
+        else:
+            valid_meta_count = raw_meta_count
+
+        if pre_hashes is not None:
+            pre_java_count = sum(
+                1 for k in pre_hashes.keys() if isinstance(k, str) and k.replace("\\", "/").lower().endswith(".java")
+            )
+            legacy_java_scanned = len(pre_hashes) if pre_hashes else valid_meta_count
+            expected_inventory_int: int | None = pre_java_count
+        else:
+            legacy_java_scanned = valid_meta_count
+            expected_inventory_int = valid_meta_count
+
+        inv_paths_arg = pre_hashes.keys() if pre_hashes is not None else None
+        bundle_root_raw = bundle.get("root")
+        source_root_arg = (
+            Path(bundle_root_raw)
+            if isinstance(bundle_root_raw, str) and bundle_root_raw.strip()
+            else None
+        )
+        og_path = entry.raw_json_path or (entry.base_dir / "capture" / "opengrep.json")
+        has_valid_sha = (
+            isinstance(entry.scan_sha256, str)
+            and len(entry.scan_sha256) == 64
+            and all(ch in "0123456789abcdef" for ch in entry.scan_sha256)
+        )
+        raw_file_present = False
+        if inventory_malformed:
+            raw_coverage_tel = {
+                "java_files_inventory": None,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+        elif not entry.scan_sha256:
+            raw_coverage_tel = {
+                "java_files_inventory": expected_inventory_int,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "MISSING_PATHS_TELEMETRY",
+            }
+        elif not has_valid_sha:
+            raw_coverage_tel = {
+                "java_files_inventory": expected_inventory_int,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+            }
+        elif og_path is not None and og_path.is_file():
+            raw_file_present = True
+            try:
+                if is_reparse_link(og_path):
+                    raise EvidenceError("symlink/reparse opengrep.json forbidden")
+                raw_og = og_path.read_bytes()
+                if digest(raw_og) != entry.scan_sha256:
+                    raw_coverage_tel = {
+                        "java_files_inventory": expected_inventory_int,
+                        "java_files_opengrep_scanned": None,
+                        "java_files_opengrep_ignored": None,
+                        "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+                    }
+                else:
+                    og_doc = strict_json(raw_og.decode("utf-8"))
+                    raw_coverage_tel = compute_opengrep_coverage_telemetry(
+                        inv_paths_arg,
+                        og_doc if isinstance(og_doc, dict) else og_doc,
+                        inventory_count_fallback=expected_inventory_int,
+                        source_root=source_root_arg,
+                    )
+            except (OSError, UnicodeDecodeError, EvidenceError, ValueError):
+                raw_coverage_tel = {
+                    "java_files_inventory": expected_inventory_int,
+                    "java_files_opengrep_scanned": None,
+                    "java_files_opengrep_ignored": None,
+                    "opengrep_paths_telemetry_status": "INCONSISTENT_TELEMETRY",
+                }
+        else:
+            raw_coverage_tel = {
+                "java_files_inventory": expected_inventory_int,
+                "java_files_opengrep_scanned": None,
+                "java_files_opengrep_ignored": None,
+                "opengrep_paths_telemetry_status": "MISSING_PATHS_TELEMETRY",
+            }
+
+        coverage_tel = reconcile_cached_and_raw_coverage_telemetry(
+            meta_doc,
+            raw_coverage_tel,
+            expected_inventory=expected_inventory_int,
+            scan_sha256=entry.scan_sha256,
+            raw_file_present=raw_file_present,
+        )
 
         return {
             "scan_id": entry.scan_id,
@@ -2851,7 +3002,11 @@ class TriageApiService:
             "resolved_commit": meta_doc.get("resolved_commit"),
             "file_name": meta_doc.get("file_name"),
             "job_id": meta_doc.get("job_id"),
-            "java_files_scanned": len(pre_hashes) if isinstance(pre_hashes, dict) and pre_hashes else meta_doc.get("java_files_count"),
+            "java_files_scanned": legacy_java_scanned,
+            "java_files_inventory": coverage_tel["java_files_inventory"],
+            "java_files_opengrep_scanned": coverage_tel["java_files_opengrep_scanned"],
+            "java_files_opengrep_ignored": coverage_tel["java_files_opengrep_ignored"],
+            "opengrep_paths_telemetry_status": coverage_tel["opengrep_paths_telemetry_status"],
             "prompt_contract": bundle.get("prompt_contract") or g1_doc.get("prompt_contract") or "blind",
             "prompt_version": g1_doc.get("prompt_version") or PROMPT_VERSION,
             "opengrep_version": g1_doc.get("opengrep_version") or meta_doc.get("opengrep_version"),

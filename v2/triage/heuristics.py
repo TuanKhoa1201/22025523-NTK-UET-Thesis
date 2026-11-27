@@ -40,41 +40,135 @@ WRONG_CONTEXT_ENCODERS = [
 
 # CWE-22 single-component filename extractors: SanitizerExpr -> inner arg group(1)
 CWE22_BASENAME_CALL_PATTERNS = [
-    ("FilenameUtils.getName", re.compile(r"\bFilenameUtils\.getName\s*\(\s*([^)]+?)\s*\)")),
-    ("File.getName", re.compile(r"\bnew\s+(?:java\.io\.)?File\s*\(\s*([^)]+?)\s*\)\s*\.\s*getName\s*\(\s*\)")),
-    ("Path.getFileName", re.compile(r"\b([A-Za-z_][A-Za-z0-9_.]*)\s*\.\s*getFileName\s*\(\s*\)(?:\s*\.\s*toString\s*\(\s*\))?")),
+    ("FilenameUtils.getName", re.compile(r"(?:org\.apache\.commons\.io\.)?FilenameUtils\.getName\s*\(\s*([^)]+?)\s*\)")),
+    ("File.getName", re.compile(r"new\s+(?:java\.io\.)?File\s*\(\s*([^)]+?)\s*\)\s*\.\s*getName\s*\(\s*\)")),
+    ("Path.getFileName", re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\s*\.\s*getFileName\s*\(\s*\)(?:\s*\.\s*toString\s*\(\s*\))?")),
 ]
 
 # CWE-89 strict scalar conversions
 CWE89_SCALAR_PARSE_PATTERNS = [
-    ("Integer.parseInt", re.compile(r"\bInteger\.parseInt\s*\(\s*([^)]+?)\s*\)")),
-    ("Long.parseLong", re.compile(r"\bLong\.parseLong\s*\(\s*([^)]+?)\s*\)")),
-    ("UUID.fromString", re.compile(r"\bUUID\.fromString\s*\(\s*([^)]+?)\s*\)")),
+    ("Integer.parseInt", re.compile(r"(?:java\.lang\.)?Integer\.parseInt\s*\(\s*([^)]+?)\s*\)")),
+    ("Long.parseLong", re.compile(r"(?:java\.lang\.)?Long\.parseLong\s*\(\s*([^)]+?)\s*\)")),
+    ("UUID.fromString", re.compile(r"(?:java\.util\.)?UUID\.fromString\s*\(\s*([^)]+?)\s*\)")),
 ]
 
-GUESS_LITERAL_RE = re.compile(r'\bString\s+guess\s*=\s*"([^"]*)"\s*;')
-SWITCH_TARGET_RE = re.compile(r"\bchar\s+switchTarget\s*=\s*guess\.charAt\s*\(\s*(\d+)\s*\)\s*;")
-CASE_CHAR_RE = re.compile(r"^\s*case\s+'([^'])'\s*:")
-DEFAULT_CASE_RE = re.compile(r"^\s*default\s*:")
-BREAK_RE = re.compile(r"^\s*break\s*;")
+_JAVA_INT_MIN = -(1 << 31)
+_JAVA_INT_MAX = (1 << 31) - 1
+_JAVA_NONNEG_DECIMAL_INT_RE = re.compile(r"^(?:0|[1-9][0-9]*)$", re.ASCII)
+_JAVA_UNICODE_ESCAPE_RE = re.compile(r"(?<!\\)(?:\\\\)*\\u+[0-9A-Fa-f]{4}")
 
-INT_NUM_RE = re.compile(r"^\s*int\s+num\s*=\s*(\d+)\s*;")
+
+def parse_java_nonneg_decimal_int_literal(token: Any) -> int | None:
+    """Strictly parse a non-negative ASCII decimal Java `int` literal (`0` or `[1-9][0-9]*` <= 2^31-1).
+
+    Fail-closed per JLS §3.10.1: rejects octal literals with leading zeros (`010`, `00`, `07`),
+    hexadecimal (`0x...`), binary (`0b...`), underscores (`1_0`), unary signs (`+1`, `-1`),
+    long suffixes (`1L`), non-ASCII Unicode digits, expressions, and 32-bit signed `int` overflow.
+    """
+    if not isinstance(token, str):
+        return None
+    s = token.strip()
+    if not _JAVA_NONNEG_DECIMAL_INT_RE.fullmatch(s):
+        return None
+    val = int(s, 10)
+    if val < 0 or val > _JAVA_INT_MAX:
+        return None
+    return val
+
+
+def _contains_java_unicode_escape(text: str) -> bool:
+    """Detect JLS §3.3 raw Unicode escapes (`\\uXXXX`), which translate prior to Java tokenization."""
+    return bool(text and _JAVA_UNICODE_ESCAPE_RE.search(text))
+
+
+GUESS_LITERAL_RE = re.compile(r'\bString\s+guess\s*=\s*"([^"]*)"\s*;')
+SWITCH_TARGET_RE = re.compile(r"\bchar\s+switchTarget\s*=\s*guess\.charAt\s*\(\s*([^()]+?)\s*\)\s*;")
+CASE_CHAR_RE = re.compile(r"^\s*case\s+'([^'\\])'\s*:\s*$")
+DEFAULT_CASE_RE = re.compile(r"^\s*default\s*:\s*$")
+BREAK_RE = re.compile(r"^\s*break\s*;\s*$")
+
+INT_NUM_RE = re.compile(r"^\s*int\s+num\s*=\s*([^;]+?)\s*;")
 ARITH_TERNARY_RE = re.compile(
     r"^(?:[A-Za-z_][A-Za-z0-9_<>,.\[\]\s]*?\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
-    r"\(\s*(\d+)\s*([*/])\s*(\d+)\s*\)\s*([+-])\s*num\s*>\s*(\d+)\s*\?\s*(.+?)\s*:\s*(.+?)\s*;$"
+    r"\(\s*([0-9A-Za-z_]+)\s*([*/])\s*([0-9A-Za-z_]+)\s*\)\s*([+-])\s*num\s*>\s*([0-9A-Za-z_]+)\s*\?\s*(.+?)\s*:\s*(.+?)\s*;$"
 )
 ARITH_COND_RE = re.compile(
-    r"^\(\s*(\d+)\s*([*/])\s*(\d+)\s*\)\s*([+-])\s*num\s*>\s*(\d+)$"
+    r"^\(\s*([0-9A-Za-z_]+)\s*([*/])\s*([0-9A-Za-z_]+)\s*\)\s*([+-])\s*num\s*>\s*([0-9A-Za-z_]+)$"
 )
 
-LIST_NEW_RE = re.compile(r"\b(?:List|ArrayList|LinkedList)\s*(?:<[^>]*>)?\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\b")
-LIST_ADD_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\.add\s*\(\s*(.+?)\s*\)\s*;$")
-LIST_REMOVE_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\.remove\s*\(\s*(\d+)\s*\)\s*;$")
-LIST_GET_EXPR_RE = re.compile(r"^(?:\(\s*String\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\.get\s*\(\s*(\d+)\s*\)$")
+LIST_NEW_RE = re.compile(
+    r"\b(?:(?:java\.util\.)?(?:List|ArrayList|LinkedList)(?:\s*<[^>]*>)?|var)\s+"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\s+(?:java\.util\.)?(?:ArrayList|LinkedList)(?:\s*<[^>]*>)?\s*\(\s*\)\s*;\s*$"
+)
+LIST_ADD_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*add\s*\((.+)\)\s*;\s*$")
+LIST_REMOVE_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*remove\s*\((.+)\)\s*;\s*$")
+LIST_SET_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*set\s*\((.+)\)\s*;\s*$")
+LIST_CLEAR_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*clear\s*\(\s*\)\s*;\s*$")
+LIST_GET_EXPR_RE = re.compile(
+    r"^(?:\(\s*(?:java\.lang\.)?String\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*get\s*\(\s*([^()]+?)\s*\)$"
+)
 
-MAP_NEW_RE = re.compile(r"\b(?:Map|HashMap)\s*(?:<[^>]*>)?\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\b")
+MAP_NEW_RE = re.compile(
+    r"\b(?:(?:java\.util\.)?(?:Map|HashMap)(?:\s*<[^>]*>)?|var)\s+"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\s+(?:java\.util\.)?HashMap(?:\s*<[^>]*>)?\s*\(\s*\)\s*;\s*$"
+)
 MAP_PUT_RE = re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\.put\s*\(\s*("[^"]*")\s*,\s*(.+?)\s*\)\s*;$')
+MAP_PUT_ANY_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\.put\s*\(")
 MAP_GET_EXPR_RE = re.compile(r'^(?:\(\s*String\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\.get\s*\(\s*("[^"]*")\s*\)$')
+
+
+def _unescape_java_string_literal_jls(lit: str) -> str | None:
+    """Decode Java string literal per JLS §3.10.7; fail closed (None) on \\u or unknown escapes."""
+    s = lit.strip()
+    if len(s) < 2 or not (s.startswith('"') and s.endswith('"')) or "\n" in s or "\r" in s:
+        return None
+    inner = s[1:-1]
+    out: list[str] = []
+    i = 0
+    n = len(inner)
+    simple_map = {
+        "b": "\b",
+        "t": "\t",
+        "n": "\n",
+        "f": "\f",
+        "r": "\r",
+        "s": " ",
+        '"': '"',
+        "'": "'",
+        "\\": "\\",
+    }
+    while i < n:
+        ch = inner[i]
+        if ch == '"':
+            return None
+        if ch == "\\":
+            if i + 1 >= n:
+                return None
+            nxt = inner[i + 1]
+            if nxt in simple_map:
+                out.append(simple_map[nxt])
+                i += 2
+                continue
+            if nxt in "01234567":
+                digits = nxt
+                j = i + 2
+                if j < n and inner[j] in "01234567":
+                    digits += inner[j]
+                    j += 1
+                    if nxt in "0123" and j < n and inner[j] in "01234567":
+                        digits += inner[j]
+                        j += 1
+                out.append(chr(int(digits, 8)))
+                i = j
+                continue
+            return None
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _has_non_bmp_or_surrogate(val: str) -> bool:
+    return any(ord(ch) > 0xFFFF or 0xD800 <= ord(ch) <= 0xDFFF for ch in val)
 
 ASSIGN_STMT_RE = re.compile(
     r"^\s*(?:final\s+)?(?:([A-Za-z_][A-Za-z0-9_<>,.\[\]]*(?:\s*\[\s*\])*)\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(\+?=)\s*(.+?)\s*;\s*$"
@@ -330,18 +424,125 @@ def _is_safe_path_prefix_expr(prefix_expr: str) -> str:
     """
     p = prefix_expr.strip()
     if _is_pure_string_literal(p):
-        inner = p[1:-1]
-        if inner.endswith("/") or inner.endswith("\\\\") or inner.endswith("\\"):
+        dec = _unescape_java_string_literal_jls(p)
+        if dec is None or "\x00" in dec:
+            return "AMBIGUOUS_NO_SEPARATOR"
+        segs = [seg for seg in dec.replace("\\", "/").split("/") if seg]
+        if ".." in segs or "." in segs:
+            return "AMBIGUOUS_NO_SEPARATOR"
+        # Reject bare filesystem/drive roots such as "/", "\\", "C:/", "C:\\"
+        non_drive = [seg for seg in segs if not re.fullmatch(r"[A-Za-z]:", seg)]
+        if not non_drive:
+            return "AMBIGUOUS_NO_SEPARATOR"
+        if dec.endswith("/") or dec.endswith("\\"):
             return "SAFE_BOUNDARY"
         return "UNSAFE_NO_SEPARATOR_LITERAL"
     parts = _split_top_level_plus(p)
     if len(parts) >= 2:
+        for part in parts:
+            if _is_pure_string_literal(part):
+                dec_part = _unescape_java_string_literal_jls(part)
+                if dec_part is None or "\x00" in dec_part:
+                    return "AMBIGUOUS_NO_SEPARATOR"
+                segs = [seg for seg in dec_part.replace("\\", "/").split("/") if seg]
+                if ".." in segs or "." in segs:
+                    return "AMBIGUOUS_NO_SEPARATOR"
         last = parts[-1].strip()
         if last in ("File.separator", "java.io.File.separator", '"/"', '"\\\\"'):
             return "SAFE_BOUNDARY"
-        if _is_pure_string_literal(last) and (last[1:-1].startswith("/") or last[1:-1].endswith("/")):
-            return "SAFE_BOUNDARY"
+        if _is_pure_string_literal(last):
+            dec_last = _unescape_java_string_literal_jls(last)
+            if dec_last is not None and (dec_last.endswith("/") or dec_last.endswith("\\")):
+                return "SAFE_BOUNDARY"
+            return "UNSAFE_NO_SEPARATOR_LITERAL"
     return "AMBIGUOUS_NO_SEPARATOR"
+
+
+def _prefix_expr_has_tainted_ident(prefix_expr: str, env: dict[str, str]) -> bool:
+    for part in _split_top_level_plus(prefix_expr.strip()):
+        if _is_pure_string_literal(part):
+            continue
+        for ident in IDENT_RE.findall(part):
+            if env.get(ident) == "TAINTED":
+                return True
+    return False
+
+
+def _strip_outer_parens_and_cast(expr: str) -> str:
+    s = expr.strip()
+    while len(s) >= 2 and s[0] == "(" and s[-1] == ")":
+        depth = 0
+        in_s = False
+        in_c = False
+        closes_at_end = True
+        i = 0
+        while i < len(s):
+            ch = s[i]
+            if in_s:
+                if ch == "\\" and i + 1 < len(s):
+                    i += 2
+                    continue
+                if ch == '"':
+                    in_s = False
+            elif in_c:
+                if ch == "\\" and i + 1 < len(s):
+                    i += 2
+                    continue
+                if ch == "'":
+                    in_c = False
+            elif ch == '"':
+                in_s = True
+            elif ch == "'":
+                in_c = True
+            elif ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0 and i < len(s) - 1:
+                    closes_at_end = False
+                    break
+            i += 1
+        if closes_at_end and depth == 0:
+            s = s[1:-1].strip()
+        else:
+            break
+    s = re.sub(
+        r"^\(\s*(?:(?:java\.lang\.)?(?:String|Integer|Long)|int|long)\s*\)\s*",
+        "",
+        s,
+    ).strip()
+    return s
+
+
+def _stmt_mutates_ident(masked_stmt: str, ident: str) -> bool:
+    return bool(
+        re.search(
+            rf"(?:\b{ident}\s*(?:[+\-*/%&|^]?=(?!=)|\+\+|--)|(?:\+\+|--)\s*{ident}\b)",
+            masked_stmt,
+        )
+    )
+
+
+def _units_mutate_ident(units_slice: list[tuple[int, int, str, str]], ident: str) -> bool:
+    return any(_stmt_mutates_ident(u[3], ident) for u in units_slice)
+
+
+def _invalidate_collections_in_units(
+    units_slice: list[tuple[int, int, str, str]],
+    lists: dict[str, list[tuple[str, int]]],
+    maps: dict[str, dict[str, tuple[str, int]]],
+) -> None:
+    if not lists and not maps:
+        return
+    idents: set[str] = set()
+    for _, _, _, m_txt in units_slice:
+        idents.update(IDENT_RE.findall(m_txt))
+    for lk in list(lists):
+        if lk in idents:
+            lists.pop(lk, None)
+    for mk in list(maps):
+        if mk in idents:
+            maps.pop(mk, None)
 
 
 def _merge_states(s1: str, s2: str, primary_cwe: str) -> str:
@@ -547,7 +748,7 @@ class _FlowAnalyzer:
     ) -> tuple[str, list[int]]:
         e = expr.strip()
         em = masked_expr.strip()
-        if not e or e in ("null", "true", "false") or e.isdigit():
+        if not e or e in ("null", "true", "false") or parse_java_nonneg_decimal_int_literal(e) is not None:
             return "SAFE_CONST", []
         if _is_pure_string_literal(e):
             return "SAFE_CONST", [ln_no]
@@ -580,6 +781,14 @@ class _FlowAnalyzer:
                     return "TAINTED", cites
                 return san_tag, cites
             if all(s == "SAFE_CONST" for s in part_states):
+                if self.primary_cwe == "CWE-22":
+                    decoded_parts = [_unescape_java_string_literal_jls(p) for p in plus_parts]
+                    if any(d is None for d in decoded_parts):
+                        return "UNKNOWN", cites
+                    combined = "".join(d for d in decoded_parts if d is not None)
+                    segs = combined.replace("\\", "/").split("/")
+                    if "\x00" in combined or ".." in segs or "." in segs:
+                        return "UNKNOWN", cites
                 return "SAFE_CONST", cites
             return "UNKNOWN", cites
 
@@ -587,10 +796,12 @@ class _FlowAnalyzer:
         if HTTP_SOURCE_CALL_RE.search(em):
             return "TAINTED", [ln_no]
 
-        # CWE-22 basename extractors
+        # CWE-22 basename extractors (must match the entire expression, never an embedded sub-call)
+        e_norm = _strip_outer_parens_and_cast(e)
+        em_norm = _strip_outer_parens_and_cast(em)
         for sname, spat in CWE22_BASENAME_CALL_PATTERNS:
-            m_san = spat.search(e)
-            if m_san and spat.search(em):
+            m_san = spat.fullmatch(e_norm)
+            if m_san and spat.fullmatch(em_norm):
                 arg_raw = m_san.group(1).strip()
                 arg_st, _ = self._eval_expr(
                     arg_raw, arg_raw, ln_no, env, var_types, lists, maps, owner_cls, depth, at_top_scope
@@ -599,10 +810,10 @@ class _FlowAnalyzer:
                     return "SANITIZED_CWE22", [ln_no]
                 return arg_st, [ln_no]
 
-        # CWE-89 scalar parsers
+        # CWE-89 scalar parsers (must match the entire expression, never an embedded sub-call)
         for sname, spat in CWE89_SCALAR_PARSE_PATTERNS:
-            m_san = spat.search(e)
-            if m_san and spat.search(em):
+            m_san = spat.fullmatch(e_norm)
+            if m_san and spat.fullmatch(em_norm):
                 arg_raw = m_san.group(1).strip()
                 arg_st, _ = self._eval_expr(
                     arg_raw, arg_raw, ln_no, env, var_types, lists, maps, owner_cls, depth, at_top_scope
@@ -613,21 +824,25 @@ class _FlowAnalyzer:
                     return "SANITIZED_CWE89", [ln_no]
                 return arg_st, [ln_no]
 
-        # Tracked List.get(idx)
+        # Tracked List.get(idx) — strict non-negative ASCII decimal Java int index only (fail-closed)
         m_lget = LIST_GET_EXPR_RE.match(e)
         if m_lget and at_top_scope:
-            lname, gidx = m_lget.group(1), int(m_lget.group(2))
-            if lname in lists and 0 <= gidx < len(lists[lname]):
+            lname = m_lget.group(1)
+            gidx = parse_java_nonneg_decimal_int_literal(m_lget.group(2))
+            if gidx is not None and lname in lists and 0 <= gidx < len(lists[lname]):
                 elem_state, elem_ln = lists[lname][gidx]
                 self.mechanisms.append(f"list_index_{elem_state.lower()}")
                 return elem_state, [elem_ln, ln_no]
+            if lname in lists:
+                return "UNKNOWN", []
 
         # Tracked Map.get("key")
         m_mget = MAP_GET_EXPR_RE.match(e)
         if m_mget and at_top_scope:
             mname, klit = m_mget.group(1), m_mget.group(2)
-            if mname in maps and klit in maps[mname]:
-                val_state, put_ln = maps[mname][klit]
+            decoded_key = _unescape_java_string_literal_jls(klit)
+            if decoded_key is not None and mname in maps and decoded_key in maps[mname]:
+                val_state, put_ln = maps[mname][decoded_key]
                 self.mechanisms.append(f"map_key_{val_state.lower()}")
                 return val_state, [put_ln, ln_no]
 
@@ -640,15 +855,16 @@ class _FlowAnalyzer:
             return "UNKNOWN", []
 
         # Array indexing `values[0]`
-        m_arr = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*\d+\s*\]", e)
-        if m_arr:
+        m_arr = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\s*\[\s*([^\]\[]+?)\s*\]", e)
+        if m_arr and parse_java_nonneg_decimal_int_literal(m_arr.group(2)) is not None:
             base_var = m_arr.group(1)
             return env.get(base_var, "UNKNOWN"), []
 
-        # Known constant environment / platform prefixes (e.g., Utils.TESTFILES_DIR, File.separator)
+        # Known constant platform separator and JDK enum constants (never mutable System.getProperty/getenv)
         if re.match(
-            r"^(?:org\.owasp\.benchmark\.helpers\.Utils\.TESTFILES_DIR|(?:java\.io\.)?File\.separator|"
-            r"System\.getProperty\s*\(\s*\"[^\"]+\"\s*\))",
+            r"^(?:(?:java\.io\.)?File\.separator|"
+            r"(?:(?:java\.nio\.file\.)?(?:StandardOpenOption|LinkOption)\.[A-Z_]+|"
+            r"(?:java\.nio\.charset\.)?StandardCharsets\.[A-Z0-9_]+)$)",
             e,
         ):
             return "SAFE_CONST", []
@@ -946,49 +1162,71 @@ class _FlowAnalyzer:
                 return_states.append((st, cites + [s_ln]))
                 return True
 
-            # Constant switch tracking (only valid at top scope when assigned once)
+            # Constant switch tracking (only valid at top scope when assigned once, BMP/JLS decoded)
             m_g = GUESS_LITERAL_RE.search(stripped_k)
             if m_g and at_top_scope:
                 guess_count += 1
-                guess_val = m_g.group(1) if guess_count == 1 else None
+                dec_guess = _unescape_java_string_literal_jls('"' + m_g.group(1) + '"')
+                if guess_count == 1 and dec_guess is not None and not _has_non_bmp_or_surrogate(dec_guess):
+                    guess_val = dec_guess
+                else:
+                    guess_val = None
                 guess_line = s_ln
+                env["guess"] = "SAFE_CONST" if guess_val is not None else "UNKNOWN"
+                i += 1
+                continue
             m_st = SWITCH_TARGET_RE.search(stripped_k)
             if m_st and at_top_scope and guess_val is not None:
                 target_count += 1
-                c_idx = int(m_st.group(1))
-                target_char = guess_val[c_idx] if (target_count == 1 and 0 <= c_idx < len(guess_val)) else None
+                c_idx = parse_java_nonneg_decimal_int_literal(m_st.group(1))
+                target_char = (
+                    guess_val[c_idx]
+                    if (
+                        target_count == 1
+                        and c_idx is not None
+                        and len(guess_val.encode("utf-16-le")) == 2 * len(guess_val)
+                        and 0 <= c_idx < len(guess_val)
+                    )
+                    else None
+                )
                 target_line = s_ln
-                env["switchTarget"] = "SAFE_CONST"
+                env["switchTarget"] = "SAFE_CONST" if target_char is not None else "UNKNOWN"
                 i += 1
                 continue
 
             m_num = INT_NUM_RE.match(stripped_k)
             if m_num and at_top_scope:
                 num_count += 1
-                num_val = int(m_num.group(1)) if num_count == 1 else None
+                parsed_num = parse_java_nonneg_decimal_int_literal(m_num.group(1))
+                num_val = parsed_num if (num_count == 1 and parsed_num is not None) else None
                 num_line = s_ln
-                env["num"] = "SAFE_CONST"
+                env["num"] = "SAFE_CONST" if num_val is not None else "UNKNOWN"
                 i += 1
                 continue
 
             # Handle `switch (...) { ... }`
             if re.match(r"^switch\s*\(", stripped_m) and "{" in stripped_m:
                 end_sw = self._find_block_end(units, i)
+                sw_slice = units[i + 1 : end_sw]
                 if at_top_scope and target_char is not None and re.match(r"^switch\s*\(\s*switchTarget\s*\)", stripped_m):
                     self._exec_constant_switch(
                         units, i + 1, end_sw, target_char, target_line, guess_line,
                         env, var_types, canon_of, lists, maps, owner_cls, depth, sink_line, return_states
                     )
                 else:
-                    # Non-constant switch: conservatively merge all case branches plus pre-state
-                    pre_env = dict(env)
-                    branch_env = dict(pre_env)
-                    self._exec_units(
-                        units, i + 1, end_sw, branch_env, dict(var_types), dict(canon_of),
-                        {}, {}, owner_cls, depth, False, sink_line, return_states
+                    self._exec_nonconstant_switch(
+                        units, i + 1, end_sw, env, var_types, canon_of,
+                        lists, maps, owner_cls, depth, sink_line, return_states
                     )
-                    for k in set(pre_env) | set(branch_env):
-                        env[k] = _merge_states(pre_env.get(k, "UNSET"), branch_env.get(k, "UNSET"), self.primary_cwe)
+                if _units_mutate_ident(sw_slice, "guess"):
+                    guess_val = None
+                    guess_count += 1
+                if _units_mutate_ident(sw_slice, "switchTarget"):
+                    target_char = None
+                    target_count += 1
+                if _units_mutate_ident(sw_slice, "num"):
+                    num_val = None
+                    num_count += 1
                 i = end_sw + 1
                 continue
 
@@ -1041,28 +1279,38 @@ class _FlowAnalyzer:
                 # 1. Check compile-time arithmetic constant `if ((A *|/ B) +|- num > THRESH)`
                 m_acond = ARITH_COND_RE.match(cond_k.strip())
                 if at_top_scope and m_acond and num_val is not None:
-                    a_i, op1, b_i, op2, thresh = (
-                        int(m_acond.group(1)),
-                        m_acond.group(2),
-                        int(m_acond.group(3)),
-                        m_acond.group(4),
-                        int(m_acond.group(5)),
-                    )
-                    lhs_v = (a_i * b_i) if op1 == "*" else (a_i // b_i)
-                    comp_v = (lhs_v + num_val) if op2 == "+" else (lhs_v - num_val)
-                    cond_true = comp_v > thresh
-                    chosen_units = then_units if cond_true else (else_units or [])
-                    dead_units = (else_units or []) if cond_true else then_units
-                    for ds, de, _, _ in dead_units:
-                        self.dead_branch_lines.update(range(ds, de + 1))
-                    if num_line is not None:
-                        self.key_lines.append(num_line)
-                    self._exec_units(
-                        chosen_units, 0, len(chosen_units), env, var_types, canon_of,
-                        lists, maps, owner_cls, depth, at_top_scope, sink_line, return_states
-                    )
-                    i = next_i
-                    continue
+                    a_i = parse_java_nonneg_decimal_int_literal(m_acond.group(1))
+                    op1 = m_acond.group(2)
+                    b_i = parse_java_nonneg_decimal_int_literal(m_acond.group(3))
+                    op2 = m_acond.group(4)
+                    thresh = parse_java_nonneg_decimal_int_literal(m_acond.group(5))
+                    if a_i is not None and b_i is not None and thresh is not None and not (op1 == "/" and b_i == 0):
+                        lhs_v = (a_i * b_i) if op1 == "*" else (a_i // b_i)
+                        if _JAVA_INT_MIN <= lhs_v <= _JAVA_INT_MAX:
+                            comp_v = (lhs_v + num_val) if op2 == "+" else (lhs_v - num_val)
+                            if _JAVA_INT_MIN <= comp_v <= _JAVA_INT_MAX:
+                                cond_true = comp_v > thresh
+                                chosen_units = then_units if cond_true else (else_units or [])
+                                dead_units = (else_units or []) if cond_true else then_units
+                                for ds, de, _, _ in dead_units:
+                                    self.dead_branch_lines.update(range(ds, de + 1))
+                                if num_line is not None:
+                                    self.key_lines.append(num_line)
+                                self._exec_units(
+                                    chosen_units, 0, len(chosen_units), env, var_types, canon_of,
+                                    lists, maps, owner_cls, depth, at_top_scope, sink_line, return_states
+                                )
+                                if _units_mutate_ident(chosen_units, "guess"):
+                                    guess_val = None
+                                    guess_count += 1
+                                if _units_mutate_ident(chosen_units, "switchTarget"):
+                                    target_char = None
+                                    target_count += 1
+                                if _units_mutate_ident(chosen_units, "num"):
+                                    num_val = None
+                                    num_count += 1
+                                i = next_i
+                                continue
 
                 # 2. Check Negative CWE-22 Containment Guard: `if (!canon.startsWith(prefix)) { return/throw; }`
                 m_neg_sw = NEG_STARTSWITH_IF_RE.match(cond_k.strip())
@@ -1075,6 +1323,8 @@ class _FlowAnalyzer:
                     )
                     if exits and (sink_line is None or e_ln < sink_line):
                         prefix_kind = _is_safe_path_prefix_expr(prefix_expr)
+                        if _prefix_expr_has_tainted_ident(prefix_expr, env):
+                            prefix_kind = "UNSAFE_TAINTED_PREFIX"
                         bound_target = canon_of.get(guard_var)
                         uses_inline_canon = ".getCanonicalPath(" in cond_m
                         if bound_target or uses_inline_canon:
@@ -1106,6 +1356,8 @@ class _FlowAnalyzer:
                 ):
                     guard_var, prefix_expr = m_pos_sw.group(1), m_pos_sw.group(2)
                     prefix_kind = _is_safe_path_prefix_expr(prefix_expr)
+                    if _prefix_expr_has_tainted_ident(prefix_expr, env):
+                        prefix_kind = "UNSAFE_TAINTED_PREFIX"
                     bound_target = canon_of.get(guard_var)
                     uses_inline_canon = ".getCanonicalPath(" in cond_m
                     if bound_target or uses_inline_canon:
@@ -1139,14 +1391,25 @@ class _FlowAnalyzer:
                 )
 
                 else_env = dict(pre_env)
+                else_lists = {k: list(v) for k, v in lists.items()}
+                else_maps = {k: dict(v) for k, v in maps.items()}
                 else_exits = False
                 if else_units is not None:
-                    else_lists = {k: list(v) for k, v in lists.items()}
-                    else_maps = {k: dict(v) for k, v in maps.items()}
                     else_exits = self._exec_units(
                         else_units, 0, len(else_units), else_env, dict(var_types), dict(canon_of),
                         else_lists, else_maps, owner_cls, depth, True, sink_line, return_states
                     )
+
+                branch_all_units = list(then_units) + list(else_units or [])
+                if _units_mutate_ident(branch_all_units, "guess"):
+                    guess_val = None
+                    guess_count += 1
+                if _units_mutate_ident(branch_all_units, "switchTarget"):
+                    target_char = None
+                    target_count += 1
+                if _units_mutate_ident(branch_all_units, "num"):
+                    num_val = None
+                    num_count += 1
 
                 if sink_line is not None and then_units and then_units[0][0] <= sink_line <= then_units[-1][1]:
                     env.clear()
@@ -1162,9 +1425,18 @@ class _FlowAnalyzer:
                 if then_exits:
                     env.clear()
                     env.update(else_env)
+                    if else_units is not None:
+                        lists.clear()
+                        lists.update(else_lists)
+                        maps.clear()
+                        maps.update(else_maps)
                 elif else_exits:
                     env.clear()
                     env.update(then_env)
+                    lists.clear()
+                    lists.update(then_lists)
+                    maps.clear()
+                    maps.update(then_maps)
                 else:
                     for k in set(then_env) | set(else_env):
                         if k in pre_env or (k in then_env and k in else_env):
@@ -1173,12 +1445,20 @@ class _FlowAnalyzer:
                                 else_env.get(k, pre_env.get(k, "UNSET")),
                                 self.primary_cwe,
                             )
+                    # Fail-closed reconciliation of collections mutated in either branch
+                    for lk in list(lists):
+                        if then_lists.get(lk) != lists[lk] or else_lists.get(lk) != lists[lk]:
+                            lists.pop(lk, None)
+                    for mk in list(maps):
+                        if then_maps.get(mk) != maps[mk] or else_maps.get(mk) != maps[mk]:
+                            maps.pop(mk, None)
                 i = next_i
                 continue
 
             # Handle `for (...)` / `while (...)` / `try { ... }` / `catch (...)` blocks
             if re.match(r"^(?:for|while|try|catch)\b", stripped_m) and "{" in stripped_m:
                 end_blk = self._find_block_end(units, i)
+                blk_slice = units[i : end_blk + 1]
                 is_try = stripped_m.startswith("try")
                 if is_try:
                     # Statements inside `try { ... }` before sink execute sequentially up to sink_line
@@ -1187,7 +1467,7 @@ class _FlowAnalyzer:
                         lists, maps, owner_cls, depth, at_top_scope, sink_line, return_states
                     )
                 else:
-                    # Loops / catch blocks may execute 0 or >=1 times: merge with pre_env!
+                    # Loops / catch blocks may execute 0 or >=1 times: merge with pre_env and invalidate touched collections!
                     pre_env = dict(env)
                     loop_env = dict(pre_env)
                     if stripped_m.startswith("for"):
@@ -1205,6 +1485,7 @@ class _FlowAnalyzer:
                         units, i + 1, end_blk, loop_env, dict(var_types), dict(canon_of),
                         {}, {}, owner_cls, depth, False, sink_line, return_states
                     )
+                    _invalidate_collections_in_units(blk_slice, lists, maps)
                     if sink_line is not None and i + 1 < end_blk and units[i + 1][0] <= sink_line <= units[end_blk][1]:
                         env.clear()
                         env.update(loop_env)
@@ -1212,59 +1493,142 @@ class _FlowAnalyzer:
                     for k in set(pre_env) | set(loop_env):
                         if k in pre_env:
                             env[k] = _merge_states(pre_env[k], loop_env.get(k, pre_env[k]), self.primary_cwe)
+                if _units_mutate_ident(blk_slice, "guess"):
+                    guess_val = None
+                    guess_count += 1
+                if _units_mutate_ident(blk_slice, "switchTarget"):
+                    target_char = None
+                    target_count += 1
+                if _units_mutate_ident(blk_slice, "num"):
+                    num_val = None
+                    num_count += 1
                 i = end_blk + 1
                 continue
 
             # Compile-time arithmetic ternary `bar = (7 * 42) - num > 200 ? a : b;`
             m_tern = ARITH_TERNARY_RE.match(stripped_k)
-            if m_tern and at_top_scope and num_val is not None:
+            if m_tern:
                 vname = m_tern.group(1)
-                a_i, op1, b_i, op2, thresh = (
-                    int(m_tern.group(2)),
-                    m_tern.group(3),
-                    int(m_tern.group(4)),
-                    m_tern.group(5),
-                    int(m_tern.group(6)),
-                )
+                a_i = parse_java_nonneg_decimal_int_literal(m_tern.group(2))
+                op1 = m_tern.group(3)
+                b_i = parse_java_nonneg_decimal_int_literal(m_tern.group(4))
+                op2 = m_tern.group(5)
+                thresh = parse_java_nonneg_decimal_int_literal(m_tern.group(6))
                 t_expr, f_expr = m_tern.group(7).strip(), m_tern.group(8).strip()
-                lhs_v = (a_i * b_i) if op1 == "*" else (a_i // b_i)
-                comp_v = (lhs_v + num_val) if op2 == "+" else (lhs_v - num_val)
-                chosen = t_expr if (comp_v > thresh) else f_expr
-                st, cites = self._eval_expr(
-                    chosen, chosen, s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
-                )
-                env[vname] = st
-                canon_of.pop(vname, None)
-                self.mechanisms.append(f"arithmetic_ternary_{st.lower()}")
-                if num_line is not None:
-                    self.key_lines.append(num_line)
-                self.key_lines.extend([s_ln] + cites)
+                resolved_chosen: str | None = None
+                if (
+                    at_top_scope
+                    and num_val is not None
+                    and a_i is not None
+                    and b_i is not None
+                    and thresh is not None
+                    and not (op1 == "/" and b_i == 0)
+                ):
+                    lhs_v = (a_i * b_i) if op1 == "*" else (a_i // b_i)
+                    if _JAVA_INT_MIN <= lhs_v <= _JAVA_INT_MAX:
+                        comp_v = (lhs_v + num_val) if op2 == "+" else (lhs_v - num_val)
+                        if _JAVA_INT_MIN <= comp_v <= _JAVA_INT_MAX:
+                            resolved_chosen = t_expr if (comp_v > thresh) else f_expr
+                if resolved_chosen is not None:
+                    st, cites = self._eval_expr(
+                        resolved_chosen, resolved_chosen, s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
+                    )
+                    env[vname] = st
+                    canon_of.pop(vname, None)
+                    self.mechanisms.append(f"arithmetic_ternary_{st.lower()}")
+                    if num_line is not None:
+                        self.key_lines.append(num_line)
+                    self.key_lines.extend([s_ln] + cites)
+                else:
+                    # Overflow or non-constant `num`: conservatively merge both ternary branches
+                    t_st, t_cites = self._eval_expr(
+                        t_expr, t_expr, s_ln, env, var_types, lists, maps, owner_cls, depth, False
+                    )
+                    f_st, f_cites = self._eval_expr(
+                        f_expr, f_expr, s_ln, env, var_types, lists, maps, owner_cls, depth, False
+                    )
+                    env[vname] = _merge_states(t_st, f_st, self.primary_cwe)
+                    canon_of.pop(vname, None)
+                    self.key_lines.extend([s_ln] + t_cites + f_cites)
+                if vname == "guess":
+                    guess_val = None
+                    guess_count += 1
+                elif vname == "switchTarget":
+                    target_char = None
+                    target_count += 1
+                elif vname == "num":
+                    num_val = None
+                    num_count += 1
                 i += 1
                 continue
 
-            # Collection mutations (List / Map)
-            if LIST_NEW_RE.search(stripped_m):
-                m_ln = LIST_NEW_RE.search(stripped_m)
-                if m_ln:
-                    lists[m_ln.group(1)] = []
+            # Collection mutations (List / Map) — strict fail-closed on non-decimal indices or unmodeled mutations
+            m_ln = LIST_NEW_RE.search(stripped_m)
+            if m_ln:
+                lists[m_ln.group(1)] = []
                 i += 1
                 continue
             m_ladd = LIST_ADD_RE.match(stripped_k)
             if m_ladd:
-                lname, elem_expr = m_ladd.group(1), m_ladd.group(2)
-                if lname in lists and at_top_scope:
-                    est, _ = self._eval_expr(
-                        elem_expr, elem_expr, s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
-                    )
-                    lists[lname].append((est, s_ln))
+                lname = m_ladd.group(1)
+                add_args = _split_top_level_args(m_ladd.group(2))
+                if lname in lists:
+                    if at_top_scope and len(add_args) == 1:
+                        est, _ = self._eval_expr(
+                            add_args[0], add_args[0], s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
+                        )
+                        lists[lname].append((est, s_ln))
+                    elif at_top_scope and len(add_args) == 2:
+                        aidx = parse_java_nonneg_decimal_int_literal(add_args[0])
+                        if aidx is not None and 0 <= aidx <= len(lists[lname]):
+                            est, _ = self._eval_expr(
+                                add_args[1], add_args[1], s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
+                            )
+                            lists[lname].insert(aidx, (est, s_ln))
+                            self.key_lines.append(s_ln)
+                        else:
+                            lists.pop(lname, None)
+                    else:
+                        lists.pop(lname, None)
                 i += 1
                 continue
             m_lrem = LIST_REMOVE_RE.match(stripped_k)
             if m_lrem:
-                lname, ridx = m_lrem.group(1), int(m_lrem.group(2))
-                if lname in lists and at_top_scope and 0 <= ridx < len(lists[lname]):
-                    lists[lname].pop(ridx)
-                    self.key_lines.append(s_ln)
+                lname = m_lrem.group(1)
+                if lname in lists:
+                    ridx = parse_java_nonneg_decimal_int_literal(m_lrem.group(2))
+                    if at_top_scope and ridx is not None and 0 <= ridx < len(lists[lname]):
+                        lists[lname].pop(ridx)
+                        self.key_lines.append(s_ln)
+                    else:
+                        lists.pop(lname, None)
+                i += 1
+                continue
+            m_lset = LIST_SET_RE.match(stripped_k)
+            if m_lset:
+                lname = m_lset.group(1)
+                set_args = _split_top_level_args(m_lset.group(2))
+                if lname in lists:
+                    sidx = parse_java_nonneg_decimal_int_literal(set_args[0]) if len(set_args) == 2 else None
+                    if at_top_scope and sidx is not None and 0 <= sidx < len(lists[lname]):
+                        est, _ = self._eval_expr(
+                            set_args[1], set_args[1], s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
+                        )
+                        lists[lname][sidx] = (est, s_ln)
+                        self.key_lines.append(s_ln)
+                    else:
+                        lists.pop(lname, None)
+                i += 1
+                continue
+            m_lclr = LIST_CLEAR_RE.match(stripped_m)
+            if m_lclr:
+                lname = m_lclr.group(1)
+                if lname in lists:
+                    if at_top_scope:
+                        lists[lname] = []
+                        self.key_lines.append(s_ln)
+                    else:
+                        lists.pop(lname, None)
                 i += 1
                 continue
 
@@ -1278,10 +1642,19 @@ class _FlowAnalyzer:
             if m_mput:
                 mname, klit, vexpr = m_mput.group(1), m_mput.group(2), m_mput.group(3)
                 if mname in maps and at_top_scope:
-                    vst, _ = self._eval_expr(
-                        vexpr, vexpr, s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
-                    )
-                    maps[mname][klit] = (vst, s_ln)
+                    decoded_key = _unescape_java_string_literal_jls(klit)
+                    if decoded_key is None:
+                        maps.pop(mname, None)
+                    else:
+                        vst, _ = self._eval_expr(
+                            vexpr, vexpr, s_ln, env, var_types, lists, maps, owner_cls, depth, at_top_scope
+                        )
+                        maps[mname][decoded_key] = (vst, s_ln)
+                i += 1
+                continue
+            m_mput_any = MAP_PUT_ANY_RE.match(stripped_m)
+            if m_mput_any and m_mput_any.group(1) in maps:
+                maps.pop(m_mput_any.group(1), None)
                 i += 1
                 continue
 
@@ -1307,6 +1680,20 @@ class _FlowAnalyzer:
                 )
                 rhs_m = m_asgn_m.group(4).strip()
                 if vname not in JAVA_KEYWORDS_AND_TYPES:
+                    # Drop tracked collection if reassigned directly (`values = List.of(...)`) or aliased/escaped on RHS
+                    lists.pop(vname, None)
+                    maps.pop(vname, None)
+                    m_rhs_lget = LIST_GET_EXPR_RE.match(rhs_k) if op_sym == "=" else None
+                    m_rhs_mget = MAP_GET_EXPR_RE.match(rhs_k) if op_sym == "=" else None
+                    allow_l = {m_rhs_lget.group(1)} if (m_rhs_lget and parse_java_nonneg_decimal_int_literal(m_rhs_lget.group(2)) is not None) else set()
+                    allow_m = {m_rhs_mget.group(1)} if m_rhs_mget else set()
+                    rhs_idents = set(IDENT_RE.findall(rhs_m))
+                    for lk in list(lists):
+                        if lk in rhs_idents and lk not in allow_l:
+                            lists.pop(lk, None)
+                    for mk in list(maps):
+                        if mk in rhs_idents and mk not in allow_m:
+                            maps.pop(mk, None)
                     # Track concrete local class instantiation for receiver resolution
                     m_new_rhs = NEW_OBJ_ASSIGN_RE.match(rhs_k)
                     if m_new_rhs:
@@ -1354,9 +1741,188 @@ class _FlowAnalyzer:
                         self.key_lines.append(s_ln)
                     elif cites:
                         self.key_lines.extend(cites)
+                    # Any subsequent assignment to tracked switch/arithmetic constants invalidates them
+                    if vname == "guess":
+                        guess_val = None
+                        guess_count += 1
+                    elif vname == "switchTarget":
+                        target_char = None
+                        target_count += 1
+                    elif vname == "num":
+                        num_val = None
+                        num_count += 1
+            else:
+                # Any other unrecognized statement touching a tracked collection (e.g., helper(values), m.replace(...)) invalidates it!
+                stmt_idents = set(IDENT_RE.findall(stripped_m))
+                for lk in list(lists):
+                    if lk in stmt_idents:
+                        lists.pop(lk, None)
+                for mk in list(maps):
+                    if mk in stmt_idents:
+                        maps.pop(mk, None)
+                if _stmt_mutates_ident(stripped_m, "guess"):
+                    guess_val = None
+                    guess_count += 1
+                if _stmt_mutates_ident(stripped_m, "switchTarget"):
+                    target_char = None
+                    target_count += 1
+                if _stmt_mutates_ident(stripped_m, "num"):
+                    num_val = None
+                    num_count += 1
 
             i += 1
         return False
+
+    def _split_inline_switch_statements(
+        self, s_ln: int, e_ln: int, code: str, masked: str
+    ) -> list[tuple[int, int, str, str]]:
+        """Split single-line inline statements (e.g. `{ bar = input; break; }` or `bar = input; break;`)."""
+        c = code.strip()
+        m = masked.strip()
+        while c.startswith("{") and c.endswith("}") and m.startswith("{") and m.endswith("}"):
+            c = c[1:-1].strip()
+            m = m[1:-1].strip()
+        if not c:
+            return []
+        c_parts = _split_sink_statements(c)
+        m_parts = _split_sink_statements(m)
+        if len(c_parts) == len(m_parts) and len(c_parts) > 1:
+            out: list[tuple[int, int, str, str]] = []
+            for cp, mp in zip(c_parts, m_parts):
+                cp_s = cp.strip()
+                mp_s = mp.strip()
+                if not cp_s:
+                    continue
+                if not cp_s.endswith((";", "{", "}")):
+                    cp_s += ";"
+                if not mp_s.endswith((";", "{", "}")):
+                    mp_s += ";"
+                if BREAK_RE.match(mp_s):
+                    continue
+                out.append((s_ln, e_ln, cp_s, mp_s))
+            return out
+        if BREAK_RE.match(m):
+            return []
+        return [(s_ln, e_ln, c, m)]
+
+    def _exec_nonconstant_switch(
+        self,
+        units: list[tuple[int, int, str, str]],
+        idx_start: int,
+        idx_end: int,
+        env: dict[str, str],
+        var_types: dict[str, str | None],
+        canon_of: dict[str, str],
+        lists: dict[str, list[tuple[str, int]]],
+        maps: dict[str, dict[str, tuple[str, int]]],
+        owner_cls: str | None,
+        depth: int,
+        sink_line: int | None,
+        return_states: list[tuple[str, list[int]]],
+    ) -> None:
+        """Conservatively merge every case segment (both fresh entry and fall-through) so no later case masks an earlier taint."""
+        sw_slice = units[idx_start:idx_end]
+        _invalidate_collections_in_units(sw_slice, lists, maps)
+
+        segments: list[tuple[list[tuple[int, int, str, str]], bool]] = []
+        cur_seg: list[tuple[int, int, str, str]] = []
+        brace_depth = 0
+
+        label_prefix_re = re.compile(r"^\s*(?:case\b[^:]*:|default\s*:)\s*")
+        for s_ln, e_ln, code, masked in sw_slice:
+            m_strip = masked.strip()
+            c_strip = code.strip()
+            if brace_depth == 0 and label_prefix_re.match(m_strip):
+                if cur_seg:
+                    segments.append((cur_seg, False))
+                    cur_seg = []
+                # Strip one or more leading `case ...:` / `default:` prefixes on the same line
+                rem_k = c_strip
+                rem_m = m_strip
+                while True:
+                    ml_m = label_prefix_re.match(rem_m)
+                    ml_k = label_prefix_re.match(rem_k)
+                    if not (ml_m and ml_k):
+                        break
+                    rem_m = rem_m[ml_m.end() :].strip()
+                    rem_k = rem_k[ml_k.end() :].strip()
+                if rem_k:
+                    if rem_m.count("{") == rem_m.count("}") and (";" in rem_m or (rem_m.startswith("{") and rem_m.endswith("}"))):
+                        has_inline_break = bool(re.search(r"\bbreak\s*;", rem_m))
+                        cur_seg.extend(self._split_inline_switch_statements(s_ln, e_ln, rem_k, rem_m))
+                        if has_inline_break:
+                            segments.append((cur_seg, True))
+                            cur_seg = []
+                    else:
+                        cur_seg.append((s_ln, e_ln, rem_k, rem_m))
+                        brace_depth += rem_m.count("{") - rem_m.count("}")
+                continue
+            if brace_depth == 0 and BREAK_RE.match(m_strip):
+                segments.append((cur_seg, True))
+                cur_seg = []
+                continue
+            cur_seg.append((s_ln, e_ln, code, masked))
+            brace_depth += m_strip.count("{") - m_strip.count("}")
+        if cur_seg:
+            segments.append((cur_seg, False))
+
+        pre_env = dict(env)
+        if not segments:
+            return
+
+        all_envs: list[dict[str, str]] = [dict(pre_env)]
+        fallthrough_env = dict(pre_env)
+        sink_env: dict[str, str] | None = None
+
+        for seg_units, ends_with_break in segments:
+            if not seg_units:
+                if ends_with_break:
+                    fallthrough_env = dict(pre_env)
+                continue
+            seg_fresh = dict(pre_env)
+            self._exec_units(
+                seg_units, 0, len(seg_units), seg_fresh, dict(var_types), dict(canon_of),
+                {}, {}, owner_cls, depth, False, sink_line, return_states
+            )
+            all_envs.append(seg_fresh)
+
+            seg_ft = dict(fallthrough_env)
+            self._exec_units(
+                seg_units, 0, len(seg_units), seg_ft, dict(var_types), dict(canon_of),
+                {}, {}, owner_cls, depth, False, sink_line, return_states
+            )
+            all_envs.append(seg_ft)
+
+            if sink_line is not None and seg_units[0][0] <= sink_line <= seg_units[-1][1]:
+                sink_env = {}
+                for k in set(seg_fresh) | set(seg_ft):
+                    sink_env[k] = _merge_states(
+                        seg_fresh.get(k, "UNSET"), seg_ft.get(k, "UNSET"), self.primary_cwe
+                    )
+
+            if ends_with_break:
+                fallthrough_env = dict(pre_env)
+            else:
+                next_ft: dict[str, str] = {}
+                for k in set(seg_fresh) | set(seg_ft):
+                    next_ft[k] = _merge_states(
+                        seg_fresh.get(k, "UNSET"), seg_ft.get(k, "UNSET"), self.primary_cwe
+                    )
+                fallthrough_env = next_ft
+
+        if sink_env is not None:
+            env.clear()
+            env.update(sink_env)
+            return
+
+        all_keys: set[str] = set()
+        for e_map in all_envs:
+            all_keys.update(e_map.keys())
+        for k in all_keys:
+            merged_st = all_envs[0].get(k, "UNSET")
+            for e_map in all_envs[1:]:
+                merged_st = _merge_states(merged_st, e_map.get(k, "UNSET"), self.primary_cwe)
+            env[k] = merged_st
 
     def _exec_constant_switch(
         self,
@@ -1376,33 +1942,83 @@ class _FlowAnalyzer:
         sink_line: int | None,
         return_states: list[tuple[str, list[int]]],
     ) -> None:
-        active_cases: set[str] = set()
-        in_default = False
-        matched_any_case = False
+        # Strict validation: fail closed to conservative multi-branch switch if any label, break, or arrow syntax is non-trivial
+        brace_depth = 0
+        matched_idx: int | None = None
+        default_idx: int | None = None
+        for j in range(idx_start, idx_end):
+            _, _, c_code, c_mask = units[j]
+            m_strip = c_mask.strip()
+            if "->" in m_strip or re.search(r"\byield\b", m_strip):
+                self._exec_nonconstant_switch(
+                    units, idx_start, idx_end, env, var_types, canon_of,
+                    lists, maps, owner_cls, depth, sink_line, return_states
+                )
+                return
+            if brace_depth == 0:
+                if re.match(r"^\s*case\b", c_code):
+                    m_case = CASE_CHAR_RE.match(c_code)
+                    if not m_case:
+                        self._exec_nonconstant_switch(
+                            units, idx_start, idx_end, env, var_types, canon_of,
+                            lists, maps, owner_cls, depth, sink_line, return_states
+                        )
+                        return
+                    if m_case.group(1) == target_char:
+                        if matched_idx is not None:
+                            self._exec_nonconstant_switch(
+                                units, idx_start, idx_end, env, var_types, canon_of,
+                                lists, maps, owner_cls, depth, sink_line, return_states
+                            )
+                            return
+                        matched_idx = j
+                elif re.match(r"^\s*default\b", c_code):
+                    if not DEFAULT_CASE_RE.match(c_code) or default_idx is not None:
+                        self._exec_nonconstant_switch(
+                            units, idx_start, idx_end, env, var_types, canon_of,
+                            lists, maps, owner_cls, depth, sink_line, return_states
+                        )
+                        return
+                    default_idx = j
+                elif re.search(r"\bbreak\b", m_strip) and not BREAK_RE.match(m_strip):
+                    self._exec_nonconstant_switch(
+                        units, idx_start, idx_end, env, var_types, canon_of,
+                        lists, maps, owner_cls, depth, sink_line, return_states
+                    )
+                    return
+            else:
+                if re.search(r"\b(?:case|default|break)\b", m_strip):
+                    self._exec_nonconstant_switch(
+                        units, idx_start, idx_end, env, var_types, canon_of,
+                        lists, maps, owner_cls, depth, sink_line, return_states
+                    )
+                    return
+            brace_depth += m_strip.count("{") - m_strip.count("}")
+
+        # Pass 2 (JLS §14.11): exact case match takes precedence over `default:` regardless of order
+        entry_idx = matched_idx if matched_idx is not None else default_idx
+        active_indices: set[int] = set()
         active_units: list[tuple[int, int, str, str]] = []
+        if entry_idx is not None:
+            active_indices.add(entry_idx)
+            brace_depth = 0
+            for j in range(entry_idx + 1, idx_end):
+                s_ln, e_ln, code, masked = units[j]
+                m_strip = masked.strip()
+                if brace_depth == 0:
+                    if BREAK_RE.match(m_strip):
+                        active_indices.add(j)
+                        break
+                    if CASE_CHAR_RE.match(code) or DEFAULT_CASE_RE.match(code):
+                        active_indices.add(j)
+                        continue
+                active_indices.add(j)
+                active_units.append((s_ln, e_ln, code, masked))
+                brace_depth += m_strip.count("{") - m_strip.count("}")
 
         for j in range(idx_start, idx_end):
-            s_ln, e_ln, code, masked = units[j]
-            m_case = CASE_CHAR_RE.match(code)
-            if m_case:
-                c_ch = m_case.group(1)
-                active_cases.add(c_ch)
-                if c_ch == target_char:
-                    matched_any_case = True
-                continue
-            if DEFAULT_CASE_RE.match(code):
-                in_default = True
-                continue
-            if BREAK_RE.match(masked):
-                if target_char in active_cases or (in_default and not matched_any_case):
-                    break
-                active_cases.clear()
-                in_default = False
-                continue
-
-            if target_char in active_cases or (in_default and not matched_any_case):
-                active_units.append((s_ln, e_ln, code, masked))
-            else:
+            if j not in active_indices:
+                s_ln, e_ln, _, _ = units[j]
                 self.dead_branch_lines.update(range(s_ln, e_ln + 1))
 
         if guess_line is not None:
@@ -1417,16 +2033,16 @@ class _FlowAnalyzer:
             )
 
 
-def _clean_sink_statement(raw_stmt: str) -> str:
-    """Select the terminal sink statement from a multi-statement rule span and strip try-with-resources tails."""
+def _split_sink_statements(raw_stmt: str) -> list[str]:
+    """Split a sink span or try-with-resources header into all top-level statements."""
     s = raw_stmt.strip()
     if s.startswith("try") and "(" in s:
         p_idx = s.find("(")
         s = s[p_idx + 1 :].strip()
     # Remove trailing `); ) {` or `) {` left by try-with-resources blocks
     s = re.sub(r";\s*\)\s*\{\s*$", ";", s)
+    s = re.sub(r"\)\s*\{\s*$", "", s)
     s = re.sub(r"\{\s*$", "", s).strip()
-    # Split on top-level `;` and pick the last non-empty statement
     parts: list[str] = []
     cur: list[str] = []
     depth = 0
@@ -1480,11 +2096,26 @@ def _clean_sink_statement(raw_stmt: str) -> str:
     if rem:
         parts.append(rem)
     if len(parts) > 1:
-        for cand in reversed(parts):
-            if not re.search(r"\b(?:printResults|outputUpdateComplete|executeBatch)\s*\(", cand):
-                return cand
-        return parts[-1]
-    return parts[0] if parts else s
+        filtered = [
+            cand for cand in parts
+            if not re.search(r"\b(?:printResults|outputUpdateComplete|executeBatch)\s*\(", cand)
+        ]
+        return filtered if filtered else parts
+    return parts if parts else ([s] if s else [])
+
+
+def _clean_sink_statement(raw_stmt: str) -> str:
+    """Select the terminal sink statement from a multi-statement rule span and strip try-with-resources tails."""
+    parts = _split_sink_statements(raw_stmt)
+    return parts[-1] if parts else raw_stmt.strip()
+
+
+_CWE22_STATIC_UTIL_RECEIVERS = {
+    "Files", "Paths", "Path", "File", "FileUtils", "FilenameUtils", "IOUtils",
+    "java.nio.file.Files", "java.nio.file.Paths", "java.nio.file.Path",
+    "java.io.File", "org.apache.commons.io.FileUtils",
+    "org.apache.commons.io.FilenameUtils", "org.apache.commons.io.IOUtils",
+}
 
 
 def _evaluate_sink_state(
@@ -1496,44 +2127,57 @@ def _evaluate_sink_state(
     owner_cls: str | None,
 ) -> str:
     """Evaluate the abstract state of the sink's vulnerable argument(s) at `sink_line`."""
-    clean_k = _clean_sink_statement(sink_code)
-    clean_m = _clean_sink_statement(sink_masked)
-    rhs_k = clean_k
-    rhs_m = clean_m
-    m_asgn = ASSIGN_STMT_RE.match(clean_k + ";")
-    m_asgn_m = ASSIGN_STMT_RE.match(clean_m + ";")
-    if m_asgn and m_asgn_m:
-        rhs_k = m_asgn.group(4).strip()
-        rhs_m = m_asgn_m.group(4).strip()
-
-    # Extract call arguments passed into sink constructor or method (excluding receiver object like `stmt`)
-    sink_arg_exprs: list[tuple[str, str]] = []
-    m_new = re.search(r"\bnew\s+[A-Za-z_][A-Za-z0-9_.]*\s*\((.+)\)(?:\s*\.\s*getFD\s*\(\s*\))?$", rhs_k)
-    m_new_m = re.search(r"\bnew\s+[A-Za-z_][A-Za-z0-9_.]*\s*\((.+)\)(?:\s*\.\s*getFD\s*\(\s*\))?$", rhs_m)
-    if m_new and m_new_m:
-        for ak, am in zip(_split_top_level_args(m_new.group(1)), _split_top_level_args(m_new_m.group(1))):
-            sink_arg_exprs.append((ak, am))
+    k_stmts = _split_sink_statements(sink_code)
+    m_stmts = _split_sink_statements(sink_masked)
+    if len(k_stmts) != len(m_stmts) or not k_stmts:
+        pairs = [(_clean_sink_statement(sink_code), _clean_sink_statement(sink_masked))]
     else:
-        # Method call sink e.g. `stmt.executeQuery(sql)`, `jdbcTemplate.queryForMap(sql)`, `baseDir.resolve(p)`
-        m_mc = re.search(r"\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$", rhs_k)
-        m_mc_m = re.search(r"\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$", rhs_m)
-        if m_mc and m_mc_m:
-            mname = m_mc.group(1)
-            k_args = _split_top_level_args(m_mc.group(2))
-            m_args = _split_top_level_args(m_mc_m.group(2))
-            if analyzer.primary_cwe == "CWE-89" and mname in (
-                "execute", "executeQuery", "executeUpdate", "executeLargeUpdate",
-                "prepareStatement", "prepareCall", "query", "queryForMap",
-                "queryForObject", "queryForList", "queryForRowSet", "update", "batchUpdate", "addBatch",
-            ) and k_args:
-                # First argument is the SQL query string/array
-                sink_arg_exprs.append((k_args[0], m_args[0] if m_args else k_args[0]))
-            else:
-                for ak, am in zip(k_args, m_args):
-                    sink_arg_exprs.append((ak, am))
+        pairs = list(zip(k_stmts, m_stmts))
 
-    if not sink_arg_exprs:
-        sink_arg_exprs = [(rhs_k, rhs_m)]
+    sink_arg_exprs: list[tuple[str, str]] = []
+    for clean_k, clean_m in pairs:
+        rhs_k = clean_k
+        rhs_m = clean_m
+        m_asgn = ASSIGN_STMT_RE.match(clean_k + ";")
+        m_asgn_m = ASSIGN_STMT_RE.match(clean_m + ";")
+        if m_asgn and m_asgn_m:
+            rhs_k = m_asgn.group(4).strip()
+            rhs_m = m_asgn_m.group(4).strip()
+        rhs_k = re.sub(r"^return\s+", "", rhs_k).strip()
+        rhs_m = re.sub(r"^return\s+", "", rhs_m).strip()
+
+        stmt_args: list[tuple[str, str]] = []
+        m_new = re.search(r"\bnew\s+[A-Za-z_][A-Za-z0-9_.]*\s*\((.+)\)(?:\s*\.\s*getFD\s*\(\s*\))?$", rhs_k)
+        m_new_m = re.search(r"\bnew\s+[A-Za-z_][A-Za-z0-9_.]*\s*\((.+)\)(?:\s*\.\s*getFD\s*\(\s*\))?$", rhs_m)
+        if m_new and m_new_m:
+            for ak, am in zip(_split_top_level_args(m_new.group(1)), _split_top_level_args(m_new_m.group(1))):
+                stmt_args.append((ak, am))
+        else:
+            # Method call sink e.g. `stmt.executeQuery(sql)`, `jdbcTemplate.queryForMap(sql)`, `baseDir.resolve(p)`
+            m_mc = re.search(r"\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$", rhs_k)
+            m_mc_m = re.search(r"\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$", rhs_m)
+            if m_mc and m_mc_m:
+                mname = m_mc.group(1)
+                k_args = _split_top_level_args(m_mc.group(2))
+                m_args = _split_top_level_args(m_mc_m.group(2))
+                if analyzer.primary_cwe == "CWE-89" and mname in (
+                    "execute", "executeQuery", "executeUpdate", "executeLargeUpdate",
+                    "prepareStatement", "prepareCall", "query", "queryForMap",
+                    "queryForObject", "queryForList", "queryForRowSet", "update", "batchUpdate", "addBatch",
+                ) and k_args:
+                    stmt_args.append((k_args[0], m_args[0] if m_args else k_args[0]))
+                else:
+                    if analyzer.primary_cwe == "CWE-22":
+                        recv_k = rhs_k[: m_mc.start()].strip()
+                        recv_m = rhs_m[: m_mc_m.start()].strip()
+                        if recv_k and recv_k not in _CWE22_STATIC_UTIL_RECEIVERS:
+                            stmt_args.append((recv_k, recv_m))
+                    for ak, am in zip(k_args, m_args):
+                        stmt_args.append((ak, am))
+
+        if not stmt_args:
+            stmt_args = [(rhs_k, rhs_m)]
+        sink_arg_exprs.extend(stmt_args)
 
     states: list[str] = []
     for ak, am in sink_arg_exprs:
@@ -1626,6 +2270,12 @@ def extract_evidence_signals(record: dict[str, Any]) -> dict[str, Any]:
     )
 
     if enclosing_method is None or not lines_by_no:
+        sink_state = "UNKNOWN"
+    elif any(
+        _contains_java_unicode_escape(lines_by_no.get(ln, ""))
+        for ln in range(enclosing_method["header_line"], enclosing_method["end_line"] + 1)
+    ):
+        # JLS §3.3 raw Unicode escapes translate before lexical tokenization -> fail closed to UNKNOWN
         sink_state = "UNKNOWN"
     else:
         env: dict[str, str] = {}

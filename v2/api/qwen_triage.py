@@ -262,6 +262,20 @@ def run_bounded_triage(
     )
     context_enrich_ms = round((time.monotonic() - t_ctx0) * 1000.0, 3)
 
+    if use_llm:
+        for record in bundle["records"]:
+            try:
+                pre_prompt_bytes = effective_prompt_byte_length(record)
+            except Exception:
+                pre_prompt_bytes = None
+            if pre_prompt_bytes is not None and pre_prompt_bytes > effective_max_prompt_bytes:
+                oversize_msg = (
+                    f"prompt byte budget exceeded ({pre_prompt_bytes} > {effective_max_prompt_bytes} bytes); "
+                    "inference aborted fail-closed"
+                )
+                if oversize_msg not in record["issues"]:
+                    record["issues"].append(oversize_msg)
+
     (output / "evidence.json").write_text(json.dumps(bundle, indent=2), encoding="utf-8")
     evidence_ms = round((time.monotonic() - t_ev0) * 1000.0, 3)
     if time.monotonic() >= deadline_mono:
@@ -305,6 +319,8 @@ def run_bounded_triage(
 
     assessments: list[dict[str, Any]] = []
     per_finding_ms: list[float] = []
+    integration_gate_ms = 0.0
+    integration_gate_calls = 0
     cache_hits = 0
     live_calls = 0
     timeout_aborts = 0
@@ -344,26 +360,24 @@ def run_bounded_triage(
                     runtime_origin=runtime_origin,
                 )
             else:
-                # Fail closed BEFORE HTTP /api/chat if prompt > 32 KB or issues exist
+                # Fail closed BEFORE HTTP /api/chat if prompt > 32 KB or issues exist (never mutate record after evidence.json write)
                 prompt_bytes_now: int | None = None
                 try:
                     prompt_bytes_now = effective_prompt_byte_length(record)
                 except Exception:
                     prompt_bytes_now = None
-                if prompt_bytes_now is not None and prompt_bytes_now > effective_max_prompt_bytes:
-                    oversize_msg = (
-                        f"prompt byte budget exceeded ({prompt_bytes_now} > {effective_max_prompt_bytes} bytes); "
-                        "inference aborted fail-closed"
-                    )
-                    if oversize_msg not in record["issues"]:
-                        record["issues"].append(oversize_msg)
-                if record.get("issues"):
-                    is_oversize = (
-                        prompt_bytes_now is not None and prompt_bytes_now > effective_max_prompt_bytes
-                    ) or any("budget exceeded" in str(x).lower() for x in record["issues"])
+                oversize_now = prompt_bytes_now is not None and prompt_bytes_now > effective_max_prompt_bytes
+                if record.get("issues") or oversize_now:
+                    is_oversize = oversize_now or any("budget exceeded" in str(x).lower() for x in (record.get("issues") or []))
+                    issue_texts = [str(x) for x in (record.get("issues") or [])]
+                    if oversize_now and not any("budget exceeded" in x.lower() for x in issue_texts):
+                        issue_texts.append(
+                            f"prompt byte budget exceeded ({prompt_bytes_now} > {effective_max_prompt_bytes} bytes); "
+                            "inference aborted fail-closed"
+                        )
                     assessment = _fail_closed_precheck_assessment(
                         record,
-                        reason="insufficient evidence: " + "; ".join(str(x) for x in record["issues"]),
+                        reason="insufficient evidence: " + "; ".join(issue_texts),
                         failure_kind="PROMPT_TOO_LARGE" if is_oversize else "EVIDENCE_PRECHECK_FAILED",
                         model=ollama_model,
                         endpoint=ollama_endpoint,
@@ -388,7 +402,10 @@ def run_bounded_triage(
                         raw_assessment = client.analyze(record)
                         if (raw_assessment.get("runtime") or {}).get("request_attempted") is True:
                             live_calls += 1
+                        t_gate0 = time.monotonic()
                         assessment = apply_integration_gate(record, raw_assessment)
+                        integration_gate_ms += (time.monotonic() - t_gate0) * 1000.0
+                        integration_gate_calls += 1
                         if time.monotonic() >= deadline_mono:
                             deadline_exceeded = True
 
@@ -404,12 +421,23 @@ def run_bounded_triage(
         if time.monotonic() >= deadline_mono:
             deadline_exceeded = True
 
-    qwen_total_ms = round((time.monotonic() - t_qwen0) * 1000.0, 3)
+    qwen_total_ms = max(0.0, round((time.monotonic() - t_qwen0) * 1000.0, 3))
+    if not no_llm and integration_gate_calls > 0:
+        clamped_gate = round(max(0.0, min(integration_gate_ms, qwen_total_ms)), 3)
+        if clamped_gate > qwen_total_ms:
+            clamped_gate = qwen_total_ms
+        integration_gate_ms_measured: float | None = 0.0 if clamped_gate == 0.0 else clamped_gate
+    else:
+        integration_gate_ms_measured = None
+    validation_nesting_mode = "skipped_no_llm" if no_llm else "interleaved_per_finding_inside_stage4"
     if on_triage_finished is not None:
         on_triage_finished(
             {
                 "assessments_list": assessments,
                 "qwen_total_ms": qwen_total_ms,
+                "integration_gate_ms": integration_gate_ms_measured,
+                "integration_gate_calls": integration_gate_calls,
+                "validation_nesting_mode": validation_nesting_mode,
                 "live_calls": live_calls,
                 "cache_hits": cache_hits,
                 "timeout_aborts": timeout_aborts,
@@ -478,6 +506,9 @@ def run_bounded_triage(
             "evidence_ms": evidence_ms,
             "context_enrich_ms": context_enrich_ms,
             "qwen_total_ms": qwen_total_ms,
+            "integration_gate_ms": integration_gate_ms_measured,
+            "integration_gate_calls": integration_gate_calls,
+            "validation_nesting_mode": validation_nesting_mode,
             "qwen_per_finding_ms": per_finding_ms,
             "store_commit_ms": store_commit_ms,
             "context_stats": context_stats,

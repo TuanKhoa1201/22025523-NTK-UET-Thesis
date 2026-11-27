@@ -47,7 +47,8 @@ Mỗi lần nghiệm thu dùng một `$RunId` mới duy nhất bên ngoài check
   - `<scenario>\triage\llm_io\<id>.response.body.bin` (bytes HTTP response body nguyên bản nhận từ cùng lượt gọi `urllib` trước khi decode UTF-8 / parse JSON, khớp `response_body_sha256`; hoặc `<id>.response.incomplete.bin` với `response_body_sha256 = null` nếu đứt kết nối/vượt ngưỡng `1,000,000` bytes).
   - `<scenario>\triage\llm_io\<id>.http-capture.json` (`schema: "ntk-ollama-http-capture-1"`, `capture_scope: "http_body_and_client_metadata_not_tcp_wire"` — chỉ bảo toàn HTTP payload/body và header phía client, không tuyên bố ghi nhận khung truyền TCP/wire thô).
   - `<scenario>\triage\llm_io\_tags\tags-NNNN.{response.body.bin,http-capture.json}` (tách riêng lượt thăm dò `GET /api/tags` khỏi `POST /api/chat`).
-  - `<scenario>\triage\http-capture-check.json` (kết quả kiểm chứng tự động của `v2.triage.verify_http_capture`).
+  - `<scenario>\triage\http-capture-check.json` (kết quả kiểm chứng ngoại tuyến ở chế độ thường của `v2.triage.verify_http_capture`: xác minh `artifact_integrity_ok` và `endpoint_reported_protocol_ok`; luôn giữ `live_origin_verified=false`, `independently_verified_model_runtime=false`, `security_conclusion_verified=false`).
+  - Quy trình nghiệm thu phân tách 3 cổng bắt buộc: **Cổng A** (kiểm chứng raw capture ngoại tuyến bằng `verify_http_capture` chế độ thường + đối chứng fail-closed `--require-live-chat` trả exit `2`), **Cổng B** (bằng chứng vận hành ngoài `triage_dir` do người vận hành thu thập trực tiếp: PID/StartTime tiến trình Ollama, đường dẫn & SHA-256 nhị phân, listener `127.0.0.1:11434`, phiên bản, tên & digest model, nhật ký daemon, `exec_receipt`, liên kết với raw HTTP capture và GPU/timing nếu có), và **Cổng C** (quyết định nghiệm thu của người vận hành tách biệt hoàn toàn với chứng thực mật mã độc lập mô hình).
 - **Contract / version manifest:** đọc `prompt_contract` và `prompt_version` từ `<scenario>\g1-run-manifest.json`, `<id>.prompt.json` và `row.assessment` (không đọc từ `live-protocol-check.json`).
 - **Warning ID trong hàng đợi CLI:** đọc từ `$QueueJson.warnings[0].id` (không dùng `.warning_id`).
 
@@ -218,6 +219,20 @@ if ($ProbeDoc.exit_code -eq 0) {
 Invoke-ReceiptStep -Step "05_wsl_status_inventory" -CommandArgv @("wsl.exe", "--status")
 Invoke-ReceiptStep -Step "06_ollama_cli_version" -CommandArgv @("ollama", "--version")
 
+# 1.2b. Cổng B (Trước khi chạy) - Thu thập bằng chứng vận hành Ollama độc lập ngoài triage_dir
+# Dùng single-quoted here-string (@'...'@) và bọc @(...) để chạy an toàn dưới Set-StrictMode -Version Latest.
+$GateBPreScript = @'
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$c = @(Get-NetTCPConnection -LocalPort 11434 -State Listen -ErrorAction Stop | Where-Object { $_.LocalAddress -eq '127.0.0.1' })
+if ($c.Count -eq 0) { throw 'No 127.0.0.1:11434 listener' }
+$p = Get-Process -Id $c[0].OwningProcess -ErrorAction Stop
+$h = (Get-FileHash -LiteralPath $p.Path -Algorithm SHA256).Hash.ToLowerInvariant()
+[PSCustomObject]@{ phase='pre'; captured_at_utc=(Get-Date).ToUniversalTime().ToString('o'); local_address=$c[0].LocalAddress; local_port=$c[0].LocalPort; pid=$p.Id; process_name=$p.ProcessName; start_time=$p.StartTime.ToString('o'); executable_path=$p.Path; executable_sha256=$h } | ConvertTo-Json -Depth 4
+'@
+Invoke-ReceiptStep -Step "06b_operator_ollama_process_pre" -CommandArgv @("powershell.exe", "-NoProfile", "-Command", $GateBPreScript)
+Invoke-ReceiptStep -Step "06c_operator_ollama_model_inventory_pre" -CommandArgv @("ollama", "list")
+
 # 1.3. Lưu nguyên HTTP body của GET /api/tags và kiểm tra model qwen3.5:9b-q4_K_M sẵn sàng trước khi tiếp tục
 Invoke-ReceiptStep -Step "07_ollama_tags_probe" -CommandArgv @(
     $VenvPython, "-X", "utf8", "-B", "-c",
@@ -350,14 +365,81 @@ Invoke-ReceiptStep -Step "21_primary_demo3a_scan" -CommandArgv @(
 )
 Copy-Item -LiteralPath "$Demo3aDir\triage\review.sqlite" -Destination "$Demo3aDir\triage\review.post_ingestion.sqlite"
 
-# 4.4. Kiểm chứng giao thức live_check (minimum 2 / 1 / 1) và raw HTTP capture (B1) không ghi đè vào triage/
+# 4.4. Cổng A - Kiểm chứng raw HTTP capture ngoại tuyến (chế độ thường, exit 0) + đối chứng fail-closed strict (exit 2)
+# Lưu ý: verifier ngoại tuyến kiểm chứng raw request/response cùng lượt, SHA-256, receipt, prompt/version/contract,
+# cross-artifact binding và endpoint-reported protocol (`artifact_integrity_ok=true`, `endpoint_reported_protocol_ok=true`),
+# đồng thời luôn giữ `live_origin_verified=false`, `independently_verified_model_runtime=false`, `security_conclusion_verified=false`.
 Invoke-ReceiptStep -Step "22_live_check_demo1" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.live_check", "$Demo1Dir\triage", "--minimum-responses", "2")
 Invoke-ReceiptStep -Step "23_live_check_demo2" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.live_check", "$Demo2Dir\triage", "--minimum-responses", "1")
 Invoke-ReceiptStep -Step "24_live_check_demo3a" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.live_check", "$Demo3aDir\triage", "--minimum-responses", "1")
 
-Invoke-ReceiptStep -Step "25_http_capture_demo1" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo1Dir\triage", "--require-live-chat", "--minimum-findings", "2", "--output", "$AuditOut\demo1-http-capture-audit.json")
-Invoke-ReceiptStep -Step "26_http_capture_demo2" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo2Dir\triage", "--require-live-chat", "--minimum-findings", "1", "--output", "$AuditOut\demo2-http-capture-audit.json")
-Invoke-ReceiptStep -Step "27_http_capture_demo3a" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo3aDir\triage", "--require-live-chat", "--minimum-findings", "1", "--output", "$AuditOut\demo3a-http-capture-audit.json")
+Invoke-ReceiptStep -Step "25_http_capture_demo1" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo1Dir\triage", "--minimum-findings", "2", "--output", "$AuditOut\demo1-http-capture-audit.json")
+Invoke-ReceiptStep -Step "26_http_capture_demo2" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo2Dir\triage", "--minimum-findings", "1", "--output", "$AuditOut\demo2-http-capture-audit.json")
+Invoke-ReceiptStep -Step "27_http_capture_demo3a" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo3aDir\triage", "--minimum-findings", "1", "--output", "$AuditOut\demo3a-http-capture-audit.json")
+
+foreach ($capSpec in @(
+    @{ Path = "$AuditOut\demo1-http-capture-audit.json"; Expected = 2 },
+    @{ Path = "$AuditOut\demo2-http-capture-audit.json"; Expected = 1 },
+    @{ Path = "$AuditOut\demo3a-http-capture-audit.json"; Expected = 1 }
+)) {
+    $capDoc = Get-Content -LiteralPath $capSpec.Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($capDoc.capture_status -ne "VERIFIED_COMPLETE" -or $capDoc.artifact_integrity_ok -ne $true -or $capDoc.endpoint_reported_protocol_ok -ne $true -or $capDoc.errors.Count -ne 0 -or $capDoc.total_findings -ne $capSpec.Expected) {
+        throw "FAIL-FAST [GATE_A_HTTP_CAPTURE]: invalid capture report at $($capSpec.Path)"
+    }
+    if ($capDoc.live_origin_verified -ne $false -or $capDoc.live_chat_verified -ne $false -or $capDoc.independently_verified_model_runtime -ne $false -or $capDoc.security_conclusion_verified -ne $false) {
+        throw "FAIL-FAST [GATE_A_TRUST_BOUNDARY]: offline verifier must keep live/model/security flags false at $($capSpec.Path)"
+    }
+    foreach ($fItem in @($capDoc.findings)) {
+        if ($fItem.prompt_metadata_binding -ne "VERIFIED_EXPLICIT" -or $fItem.canonical_request_status -ne "MATCHED" -or $fItem.artifact_integrity_ok -ne $true -or $fItem.endpoint_reported_protocol_ok -ne $true) {
+            throw "FAIL-FAST [GATE_A_FINDING_BINDING]: finding check failed at $($capSpec.Path)"
+        }
+    }
+}
+
+# Đối chứng fail-closed chế độ strict (--require-live-chat --no-write): bắt buộc trả exit 2 VÀ phải kiểm tra JSON stdout
+# chứng minh lý do từ chối chính xác là UNVERIFIED_LIVE_RUNTIME_ORIGIN (không chấp nhận mọi exit 2 do lỗi parse/path/checksum/ghi tệp).
+Invoke-ReceiptStep -Step "25b_http_capture_demo1_strict_control" -ExpectedExit @(2) -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo1Dir\triage", "--require-live-chat", "--minimum-findings", "2", "--no-write")
+Invoke-ReceiptStep -Step "26b_http_capture_demo2_strict_control" -ExpectedExit @(2) -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo2Dir\triage", "--require-live-chat", "--minimum-findings", "1", "--no-write")
+Invoke-ReceiptStep -Step "27b_http_capture_demo3a_strict_control" -ExpectedExit @(2) -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture", "$Demo3aDir\triage", "--require-live-chat", "--minimum-findings", "1", "--no-write")
+
+foreach ($strictStep in @(
+    "25b_http_capture_demo1_strict_control",
+    "26b_http_capture_demo2_strict_control",
+    "27b_http_capture_demo3a_strict_control"
+)) {
+    $strictDoc = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes("$ReceiptsDir\$strictStep.stdout.bin")) | ConvertFrom-Json
+    $unverifiedHits = @($strictDoc.errors | Where-Object { $_ -like "*UNVERIFIED_LIVE_RUNTIME_ORIGIN*" })
+    if ($strictDoc.capture_status -ne "FAILED" -or $strictDoc.artifact_integrity_ok -ne $true -or $strictDoc.endpoint_reported_protocol_ok -ne $true -or $strictDoc.live_origin_verified -ne $false -or $strictDoc.live_chat_verified -ne $false -or $strictDoc.live_origin_trust_status -ne "UNVERIFIED_OFFLINE_NO_TRUSTED_EXTERNAL_PROVENANCE" -or $unverifiedHits.Count -eq 0 -or $strictDoc.report_write_ok -eq $false) {
+        throw "FAIL-FAST [GATE_A_STRICT_CONTROL]: $strictStep did not fail strictly for UNVERIFIED_LIVE_RUNTIME_ORIGIN"
+    }
+}
+
+# 4.4b. Cổng B (Sau khi chạy) - Đối chiếu PID/StartTime/binary SHA-256/listener 127.0.0.1:11434 không đổi, nhật ký daemon và GPU/timing
+$GateBPostScript = @'
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$c = @(Get-NetTCPConnection -LocalPort 11434 -State Listen -ErrorAction Stop | Where-Object { $_.LocalAddress -eq '127.0.0.1' })
+if ($c.Count -eq 0) { throw 'No 127.0.0.1:11434 listener' }
+$p = Get-Process -Id $c[0].OwningProcess -ErrorAction Stop
+$h = (Get-FileHash -LiteralPath $p.Path -Algorithm SHA256).Hash.ToLowerInvariant()
+[PSCustomObject]@{ phase='post'; captured_at_utc=(Get-Date).ToUniversalTime().ToString('o'); local_address=$c[0].LocalAddress; local_port=$c[0].LocalPort; pid=$p.Id; process_name=$p.ProcessName; start_time=$p.StartTime.ToString('o'); executable_path=$p.Path; executable_sha256=$h } | ConvertTo-Json -Depth 4
+'@
+Invoke-ReceiptStep -Step "27c_operator_ollama_process_post" -CommandArgv @("powershell.exe", "-NoProfile", "-Command", $GateBPostScript)
+$GateBPre  = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes("$ReceiptsDir\06b_operator_ollama_process_pre.stdout.bin")) | ConvertFrom-Json
+$GateBPost = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes("$ReceiptsDir\27c_operator_ollama_process_post.stdout.bin")) | ConvertFrom-Json
+if ($GateBPre.pid -ne $GateBPost.pid -or $GateBPre.start_time -ne $GateBPost.start_time -or $GateBPre.executable_path -ne $GateBPost.executable_path -or $GateBPre.executable_sha256 -ne $GateBPost.executable_sha256 -or $GateBPost.local_address -ne "127.0.0.1" -or $GateBPost.local_port -ne 11434) {
+    throw "FAIL-FAST [GATE_B_CONTINUITY]: Ollama process/listener identity changed during run"
+}
+$GateBOutDir = "$AuditOut\operator-runtime-evidence"
+Assert-FreshAbsent -TargetPath $GateBOutDir
+New-Item -ItemType Directory -Path $GateBOutDir | Out-Null
+$OllamaLogSrc = Join-Path $env:LOCALAPPDATA "Ollama\server.log"
+if (Test-Path -LiteralPath $OllamaLogSrc -PathType Leaf) {
+    Copy-Item -LiteralPath $OllamaLogSrc -Destination "$GateBOutDir\ollama-server.log.snapshot"
+}
+# Người vận hành đối chiếu dấu thời gian UTC và chuỗi yêu cầu /api/chat giữa ollama-server.log.snapshot,
+# process-receipts (19/20/21/06b/06c/27c) và raw HTTP capture cùng lượt, rồi niêm phong manifest SHA-256
+# và biên bản quyết định Cổng C tại $GateBOutDir (ngoài mọi triage_dir; không sửa JSON của verifier/evaluator).
 
 # 4.5. Chạy bộ kiểm toán độc lập v2/g1_audit/audit.py (ghi nhận INCOMPLETE có chủ đích cho model attestation bằng --allow-any-exit, sau đó kiểm tra từng mục dữ liệu)
 foreach ($pair in @(
@@ -437,8 +519,11 @@ Invoke-ReceiptStep -Step "41_d2_history" -CommandArgv @($VenvPython, "-X", "utf8
 Không suy luận `PASS` từ việc các bước trên trả `exit 0`. Chạy bộ đánh giá chỉ-đọc `v2.g1_integration.evaluate_r01_r03` (mở SQLite bằng URI `?mode=ro`, replay lại `validate_answer` từ chính `<id>.response.body.bin`):
 
 ```powershell
-# 6.1. Đánh giá quyết định R01, R02, R03 (trả exit 0 CHỈ KHI cả R01, R02 và R03 đều PASS)
-Invoke-ReceiptStep -Step "42_evaluate_r01_r03" -CommandArgv @(
+# 6.1. Đánh giá chỉ-đọc Cổng A (R01, R02, R03) ở chế độ chính thức (không dùng --allow-mock-primary):
+# - Exit 2 = FAIL hoặc BLOCKED (lỗi hiện vật, mock, giao thức endpoint chưa đủ, sai citation/SARIF/SQLite) -> DỪNG NGAY.
+# - Exit 3 = OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN (toàn bộ kiểm chứng ngoại tuyến Cổng A PASS;
+#   nguồn gốc Ollama live phải được người vận hành đối chiếu riêng ở Cổng B & Cổng C, không tự tuyên bố PASS từ artifact).
+Invoke-ReceiptStep -Step "42_evaluate_r01_r03" -ExpectedExit @(3) -CommandArgv @(
     $VenvPython, "-X", "utf8", "-B", "-m", "v2.g1_integration.evaluate_r01_r03",
     "--demo1-dir", $Demo1Dir,
     "--demo2-dir", $Demo2Dir,
@@ -448,6 +533,10 @@ Invoke-ReceiptStep -Step "42_evaluate_r01_r03" -CommandArgv @(
     "--demo4-dir", "$ControlsDir\demo4_stale_source",
     "--output", "$AuditOut\r01_r03_evaluation.json"
 )
+$EvalDoc = Get-Content -LiteralPath "$AuditOut\r01_r03_evaluation.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($EvalDoc.overall_status -ne "OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN" -or $EvalDoc.offline_artifact_status -ne "PASS" -or $EvalDoc.live_runtime_acceptance_status -ne "PENDING_OPERATOR_EXTERNAL_RUNTIME_EVIDENCE" -or $EvalDoc.live_origin_verified -ne $false -or $EvalDoc.independently_verified_model_runtime -ne $false -or $EvalDoc.security_conclusion_verified -ne $false -or @($EvalDoc.criteria.R01.failures).Count -ne 0 -or @($EvalDoc.criteria.R01.blockers).Count -ne 0 -or @($EvalDoc.live_origin_requirements).Count -lt 3) {
+    throw "FAIL-FAST [EVAL_R01_R03]: unexpected evaluator contract state ($($EvalDoc.overall_status) / $($EvalDoc.offline_artifact_status))"
+}
 
 # 6.2. Hậu kiểm Git checkout vẫn sạch tuyệt đối và không bị thay đổi HEAD/tree
 $PostHead   = (git -C $CheckoutDir rev-parse --verify HEAD).Trim()
@@ -461,10 +550,17 @@ if ($PostHead -ne $ExpectedCommit -or $PostTree -ne $ExpectedTree -or $PostStatu
 }
 ```
 
-### Quy Tắc Kết Luận Bắt Buộc Cho R01–R03
+### Quy Tắc Kết Luận Bắt Buộc Cho R01–R03 (Phân Tách 3 Cổng A / B / C)
 
-- **`R01 = PASS`** khi và chỉ khi toàn bộ **4 cảnh báo thật (`2 + 1 + 1`)** có đầy đủ raw HTTP request/response bytes cùng lượt gọi khớp SHA-256 (`verify_http_capture --require-live-chat` đạt), prompt `blind` / `v2.2.4-cwe22-cwe89-minimal-singleline-citations` (khớp `PROMPT_VERSION` hiện hành được `evaluate_r01_r03.py` đối chiếu trên manifest, assessment và prompt) không rò rỉ khóa `raw_path`, **Demo1 (2 cảnh báo) đạt `SUPPORTED` hợp lệ qua bộ validator không sửa đổi với canonical citation**, **Demo2 (1 cảnh báo) đạt `REFUTED` hợp lệ qua bộ validator không sửa đổi với canonical citation**, **Demo3a (1 cảnh báo thiếu helper) tự abstain `raw_model_status == "UNDETERMINED"` và `validated_status == "UNDETERMINED"` (`failure_kind == "NONE"`, `answer_validated == true`)**, và toàn bộ hàng đợi khởi tạo ở trạng thái `OPEN` (các lượt chạy và hiện vật lịch sử ghi nhận dưới `v2.2.2-cwe22-cwe89-canonical-citations` giữ nguyên phiên bản lịch sử đó, không quy đổi sang `v2.2.4`).
-- **`R01 = FAIL`** nếu phát sinh `INVALID_CITATION` hoặc thiếu kết luận dứt khoát hợp lệ trên Demo1/Demo2, hoặc Demo3a trả `SUPPORTED` / `REFUTED` (kể cả khi bị validator chặn xuống `UNDETERMINED`) hay chỉ thành `UNDETERMINED` do lỗi JSON/timeout. Giữ nguyên toàn bộ hiện vật lần chạy thất bại; **cấm chạy đè hoặc xóa lần lỗi**.
+- **Cổng A (Kiểm chứng raw capture & hiện vật ngoại tuyến):**
+  - `verify_http_capture` chế độ thường (`exit 0`, không truyền `--require-live-chat`) xác nhận đủ **4 cảnh báo chính (`2 + 1 + 1`)** đạt `capture_status == "VERIFIED_COMPLETE"`, `artifact_integrity_ok == true`, `endpoint_reported_protocol_ok == true`, `errors == []`, `live_origin_verified == false`; đối chứng strict (`--require-live-chat --no-write`) fail-closed trả `exit 2` với `artifact_integrity_ok == true` và mã `UNVERIFIED_LIVE_RUNTIME_ORIGIN`.
+  - `evaluate_r01_r03` (không dùng `--allow-mock-primary`) trả `exit 3` (`overall_status == "OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN"`, `offline_artifact_status == "PASS"`), xác nhận prompt `blind` / `v2.2.6-cwe22-cwe89-strict-singleline-max3-citations` (khớp `PROMPT_VERSION` hiện hành của `v2/triage/ollama.py` khi chạy mới; các capture lịch sử `v2.2.2`/`v2.2.4`/`v2.2.5` giữ nguyên phiên bản đã ghi nhận khi replay tường minh bằng `--expected-prompt-version`) không rò rỉ khóa `raw_path`, **Demo1 (2 cảnh báo) đạt `SUPPORTED` hợp lệ qua bộ validator không sửa đổi với canonical citation**, **Demo2 (1 cảnh báo) đạt `REFUTED` hợp lệ qua bộ validator không sửa đổi với canonical citation**, **Demo3a (1 cảnh báo thiếu helper) tự abstain `raw_model_status == "UNDETERMINED"` và `validated_status == "UNDETERMINED"` (`failure_kind == "NONE"`, `answer_validated == true`)**, và toàn bộ hàng đợi khởi tạo ở trạng thái `OPEN`.
+- **Cổng B (Kiểm chứng vận hành ngoài `triage_dir` do người vận hành kiểm soát):**
+  - Ghi nhận trước/sau phiên chạy: PID và `StartTime` tiến trình Ollama, đường dẫn tuyệt đối và SHA-256 nhị phân Ollama, listener `127.0.0.1:11434` thuộc đúng PID đó, phiên bản Ollama, tên model và digest, nhật ký daemon khớp cửa sổ UTC thực thi, biên nhận `exec_receipt` liên kết trực tiếp với raw HTTP capture của đúng lượt chạy, kèm bằng chứng GPU/timing nếu có.
+- **Cổng C (Quyết định nghiệm thu của người vận hành):**
+  - **`R01 = PASS` (nghiệm thu vận hành)** chỉ được người vận hành ghi nhận khi **cả Cổng A và Cổng B đều đầy đủ và nhất quán**; không coi metadata tự khai trong `triage_dir` hay tệp JSON tự tạo là chứng thực nguồn gốc độc lập và không ép verifier ngoại tuyến xác minh nguồn gốc runtime mà nó không quan sát được.
+  - Phân biệt rõ **nghiệm thu vận hành** (process/listener/log/receipt consistency) với **chứng thực mật mã độc lập mô hình**: luôn giữ nguyên `independently_verified_model_runtime=false` và `security_conclusion_verified=false` (quyền xác nhận TP/FP thuộc người kiểm duyệt trên Human Review).
+- **`R01 = FAIL`** nếu phát sinh `INVALID_CITATION`, lỗi toàn vẹn raw HTTP (`HTTP_ARTIFACT_INTEGRITY_FAILED`) hoặc thiếu kết luận dứt khoát hợp lệ trên Demo1/Demo2, hoặc Demo3a trả `SUPPORTED` / `REFUTED` (kể cả khi bị validator chặn xuống `UNDETERMINED`) hay chỉ thành `UNDETERMINED` do lỗi JSON/timeout. Giữ nguyên toàn bộ hiện vật lần chạy thất bại; **cấm chạy đè hoặc xóa lần lỗi**.
 - **`R02 = PASS`** khi và chỉ khi M1 `--scan-only` không tạo `triage/` và khớp byte với báo cáo legacy, `triage_subprocess_invocations == 0` ở cả ba lượt G1, mã băm nguồn trước/sau khớp tuyệt đối, và đối chiếu đa tập JSON/SARIF (`contracts.compare_sarif`) đạt.
 - **`R03 = PASS`** khi và chỉ khi kiểm tra SQLite chỉ-đọc (`?mode=ro`) xác nhận đầy đủ chuyển trạng thái `OPEN -> CONFIRMED_TRUE` (Demo1), `OPEN -> CONFIRMED_FALSE` (ẩn khỏi `queue`, còn trong `queue --all`) `-> OPEN` (Demo2), và từ chối `STALE_SOURCE` mã thoát `2` trên `Demo4` (`OPEN`, `0` accepted events, `1` `rejected_decisions`).
 
@@ -516,16 +612,31 @@ Invoke-ReceiptStep -Step "P1_allowq_scan_qwen" -CommandArgv @(
 )
 Copy-Item -LiteralPath "$AllowQDir\triage\review.sqlite" -Destination "$AllowQDir\triage\review.post_ingestion.sqlite"
 
-# P2-P3. Xác minh HTTP capture thật và trạng thái OPEN trước khi con người kiểm duyệt
+# P2-P3. Cổng A kiểm chứng raw HTTP capture ngoại tuyến (chế độ thường exit 0 + đối chứng strict exit 2) và kiểm tra trạng thái OPEN
+# Lưu ý: nguồn gốc Ollama live của phiên P1 được đối chiếu riêng ở Cổng B (PID/StartTime/binary SHA-256/listener/daemon log/exec_receipt).
 Invoke-ReceiptStep -Step "P2_allowq_verify_http" -CommandArgv @(
     $VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture",
-    "$AllowQDir\triage", "--require-live-chat", "--minimum-findings", "1",
+    "$AllowQDir\triage", "--minimum-findings", "1",
     "--output", "$AuditOut\allowlisted_query-http.json"
 )
+$AllowQCapDoc = Get-Content -LiteralPath "$AuditOut\allowlisted_query-http.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($AllowQCapDoc.capture_status -ne "VERIFIED_COMPLETE" -or $AllowQCapDoc.artifact_integrity_ok -ne $true -or $AllowQCapDoc.endpoint_reported_protocol_ok -ne $true -or $AllowQCapDoc.errors.Count -ne 0 -or $AllowQCapDoc.total_findings -ne 1 -or $AllowQCapDoc.live_origin_verified -ne $false -or $AllowQCapDoc.live_chat_verified -ne $false -or $AllowQCapDoc.independently_verified_model_runtime -ne $false -or $AllowQCapDoc.security_conclusion_verified -ne $false) {
+    throw "FAIL-FAST [P2_GATE_A_HTTP_CAPTURE]: invalid AllowlistedQuery capture report"
+}
+Invoke-ReceiptStep -Step "P2b_allowq_verify_http_strict_control" -ExpectedExit @(2) -CommandArgv @(
+    $VenvPython, "-X", "utf8", "-B", "-m", "v2.triage.verify_http_capture",
+    "$AllowQDir\triage", "--require-live-chat", "--minimum-findings", "1", "--no-write"
+)
+$AllowQStrictDoc = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes("$ReceiptsDir\P2b_allowq_verify_http_strict_control.stdout.bin")) | ConvertFrom-Json
+$AllowQUnverifiedHits = @($AllowQStrictDoc.errors | Where-Object { $_ -like "*UNVERIFIED_LIVE_RUNTIME_ORIGIN*" })
+if ($AllowQStrictDoc.capture_status -ne "FAILED" -or $AllowQStrictDoc.artifact_integrity_ok -ne $true -or $AllowQStrictDoc.endpoint_reported_protocol_ok -ne $true -or $AllowQStrictDoc.live_origin_verified -ne $false -or $AllowQStrictDoc.live_chat_verified -ne $false -or $AllowQStrictDoc.live_origin_trust_status -ne "UNVERIFIED_OFFLINE_NO_TRUSTED_EXTERNAL_PROVENANCE" -or $AllowQUnverifiedHits.Count -eq 0 -or $AllowQStrictDoc.report_write_ok -eq $false) {
+    throw "FAIL-FAST [P2B_STRICT_CONTROL]: P2b did not fail strictly for UNVERIFIED_LIVE_RUNTIME_ORIGIN"
+}
 $AllowQDb = "$AllowQDir\triage\review.sqlite"
-$AllowQQueueRaw = Invoke-ReceiptStep -Step "P3_allowq_queue_initial" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "queue", "--db", $AllowQDb)
-$AllowQJson = $AllowQQueueRaw.stdout | ConvertFrom-Json
-$AllowQId = $AllowQJson.warnings[0].id
+Invoke-ReceiptStep -Step "P3_allowq_queue_initial" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "queue", "--db", $AllowQDb)
+$AllowQJson = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes("$ReceiptsDir\P3_allowq_queue_initial.stdout.bin")) | ConvertFrom-Json
+$AllowQId = [string]$AllowQJson.warnings[0].id
+if ($AllowQId -notmatch "^[0-9a-f]{64}$") { throw "FAIL-FAST [P3_WARNING_ID]: invalid warning id '$AllowQId'" }
 
 # P4-P10. Người kiểm duyệt con người thực hiện R03 lifecycle: confirm-false -> queue (ẩn) -> queue --all -> reopen -> history
 Invoke-ReceiptStep -Step "P4_allowq_show" -CommandArgv @($VenvPython, "-X", "utf8", "-B", "-m", "semgrepai", "show", $AllowQId, "--db", $AllowQDb)
@@ -643,7 +754,15 @@ function Assert-P11NonOverlapping {
 }
 
 # 1. Khai báo đầy đủ toàn bộ đường dẫn evaluator, Python venv, nguồn gốc lịch sử, bản sao review và output
-$EvaluatorCheckoutDir     = "C:\NTK-G1\candidates\g1-r03-3981a91-relocation"
+# Lưu ý P11: checkout lịch sử commit de61f4b4 (g1-r03-relocation) chỉ hỗ trợ schema cũ (exit 0/2)
+# và được giữ nguyên bất biến; P11 chạy evaluator hiện hành (hỗ trợ 3-Gate exit 3) ở chế độ replay lịch sử tường minh
+# với đúng --expected-prompt-version "v2.2.2-cwe22-cwe89-canonical-citations" của các capture lịch sử đã niêm phong.
+# Cung cấp đường dẫn checkout evaluator cục bộ đã xác minh qua biến môi trường NTK_P11_EVALUATOR_CHECKOUT (fail-closed nếu bỏ trống).
+$EvaluatorCheckoutDir     = $env:NTK_P11_EVALUATOR_CHECKOUT
+if ([string]::IsNullOrWhiteSpace($EvaluatorCheckoutDir)) {
+    throw "FAIL-FAST [P11_CONFIG]: set env NTK_P11_EVALUATOR_CHECKOUT to the verified local evaluator checkout directory before running P11"
+}
+$P11ExpectedPromptVersion = "v2.2.2-cwe22-cwe89-canonical-citations"
 $P11PythonExe             = "C:\NTK-G1-Private\G1-C3\runs\g1-c5-runtime-20261115T031957Z\venv-g1-c5\Scripts\python.exe"
 
 # Nhóm G1-C5 lịch sử (e9c93349a0fbfef76e00ffe91558cdfc73da5bf3)
@@ -812,7 +931,7 @@ $env:NTK_G1_REPO_ROOT = $ResolvedEvaluatorCheckout
     --receipt-dir $P11ReceiptsDir `
     --step "P11_historical_read_only_evaluate_r01_r03" `
     --cwd $ResolvedEvaluatorCheckout `
-    --expect-exit 0 `
+    --expect-exit 3 `
     -- $P11PythonExe -X utf8 -B -m v2.g1_integration.evaluate_r01_r03 `
         --demo1-dir $Demo1ReviewDir `
         --demo2-dir $Demo2OriginalDir `
@@ -828,8 +947,13 @@ $env:NTK_G1_REPO_ROOT = $ResolvedEvaluatorCheckout
         --demo1-trusted-capture-root $Demo1OriginalCaptureDir `
         --allowlisted-trusted-scenario-root $AllowQOriginalDir `
         --allowlisted-trusted-capture-root $AllowQOriginalCaptureDir `
+        --expected-prompt-version $P11ExpectedPromptVersion `
         --output $P11EvalJson | Out-Null
 Assert-P11LastExit -Step "evaluate_r01_r03"
+$P11EvalDoc = Get-Content -LiteralPath $P11EvalJson -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($P11EvalDoc.overall_status -ne "OFFLINE_VERIFIED_PENDING_OPERATOR_LIVE_ORIGIN" -or $P11EvalDoc.offline_artifact_status -ne "PASS" -or $P11EvalDoc.live_runtime_acceptance_status -ne "PENDING_OPERATOR_EXTERNAL_RUNTIME_EVIDENCE" -or $P11EvalDoc.expected_prompt_version -ne $P11ExpectedPromptVersion -or $P11EvalDoc.historical_prompt_replay_mode -ne $true -or $P11EvalDoc.live_origin_verified -ne $false -or $P11EvalDoc.independently_verified_model_runtime -ne $false -or $P11EvalDoc.security_conclusion_verified -ne $false) {
+    throw "FAIL-FAST [P11_EVAL_CONTRACT]: unexpected P11 evaluator status $($P11EvalDoc.overall_status)"
+}
 ```
 
 ### 12.4. Tiêu Chí Chế Độ Đề Xuất (`--r03-fp-mode proposed-allowlisted-fp`) & Chế Độ Relocation (`--capture-relocation-mode`)

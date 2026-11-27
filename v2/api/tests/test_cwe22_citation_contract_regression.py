@@ -125,7 +125,15 @@ class Cwe22CitationContractRegressionTests(unittest.TestCase):
             return client.analyze(rec)
 
     def test_prompt_contract_v223_prefers_single_line_and_stays_blind(self) -> None:
-        self.assertEqual(ollama.PROMPT_VERSION, "v2.2.4-cwe22-cwe89-minimal-singleline-citations")
+        self.assertEqual(ollama.PROMPT_VERSION, "v2.2.6-cwe22-cwe89-strict-singleline-max3-citations")
+        self.assertEqual(
+            ollama.PREVIOUS_V225_PROMPT_VERSION,
+            "v2.2.5-cwe22-cwe89-exec-citations-and-flow-rebuttal",
+        )
+        self.assertEqual(
+            ollama.PREVIOUS_MINIMAL_SINGLELINE_PROMPT_VERSION,
+            "v2.2.4-cwe22-cwe89-minimal-singleline-citations",
+        )
         self.assertEqual(ollama.PREVIOUS_CANONICAL_PROMPT_VERSION, "v2.2.2-cwe22-cwe89-canonical-citations")
         for contract in ("blind", "neutral_hints"):
             rec = copy.deepcopy(self.record)
@@ -134,8 +142,9 @@ class Cwe22CitationContractRegressionTests(unittest.TestCase):
             sys_txt = msgs[0]["content"]
             user_doc = json.loads(msgs[1]["content"])
             ollama.assert_prompt_contract(user_doc, contract)
-            self.assertIn("SINGLE-LINE citations with start_line == end_line", sys_txt)
-            self.assertIn("(end_line - start_line + 1)", sys_txt)
+            self.assertIn("DISTINCT SINGLE-LINE citations", sys_txt)
+            self.assertIn("start_line == end_line", sys_txt)
+            self.assertNotIn("(end_line - start_line + 1)", sys_txt)
             self.assertNotIn("AddPage", sys_txt)
             self.assertLess(len(json.dumps(msgs).encode("utf-8")), 32_000)
 
@@ -175,33 +184,57 @@ class Cwe22CitationContractRegressionTests(unittest.TestCase):
             "citations": [
                 {"path": self.rel, "start_line": 9, "end_line": 9, "quote": self.lines[8], "sha256": self.sha},
                 {"path": self.rel, "start_line": 14, "end_line": 14, "quote": self.lines[13], "sha256": self.sha},
-                {"path": self.rel, "start_line": 15, "end_line": 15, "quote": self.lines[14], "sha256": self.sha},
                 {"path": self.rel, "start_line": 18, "end_line": 18, "quote": self.lines[17], "sha256": self.sha},
             ],
         }
         out = self._run_mock(answer)
         self.assertEqual(out["validated_status"], "SUPPORTED")
         self.assertEqual(out["citation_check"], "MATCHED")
-        self.assertEqual(len(out["citations"]), 4)
+        self.assertEqual(len(out["citations"]), 3)
         self.assertTrue(out["citation_provenance"]["citation_in_source"])
         self.assertTrue(out["citation_provenance"]["citation_in_prompt"])
         # Citation MATCHED never implies automated security conclusion proof
         self.assertFalse(out["citation_provenance"]["supports_security_claim_verified"])
         self.assertFalse(out["security_conclusion_verified"])
 
+        # Current v2.2.6 contract rejects >3 citations while preserving v2.2.4 historical replay
+        four_cites_answer = copy.deepcopy(answer)
+        four_cites_answer["citations"].insert(
+            2, {"path": self.rel, "start_line": 15, "end_line": 15, "quote": self.lines[14], "sha256": self.sha}
+        )
+        out_four = self._run_mock(four_cites_answer)
+        self.assertEqual(out_four["validated_status"], "UNDETERMINED")
+        self.assertEqual(out_four["failure_kind"], "INVALID_CITATION")
+        hist_four = ollama.validate_answer(
+            json.dumps(four_cites_answer),
+            self.record,
+            prompt_version=ollama.PREVIOUS_MINIMAL_SINGLELINE_PROMPT_VERSION,
+        )
+        self.assertEqual(hist_four["validated_status"], "SUPPORTED")
+        self.assertEqual(len(hist_four["citations"]), 4)
+
     def test_exact_inclusive_multiline_citation_still_supported(self) -> None:
         answer = {
             "status": "SUPPORTED",
-            "explanation": "Exact inclusive 2-line quote still allowed when contract is satisfied verbatim.",
+            "explanation": "Exact inclusive 2-line quote allowed only under historical replay, rejected on v2.2.6.",
             "fix_suggestion": "Validate canonical path",
             "citations": [
                 {"path": self.rel, "start_line": 14, "end_line": 15, "quote": "\n".join(self.lines[13:15]), "sha256": self.sha},
             ],
         }
-        out = self._run_mock(answer)
-        self.assertEqual(out["validated_status"], "SUPPORTED")
-        self.assertEqual(out["citation_check"], "MATCHED")
-        self.assertFalse(out["security_conclusion_verified"])
+        # Strict v2.2.6 rejects multi-line spans
+        out_cur = self._run_mock(answer)
+        self.assertEqual(out_cur["validated_status"], "UNDETERMINED")
+        self.assertEqual(out_cur["failure_kind"], "INVALID_CITATION")
+        # Historical replay under v2.2.2/v2.2.4 preserves exact inclusive multi-line semantics
+        out_hist = ollama.validate_answer(
+            json.dumps(answer),
+            self.record,
+            prompt_version=ollama.PREVIOUS_CANONICAL_PROMPT_VERSION,
+        )
+        self.assertEqual(out_hist["validated_status"], "SUPPORTED")
+        self.assertEqual(out_hist["citation_check"], "MATCHED")
+        self.assertFalse(out_hist["security_conclusion_verified"])
 
     def test_wrong_line_trimmed_quote_wrong_sha_wrong_file_and_out_of_prompt_rejected(self) -> None:
         bad_cites = [

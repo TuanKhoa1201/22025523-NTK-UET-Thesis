@@ -824,7 +824,7 @@ class CitationIntegrityAndFocusedContextTests(unittest.TestCase):
             with self.assertRaises(EvidenceError):
                 validate_answer(json.dumps(ans_bad_hash), rec)
 
-            # 4. Verbatim exact quote with leading spaces and blank line -> SUPPORTED
+            # 4. Verbatim exact multi-line quote rejected on strict v2.2.6, preserved for v2.2.2 historical replay
             exact_quote = (
                 "        File file = new File(\"/tmp/\" + f);\n"
                 "            \n"
@@ -844,7 +844,13 @@ class CitationIntegrityAndFocusedContextTests(unittest.TestCase):
                     }
                 ],
             }
-            v_exact = validate_answer(json.dumps(ans_exact), rec)
+            with self.assertRaises(EvidenceError):
+                validate_answer(json.dumps(ans_exact), rec)
+            v_exact = validate_answer(
+                json.dumps(ans_exact),
+                rec,
+                prompt_version="v2.2.2-cwe22-cwe89-canonical-citations",
+            )
             self.assertEqual(v_exact["status"], "SUPPORTED")
 
     def test_focused_caller_context_does_not_expand_unrelated_siblings_and_compacts_helper_overlap(self) -> None:

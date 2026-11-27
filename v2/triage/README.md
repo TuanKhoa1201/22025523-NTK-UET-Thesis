@@ -69,16 +69,24 @@ after an actual model-enabled run:
 
 ```powershell
 python -m v2.triage.live_check v2/triage/evidence/my-run
-python -m v2.triage.verify_http_capture v2/triage/evidence/my-run --require-live-chat --no-write
+python -m v2.triage.verify_http_capture v2/triage/evidence/my-run --no-write
 ```
 
 `live_check` exit 0 means enough nonmock HTTP/request/response/model-counter records
 match their finding identity (`OLLAMA_REPORTED_UNATTESTED`, never independent model
-attestation). `verify_http_capture` independently verifies that `llm_io/<id>.request.body.bin`
+attestation). `verify_http_capture` in normal mode (exit 0) independently verifies
+artifact integrity (`artifact_integrity_ok`) and endpoint-reported Ollama protocol
+shape (`endpoint_reported_protocol_ok`): that `llm_io/<id>.request.body.bin`
 and `llm_io/<id>.response.body.bin` (or `.response.incomplete.bin` on truncated/oversize
 transfers) match `request_payload_sha256` and `response_body_sha256` byte-for-byte via
 `llm_io/<id>.http-capture.json`, while compatibility `*.response.json["raw_response"]`
-stores the parsed JSON envelope. Capture covers HTTP payload/body bytes and client
+stores the parsed JSON envelope. Because offline inspection inside `<run>` cannot prove
+that the HTTP endpoint was genuine Ollama rather than a loopback fixture,
+`live_origin_verified` and `live_chat_verified` remain `false` offline and strict
+`--require-live-chat` fails closed with exit 2 (`UNVERIFIED_LIVE_RUNTIME_ORIGIN`);
+live runtime origin must be verified via operator-controlled external runtime evidence
+(Ollama PID/StartTime, binary SHA-256, `127.0.0.1:11434` listener, version, model digest,
+daemon logs, and execution receipts). Capture covers HTTP payload/body bytes and client
 headers, not raw TCP wire framing; write collisions or I/O errors fail closed to
 `UNDETERMINED` (`EVIDENCE_CAPTURE_WRITE_FAILED`) and retain warnings `OPEN`. Keep
 server model digest/run logs externally; generated `llm_io/` files are Git-ignored.

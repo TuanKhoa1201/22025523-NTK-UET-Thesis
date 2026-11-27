@@ -10,12 +10,15 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from datetime import datetime, timezone
+import errno
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
+import stat
 import subprocess
 import time
 from typing import Any
@@ -48,10 +51,60 @@ def _sha256_file_bounded(path: Path) -> str | None:
         return None
 
 
+def _is_reparse_or_symlink(path: Path) -> bool:
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return False
+    if stat.S_ISLNK(st.st_mode):
+        return True
+    if os.name == "nt" and bool(getattr(st, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)):
+        return True
+    return False
+
+
 def _write_xb(path: Path, payload: bytes) -> None:
+    """Atomically publish `payload` to `path` via synced sibling temp + exclusive hard link.
+
+    Propagates `os.fsync` I/O errors without publishing `path`, cleans up only the temp file created
+    by this invocation, preserves any existing file at `path`, and fails closed if the target
+    filesystem does not support exclusive hard-link publication rather than falling back to
+    non-atomic direct writes.
+    """
+    if os.path.lexists(path):
+        raise FileExistsError(f"refusing to overwrite existing step artifact: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as handle:
-        handle.write(payload)
+    tmp = path.parent / f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
+    created_tmp = False
+    try:
+        with tmp.open("xb") as handle:
+            created_tmp = True
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(tmp, path)
+            return
+        except FileExistsError:
+            raise FileExistsError(f"refusing to overwrite existing step artifact: {path}")
+        except OSError as exc:
+            unsupported_link_errnos = {
+                e for e in (getattr(errno, "EXDEV", None), getattr(errno, "EOPNOTSUPP", None), getattr(errno, "ENOSYS", None))
+                if e is not None
+            }
+            win_err = getattr(exc, "winerror", None)
+            if exc.errno in unsupported_link_errnos or win_err in (1, 50):
+                raise OSError(
+                    exc.errno or getattr(errno, "EOPNOTSUPP", errno.EIO),
+                    f"ATOMIC_PUBLISH_UNSUPPORTED: target filesystem does not support exclusive hard-link publication for {path}: {exc}",
+                ) from exc
+            raise
+    finally:
+        if created_tmp:
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
 
 
 def _resolve_executable(cmd0: str, cwd: Path, env: dict[str, str]) -> Path | None:
@@ -87,7 +140,9 @@ def execute_with_receipt(
     stderr_path = receipt_dir / f"{step}.stderr.bin"
     receipt_path = receipt_dir / f"{step}.receipt.json"
     for target in (stdout_path, stderr_path, receipt_path):
-        if target.exists():
+        if os.path.lexists(target):
+            if _is_reparse_or_symlink(target):
+                raise FileExistsError(f"refusing symlink/junction step artifact target: {target}")
             raise FileExistsError(f"refusing to overwrite existing step artifact: {target}")
 
     argv_list = [str(x) for x in cmd_argv]
