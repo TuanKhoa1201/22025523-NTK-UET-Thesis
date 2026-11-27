@@ -15,7 +15,7 @@ Hệ thống đang được phát triển theo yêu cầu thầy hướng dẫn,
 - Thực nghiệm có Ground Truth và bảng đối chứng đáng tin cậy.
 - Tập trung trước vào CWE-22 và CWE-89.
 
-Mã nguồn của đồ án trước được lưu tại `history/legacy-thesis-20261114`. Frontend cũ có thể được tái sử dụng sau khi backend mới đáp ứng yêu cầu.
+Backend hiện hành nằm trong `v2/`, frontend trong `apps/22025523-thesis/`. Đồ án cũ và lịch sử ba nhánh agent đã được sao lưu tại [Thesis-History](https://github.com/TuanKhoa1201/Thesis-History) (Private). Tra cứu SHA các nhánh trong README. Không dùng lệnh trong hồ sơ cũ để vận hành hệ thống hiện tại.
 
 Không tự đưa IRIS, LoRA, CWSS hoặc kiến trúc đồ án trước trở lại phạm vi triển khai hiện tại khi chưa có phê duyệt.
 
@@ -26,7 +26,7 @@ Codex, Antigravity, JavisOS và mọi tiến trình hỗ trợ phải tuân th�
 - Không tạo thêm nhánh remote.
 - Không force-push.
 - Không sửa, viết lại hoặc xóa lịch sử commit đã công bố.
-- Không thay đổi các nhánh lịch sử.
+- Không ghi đè các nhánh lịch sử hoặc sửa repository lưu trữ. Chỉ xóa tên nhánh cũ trên repository chính khi người vận hành phê duyệt riêng và đã xác minh bản sao, SHA của các ref, cùng các phụ thuộc đang hoạt động. Không xóa `main` hoặc tag lịch sử.
 - Không tự ý cập nhật nhánh `main` nếu chưa được cấp quyền tích hợp.
 - Không ghi đè công việc của agent khác.
 - Không tự động merge toàn bộ nhánh cũ vào `main`.
@@ -34,7 +34,7 @@ Codex, Antigravity, JavisOS và mọi tiến trình hỗ trợ phải tuân th�
 
 Agent được phép sử dụng nhánh cục bộ hoặc worktree riêng để phát triển và kiểm thử.
 
-Việc cập nhật `main` phải được điều phối tuần tự, kiểm tra xung đột và xác nhận quyền thực hiện.
+Việc cập nhật `main` phải được điều phối tuần tự, kiểm tra xung đột và xác nhận quyền thực hiện. Phê duyệt cập nhật GitHub không cấp quyền sửa, khởi động lại hoặc triển khai hệ thống đang chạy. Không tắt CI, bỏ test hoặc nới điều kiện kiểm chứng để che lỗi.
 
 Orchestrator đã tạm dừng phát triển sau tái kiểm toán chưa đạt. Sử dụng quy trình tích hợp thủ công có kiểm soát.
 
@@ -58,6 +58,8 @@ Ví dụ hợp lệ:
 - `Cập nhật bảng đối chứng cảnh báo thật và cảnh báo giả`
 
 Mỗi commit phải có thay đổi thực tế tương ứng. Không tạo commit rỗng để mô phỏng tiến độ.
+
+Tài liệu tiếng Việt và thông điệp commit dùng dấu gạch ngang ngắn `-`. Không dùng em dash hoặc en dash trong văn xuôi. Viết rõ việc đã làm và kết quả có căn cứ, tránh câu sáo rỗng hoặc lặp ý. Giữ chính xác tên, thuật ngữ, số liệu, lệnh, SHA, trích dẫn và các giới hạn nghiên cứu khi biên tập.
 
 ## 4. Quy định về bằng chứng và nghiệm thu
 
@@ -106,7 +108,7 @@ Trước khi cập nhật GitHub:
 7. Chỉ tích hợp khi được người vận hành hoặc tiến trình tích hợp được ủy quyền chấp thuận.
 8. Báo cáo commit SHA mới sau khi cập nhật thành công.
 
-Nếu điều kiện chưa đạt, giữ thay đổi cục bộ và báo cáo trạng thái thực tế.
+Nếu điều kiện chưa đạt, giữ thay đổi cục bộ và báo cáo trạng thái thực tế. Trường hợp người vận hành phê duyệt ngoại lệ công bố mốc mã nguồn, phải ghi rõ giới hạn và phạm vi được chấp thuận. Ngoại lệ công bố không thay thế nghiệm thu hoặc cho phép bỏ qua kiểm thử.
 
 ## 7. Ghi nhận tiến độ nghiên cứu
 
